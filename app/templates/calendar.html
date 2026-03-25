@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Calendar - Running Coach{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <h1>Calendar</h1>
+</header>
+
+{% if upcoming_races %}
+<section class="card">
+    <h2>Upcoming Races</h2>
+    <div class="race-list">
+        {% for r in upcoming_races %}
+        <div class="race-item">
+            <div class="race-info">
+                <span class="race-flag">&#127937;</span>
+                <div>
+                    <strong>{{ r.name }}</strong>
+                    <span class="race-meta">{{ r.distance_label }} &middot; {{ r.date.strftime('%b %d, %Y') }}</span>
+                </div>
+            </div>
+            <div class="race-right">
+                <span class="badge badge-race">{{ (r.date - today).days }}d</span>
+                <form action="/races/{{ r.id }}/delete" method="post" class="inline-form" onsubmit="return confirm('Delete this race?')">
+                    <button type="submit" class="btn-icon" title="Delete">&times;</button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+<section class="card">
+    <div class="calendar-nav">
+        <a href="/calendar?month={{ prev_month }}" class="btn-ghost">&larr;</a>
+        <h2>{{ view_date.strftime('%B %Y') }}</h2>
+        <a href="/calendar?month={{ next_month }}" class="btn-ghost">&rarr;</a>
+    </div>
+
+    <div class="calendar-grid">
+        <div class="cal-header">Mon</div>
+        <div class="cal-header">Tue</div>
+        <div class="cal-header">Wed</div>
+        <div class="cal-header">Thu</div>
+        <div class="cal-header">Fri</div>
+        <div class="cal-header">Sat</div>
+        <div class="cal-header">Sun</div>
+
+        {% for day_num, weekday in month_days %}
+        {% if day_num == 0 %}
+        <div class="cal-day empty"></div>
+        {% else %}
+        {% set d = view_date.replace(day=day_num) %}
+        <div class="cal-day {% if d == today %}today{% endif %} {% if d in races_by_date %}race-day{% endif %}">
+            <span class="day-num">{{ day_num }}</span>
+            {% if d in activities_by_date %}
+            <div class="day-dots">
+                {% for a in activities_by_date[d][:3] %}
+                <span class="dot {% if 'run' in (a.activity_type or '') %}run{% elif 'cycling' in (a.activity_type or '') or 'biking' in (a.activity_type or '') %}cycle{% else %}other{% endif %}" title="{{ a.name }}: {{ a.distance_m | distance_km }}km"></span>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if d in races_by_date %}
+            <span class="day-race" title="{{ races_by_date[d].name }}">&#127937;</span>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+</section>
+
+<section class="card">
+    <h2>Add Race</h2>
+    <form action="/races/add" method="post" class="form-stack">
+        <div class="form-group">
+            <label for="name">Race Name</label>
+            <input type="text" id="name" name="name" required placeholder="e.g. Boston Marathon">
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="race_date">Date</label>
+                <input type="date" id="race_date" name="race_date" required>
+            </div>
+            <div class="form-group">
+                <label for="distance_label">Distance</label>
+                <select id="distance_label" name="distance_label" onchange="document.getElementById('custom_dist').style.display = this.value === 'Custom' ? 'block' : 'none'">
+                    <option value="5K">5K</option>
+                    <option value="10K">10K</option>
+                    <option value="Half Marathon">Half Marathon</option>
+                    <option value="Marathon">Marathon</option>
+                    <option value="Custom">Custom</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-group" id="custom_dist" style="display:none">
+            <label for="custom_distance_km">Custom Distance (km)</label>
+            <input type="number" id="custom_distance_km" name="custom_distance_km" step="0.1" placeholder="15.0">
+        </div>
+        <div class="form-group">
+            <label>Goal Time (optional)</label>
+            <div class="form-row time-inputs">
+                <input type="number" name="goal_hours" min="0" max="24" placeholder="HH" class="time-input">
+                <span>:</span>
+                <input type="number" name="goal_minutes" min="0" max="59" placeholder="MM" class="time-input">
+                <span>:</span>
+                <input type="number" name="goal_seconds" min="0" max="59" placeholder="SS" class="time-input">
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="notes">Notes (optional)</label>
+            <textarea id="notes" name="notes" rows="2" placeholder="Course type, elevation profile..."></textarea>
+        </div>
+        <button type="submit" class="btn-primary">Add Race</button>
+    </form>
+</section>
+{% endblock %}
