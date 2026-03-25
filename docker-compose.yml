@@ -6,8 +6,16 @@ services:
       - "8080:8000"
     volumes:
       - ./data:/data
-    env_file:
-      - .env
+    environment:
+      - GARMIN_EMAIL=${GARMIN_EMAIL}
+      - GARMIN_PASSWORD=${GARMIN_PASSWORD}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - TIMEZONE=${TIMEZONE:-UTC}
+      - DB_PATH=${DB_PATH:-/data/running_coach.db}
+      - GARMIN_TOKEN_DIR=${GARMIN_TOKEN_DIR:-/data/garmin_tokens}
+      - ACTIVITY_POLL_MINUTES=${ACTIVITY_POLL_MINUTES:-5}
+      - DAILY_SYNC_HOUR=${DAILY_SYNC_HOUR:-7}
+      - AI_MODEL=${AI_MODEL:-claude-sonnet-4-6}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/')"]
