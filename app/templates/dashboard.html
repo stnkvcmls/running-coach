@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Running Coach - Dashboard{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <h1>Running Coach</h1>
+    {% if next_race %}
+    <div class="race-countdown">
+        <span class="race-flag">&#127937;</span>
+        <strong>{{ next_race.name }}</strong>
+        <span class="badge">{{ days_to_race }}d</span>
+    </div>
+    {% endif %}
+</header>
+
+{% if daily %}
+<section class="card daily-card">
+    <h2>{{ daily.date }}</h2>
+    <div class="stat-grid stat-grid-4">
+        <div class="stat">
+            <span class="stat-value">{{ daily.resting_hr or '-' }}</span>
+            <span class="stat-label">RHR</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value">{% if daily.sleep_seconds %}{{ daily.sleep_seconds // 3600 }}h{{ (daily.sleep_seconds % 3600) // 60 }}m{% else %}-{% endif %}</span>
+            <span class="stat-label">Sleep</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value">{% if daily.body_battery_high %}{{ daily.body_battery_high }}{% else %}-{% endif %}</span>
+            <span class="stat-label">Battery</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value">{{ daily.steps | default('-', true) }}</span>
+            <span class="stat-label">Steps</span>
+        </div>
+    </div>
+</section>
+{% endif %}
+
+<section class="card">
+    <h2>Weekly Mileage</h2>
+    <div class="chart-container">
+        <canvas id="weeklyChart"></canvas>
+    </div>
+</section>
+
+<section class="card">
+    <h2>Recent Activities</h2>
+    {% if activities %}
+    <div class="activity-list">
+        {% for a in activities %}
+        <a href="/activity/{{ a.id }}" class="activity-item">
+            <div class="activity-type-badge {{ a.activity_type }}">
+                {% if 'run' in (a.activity_type or '') %}&#127939;{% elif 'cycling' in (a.activity_type or '') or 'biking' in (a.activity_type or '') %}&#128692;{% elif 'swim' in (a.activity_type or '') %}&#127946;{% elif 'walk' in (a.activity_type or '') or 'hik' in (a.activity_type or '') %}&#128694;{% else %}&#9889;{% endif %}
+            </div>
+            <div class="activity-info">
+                <div class="activity-name">{{ a.name or 'Activity' }}</div>
+                <div class="activity-meta">
+                    {{ a.started_at.strftime('%b %d') if a.started_at else '' }}
+                    &middot; {{ a.distance_m | distance_km }} km
+                    &middot; {{ a.duration_sec | duration }}
+                </div>
+            </div>
+            <div class="activity-stats">
+                <span class="pace">{{ a.avg_pace_min_km | pace }}/km</span>
+                {% if a.avg_hr %}<span class="hr">&#10084; {{ a.avg_hr }}</span>{% endif %}
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty-state">No activities yet. Sync will start automatically.</p>
+    {% endif %}
+</section>
+
+{% if insights %}
+<section class="card">
+    <h2>Latest Insights</h2>
+    <div class="insight-list">
+        {% for i in insights %}
+        <div class="insight-item">
+            <span class="badge badge-{{ i.category }}">{{ i.category | replace('_', ' ') | title }}</span>
+            <p class="insight-summary">{{ i.summary }}</p>
+            <details>
+                <summary>Read more</summary>
+                <div class="insight-content markdown">{{ i.content | replace('\n', '<br>') | safe }}</div>
+            </details>
+            <time>{{ i.created_at.strftime('%b %d, %H:%M') if i.created_at else '' }}</time>
+        </div>
+        {% endfor %}
+    </div>
+    <a href="/insights" class="link-more">View all insights &rarr;</a>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const weeklyData = {{ weekly_data | safe }};
+const ctx = document.getElementById('weeklyChart');
+if (ctx) {
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: weeklyData.map(d => d.label),
+            datasets: [{
+                label: 'km',
+                data: weeklyData.map(d => d.km),
+                backgroundColor: '#6c5ce7',
+                borderRadius: 6,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#999' } },
+                x: { grid: { display: false }, ticks: { color: '#999' } }
+            }
+        }
+    });
+}
+</script>
+{% endblock %}

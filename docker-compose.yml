@@ -1,0 +1,16 @@
+services:
+  running-coach:
+    build: .
+    container_name: running-coach
+    ports:
+      - "8080:8000"
+    volumes:
+      - ./data:/data
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/')"]
+      interval: 60s
+      timeout: 10s
+      retries: 3

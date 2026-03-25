@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Insights - Running Coach{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <h1>Insights</h1>
+</header>
+
+<div class="filter-chips">
+    <a href="/insights" class="chip {% if not current_category %}active{% endif %}">All</a>
+    {% for cat, count in categories %}
+    <a href="/insights?category={{ cat }}" class="chip {% if current_category == cat %}active{% endif %}">
+        {{ cat | replace('_', ' ') | title }} ({{ count }})
+    </a>
+    {% endfor %}
+</div>
+
+{% if insights %}
+<div class="insight-list">
+    {% for i in insights %}
+    <section class="card insight-card">
+        <div class="insight-header">
+            <span class="badge badge-{{ i.category }}">{{ i.category | replace('_', ' ') | title }}</span>
+            <time>{{ i.created_at.strftime('%b %d, %H:%M') if i.created_at else '' }}</time>
+        </div>
+        <p class="insight-summary">{{ i.summary }}</p>
+        <details>
+            <summary>Full analysis</summary>
+            <div class="insight-content markdown">{{ i.content | replace('\n', '<br>') | safe }}</div>
+        </details>
+    </section>
+    {% endfor %}
+</div>
+{% else %}
+<section class="card">
+    <p class="empty-state">No insights yet. They'll appear after activities are synced and analyzed.</p>
+</section>
+{% endif %}
+{% endblock %}

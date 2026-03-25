@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% block title %}{{ activity.name or 'Activity' }} - Running Coach{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <a href="/" class="back-link">&larr; Back</a>
+    <h1>{{ activity.name or 'Activity' }}</h1>
+    <p class="subtitle">
+        {{ activity.started_at.strftime('%A, %B %d %Y at %H:%M') if activity.started_at else '' }}
+        &middot; {{ activity.activity_type | default('', true) | replace('_', ' ') | title }}
+    </p>
+</header>
+
+<section class="card">
+    <div class="stat-grid stat-grid-3">
+        <div class="stat stat-large">
+            <span class="stat-value">{{ activity.distance_m | distance_km }}</span>
+            <span class="stat-label">km</span>
+        </div>
+        <div class="stat stat-large">
+            <span class="stat-value">{{ activity.duration_sec | duration }}</span>
+            <span class="stat-label">Duration</span>
+        </div>
+        <div class="stat stat-large">
+            <span class="stat-value">{{ activity.avg_pace_min_km | pace }}</span>
+            <span class="stat-label">/km</span>
+        </div>
+    </div>
+</section>
+
+<section class="card">
+    <h2>Details</h2>
+    <div class="stat-grid stat-grid-2">
+        {% if activity.avg_hr %}
+        <div class="stat"><span class="stat-value">{{ activity.avg_hr }}</span><span class="stat-label">Avg HR</span></div>
+        {% endif %}
+        {% if activity.max_hr %}
+        <div class="stat"><span class="stat-value">{{ activity.max_hr }}</span><span class="stat-label">Max HR</span></div>
+        {% endif %}
+        {% if activity.avg_cadence %}
+        <div class="stat"><span class="stat-value">{{ activity.avg_cadence | round(0) | int }}</span><span class="stat-label">Cadence</span></div>
+        {% endif %}
+        {% if activity.avg_stride %}
+        <div class="stat"><span class="stat-value">{{ '%.2f' | format(activity.avg_stride) }}m</span><span class="stat-label">Stride</span></div>
+        {% endif %}
+        {% if activity.elevation_gain %}
+        <div class="stat"><span class="stat-value">+{{ activity.elevation_gain | round(0) | int }}m</span><span class="stat-label">Elevation</span></div>
+        {% endif %}
+        {% if activity.calories %}
+        <div class="stat"><span class="stat-value">{{ activity.calories | round(0) | int }}</span><span class="stat-label">Calories</span></div>
+        {% endif %}
+        {% if activity.training_effect_aerobic %}
+        <div class="stat"><span class="stat-value">{{ '%.1f' | format(activity.training_effect_aerobic) }}</span><span class="stat-label">Aerobic TE</span></div>
+        {% endif %}
+        {% if activity.training_effect_anaerobic %}
+        <div class="stat"><span class="stat-value">{{ '%.1f' | format(activity.training_effect_anaerobic) }}</span><span class="stat-label">Anaerobic TE</span></div>
+        {% endif %}
+        {% if activity.vo2max %}
+        <div class="stat"><span class="stat-value">{{ '%.1f' | format(activity.vo2max) }}</span><span class="stat-label">VO2max</span></div>
+        {% endif %}
+        {% if activity.avg_power %}
+        <div class="stat"><span class="stat-value">{{ activity.avg_power | round(0) | int }}W</span><span class="stat-label">Avg Power</span></div>
+        {% endif %}
+    </div>
+</section>
+
+{% if hr_zones and hr_zones is iterable and hr_zones is not string %}
+<section class="card">
+    <h2>HR Zones</h2>
+    <div class="chart-container chart-sm">
+        <canvas id="hrZoneChart"></canvas>
+    </div>
+</section>
+{% endif %}
+
+{% if splits %}
+<section class="card">
+    <h2>Splits</h2>
+    <div class="table-scroll">
+        <table class="data-table">
+            <thead>
+                <tr><th>#</th><th>Dist</th><th>Pace</th><th>HR</th><th>Cadence</th></tr>
+            </thead>
+            <tbody>
+            {% if splits is mapping and splits.get('lapDTOs') %}
+                {% for lap in splits['lapDTOs'] %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ '%.2f' | format((lap.get('distance', 0)) / 1000) }}km</td>
+                    <td>{% if lap.get('distance', 0) > 0 and lap.get('duration', 0) > 0 %}{% set p = (lap['duration'] / 60) / (lap['distance'] / 1000) %}{{ p | int }}:{{ '%02d' | format(((p - (p | int)) * 60) | int) }}{% else %}-{% endif %}</td>
+                    <td>{{ lap.get('averageHR', '-') }}</td>
+                    <td>{{ lap.get('averageRunCadence', '-') }}</td>
+                </tr>
+                {% endfor %}
+            {% elif splits is iterable and splits is not string %}
+                {% for s in splits %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ '%.2f' | format((s.get('distance', 0)) / 1000) }}km</td>
+                    <td>-</td>
+                    <td>{{ s.get('averageHR', '-') }}</td>
+                    <td>-</td>
+                </tr>
+                {% endfor %}
+            {% endif %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+
+{% if weather and weather is mapping %}
+<section class="card">
+    <h2>Weather</h2>
+    <div class="stat-grid stat-grid-3">
+        {% if weather.get('temp') is not none %}
+        <div class="stat"><span class="stat-value">{{ weather.temp }}°C</span><span class="stat-label">Temp</span></div>
+        {% endif %}
+        {% if weather.get('apparentTemp') is not none %}
+        <div class="stat"><span class="stat-value">{{ weather.apparentTemp }}°C</span><span class="stat-label">Feels Like</span></div>
+        {% endif %}
+        {% if weather.get('relativeHumidity') is not none %}
+        <div class="stat"><span class="stat-value">{{ weather.relativeHumidity }}%</span><span class="stat-label">Humidity</span></div>
+        {% endif %}
+        {% if weather.get('windSpeed') is not none %}
+        <div class="stat"><span class="stat-value">{{ weather.windSpeed }} km/h</span><span class="stat-label">Wind</span></div>
+        {% endif %}
+    </div>
+</section>
+{% endif %}
+
+{% if insight %}
+<section class="card insight-card">
+    <h2>AI Analysis</h2>
+    <div class="insight-content markdown">{{ insight.content | replace('\n', '<br>') | safe }}</div>
+    <time>{{ insight.created_at.strftime('%b %d, %H:%M') if insight.created_at else '' }}</time>
+</section>
+{% elif not activity.ai_analyzed %}
+<section class="card">
+    <p class="empty-state">AI analysis pending...</p>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if hr_zones and hr_zones is iterable and hr_zones is not string %}
+<script>
+const zones = {{ hr_zones | tojson }};
+const zoneLabels = [];
+const zoneData = [];
+const zoneColors = ['#2ecc71', '#27ae60', '#f1c40f', '#e67e22', '#e74c3c'];
+if (Array.isArray(zones)) {
+    zones.forEach(z => {
+        zoneLabels.push('Z' + (z.zoneNumber || '?'));
+        zoneData.push(Math.round((z.secsInZone || 0) / 60));
+    });
+}
+const hrCtx = document.getElementById('hrZoneChart');
+if (hrCtx && zoneData.length) {
+    new Chart(hrCtx, {
+        type: 'bar',
+        data: {
+            labels: zoneLabels,
+            datasets: [{
+                label: 'Minutes',
+                data: zoneData,
+                backgroundColor: zoneColors.slice(0, zoneData.length),
+                borderRadius: 6,
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#999' } },
+                y: { grid: { display: false }, ticks: { color: '#999' } }
+            }
+        }
+    });
+}
+</script>
+{% endif %}
+{% endblock %}
