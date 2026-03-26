@@ -14,7 +14,7 @@
 </header>
 
 {% if daily %}
-<section class="card daily-card">
+<a href="/daily/{{ daily.id }}" class="card daily-card" style="display: block; text-decoration: none; color: inherit;">
     <h2>{{ daily.date }}</h2>
     <div class="stat-grid stat-grid-4">
         <div class="stat">
@@ -34,7 +34,8 @@
             <span class="stat-label">Steps</span>
         </div>
     </div>
-</section>
+</a>
+<a href="/daily" class="link-more">View all daily summaries &rarr;</a>
 {% endif %}
 
 <section class="card">
