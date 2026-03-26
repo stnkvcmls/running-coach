@@ -186,6 +186,56 @@ def activity_detail(request: Request, activity_id: int, db: Session = Depends(ge
     })
 
 
+# --- Daily Summaries ---
+
+@router.get("/daily", response_class=HTMLResponse)
+def daily_list(request: Request, db: Session = Depends(get_db)):
+    summaries = (
+        db.query(DailySummary)
+        .order_by(DailySummary.date.desc())
+        .limit(30)
+        .all()
+    )
+    return templates.TemplateResponse("daily_list.html", {
+        "request": request,
+        "summaries": summaries,
+        "page": "dashboard",
+    })
+
+
+@router.get("/daily/{summary_id}", response_class=HTMLResponse)
+def daily_detail(request: Request, summary_id: int, db: Session = Depends(get_db)):
+    summary = db.query(DailySummary).filter(DailySummary.id == summary_id).first()
+    if not summary:
+        raise HTTPException(status_code=404, detail="Daily summary not found")
+
+    # Get AI insight for this daily summary
+    insight = (
+        db.query(Insight)
+        .filter(Insight.trigger_type == "daily_summary", Insight.trigger_id == summary.id)
+        .first()
+    )
+
+    # Get activities for this day
+    day_activities = (
+        db.query(Activity)
+        .filter(
+            Activity.started_at >= datetime.combine(summary.date, datetime.min.time()),
+            Activity.started_at < datetime.combine(summary.date + timedelta(days=1), datetime.min.time()),
+        )
+        .order_by(Activity.started_at.asc())
+        .all()
+    )
+
+    return templates.TemplateResponse("daily_detail.html", {
+        "request": request,
+        "summary": summary,
+        "insight": insight,
+        "activities": day_activities,
+        "page": "dashboard",
+    })
+
+
 # --- Insights ---
 
 @router.get("/insights", response_class=HTMLResponse)

@@ -181,6 +181,50 @@ body {
     color: var(--danger);
 }
 
+/* === Daily List === */
+.daily-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.daily-list-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+}
+
+.daily-list-item:active { opacity: 0.7; }
+
+.daily-list-date {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 40px;
+    flex-shrink: 0;
+}
+
+.daily-day {
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.daily-month {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.daily-ai-dot {
+    color: var(--accent-light);
+    font-size: 0.6rem;
+    flex-shrink: 0;
+}
+
 /* === Charts === */
 .chart-container {
     position: relative;

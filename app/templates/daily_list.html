@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Daily Summaries - Running Coach{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <a href="/" class="back-link">&larr; Back</a>
+    <h1>Daily Summaries</h1>
+</header>
+
+{% if summaries %}
+<div class="daily-list">
+    {% for s in summaries %}
+    <a href="/daily/{{ s.id }}" class="card daily-list-item">
+        <div class="daily-list-date">
+            <span class="daily-day">{{ s.date.strftime('%d') }}</span>
+            <span class="daily-month">{{ s.date.strftime('%b') }}</span>
+        </div>
+        <div class="stat-grid stat-grid-4" style="flex: 1;">
+            <div class="stat">
+                <span class="stat-value">{{ s.resting_hr or '-' }}</span>
+                <span class="stat-label">RHR</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value">{% if s.sleep_seconds %}{{ s.sleep_seconds // 3600 }}h{{ '%02d' | format((s.sleep_seconds % 3600) // 60) }}{% else %}-{% endif %}</span>
+                <span class="stat-label">Sleep</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value">{% if s.body_battery_high is not none %}{{ s.body_battery_high }}{% else %}-{% endif %}</span>
+                <span class="stat-label">Battery</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value">{% if s.steps %}{{ '{:,}'.format(s.steps) }}{% else %}-{% endif %}</span>
+                <span class="stat-label">Steps</span>
+            </div>
+        </div>
+        {% if s.ai_analyzed %}
+        <span class="daily-ai-dot" title="AI analyzed">&#9679;</span>
+        {% endif %}
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card">
+    <p class="empty-state">No daily summaries yet. Sync will start automatically.</p>
+</div>
+{% endif %}
+{% endblock %}
