@@ -355,6 +355,89 @@ def analyze_daily_summary(daily: DailySummary):
         db.close()
 
 
+def analyze_activity_force(activity_id: int):
+    """Generate AI insight for an activity, replacing any existing insight."""
+    db = SessionLocal()
+    try:
+        activity = db.query(Activity).get(activity_id)
+        if not activity:
+            logger.warning("Activity %s not found for re-analysis", activity_id)
+            return
+
+        # Delete existing insight for this activity
+        db.query(Insight).filter(
+            Insight.trigger_type == "activity",
+            Insight.trigger_id == activity.id,
+        ).delete()
+
+        activity_context = _format_activity_context(activity)
+        full_context = _build_context(db, "activity", activity_context)
+        content, summary, category = _call_claude(full_context, "activity")
+
+        insight = Insight(
+            created_at=datetime.utcnow(),
+            trigger_type="activity",
+            trigger_id=activity.id,
+            content=content,
+            summary=summary,
+            category=category,
+        )
+        db.add(insight)
+        activity.ai_analyzed = True
+        db.commit()
+        logger.info("AI re-analysis complete for activity %s: %s", activity.id, summary[:80])
+    except Exception:
+        logger.exception("AI re-analysis failed for activity %s", activity_id)
+    finally:
+        db.close()
+
+
+def backfill_missing_insights():
+    """Analyze past 7 days of activities and daily summaries that lack insights."""
+    db = SessionLocal()
+    try:
+        cutoff = datetime.utcnow() - timedelta(days=7)
+
+        # Activities in past 7 days without insights
+        activities = (
+            db.query(Activity)
+            .filter(
+                Activity.started_at >= cutoff,
+                Activity.ai_analyzed == False,
+            )
+            .order_by(Activity.started_at.asc())
+            .all()
+        )
+        logger.info("Backfilling insights for %d activities", len(activities))
+        for activity in activities:
+            try:
+                analyze_activity(activity)
+            except Exception:
+                logger.exception("Insight backfill failed for activity %s", activity.id)
+
+        # Daily summaries in past 7 days without insights
+        cutoff_date = (datetime.utcnow() - timedelta(days=7)).date()
+        summaries = (
+            db.query(DailySummary)
+            .filter(
+                DailySummary.date >= cutoff_date,
+                DailySummary.ai_analyzed == False,
+            )
+            .order_by(DailySummary.date.asc())
+            .all()
+        )
+        logger.info("Backfilling insights for %d daily summaries", len(summaries))
+        for summary in summaries:
+            try:
+                analyze_daily_summary(summary)
+            except Exception:
+                logger.exception("Insight backfill failed for daily summary %s", summary.id)
+
+        logger.info("Insight backfill complete")
+    finally:
+        db.close()
+
+
 def weekly_review():
     """Generate a weekly training summary and recommendations."""
     db = SessionLocal()

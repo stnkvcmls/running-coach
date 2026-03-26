@@ -503,6 +503,14 @@ details summary {
     min-height: 44px;
 }
 
+.btn-sm {
+    display: inline-block;
+    width: auto;
+    padding: 6px 14px;
+    font-size: 0.8rem;
+    min-height: 32px;
+}
+
 .btn-ghost {
     background: none;
     border: none;

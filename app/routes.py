@@ -345,6 +345,18 @@ def settings_page(request: Request, db: Session = Depends(get_db)):
     })
 
 
+@router.post("/activity/{activity_id}/analyze")
+def trigger_activity_analysis(activity_id: int, db: Session = Depends(get_db)):
+    """Manually trigger AI analysis for an activity (creates or replaces insight)."""
+    activity = db.query(Activity).filter(Activity.id == activity_id).first()
+    if not activity:
+        raise HTTPException(status_code=404, detail="Activity not found")
+    import threading
+    from app.ai_coach import analyze_activity_force
+    threading.Thread(target=analyze_activity_force, args=(activity_id,), daemon=True).start()
+    return RedirectResponse(url=f"/activity/{activity_id}", status_code=303)
+
+
 @router.post("/sync/activities")
 def trigger_activity_sync():
     """Manually trigger activity sync."""

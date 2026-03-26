@@ -59,7 +59,7 @@ def _scheduled_weekly_review():
 def _run_backfill():
     """Run historical backfill in a background thread."""
     from app.garmin_sync import backfill_activities, backfill_daily_summaries
-    from app.ai_coach import weekly_review
+    from app.ai_coach import weekly_review, backfill_missing_insights
 
     logger.info("Starting historical backfill...")
     backfill_activities()
@@ -69,6 +69,11 @@ def _run_backfill():
         weekly_review()
     except Exception:
         logger.exception("Initial weekly review failed")
+    logger.info("Backfilling missing AI insights for recent data...")
+    try:
+        backfill_missing_insights()
+    except Exception:
+        logger.exception("Insight backfill failed")
 
 
 @asynccontextmanager
