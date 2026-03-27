@@ -66,6 +66,11 @@ def _migrate_db():
         "min_hr": "INTEGER",
         "max_elevation": "FLOAT",
         "min_elevation": "FLOAT",
+        "max_cadence": "FLOAT",
+        "run_time_sec": "FLOAT",
+        "walk_time_sec": "FLOAT",
+        "typed_splits_json": "TEXT",
+        "power_zones_json": "TEXT",
     }
     try:
         with engine.connect() as conn:

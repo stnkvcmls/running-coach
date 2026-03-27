@@ -106,6 +106,7 @@ def _extract_activity_fields(summary: dict, details: dict | None = None) -> dict
         "min_hr": src.get("minHR"),
         "max_elevation": src.get("maxElevation"),
         "min_elevation": src.get("minElevation"),
+        "max_cadence": src.get("maxRunningCadenceInStepsPerMinute"),
     })
 
     return fields
@@ -150,6 +151,11 @@ def _fetch_activity_details(client: Garmin, activity_id) -> dict:
     except Exception as e:
         logger.debug("No split summaries for %s: %s", activity_id, e)
 
+    try:
+        details["typed_splits"] = client.get_activity_typed_splits(activity_id)
+    except Exception as e:
+        logger.debug("No typed splits for %s: %s", activity_id, e)
+
     return details
 
 
@@ -165,6 +171,29 @@ def _store_activity(db: Session, summary: dict, details: dict, skip_ai: bool = F
 
     fields = _extract_activity_fields(summary, details or {})
 
+    # Parse run/walk times from typed splits
+    run_time_sec = None
+    walk_time_sec = None
+    typed_splits = details.get("typed_splits")
+    if isinstance(typed_splits, list):
+        run_secs = 0.0
+        walk_secs = 0.0
+        for s in typed_splits:
+            split_type = (s.get("splitType") or "").upper()
+            dur = s.get("totalElapsedDuration") or 0
+            if "RUNNING" in split_type:
+                run_secs += dur
+            elif "WALKING" in split_type or "WALK" in split_type:
+                walk_secs += dur
+        if run_secs > 0:
+            run_time_sec = run_secs
+        if walk_secs > 0:
+            walk_time_sec = walk_secs
+
+    # Extract power zones from full activity summary
+    act_summary = (details or {}).get("activity_summary") or {}
+    power_zones = act_summary.get("powerZoneSummaries")
+
     # Fetch laps from the summary's built-in laps if available
     laps = None
     try:
@@ -176,10 +205,14 @@ def _store_activity(db: Session, summary: dict, details: dict, skip_ai: bool = F
 
     activity = Activity(
         **fields,
+        run_time_sec=run_time_sec,
+        walk_time_sec=walk_time_sec,
         laps_json=json.dumps(laps) if laps else None,
         splits_json=json.dumps(details.get("splits")) if details.get("splits") else None,
         hr_zones_json=json.dumps(details.get("hr_zones")) if details.get("hr_zones") else None,
         weather_json=json.dumps(details.get("weather")) if details.get("weather") else None,
+        typed_splits_json=json.dumps(typed_splits) if typed_splits else None,
+        power_zones_json=json.dumps(power_zones) if power_zones else None,
         raw_json=json.dumps(summary, default=str),
         synced_at=datetime.now(timezone.utc),
         ai_analyzed=skip_ai,

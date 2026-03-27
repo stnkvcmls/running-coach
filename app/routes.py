@@ -43,11 +43,17 @@ def _parse_activity_charts(laps_data) -> dict:
     sampled = metrics[::step]
 
     series_defs = [
-        ("heart_rate", "directHeartRate", "Heart Rate", "bpm"),
-        ("elevation", "directElevation", "Elevation", "m"),
-        ("pace", "directSpeed", "Pace", "min/km"),
-        ("cadence", "directRunCadence", "Cadence", "spm"),
-        ("power", "directPower", "Power", "W"),
+        ("heart_rate",  "directHeartRate",            "Heart Rate",  "bpm"),
+        ("elevation",   "directElevation",            "Elevation",   "m"),
+        ("pace",        "directSpeed",                "Pace",        "min/km"),
+        ("cadence",     "directRunCadence",           "Cadence",     "spm"),
+        ("power",       "directPower",                "Power",       "W"),
+        ("gct",         "directGroundContactTime",    "GCT",         "ms"),
+        ("vert_osc",    "directVerticalOscillation",  "Vert. Osc.",  "cm"),
+        ("vert_ratio",  "directVerticalRatio",        "Vert. Ratio", "%"),
+        ("stride",      "directStrideLength",         "Stride",      "m"),
+        ("perf_cond",   "directPerformanceCondition", "Perf. Cond.", ""),
+        ("stamina",     "directCurrentStamina",       "Stamina",     "%"),
     ]
 
     for chart_key, garmin_key, label, unit in series_defs:
@@ -220,6 +226,7 @@ def activity_detail(request: Request, activity_id: int, db: Session = Depends(ge
     splits = safe_json_loads(activity.splits_json)
     hr_zones = safe_json_loads(activity.hr_zones_json)
     weather = safe_json_loads(activity.weather_json)
+    power_zones = safe_json_loads(activity.power_zones_json)
 
     # Parse time-series data for area charts
     chart_data = _parse_activity_charts(laps)
@@ -238,6 +245,7 @@ def activity_detail(request: Request, activity_id: int, db: Session = Depends(ge
         "splits": splits,
         "hr_zones": hr_zones,
         "weather": weather,
+        "power_zones": power_zones,
         "chart_data": json.dumps(chart_data),
         "insight": insight,
         "page": "dashboard",
