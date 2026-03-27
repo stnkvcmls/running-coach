@@ -1,6 +1,8 @@
+import calendar
 import json
 import logging
-from datetime import datetime, date, timedelta
+import threading
+from datetime import datetime, date, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -10,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Activity, DailySummary, Insight, Race, SyncStatus
+from app.utils import safe_json_loads
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +53,7 @@ def _distance_str(meters: float | None) -> str:
 templates.env.filters["pace"] = _pace_str
 templates.env.filters["duration"] = _duration_str
 templates.env.filters["distance_km"] = _distance_str
-templates.env.globals["now"] = datetime.utcnow
+templates.env.globals["now"] = lambda: datetime.now(timezone.utc)
 
 
 # --- Dashboard ---
@@ -87,23 +90,39 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             .first()
         )
 
-    # Weekly mileage (last 8 weeks)
-    weekly_data = []
-    for w in range(7, -1, -1):
-        week_start = date.today() - timedelta(days=date.today().weekday() + 7 * w)
-        week_end = week_start + timedelta(days=7)
-        result = (
-            db.query(func.sum(Activity.distance_m))
-            .filter(
-                Activity.started_at >= datetime.combine(week_start, datetime.min.time()),
-                Activity.started_at < datetime.combine(week_end, datetime.min.time()),
-            )
-            .scalar()
+    # Weekly mileage (last 8 weeks) - single query
+    week_start_base = date.today() - timedelta(days=date.today().weekday())
+    eight_weeks_ago = week_start_base - timedelta(weeks=7)
+
+    all_distances = (
+        db.query(Activity.started_at, Activity.distance_m)
+        .filter(
+            Activity.started_at >= datetime.combine(eight_weeks_ago, datetime.min.time()),
+            Activity.distance_m.isnot(None),
         )
-        weekly_data.append({
-            "label": week_start.strftime("%b %d"),
-            "km": round((result or 0) / 1000, 1),
-        })
+        .all()
+    )
+
+    # Bucket into weeks
+    weekly_buckets = {}
+    for w in range(7, -1, -1):
+        ws = week_start_base - timedelta(weeks=w)
+        weekly_buckets[ws] = 0.0
+
+    for a_started, a_dist in all_distances:
+        if a_started is None:
+            continue
+        a_date = a_started.date() if isinstance(a_started, datetime) else a_started
+        days_from_base = (week_start_base - a_date).days
+        week_idx = days_from_base // 7
+        ws = week_start_base - timedelta(weeks=week_idx)
+        if ws in weekly_buckets:
+            weekly_buckets[ws] += a_dist or 0
+
+    weekly_data = [
+        {"label": ws.strftime("%b %d"), "km": round(dist / 1000, 1)}
+        for ws, dist in sorted(weekly_buckets.items())
+    ]
 
     # Next race
     next_race = (
@@ -135,37 +154,10 @@ def activity_detail(request: Request, activity_id: int, db: Session = Depends(ge
         raise HTTPException(status_code=404, detail="Activity not found")
 
     # Parse JSON fields
-    laps = None
-    if activity.laps_json:
-        try:
-            laps_data = json.loads(activity.laps_json)
-            if isinstance(laps_data, dict):
-                laps = laps_data
-            elif isinstance(laps_data, list):
-                laps = laps_data
-        except (json.JSONDecodeError, TypeError):
-            pass
-
-    splits = None
-    if activity.splits_json:
-        try:
-            splits = json.loads(activity.splits_json)
-        except (json.JSONDecodeError, TypeError):
-            pass
-
-    hr_zones = None
-    if activity.hr_zones_json:
-        try:
-            hr_zones = json.loads(activity.hr_zones_json)
-        except (json.JSONDecodeError, TypeError):
-            pass
-
-    weather = None
-    if activity.weather_json:
-        try:
-            weather = json.loads(activity.weather_json)
-        except (json.JSONDecodeError, TypeError):
-            pass
+    laps = safe_json_loads(activity.laps_json)
+    splits = safe_json_loads(activity.splits_json)
+    hr_zones = safe_json_loads(activity.hr_zones_json)
+    weather = safe_json_loads(activity.weather_json)
 
     # Get AI insight for this activity
     insight = (
@@ -304,7 +296,6 @@ def calendar_view(request: Request, month: str | None = None, db: Session = Depe
     upcoming_races = [r for r in all_races if r.date >= date.today()]
 
     # Build calendar grid
-    import calendar
     cal = calendar.Calendar(firstweekday=0)  # Monday start
     month_days = list(cal.itermonthdays2(view_date.year, view_date.month))
 
@@ -337,6 +328,11 @@ def add_race(
     notes: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
+    try:
+        parsed_date = datetime.strptime(race_date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+
     distance_map = {
         "5K": 5000,
         "10K": 10000,
@@ -345,22 +341,26 @@ def add_race(
     }
 
     if distance_label == "Custom" and custom_distance_km:
+        if custom_distance_km <= 0:
+            raise HTTPException(status_code=400, detail="Distance must be positive.")
         distance_m = custom_distance_km * 1000
     else:
         distance_m = distance_map.get(distance_label, 0)
 
     goal_time_sec = None
     if goal_hours or goal_minutes or goal_seconds:
+        if any(v is not None and v < 0 for v in [goal_hours, goal_minutes, goal_seconds]):
+            raise HTTPException(status_code=400, detail="Goal time values must be non-negative.")
         goal_time_sec = (goal_hours or 0) * 3600 + (goal_minutes or 0) * 60 + (goal_seconds or 0)
 
     race = Race(
         name=name,
-        date=datetime.strptime(race_date, "%Y-%m-%d").date(),
+        date=parsed_date,
         distance_m=distance_m,
         distance_label=distance_label if distance_label != "Custom" else f"{custom_distance_km}km",
         goal_time_sec=goal_time_sec,
         notes=notes or None,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     )
     db.add(race)
     db.commit()
@@ -401,7 +401,6 @@ def trigger_activity_analysis(activity_id: int, db: Session = Depends(get_db)):
     activity = db.query(Activity).filter(Activity.id == activity_id).first()
     if not activity:
         raise HTTPException(status_code=404, detail="Activity not found")
-    import threading
     from app.ai_coach import analyze_activity_force
     threading.Thread(target=analyze_activity_force, args=(activity_id,), daemon=True).start()
     return RedirectResponse(url=f"/activity/{activity_id}", status_code=303)
@@ -410,7 +409,6 @@ def trigger_activity_analysis(activity_id: int, db: Session = Depends(get_db)):
 @router.post("/sync/activities")
 def trigger_activity_sync():
     """Manually trigger activity sync."""
-    import threading
     from app.main import _scheduled_activity_sync
     threading.Thread(target=_scheduled_activity_sync, daemon=True).start()
     return RedirectResponse(url="/settings", status_code=303)
@@ -419,7 +417,6 @@ def trigger_activity_sync():
 @router.post("/sync/daily")
 def trigger_daily_sync():
     """Manually trigger daily summary sync."""
-    import threading
     from app.main import _scheduled_daily_sync
     threading.Thread(target=_scheduled_daily_sync, daemon=True).start()
     return RedirectResponse(url="/settings", status_code=303)

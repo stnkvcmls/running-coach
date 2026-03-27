@@ -1,4 +1,4 @@
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 
 from sqlalchemy import (
     Column,
@@ -14,6 +14,10 @@ from sqlalchemy import (
 )
 
 from app.database import Base
+
+
+def _utcnow():
+    return datetime.now(timezone.utc)
 
 
 class Activity(Base):
@@ -43,7 +47,7 @@ class Activity(Base):
     hr_zones_json = Column(Text)
     weather_json = Column(Text)
     raw_json = Column(Text)
-    synced_at = Column(DateTime, default=datetime.utcnow)
+    synced_at = Column(DateTime, default=_utcnow)
     ai_analyzed = Column(Boolean, default=False)
 
 
@@ -65,7 +69,7 @@ class DailySummary(Base):
     intensity_minutes = Column(Integer)
     floors_climbed = Column(Integer)
     raw_json = Column(Text)
-    synced_at = Column(DateTime, default=datetime.utcnow)
+    synced_at = Column(DateTime, default=_utcnow)
     ai_analyzed = Column(Boolean, default=False)
 
 
@@ -73,7 +77,7 @@ class Insight(Base):
     __tablename__ = "insights"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=_utcnow, index=True)
     trigger_type = Column(Text)  # activity, daily_summary, weekly_review
     trigger_id = Column(Integer, nullable=True)
     content = Column(Text)
@@ -91,7 +95,7 @@ class Race(Base):
     distance_label = Column(Text)  # 5K, 10K, Half Marathon, Marathon, custom
     goal_time_sec = Column(Integer, nullable=True)
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
 
 
 class SyncStatus(Base):
@@ -100,4 +104,4 @@ class SyncStatus(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     key = Column(String(100), unique=True, nullable=False)
     value = Column(Text)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)

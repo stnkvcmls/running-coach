@@ -1,4 +1,5 @@
 import os
+from contextlib import contextmanager
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
@@ -30,6 +31,16 @@ class Base(DeclarativeBase):
 
 
 def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+@contextmanager
+def db_session():
+    """Context manager for database sessions in non-FastAPI code (background jobs, sync tasks)."""
     db = SessionLocal()
     try:
         yield db

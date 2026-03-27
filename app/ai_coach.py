@@ -1,13 +1,13 @@
 import json
 import logging
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 
 import anthropic
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.config import settings
-from app.database import SessionLocal
+from app.database import db_session
 from app.models import Activity, DailySummary, Insight, Race
 
 logger = logging.getLogger(__name__)
@@ -150,7 +150,7 @@ def _build_context(db: Session, trigger_type: str, trigger_data: str) -> str:
     sections = [f"## Current Data\n{trigger_data}"]
 
     # Recent activities (last 14 days)
-    cutoff = datetime.utcnow() - timedelta(days=14)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=14)
     recent_activities = (
         db.query(Activity)
         .filter(Activity.started_at >= cutoff)
@@ -297,106 +297,99 @@ def _call_claude(context: str, trigger_type: str) -> tuple[str, str, str]:
 
 def analyze_activity(activity: Activity):
     """Generate AI insight for a new activity."""
-    db = SessionLocal()
-    try:
-        activity_context = _format_activity_context(activity)
-        full_context = _build_context(db, "activity", activity_context)
-        content, summary, category = _call_claude(full_context, "activity")
+    with db_session() as db:
+        try:
+            activity_context = _format_activity_context(activity)
+            full_context = _build_context(db, "activity", activity_context)
+            content, summary, category = _call_claude(full_context, "activity")
 
-        insight = Insight(
-            created_at=datetime.utcnow(),
-            trigger_type="activity",
-            trigger_id=activity.id,
-            content=content,
-            summary=summary,
-            category=category,
-        )
-        db.add(insight)
+            insight = Insight(
+                created_at=datetime.now(timezone.utc),
+                trigger_type="activity",
+                trigger_id=activity.id,
+                content=content,
+                summary=summary,
+                category=category,
+            )
+            db.add(insight)
 
-        db_activity = db.query(Activity).get(activity.id)
-        if db_activity:
-            db_activity.ai_analyzed = True
+            db_activity = db.query(Activity).get(activity.id)
+            if db_activity:
+                db_activity.ai_analyzed = True
 
-        db.commit()
-        logger.info("AI analysis complete for activity %s: %s", activity.id, summary[:80])
-    except Exception:
-        logger.exception("AI analysis failed for activity %s", activity.id)
-    finally:
-        db.close()
+            db.commit()
+            logger.info("AI analysis complete for activity %s: %s", activity.id, summary[:80])
+        except Exception:
+            logger.exception("AI analysis failed for activity %s", activity.id)
 
 
 def analyze_daily_summary(daily: DailySummary):
     """Generate AI insight for a daily summary."""
-    db = SessionLocal()
-    try:
-        daily_context = _format_daily_context(daily)
-        full_context = _build_context(db, "daily_summary", daily_context)
-        content, summary, category = _call_claude(full_context, "daily_summary")
+    with db_session() as db:
+        try:
+            daily_context = _format_daily_context(daily)
+            full_context = _build_context(db, "daily_summary", daily_context)
+            content, summary, category = _call_claude(full_context, "daily_summary")
 
-        insight = Insight(
-            created_at=datetime.utcnow(),
-            trigger_type="daily_summary",
-            trigger_id=daily.id,
-            content=content,
-            summary=summary,
-            category=category,
-        )
-        db.add(insight)
+            insight = Insight(
+                created_at=datetime.now(timezone.utc),
+                trigger_type="daily_summary",
+                trigger_id=daily.id,
+                content=content,
+                summary=summary,
+                category=category,
+            )
+            db.add(insight)
 
-        db_daily = db.query(DailySummary).get(daily.id)
-        if db_daily:
-            db_daily.ai_analyzed = True
+            db_daily = db.query(DailySummary).get(daily.id)
+            if db_daily:
+                db_daily.ai_analyzed = True
 
-        db.commit()
-        logger.info("AI analysis complete for daily summary %s: %s", daily.date, summary[:80])
-    except Exception:
-        logger.exception("AI analysis failed for daily summary %s", daily.id)
-    finally:
-        db.close()
+            db.commit()
+            logger.info("AI analysis complete for daily summary %s: %s", daily.date, summary[:80])
+        except Exception:
+            logger.exception("AI analysis failed for daily summary %s", daily.id)
 
 
 def analyze_activity_force(activity_id: int):
     """Generate AI insight for an activity, replacing any existing insight."""
-    db = SessionLocal()
-    try:
-        activity = db.query(Activity).get(activity_id)
-        if not activity:
-            logger.warning("Activity %s not found for re-analysis", activity_id)
-            return
+    with db_session() as db:
+        try:
+            activity = db.query(Activity).get(activity_id)
+            if not activity:
+                logger.warning("Activity %s not found for re-analysis", activity_id)
+                return
 
-        # Delete existing insight for this activity
-        db.query(Insight).filter(
-            Insight.trigger_type == "activity",
-            Insight.trigger_id == activity.id,
-        ).delete()
+            # Delete existing insight for this activity
+            db.query(Insight).filter(
+                Insight.trigger_type == "activity",
+                Insight.trigger_id == activity.id,
+            ).delete()
 
-        activity_context = _format_activity_context(activity)
-        full_context = _build_context(db, "activity", activity_context)
-        content, summary, category = _call_claude(full_context, "activity")
+            activity_context = _format_activity_context(activity)
+            full_context = _build_context(db, "activity", activity_context)
+            content, summary, category = _call_claude(full_context, "activity")
 
-        insight = Insight(
-            created_at=datetime.utcnow(),
-            trigger_type="activity",
-            trigger_id=activity.id,
-            content=content,
-            summary=summary,
-            category=category,
-        )
-        db.add(insight)
-        activity.ai_analyzed = True
-        db.commit()
-        logger.info("AI re-analysis complete for activity %s: %s", activity.id, summary[:80])
-    except Exception:
-        logger.exception("AI re-analysis failed for activity %s", activity_id)
-    finally:
-        db.close()
+            insight = Insight(
+                created_at=datetime.now(timezone.utc),
+                trigger_type="activity",
+                trigger_id=activity.id,
+                content=content,
+                summary=summary,
+                category=category,
+            )
+            db.add(insight)
+            activity.ai_analyzed = True
+            db.commit()
+            logger.info("AI re-analysis complete for activity %s: %s", activity.id, summary[:80])
+        except Exception:
+            logger.exception("AI re-analysis failed for activity %s", activity_id)
 
 
 def backfill_missing_insights():
     """Analyze past 7 days of activities and daily summaries that lack insights."""
-    db = SessionLocal()
-    try:
-        cutoff = datetime.utcnow() - timedelta(days=7)
+    with db_session() as db:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=7)
 
         # Activities in past 7 days without insights
         activities = (
@@ -416,7 +409,7 @@ def backfill_missing_insights():
                 logger.exception("Insight backfill failed for activity %s", activity.id)
 
         # Daily summaries in past 7 days without insights
-        cutoff_date = (datetime.utcnow() - timedelta(days=7)).date()
+        cutoff_date = (datetime.now(timezone.utc) - timedelta(days=7)).date()
         summaries = (
             db.query(DailySummary)
             .filter(
@@ -434,43 +427,39 @@ def backfill_missing_insights():
                 logger.exception("Insight backfill failed for daily summary %s", summary.id)
 
         logger.info("Insight backfill complete")
-    finally:
-        db.close()
 
 
 def weekly_review():
     """Generate a weekly training summary and recommendations."""
-    db = SessionLocal()
-    try:
-        week_start = date.today() - timedelta(days=7)
-        week_activities = (
-            db.query(Activity)
-            .filter(Activity.started_at >= datetime.combine(week_start, datetime.min.time()))
-            .order_by(Activity.started_at.asc())
-            .all()
-        )
+    with db_session() as db:
+        try:
+            week_start = date.today() - timedelta(days=7)
+            week_activities = (
+                db.query(Activity)
+                .filter(Activity.started_at >= datetime.combine(week_start, datetime.min.time()))
+                .order_by(Activity.started_at.asc())
+                .all()
+            )
 
-        if not week_activities:
-            logger.info("No activities this week, skipping weekly review")
-            return
+            if not week_activities:
+                logger.info("No activities this week, skipping weekly review")
+                return
 
-        activity_summaries = "\n\n".join(_format_activity_context(a) for a in week_activities)
-        trigger_data = f"## Weekly Review ({week_start} to {date.today()})\n\n{activity_summaries}"
-        full_context = _build_context(db, "weekly_review", trigger_data)
-        content, summary, category = _call_claude(full_context, "weekly_review")
+            activity_summaries = "\n\n".join(_format_activity_context(a) for a in week_activities)
+            trigger_data = f"## Weekly Review ({week_start} to {date.today()})\n\n{activity_summaries}"
+            full_context = _build_context(db, "weekly_review", trigger_data)
+            content, summary, category = _call_claude(full_context, "weekly_review")
 
-        insight = Insight(
-            created_at=datetime.utcnow(),
-            trigger_type="weekly_review",
-            trigger_id=None,
-            content=content,
-            summary=summary,
-            category="training_plan",
-        )
-        db.add(insight)
-        db.commit()
-        logger.info("Weekly review complete: %s", summary[:80])
-    except Exception:
-        logger.exception("Weekly review failed")
-    finally:
-        db.close()
+            insight = Insight(
+                created_at=datetime.now(timezone.utc),
+                trigger_type="weekly_review",
+                trigger_id=None,
+                content=content,
+                summary=summary,
+                category="training_plan",
+            )
+            db.add(insight)
+            db.commit()
+            logger.info("Weekly review complete: %s", summary[:80])
+        except Exception:
+            logger.exception("Weekly review failed")
