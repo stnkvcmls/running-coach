@@ -1,6 +1,6 @@
 services:
   running-coach:
-    build: .
+    image: ghcr.io/stnkvcmls/running-coach:latest
     container_name: running-coach
     ports:
       - "8080:8000"
@@ -22,3 +22,15 @@ services:
       interval: 60s
       timeout: 10s
       retries: 3
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_POLL_INTERVAL=300
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_INCLUDE_STOPPED=false
+      - WATCHTOWER_LABEL_ENABLE=false
+    restart: unless-stopped
