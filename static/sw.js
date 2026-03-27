@@ -1,4 +1,4 @@
-const CACHE_NAME = 'running-coach-v1';
+const CACHE_NAME = 'running-coach-v2';
 const SHELL_URLS = [
     '/static/style.css',
     '/static/manifest.json',
