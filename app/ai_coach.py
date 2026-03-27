@@ -99,6 +99,26 @@ def _format_activity_context(activity: Activity) -> str:
         parts.append(f"Min HR: {activity.min_hr} bpm")
     if activity.max_elevation is not None and activity.min_elevation is not None:
         parts.append(f"Elevation Range: {activity.min_elevation:.0f}m - {activity.max_elevation:.0f}m")
+    if activity.max_cadence:
+        parts.append(f"Max Cadence: {activity.max_cadence:.0f} spm")
+    if activity.run_time_sec and activity.walk_time_sec:
+        parts.append(
+            f"Run/Walk: {int(activity.run_time_sec // 60)}min run / {int(activity.walk_time_sec // 60)}min walk"
+        )
+    elif activity.run_time_sec:
+        parts.append(f"Run Time: {int(activity.run_time_sec // 60)}min")
+    if activity.power_zones_json:
+        try:
+            pz = json.loads(activity.power_zones_json)
+            if isinstance(pz, list):
+                zone_parts = [
+                    f"PZ{z.get('zoneNumber', '?')}: {int(z.get('secsInZone', 0) // 60)}m"
+                    for z in pz if z.get("secsInZone", 0) > 0
+                ]
+                if zone_parts:
+                    parts.append(f"Power Zones: {', '.join(zone_parts)}")
+        except (json.JSONDecodeError, TypeError):
+            pass
 
     # Add lap data if available
     if activity.laps_json:

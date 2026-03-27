@@ -38,7 +38,10 @@
         <div class="stat"><span class="stat-value">{{ activity.max_hr }}</span><span class="stat-label">Max HR</span></div>
         {% endif %}
         {% if activity.avg_cadence %}
-        <div class="stat"><span class="stat-value">{{ activity.avg_cadence | round(0) | int }}</span><span class="stat-label">Cadence</span></div>
+        <div class="stat"><span class="stat-value">{{ activity.avg_cadence | round(0) | int }}</span><span class="stat-label">Avg Cadence</span></div>
+        {% endif %}
+        {% if activity.max_cadence %}
+        <div class="stat"><span class="stat-value">{{ activity.max_cadence | round(0) | int }}</span><span class="stat-label">Max Cadence</span></div>
         {% endif %}
         {% if activity.avg_stride %}
         <div class="stat"><span class="stat-value">{{ '%.2f' | format(activity.avg_stride) }}m</span><span class="stat-label">Stride</span></div>
@@ -90,6 +93,20 @@
 </section>
 {% endif %}
 
+{% if activity.run_time_sec or activity.walk_time_sec %}
+<section class="card">
+    <h2>Run / Walk</h2>
+    <div class="stat-grid stat-grid-2">
+        {% if activity.run_time_sec %}
+        <div class="stat"><span class="stat-value">{{ activity.run_time_sec | duration }}</span><span class="stat-label">Run Time</span></div>
+        {% endif %}
+        {% if activity.walk_time_sec %}
+        <div class="stat"><span class="stat-value">{{ activity.walk_time_sec | duration }}</span><span class="stat-label">Walk Time</span></div>
+        {% endif %}
+    </div>
+</section>
+{% endif %}
+
 {% if activity.normalized_power or activity.training_stress_score or activity.intensity_factor %}
 <section class="card">
     <h2>Performance</h2>
@@ -136,6 +153,15 @@
     <h2>HR Zones</h2>
     <div class="chart-container chart-sm">
         <canvas id="hrZoneChart"></canvas>
+    </div>
+</section>
+{% endif %}
+
+{% if power_zones and power_zones is iterable and power_zones is not string %}
+<section class="card">
+    <h2>Power Zones</h2>
+    <div class="chart-container chart-sm">
+        <canvas id="powerZoneChart"></canvas>
     </div>
 </section>
 {% endif %}
@@ -278,10 +304,16 @@ const chartData = {{ chart_data | safe }};
 const chartKeys = Object.keys(chartData);
 const chartColors = {
     heart_rate: { line: '#e74c3c', fill: 'rgba(231, 76, 60, 0.15)' },
-    elevation: { line: '#2ecc71', fill: 'rgba(46, 204, 113, 0.15)' },
-    pace:      { line: '#6c5ce7', fill: 'rgba(108, 92, 231, 0.15)' },
-    cadence:   { line: '#f39c12', fill: 'rgba(243, 156, 18, 0.15)' },
-    power:     { line: '#0984e3', fill: 'rgba(9, 132, 227, 0.15)' },
+    elevation:  { line: '#2ecc71', fill: 'rgba(46, 204, 113, 0.15)' },
+    pace:       { line: '#6c5ce7', fill: 'rgba(108, 92, 231, 0.15)' },
+    cadence:    { line: '#f39c12', fill: 'rgba(243, 156, 18, 0.15)' },
+    power:      { line: '#0984e3', fill: 'rgba(9, 132, 227, 0.15)' },
+    gct:        { line: '#fd79a8', fill: 'rgba(253, 121, 168, 0.15)' },
+    vert_osc:   { line: '#00cec9', fill: 'rgba(0, 206, 201, 0.15)' },
+    vert_ratio: { line: '#a29bfe', fill: 'rgba(162, 155, 254, 0.15)' },
+    stride:     { line: '#55efc4', fill: 'rgba(85, 239, 196, 0.15)' },
+    perf_cond:  { line: '#fdcb6e', fill: 'rgba(253, 203, 110, 0.15)' },
+    stamina:    { line: '#e17055', fill: 'rgba(225, 112, 85, 0.15)' },
 };
 
 if (chartKeys.length > 0) {
@@ -366,4 +398,43 @@ if (chartKeys.length > 0) {
     renderChart(chartKeys[0]);
 }
 </script>
+{% if power_zones and power_zones is iterable and power_zones is not string %}
+<script>
+const pzones = {{ power_zones | tojson }};
+const pzoneLabels = [];
+const pzoneData = [];
+const pzoneColors = ['#2ecc71', '#27ae60', '#f1c40f', '#e67e22', '#e74c3c'];
+if (Array.isArray(pzones)) {
+    pzones.forEach(z => {
+        pzoneLabels.push('PZ' + (z.zoneNumber || z.zoneLow || '?'));
+        pzoneData.push(Math.round((z.secsInZone || 0) / 60));
+    });
+}
+const pzCtx = document.getElementById('powerZoneChart');
+if (pzCtx && pzoneData.length) {
+    new Chart(pzCtx, {
+        type: 'bar',
+        data: {
+            labels: pzoneLabels,
+            datasets: [{
+                label: 'Minutes',
+                data: pzoneData,
+                backgroundColor: pzoneColors.slice(0, pzoneData.length),
+                borderRadius: 6,
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#999' } },
+                y: { grid: { display: false }, ticks: { color: '#999' } }
+            }
+        }
+    });
+}
+</script>
+{% endif %}
 {% endblock %}

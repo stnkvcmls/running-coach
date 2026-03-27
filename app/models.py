@@ -75,6 +75,15 @@ class Activity(Base):
     max_elevation = Column(Float)
     min_elevation = Column(Float)
 
+    # Run/Walk
+    max_cadence = Column(Float)
+    run_time_sec = Column(Float)
+    walk_time_sec = Column(Float)
+
+    # Extended JSON data
+    typed_splits_json = Column(Text)
+    power_zones_json = Column(Text)
+
 
 class DailySummary(Base):
     __tablename__ = "daily_summaries"
