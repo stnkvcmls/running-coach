@@ -50,6 +50,31 @@ class Activity(Base):
     synced_at = Column(DateTime, default=_utcnow)
     ai_analyzed = Column(Boolean, default=False)
 
+    # Running Dynamics
+    avg_ground_contact_time = Column(Float)
+    avg_vertical_oscillation = Column(Float)
+    avg_vertical_ratio = Column(Float)
+
+    # Power Metrics
+    normalized_power = Column(Float)
+    training_stress_score = Column(Float)
+    intensity_factor = Column(Float)
+
+    # Respiration
+    avg_respiration_rate = Column(Float)
+    max_respiration_rate = Column(Float)
+
+    # Speed
+    avg_speed = Column(Float)
+    max_speed = Column(Float)
+
+    # Heart Rate
+    min_hr = Column(Integer)
+
+    # Elevation
+    max_elevation = Column(Float)
+    min_elevation = Column(Float)
+
 
 class DailySummary(Base):
     __tablename__ = "daily_summaries"

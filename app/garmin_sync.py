@@ -67,7 +67,7 @@ def _extract_activity_fields(summary: dict, details: dict | None = None) -> dict
     if distance and duration and distance > 0:
         avg_pace = (duration / 60) / (distance / 1000)  # min/km
 
-    return {
+    fields = {
         "garmin_id": activity_id,
         "activity_type": summary.get("activityType", {}).get("typeKey", "unknown"),
         "name": summary.get("activityName", ""),
@@ -88,6 +88,28 @@ def _extract_activity_fields(summary: dict, details: dict | None = None) -> dict
         "avg_power": summary.get("avgPower"),
     }
 
+    # Extract additional fields from full activity summary (get_activity response)
+    act_summary = details.get("activity_summary") if details else None
+    # Merge: prefer detailed summary, fall back to list summary for some fields
+    src = act_summary or summary
+    fields.update({
+        "avg_ground_contact_time": src.get("avgGroundContactTime"),
+        "avg_vertical_oscillation": src.get("avgVerticalOscillation"),
+        "avg_vertical_ratio": src.get("avgVerticalRatio"),
+        "normalized_power": src.get("normPower"),
+        "training_stress_score": src.get("trainingStressScore"),
+        "intensity_factor": src.get("intensityFactor"),
+        "avg_respiration_rate": src.get("avgRespirationRate"),
+        "max_respiration_rate": src.get("maxRespirationRate"),
+        "avg_speed": src.get("averageSpeed"),
+        "max_speed": src.get("maxSpeed"),
+        "min_hr": src.get("minHR"),
+        "max_elevation": src.get("maxElevation"),
+        "min_elevation": src.get("minElevation"),
+    })
+
+    return fields
+
 
 def _parse_garmin_ts(ts_str: str | None) -> datetime | None:
     if not ts_str:
@@ -103,6 +125,11 @@ def _parse_garmin_ts(ts_str: str | None) -> datetime | None:
 def _fetch_activity_details(client: Garmin, activity_id) -> dict:
     """Fetch all detail endpoints for an activity."""
     details = {}
+    try:
+        details["activity_summary"] = client.get_activity(activity_id)
+    except Exception as e:
+        logger.debug("No activity summary for %s: %s", activity_id, e)
+
     try:
         details["splits"] = client.get_activity_splits(activity_id)
     except Exception as e:
@@ -136,7 +163,7 @@ def _store_activity(db: Session, summary: dict, details: dict, skip_ai: bool = F
     if existing:
         return None
 
-    fields = _extract_activity_fields(summary, details)
+    fields = _extract_activity_fields(summary, details or {})
 
     # Fetch laps from the summary's built-in laps if available
     laps = None

@@ -61,8 +61,75 @@
         {% if activity.avg_power %}
         <div class="stat"><span class="stat-value">{{ activity.avg_power | round(0) | int }}W</span><span class="stat-label">Avg Power</span></div>
         {% endif %}
+        {% if activity.min_hr %}
+        <div class="stat"><span class="stat-value">{{ activity.min_hr }}</span><span class="stat-label">Min HR</span></div>
+        {% endif %}
+        {% if activity.avg_speed %}
+        <div class="stat"><span class="stat-value">{{ '%.1f' | format(activity.avg_speed * 3.6) }}</span><span class="stat-label">Avg km/h</span></div>
+        {% endif %}
+        {% if activity.max_speed %}
+        <div class="stat"><span class="stat-value">{{ '%.1f' | format(activity.max_speed * 3.6) }}</span><span class="stat-label">Max km/h</span></div>
+        {% endif %}
     </div>
 </section>
+
+{% if activity.avg_ground_contact_time or activity.avg_vertical_oscillation or activity.avg_vertical_ratio %}
+<section class="card">
+    <h2>Running Dynamics</h2>
+    <div class="stat-grid stat-grid-3">
+        {% if activity.avg_ground_contact_time %}
+        <div class="stat"><span class="stat-value">{{ activity.avg_ground_contact_time | round(0) | int }}ms</span><span class="stat-label">GCT</span></div>
+        {% endif %}
+        {% if activity.avg_vertical_oscillation %}
+        <div class="stat"><span class="stat-value">{{ '%.1f' | format(activity.avg_vertical_oscillation) }}cm</span><span class="stat-label">Vert. Osc.</span></div>
+        {% endif %}
+        {% if activity.avg_vertical_ratio %}
+        <div class="stat"><span class="stat-value">{{ '%.1f' | format(activity.avg_vertical_ratio) }}%</span><span class="stat-label">Vert. Ratio</span></div>
+        {% endif %}
+    </div>
+</section>
+{% endif %}
+
+{% if activity.normalized_power or activity.training_stress_score or activity.intensity_factor %}
+<section class="card">
+    <h2>Performance</h2>
+    <div class="stat-grid stat-grid-3">
+        {% if activity.normalized_power %}
+        <div class="stat"><span class="stat-value">{{ activity.normalized_power | round(0) | int }}W</span><span class="stat-label">NP</span></div>
+        {% endif %}
+        {% if activity.training_stress_score %}
+        <div class="stat"><span class="stat-value">{{ '%.1f' | format(activity.training_stress_score) }}</span><span class="stat-label">TSS</span></div>
+        {% endif %}
+        {% if activity.intensity_factor %}
+        <div class="stat"><span class="stat-value">{{ '%.2f' | format(activity.intensity_factor) }}</span><span class="stat-label">IF</span></div>
+        {% endif %}
+    </div>
+</section>
+{% endif %}
+
+{% if activity.avg_respiration_rate or activity.max_respiration_rate %}
+<section class="card">
+    <h2>Respiration</h2>
+    <div class="stat-grid stat-grid-2">
+        {% if activity.avg_respiration_rate %}
+        <div class="stat"><span class="stat-value">{{ '%.1f' | format(activity.avg_respiration_rate) }}</span><span class="stat-label">Avg br/min</span></div>
+        {% endif %}
+        {% if activity.max_respiration_rate %}
+        <div class="stat"><span class="stat-value">{{ '%.1f' | format(activity.max_respiration_rate) }}</span><span class="stat-label">Max br/min</span></div>
+        {% endif %}
+    </div>
+</section>
+{% endif %}
+
+{% if activity.max_elevation is not none and activity.min_elevation is not none %}
+<section class="card">
+    <h2>Elevation Range</h2>
+    <div class="stat-grid stat-grid-2">
+        <div class="stat"><span class="stat-value">{{ activity.min_elevation | round(0) | int }}m</span><span class="stat-label">Min</span></div>
+        <div class="stat"><span class="stat-value">{{ activity.max_elevation | round(0) | int }}m</span><span class="stat-label">Max</span></div>
+    </div>
+</section>
+{% endif %}
 
 {% if hr_zones and hr_zones is iterable and hr_zones is not string %}
 <section class="card">
@@ -125,6 +192,17 @@
         {% if weather.get('windSpeed') is not none %}
         <div class="stat"><span class="stat-value">{{ weather.windSpeed }} km/h</span><span class="stat-label">Wind</span></div>
         {% endif %}
+    </div>
+</section>
+{% endif %}
+
+{% set charts = chart_data | default('{}') %}
+{% if charts != '{}' %}
+<section class="card">
+    <h2>Activity Charts</h2>
+    <div class="chart-tabs" id="chartTabs"></div>
+    <div class="chart-container" style="height: 200px;">
+        <canvas id="activityChart"></canvas>
     </div>
 </section>
 {% endif %}
@@ -195,4 +273,97 @@ if (hrCtx && zoneData.length) {
 }
 </script>
 {% endif %}
+<script>
+const chartData = {{ chart_data | safe }};
+const chartKeys = Object.keys(chartData);
+const chartColors = {
+    heart_rate: { line: '#e74c3c', fill: 'rgba(231, 76, 60, 0.15)' },
+    elevation: { line: '#2ecc71', fill: 'rgba(46, 204, 113, 0.15)' },
+    pace:      { line: '#6c5ce7', fill: 'rgba(108, 92, 231, 0.15)' },
+    cadence:   { line: '#f39c12', fill: 'rgba(243, 156, 18, 0.15)' },
+    power:     { line: '#0984e3', fill: 'rgba(9, 132, 227, 0.15)' },
+};
+
+if (chartKeys.length > 0) {
+    const tabsEl = document.getElementById('chartTabs');
+    const canvas = document.getElementById('activityChart');
+    let activeChart = null;
+
+    function renderChart(key) {
+        if (activeChart) activeChart.destroy();
+        const series = chartData[key];
+        const colors = chartColors[key] || { line: '#6c5ce7', fill: 'rgba(108, 92, 231, 0.15)' };
+        const labels = series.data.map((_, i) => '');
+        // For pace chart, reverse Y axis (lower pace = faster)
+        const reverseY = key === 'pace';
+        activeChart = new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: series.label,
+                    data: series.data,
+                    borderColor: colors.line,
+                    backgroundColor: colors.fill,
+                    fill: true,
+                    borderWidth: 1.5,
+                    pointRadius: 0,
+                    pointHitRadius: 8,
+                    tension: 0.3,
+                    spanGaps: true,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title: () => '',
+                            label: (ctx) => {
+                                const v = ctx.parsed.y;
+                                if (v == null) return '';
+                                if (key === 'pace') {
+                                    const m = Math.floor(v);
+                                    const s = Math.round((v - m) * 60);
+                                    return `${m}:${s.toString().padStart(2, '0')} /km`;
+                                }
+                                return `${v.toFixed(key === 'elevation' ? 0 : 1)} ${series.unit}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: { display: false },
+                    y: {
+                        reverse: reverseY,
+                        grid: { color: 'rgba(255,255,255,0.06)' },
+                        ticks: { color: '#999', maxTicksLimit: 5 },
+                    }
+                },
+                interaction: { mode: 'index', intersect: false },
+            }
+        });
+
+        // Update active tab
+        tabsEl.querySelectorAll('.chart-tab').forEach(t => {
+            t.classList.toggle('active', t.dataset.key === key);
+        });
+    }
+
+    // Build tabs
+    chartKeys.forEach((key, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'chart-tab' + (i === 0 ? ' active' : '');
+        btn.textContent = chartData[key].label;
+        btn.dataset.key = key;
+        btn.addEventListener('click', () => renderChart(key));
+        tabsEl.appendChild(btn);
+    });
+
+    // Render first chart
+    renderChart(chartKeys[0]);
+}
+</script>
 {% endblock %}
