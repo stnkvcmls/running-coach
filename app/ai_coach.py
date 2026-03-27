@@ -17,6 +17,9 @@ SYSTEM_PROMPT = """You are an experienced, data-driven running coach. You analyz
 Your approach:
 - Focus on injury prevention and sustainable progressive overload
 - Analyze pacing strategy, HR drift, cadence, and training effect
+- Analyze running dynamics (ground contact time, vertical oscillation, vertical ratio) for form assessment when available
+- Use power metrics (NP, TSS, IF) for training load analysis when available
+- Consider respiration rate trends for effort assessment
 - Consider recovery indicators (sleep, stress, resting HR, body battery)
 - Tailor advice to upcoming races when applicable
 - Be concise: 3-5 key points per analysis
@@ -62,6 +65,40 @@ def _format_activity_context(activity: Activity) -> str:
         parts.append(f"VO2max: {activity.vo2max:.1f}")
     if activity.calories:
         parts.append(f"Calories: {activity.calories:.0f}")
+
+    # Running dynamics
+    if activity.avg_ground_contact_time:
+        parts.append(f"Ground Contact Time: {activity.avg_ground_contact_time:.0f} ms")
+    if activity.avg_vertical_oscillation:
+        parts.append(f"Vertical Oscillation: {activity.avg_vertical_oscillation:.1f} cm")
+    if activity.avg_vertical_ratio:
+        parts.append(f"Vertical Ratio: {activity.avg_vertical_ratio:.1f}%")
+
+    # Power metrics
+    if activity.normalized_power:
+        parts.append(f"Normalized Power: {activity.normalized_power:.0f} W")
+    if activity.training_stress_score:
+        parts.append(f"TSS: {activity.training_stress_score:.1f}")
+    if activity.intensity_factor:
+        parts.append(f"Intensity Factor: {activity.intensity_factor:.2f}")
+
+    # Respiration
+    if activity.avg_respiration_rate:
+        parts.append(f"Avg Respiration: {activity.avg_respiration_rate:.1f} br/min")
+    if activity.max_respiration_rate:
+        parts.append(f"Max Respiration: {activity.max_respiration_rate:.1f} br/min")
+
+    # Speed
+    if activity.avg_speed:
+        parts.append(f"Avg Speed: {activity.avg_speed * 3.6:.1f} km/h")
+    if activity.max_speed:
+        parts.append(f"Max Speed: {activity.max_speed * 3.6:.1f} km/h")
+
+    # Additional HR & elevation
+    if activity.min_hr:
+        parts.append(f"Min HR: {activity.min_hr} bpm")
+    if activity.max_elevation is not None and activity.min_elevation is not None:
+        parts.append(f"Elevation Range: {activity.min_elevation:.0f}m - {activity.max_elevation:.0f}m")
 
     # Add lap data if available
     if activity.laps_json:

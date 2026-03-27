@@ -685,6 +685,33 @@ details summary {
     color: var(--accent-light);
 }
 
+/* === Chart Tabs === */
+.chart-tabs {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    margin-bottom: 12px;
+    -webkit-overflow-scrolling: touch;
+}
+
+.chart-tab {
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    background: var(--bg-input);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s;
+}
+
+.chart-tab.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+
 /* === Markdown content === */
 .markdown strong { color: var(--text); }
 .markdown br { margin-bottom: 4px; }
