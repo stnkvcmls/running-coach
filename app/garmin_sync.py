@@ -493,10 +493,10 @@ def _parse_calendar_response(data: dict) -> list[dict]:
         event_date = _parse_calendar_date(date_raw)
         if not event_date:
             continue
-        if item_type not in ("race", "workout"):
+        if item_type not in ("race", "event", "workout"):
             continue
 
-        if item_type == "race":
+        if item_type in ("race", "event"):
             garmin_id = f"race_{item.get('id', item.get('eventId', ''))}"
             distance_m = item.get("raceDistance")
             distance_label = _race_distance_label(distance_m)
