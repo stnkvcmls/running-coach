@@ -8,7 +8,7 @@
 
 <section class="card">
     <h2>Database Stats</h2>
-    <div class="stat-grid stat-grid-3">
+    <div class="stat-grid stat-grid-4">
         <div class="stat">
             <span class="stat-value">{{ activity_count }}</span>
             <span class="stat-label">Activities</span>
@@ -21,13 +21,17 @@
             <span class="stat-value">{{ insight_count }}</span>
             <span class="stat-label">AI Insights</span>
         </div>
+        <div class="stat">
+            <span class="stat-value">{{ calendar_event_count }}</span>
+            <span class="stat-label">Calendar Events</span>
+        </div>
     </div>
 </section>
 
 <section class="card">
     <h2>Sync Status</h2>
     <div class="status-list">
-        {% for key in ['last_activity_sync', 'last_daily_sync', 'backfill_activities', 'backfill_daily'] %}
+        {% for key in ['last_activity_sync', 'last_daily_sync', 'last_calendar_sync', 'backfill_activities', 'backfill_daily'] %}
         <div class="status-item">
             <span class="status-key">{{ key | replace('_', ' ') | title }}</span>
             <span class="status-value">
@@ -51,6 +55,9 @@
         </form>
         <form action="/sync/daily" method="post" class="inline-form">
             <button type="submit" class="btn-secondary">Sync Daily Summary</button>
+        </form>
+        <form action="/sync/calendar" method="post" class="inline-form">
+            <button type="submit" class="btn-secondary">Sync Calendar</button>
         </form>
     </div>
 </section>

@@ -8,7 +8,7 @@ from sqlalchemy import func
 
 from app.config import settings
 from app.database import db_session
-from app.models import Activity, DailySummary, Insight, Race
+from app.models import Activity, DailySummary, GarminCalendarEvent, Insight
 
 logger = logging.getLogger(__name__)
 
@@ -277,11 +277,14 @@ def _build_context(db: Session, trigger_type: str, trigger_data: str) -> str:
             day_lines.append(f"- {d.date}: {sleep} {rhr} {bb} {stress}")
         sections.append("## Recent Recovery (7 days)\n" + "\n".join(day_lines))
 
-    # Upcoming races
+    # Upcoming races (from Garmin calendar)
     upcoming_races = (
-        db.query(Race)
-        .filter(Race.date >= date.today())
-        .order_by(Race.date.asc())
+        db.query(GarminCalendarEvent)
+        .filter(
+            GarminCalendarEvent.event_type == "race",
+            GarminCalendarEvent.date >= date.today(),
+        )
+        .order_by(GarminCalendarEvent.date.asc())
         .all()
     )
     if upcoming_races:
@@ -294,11 +297,31 @@ def _build_context(db: Session, trigger_type: str, trigger_data: str) -> str:
                 gm = (r.goal_time_sec % 3600) // 60
                 gs = r.goal_time_sec % 60
                 goal = f" Goal: {gh}:{gm:02d}:{gs:02d}" if gh else f" Goal: {gm}:{gs:02d}"
+            priority = f" [Priority {r.priority}]" if r.priority else ""
             race_lines.append(
-                f"- {r.name} ({r.distance_label}) on {r.date} "
-                f"({days_until} days away){goal}"
+                f"- {r.title} ({r.distance_label or '?'}) on {r.date} "
+                f"({days_until} days away){goal}{priority}"
             )
         sections.append("## Upcoming Races\n" + "\n".join(race_lines))
+
+    # Next scheduled training (from Garmin calendar)
+    next_training = (
+        db.query(GarminCalendarEvent)
+        .filter(
+            GarminCalendarEvent.event_type == "workout",
+            GarminCalendarEvent.date >= date.today(),
+        )
+        .order_by(GarminCalendarEvent.date.asc())
+        .first()
+    )
+    if next_training:
+        training_parts = [
+            f"- {next_training.title} on {next_training.date}",
+            f"- Type: {next_training.workout_type or 'General'}",
+        ]
+        if next_training.workout_description:
+            training_parts.append(f"- Details: {next_training.workout_description}")
+        sections.append("## Next Scheduled Training\n" + "\n".join(training_parts))
 
     # Recent insights (last 3) to avoid repetition
     recent_insights = (

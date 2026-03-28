@@ -4,14 +4,14 @@ import logging
 import threading
 from datetime import datetime, date, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Request, Form, HTTPException
+from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, desc
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Activity, DailySummary, Insight, Race, SyncStatus
+from app.models import Activity, DailySummary, GarminCalendarEvent, Insight, SyncStatus
 from app.utils import safe_json_loads
 
 logger = logging.getLogger(__name__)
@@ -192,11 +192,14 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         for ws, dist in sorted(weekly_buckets.items())
     ]
 
-    # Next race
+    # Next race (from Garmin calendar)
     next_race = (
-        db.query(Race)
-        .filter(Race.date >= date.today())
-        .order_by(Race.date.asc())
+        db.query(GarminCalendarEvent)
+        .filter(
+            GarminCalendarEvent.event_type == "race",
+            GarminCalendarEvent.date >= date.today(),
+        )
+        .order_by(GarminCalendarEvent.date.asc())
         .first()
     )
     days_to_race = (next_race.date - date.today()).days if next_race else None
@@ -362,12 +365,42 @@ def calendar_view(request: Request, month: str | None = None, db: Session = Depe
             d = a.started_at.date()
             activities_by_date.setdefault(d, []).append(a)
 
-    # All races
-    all_races = db.query(Race).order_by(Race.date.asc()).all()
-    races_by_date = {r.date: r for r in all_races}
+    # Garmin calendar events this month
+    month_events = (
+        db.query(GarminCalendarEvent)
+        .filter(
+            GarminCalendarEvent.date >= view_date,
+            GarminCalendarEvent.date < next_month,
+        )
+        .order_by(GarminCalendarEvent.date.asc())
+        .all()
+    )
+    events_by_date = {}
+    for e in month_events:
+        events_by_date.setdefault(e.date, []).append(e)
 
     # Upcoming races
-    upcoming_races = [r for r in all_races if r.date >= date.today()]
+    upcoming_races = (
+        db.query(GarminCalendarEvent)
+        .filter(
+            GarminCalendarEvent.event_type == "race",
+            GarminCalendarEvent.date >= date.today(),
+        )
+        .order_by(GarminCalendarEvent.date.asc())
+        .all()
+    )
+
+    # Upcoming workouts
+    upcoming_workouts = (
+        db.query(GarminCalendarEvent)
+        .filter(
+            GarminCalendarEvent.event_type == "workout",
+            GarminCalendarEvent.date >= date.today(),
+        )
+        .order_by(GarminCalendarEvent.date.asc())
+        .limit(10)
+        .all()
+    )
 
     # Build calendar grid
     cal = calendar.Calendar(firstweekday=0)  # Monday start
@@ -381,73 +414,14 @@ def calendar_view(request: Request, month: str | None = None, db: Session = Depe
         "view_date": view_date,
         "month_days": month_days,
         "activities_by_date": activities_by_date,
-        "races_by_date": races_by_date,
+        "events_by_date": events_by_date,
         "upcoming_races": upcoming_races,
+        "upcoming_workouts": upcoming_workouts,
         "prev_month": prev_month.strftime("%Y-%m"),
         "next_month": next_month.strftime("%Y-%m"),
         "today": date.today(),
         "page": "calendar",
     })
-
-
-@router.post("/races/add")
-def add_race(
-    name: str = Form(...),
-    race_date: str = Form(...),
-    distance_label: str = Form(...),
-    custom_distance_km: float | None = Form(None),
-    goal_hours: int | None = Form(None),
-    goal_minutes: int | None = Form(None),
-    goal_seconds: int | None = Form(None),
-    notes: str | None = Form(None),
-    db: Session = Depends(get_db),
-):
-    try:
-        parsed_date = datetime.strptime(race_date, "%Y-%m-%d").date()
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
-
-    distance_map = {
-        "5K": 5000,
-        "10K": 10000,
-        "Half Marathon": 21097.5,
-        "Marathon": 42195,
-    }
-
-    if distance_label == "Custom" and custom_distance_km:
-        if custom_distance_km <= 0:
-            raise HTTPException(status_code=400, detail="Distance must be positive.")
-        distance_m = custom_distance_km * 1000
-    else:
-        distance_m = distance_map.get(distance_label, 0)
-
-    goal_time_sec = None
-    if goal_hours or goal_minutes or goal_seconds:
-        if any(v is not None and v < 0 for v in [goal_hours, goal_minutes, goal_seconds]):
-            raise HTTPException(status_code=400, detail="Goal time values must be non-negative.")
-        goal_time_sec = (goal_hours or 0) * 3600 + (goal_minutes or 0) * 60 + (goal_seconds or 0)
-
-    race = Race(
-        name=name,
-        date=parsed_date,
-        distance_m=distance_m,
-        distance_label=distance_label if distance_label != "Custom" else f"{custom_distance_km}km",
-        goal_time_sec=goal_time_sec,
-        notes=notes or None,
-        created_at=datetime.now(timezone.utc),
-    )
-    db.add(race)
-    db.commit()
-    return RedirectResponse(url="/calendar", status_code=303)
-
-
-@router.post("/races/{race_id}/delete")
-def delete_race(race_id: int, db: Session = Depends(get_db)):
-    race = db.query(Race).filter(Race.id == race_id).first()
-    if race:
-        db.delete(race)
-        db.commit()
-    return RedirectResponse(url="/calendar", status_code=303)
 
 
 # --- Settings ---
@@ -458,6 +432,7 @@ def settings_page(request: Request, db: Session = Depends(get_db)):
     activity_count = db.query(func.count(Activity.id)).scalar()
     daily_count = db.query(func.count(DailySummary.id)).scalar()
     insight_count = db.query(func.count(Insight.id)).scalar()
+    calendar_event_count = db.query(func.count(GarminCalendarEvent.id)).scalar()
 
     return templates.TemplateResponse("settings.html", {
         "request": request,
@@ -465,6 +440,7 @@ def settings_page(request: Request, db: Session = Depends(get_db)):
         "activity_count": activity_count,
         "daily_count": daily_count,
         "insight_count": insight_count,
+        "calendar_event_count": calendar_event_count,
         "page": "settings",
     })
 
@@ -493,4 +469,12 @@ def trigger_daily_sync():
     """Manually trigger daily summary sync."""
     from app.main import _scheduled_daily_sync
     threading.Thread(target=_scheduled_daily_sync, daemon=True).start()
+    return RedirectResponse(url="/settings", status_code=303)
+
+
+@router.post("/sync/calendar")
+def trigger_calendar_sync():
+    """Manually trigger calendar sync."""
+    from app.garmin_sync import sync_calendar
+    threading.Thread(target=sync_calendar, daemon=True).start()
     return RedirectResponse(url="/settings", status_code=303)

@@ -132,6 +132,24 @@ class Race(Base):
     created_at = Column(DateTime, default=_utcnow)
 
 
+class GarminCalendarEvent(Base):
+    __tablename__ = "garmin_calendar_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    garmin_id = Column(String(100), unique=True, nullable=False, index=True)
+    event_type = Column(String(50), nullable=False, index=True)  # "race", "workout"
+    date = Column(Date, nullable=False, index=True)
+    title = Column(Text)
+    distance_m = Column(Float, nullable=True)
+    distance_label = Column(Text, nullable=True)
+    goal_time_sec = Column(Integer, nullable=True)
+    priority = Column(String(1), nullable=True)  # A, B, C (races only)
+    workout_type = Column(Text, nullable=True)
+    workout_description = Column(Text, nullable=True)
+    raw_json = Column(Text)
+    synced_at = Column(DateTime, default=_utcnow)
+
+
 class SyncStatus(Base):
     __tablename__ = "sync_status"
 

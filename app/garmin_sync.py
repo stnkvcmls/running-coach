@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import db_session
-from app.models import Activity, DailySummary, SyncStatus
+from app.models import Activity, DailySummary, GarminCalendarEvent, SyncStatus
 
 logger = logging.getLogger(__name__)
 
@@ -443,3 +443,161 @@ def backfill_daily_summaries():
 
         except Exception:
             logger.exception("Daily summary backfill failed")
+
+
+def _parse_calendar_response(data: dict) -> list[dict]:
+    """Parse Garmin calendar API response into event dicts."""
+    events = []
+    items = data.get("calendarItems", [])
+    for item in items:
+        item_type = (item.get("itemType") or "").lower()
+        start_date_str = item.get("startDate")
+        if not start_date_str or item_type not in ("race", "workout"):
+            continue
+
+        try:
+            event_date = datetime.strptime(start_date_str[:10], "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            continue
+
+        if item_type == "race":
+            garmin_id = f"race_{item.get('id', item.get('eventId', ''))}"
+            distance_m = item.get("raceDistance")
+            distance_label = _race_distance_label(distance_m)
+            goal_time_sec = None
+            goal_time_raw = item.get("raceGoalTime")
+            if goal_time_raw and isinstance(goal_time_raw, (int, float)):
+                goal_time_sec = int(goal_time_raw)
+            priority = item.get("racePriority")
+            if priority and isinstance(priority, str):
+                priority = priority[0].upper() if priority else None
+
+            events.append({
+                "garmin_id": garmin_id,
+                "event_type": "race",
+                "date": event_date,
+                "title": item.get("title") or item.get("eventName") or "Race",
+                "distance_m": distance_m,
+                "distance_label": distance_label,
+                "goal_time_sec": goal_time_sec,
+                "priority": priority,
+                "workout_type": None,
+                "workout_description": None,
+                "raw_json": json.dumps(item, default=str),
+            })
+
+        elif item_type == "workout":
+            workout_id = item.get("workoutId") or item.get("id") or ""
+            garmin_id = f"workout_{workout_id}_{start_date_str[:10]}"
+            workout_type = item.get("workoutType") or item.get("sportType")
+            description = item.get("workoutDescription") or ""
+            if not description:
+                # Try to build description from workout steps
+                steps = item.get("workoutSteps") or item.get("steps") or []
+                if isinstance(steps, list):
+                    step_parts = []
+                    for s in steps:
+                        step_name = s.get("stepName") or s.get("type") or ""
+                        duration = s.get("endConditionValue") or ""
+                        if step_name:
+                            step_parts.append(f"{step_name}: {duration}" if duration else step_name)
+                    description = " → ".join(step_parts) if step_parts else ""
+
+            events.append({
+                "garmin_id": garmin_id,
+                "event_type": "workout",
+                "date": event_date,
+                "title": item.get("title") or item.get("workoutName") or "Workout",
+                "distance_m": item.get("distance"),
+                "distance_label": None,
+                "goal_time_sec": None,
+                "priority": None,
+                "workout_type": workout_type,
+                "workout_description": description or None,
+                "raw_json": json.dumps(item, default=str),
+            })
+
+    return events
+
+
+def _race_distance_label(distance_m: float | None) -> str | None:
+    """Convert distance in meters to a standard label."""
+    if not distance_m:
+        return None
+    thresholds = [
+        (5000, "5K"),
+        (10000, "10K"),
+        (21097.5, "Half Marathon"),
+        (42195, "Marathon"),
+    ]
+    for threshold, label in thresholds:
+        if abs(distance_m - threshold) < 500:
+            return label
+    return f"{distance_m / 1000:.1f}km"
+
+
+def sync_calendar() -> int:
+    """Sync Garmin calendar events (races + workouts). Returns count of upserted events."""
+    logger.info("Syncing Garmin calendar...")
+    client = get_garmin_client()
+    today = date.today()
+
+    # Fetch current month + next 2 months
+    months_to_fetch = []
+    for offset in range(3):
+        m = today.month + offset
+        y = today.year
+        if m > 12:
+            m -= 12
+            y += 1
+        months_to_fetch.append((y, m))
+
+    all_events = []
+    for year, month in months_to_fetch:
+        try:
+            # Garmin API uses 0-indexed months
+            data = client.connectapi(f"/calendar-service/year/{year}/month/{month - 1}")
+            parsed = _parse_calendar_response(data)
+            all_events.extend(parsed)
+            time.sleep(0.3)
+        except Exception:
+            logger.exception("Failed to fetch calendar for %d-%02d", year, month)
+
+    with db_session() as db:
+        try:
+            seen_garmin_ids = set()
+            for evt in all_events:
+                if evt["date"] < today:
+                    continue
+                seen_garmin_ids.add(evt["garmin_id"])
+                # Upsert
+                existing = db.query(GarminCalendarEvent).filter(
+                    GarminCalendarEvent.garmin_id == evt["garmin_id"]
+                ).first()
+                if existing:
+                    for key, value in evt.items():
+                        if key != "garmin_id":
+                            setattr(existing, key, value)
+                    existing.synced_at = datetime.now(timezone.utc)
+                else:
+                    db.add(GarminCalendarEvent(**evt, synced_at=datetime.now(timezone.utc)))
+
+            # Remove stale future events no longer in API response
+            stale_query = db.query(GarminCalendarEvent).filter(
+                GarminCalendarEvent.date >= today,
+            )
+            if seen_garmin_ids:
+                stale_query = stale_query.filter(
+                    ~GarminCalendarEvent.garmin_id.in_(seen_garmin_ids)
+                )
+            stale_count = stale_query.delete(synchronize_session="fetch")
+            if stale_count:
+                logger.info("Removed %d stale calendar events", stale_count)
+
+            db.commit()
+            _set_sync_status(db, "last_calendar_sync", datetime.now(timezone.utc).isoformat())
+            logger.info("Calendar sync complete. %d events.", len(seen_garmin_ids))
+        except Exception:
+            logger.exception("Calendar sync failed")
+
+    return len(all_events)

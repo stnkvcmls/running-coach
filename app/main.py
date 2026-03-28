@@ -24,8 +24,8 @@ scheduler = BackgroundScheduler()
 
 
 def _scheduled_activity_sync():
-    """Scheduled job: sync activities and trigger AI for new ones."""
-    from app.garmin_sync import sync_activities
+    """Scheduled job: sync activities, calendar, and trigger AI for new ones."""
+    from app.garmin_sync import sync_activities, sync_calendar
     from app.ai_coach import analyze_activity
 
     new_activities = sync_activities()
@@ -34,6 +34,11 @@ def _scheduled_activity_sync():
             analyze_activity(activity)
         except Exception:
             logger.exception("AI analysis failed for activity %s", activity.id)
+
+    try:
+        sync_calendar()
+    except Exception:
+        logger.exception("Calendar sync failed")
 
 
 def _scheduled_daily_sync():
