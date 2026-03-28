@@ -335,6 +335,9 @@ details summary {
 .badge-trend { background: #fdcb6e; color: #333; }
 .badge-recommendation { background: #e17055; }
 .badge-race { background: var(--warning); color: #333; }
+.badge-priority-A { background: #6c5ce7; font-size: 0.65rem; padding: 1px 6px; vertical-align: middle; }
+.badge-priority-B { background: #636e72; font-size: 0.65rem; padding: 1px 6px; vertical-align: middle; }
+.badge-priority-C { background: #2d3436; font-size: 0.65rem; padding: 1px 6px; vertical-align: middle; }
 
 /* === Filter Chips === */
 .filter-chips {

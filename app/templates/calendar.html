@@ -16,7 +16,9 @@
                 <span class="race-flag">&#127937;</span>
                 <div>
                     <strong>{{ r.title }}</strong>
-                    <span class="race-meta">{{ r.distance_label or '' }} &middot; {{ r.date.strftime('%b %d, %Y') }}{% if r.priority %} &middot; Priority {{ r.priority }}{% endif %}</span>
+                    {% if r.priority %}<span class="badge badge-priority-{{ r.priority }}">{{ r.priority }}</span>{% endif %}
+                    <span class="race-meta">{{ r.distance_label or '' }} &middot; {{ r.date.strftime('%b %d, %Y') }}</span>
+                    {% if r.goal_time_sec %}<span class="race-meta">Goal: {{ r.goal_time_sec | duration }}</span>{% endif %}
                 </div>
             </div>
             <div class="race-right">
