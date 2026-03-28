@@ -102,7 +102,7 @@ class DailySummaryResponse(BaseModel):
     body_battery_high: int | None = None
     body_battery_low: int | None = None
     intensity_minutes: int | None = None
-    floors_climbed: int | None = None
+    floors_climbed: float | None = None
 
     class Config:
         from_attributes = True
