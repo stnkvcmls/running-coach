@@ -166,9 +166,12 @@ from fastapi.responses import FileResponse  # noqa: E402
 @app.get("/{full_path:path}", include_in_schema=False)
 async def spa_catch_all(full_path: str):
     """Serve the React SPA for client-side routing."""
+    # Don't intercept API or static file requests
+    if full_path.startswith("api/") or full_path.startswith("static/") or full_path.startswith("assets/") or full_path.startswith("legacy/"):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Not found")
     index_path = os.path.join(frontend_dist, "index.html")
     if os.path.isfile(index_path):
         return FileResponse(index_path, media_type="text/html")
-    # Fall back to 404 if React build not available
     from fastapi import HTTPException
     raise HTTPException(status_code=404, detail="Not found")

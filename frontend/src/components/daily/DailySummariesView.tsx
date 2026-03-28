@@ -7,10 +7,11 @@ import './DailySummariesView.css'
 
 export default function DailySummariesView() {
   const [page, setPage] = useState(1)
-  const { data: summaries, isLoading } = useDailySummaries(page)
+  const { data: summaries, isLoading, error } = useDailySummaries(page)
   const navigate = useNavigate()
 
   if (isLoading) return <div className="spinner" />
+  if (error) return <div className="empty-state">Failed to load daily summaries</div>
 
   return (
     <div className="daily-view">
