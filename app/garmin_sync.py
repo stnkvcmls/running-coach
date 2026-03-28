@@ -445,19 +445,55 @@ def backfill_daily_summaries():
             logger.exception("Daily summary backfill failed")
 
 
+def _parse_calendar_date(value) -> date | None:
+    """Parse a date from various Garmin calendar formats."""
+    if value is None:
+        return None
+    if isinstance(value, date):
+        return value
+    if isinstance(value, (int, float)):
+        # Epoch timestamp in milliseconds
+        try:
+            return datetime.fromtimestamp(value / 1000, tz=timezone.utc).date()
+        except (ValueError, OSError):
+            return None
+    if isinstance(value, str):
+        for fmt in ("%Y-%m-%d", "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S"):
+            try:
+                return datetime.strptime(value[:len(fmt.replace('%', 'X'))], fmt).date()
+            except (ValueError, TypeError):
+                continue
+        # Try just first 10 chars as YYYY-MM-DD
+        try:
+            return datetime.strptime(value[:10], "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            return None
+    return None
+
+
 def _parse_calendar_response(data: dict) -> list[dict]:
     """Parse Garmin calendar API response into event dicts."""
     events = []
     items = data.get("calendarItems", [])
+
+    # Log item types for debugging
+    if items:
+        type_counts = {}
+        for item in items:
+            t = item.get("itemType") or "unknown"
+            type_counts[t] = type_counts.get(t, 0) + 1
+        logger.info("Calendar items: %d total, types: %s", len(items), type_counts)
+    else:
+        logger.info("Calendar response has 0 calendarItems (keys: %s)", list(data.keys()))
+
     for item in items:
         item_type = (item.get("itemType") or "").lower()
-        start_date_str = item.get("startDate")
-        if not start_date_str or item_type not in ("race", "workout"):
+        # Try multiple date field names
+        date_raw = item.get("date") or item.get("startDate") or item.get("startTimestampLocal")
+        event_date = _parse_calendar_date(date_raw)
+        if not event_date:
             continue
-
-        try:
-            event_date = datetime.strptime(start_date_str[:10], "%Y-%m-%d").date()
-        except (ValueError, TypeError):
+        if item_type not in ("race", "workout"):
             continue
 
         if item_type == "race":
@@ -488,7 +524,7 @@ def _parse_calendar_response(data: dict) -> list[dict]:
 
         elif item_type == "workout":
             workout_id = item.get("workoutId") or item.get("id") or ""
-            garmin_id = f"workout_{workout_id}_{start_date_str[:10]}"
+            garmin_id = f"workout_{workout_id}_{event_date.isoformat()}"
             workout_type = item.get("workoutType") or item.get("sportType")
             description = item.get("workoutDescription") or ""
             if not description:
