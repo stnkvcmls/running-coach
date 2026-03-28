@@ -1,0 +1,85 @@
+.daily-view {
+  padding: 16px;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.daily-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.daily-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  cursor: pointer;
+  transition: background 0.15s;
+  padding: 12px 16px;
+}
+
+.daily-card:hover {
+  background: var(--bg-hover);
+}
+
+.daily-date-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 40px;
+}
+
+.daily-day {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1;
+}
+
+.daily-month {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+.daily-stats-col {
+  flex: 1;
+}
+
+.daily-stat-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.daily-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.daily-stat .stat-value {
+  font-size: 1rem;
+}
+
+.load-more-wrap {
+  text-align: center;
+  padding: 16px 0;
+}
+
+.load-more-btn {
+  padding: 10px 24px;
+  border-radius: 20px;
+  background: var(--bg-card);
+  color: var(--accent-light);
+  font-size: 0.85rem;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  transition: background 0.15s;
+}
+
+.load-more-btn:hover {
+  background: var(--bg-hover);
+}

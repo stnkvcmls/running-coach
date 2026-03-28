@@ -143,7 +143,32 @@ app = FastAPI(title="Running Coach", lifespan=lifespan)
 static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
-# Import routes
+# Mount React build assets if available
+frontend_dist = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")
+if os.path.isdir(os.path.join(frontend_dist, "assets")):
+    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="react-assets")
+
+# Import and mount API router
+from app.api import api_router  # noqa: E402
+
+app.include_router(api_router)
+
+# Import HTML routes (legacy Jinja2 templates) under /legacy prefix
 from app.routes import router  # noqa: E402
 
-app.include_router(router)
+app.include_router(router, prefix="/legacy")
+
+
+# SPA: serve React index.html for all non-API, non-static paths
+from fastapi.responses import FileResponse  # noqa: E402
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def spa_catch_all(full_path: str):
+    """Serve the React SPA for client-side routing."""
+    index_path = os.path.join(frontend_dist, "index.html")
+    if os.path.isfile(index_path):
+        return FileResponse(index_path, media_type="text/html")
+    # Fall back to 404 if React build not available
+    from fastapi import HTTPException
+    raise HTTPException(status_code=404, detail="Not found")

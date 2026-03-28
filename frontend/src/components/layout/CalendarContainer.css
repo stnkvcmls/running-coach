@@ -1,0 +1,28 @@
+.calendar-container {
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  transition: transform 0.25s ease-out;
+  touch-action: pan-x;
+  user-select: none;
+}
+
+.calendar-container.collapsed {
+  /* Week strip height */
+}
+
+.calendar-container.expanded {
+  /* Month calendar - taller */
+}
+
+.calendar-handle {
+  display: flex;
+  justify-content: center;
+  padding: 6px 0 4px;
+}
+
+.handle-bar {
+  width: 32px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+}

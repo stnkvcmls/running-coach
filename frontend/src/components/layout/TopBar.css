@@ -1,0 +1,41 @@
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--top-bar-height);
+  padding: 0 16px;
+  background: var(--bg);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 1px solid var(--border);
+}
+
+.top-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.top-bar-week {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.top-bar-calendar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  color: var(--text-muted);
+  transition: background 0.15s, color 0.15s;
+}
+
+.top-bar-calendar-btn:hover,
+.top-bar-calendar-btn.active {
+  background: var(--bg-card);
+  color: var(--accent-light);
+}

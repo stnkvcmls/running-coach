@@ -1,0 +1,60 @@
+.today-view {
+  padding: 16px;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.today-section {
+  margin-bottom: 20px;
+}
+
+.workout-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Race card */
+.race-card {
+  text-align: center;
+  background: linear-gradient(135deg, var(--accent), #8b5cf6);
+  padding: 20px;
+}
+
+.race-days {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1;
+}
+
+.race-name {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.85);
+  margin-top: 4px;
+}
+
+.race-distance {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.65);
+  margin-top: 2px;
+}
+
+/* Daily snapshot */
+.daily-snapshot .snap-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.snap-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+@media (min-width: 400px) {
+  .daily-snapshot .snap-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}

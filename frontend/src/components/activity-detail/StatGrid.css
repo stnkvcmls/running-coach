@@ -1,0 +1,15 @@
+.stat-grid {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.stat-grid-large .stat-cell {
+  text-align: center;
+}
+
+.stat-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}

@@ -1,0 +1,88 @@
+.activity-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+  gap: 12px;
+}
+
+.activity-list-item:hover {
+  background: var(--bg-hover);
+}
+
+.activity-list-item:active {
+  transform: scale(0.99);
+}
+
+.ali-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.ali-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ali-icon-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.ali-info {
+  min-width: 0;
+}
+
+.ali-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ali-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.ali-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.ali-stats {
+  display: flex;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.ali-sep {
+  color: var(--text-muted);
+}
+
+.ali-chevron {
+  color: var(--text-muted);
+}
+
+@media (max-width: 400px) {
+  .ali-stats {
+    display: none;
+  }
+}

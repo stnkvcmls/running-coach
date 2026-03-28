@@ -1,0 +1,14 @@
+.week-overview {
+  padding: 16px;
+}
+
+.week-total {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.week-chart {
+  width: 100%;
+}

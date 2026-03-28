@@ -1,0 +1,98 @@
+.settings-view {
+  padding: 16px;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.settings-section {
+  margin-bottom: 24px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.settings-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.settings-stat .stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.sync-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.sync-item {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.sync-item:last-child {
+  border-bottom: none;
+}
+
+.sync-key {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text);
+  text-transform: capitalize;
+}
+
+.sync-value {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.sync-time {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+.sync-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sync-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 0.88rem;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  transition: background 0.15s;
+}
+
+.sync-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.sync-btn:disabled {
+  opacity: 0.6;
+}
+
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

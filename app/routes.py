@@ -12,79 +12,11 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Activity, DailySummary, GarminCalendarEvent, Insight, SyncStatus
-from app.utils import safe_json_loads
+from app.utils import safe_json_loads, parse_activity_charts
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-def _parse_activity_charts(laps_data) -> dict:
-    """Extract time-series chart data from activity details (laps_json)."""
-    if not laps_data or not isinstance(laps_data, dict):
-        return {}
-
-    descriptors = laps_data.get("metricDescriptors", [])
-    metrics = laps_data.get("activityDetailMetrics", [])
-    if not descriptors or not metrics:
-        return {}
-
-    # Build column index map
-    col_map = {}
-    for desc in descriptors:
-        key = desc.get("key", "")
-        idx = desc.get("metricsIndex")
-        if idx is not None:
-            col_map[key] = idx
-
-    charts = {}
-    # Sample ~200 points max for performance
-    step = max(1, len(metrics) // 200)
-    sampled = metrics[::step]
-
-    series_defs = [
-        ("heart_rate",  "directHeartRate",            "Heart Rate",  "bpm"),
-        ("elevation",   "directElevation",            "Elevation",   "m"),
-        ("pace",        "directSpeed",                "Pace",        "min/km"),
-        ("cadence",     "directRunCadence",           "Cadence",     "spm"),
-        ("power",       "directPower",                "Power",       "W"),
-        ("gct",         "directGroundContactTime",    "GCT",         "ms"),
-        ("vert_osc",    "directVerticalOscillation",  "Vert. Osc.",  "cm"),
-        ("vert_ratio",  "directVerticalRatio",        "Vert. Ratio", "%"),
-        ("stride",      "directStrideLength",         "Stride",      "m"),
-        ("perf_cond",   "directPerformanceCondition", "Perf. Cond.", ""),
-        ("stamina",     "directCurrentStamina",       "Stamina",     "%"),
-    ]
-
-    for chart_key, garmin_key, label, unit in series_defs:
-        if garmin_key not in col_map:
-            continue
-        idx = col_map[garmin_key]
-        values = []
-        for m in sampled:
-            metrics_arr = m.get("metrics", [])
-            if idx < len(metrics_arr) and metrics_arr[idx] is not None:
-                values.append(metrics_arr[idx])
-            else:
-                values.append(None)
-        if any(v is not None for v in values):
-            charts[chart_key] = {"label": label, "unit": unit, "data": values}
-
-    # Convert speed (m/s) to pace (min/km)
-    if "pace" in charts:
-        charts["pace"]["data"] = [
-            round(1000 / (60 * v), 2) if v and v > 0 else None
-            for v in charts["pace"]["data"]
-        ]
-
-    # Double cadence for running (Garmin reports half-cadence)
-    if "cadence" in charts:
-        charts["cadence"]["data"] = [
-            round(v * 2) if v is not None else None
-            for v in charts["cadence"]["data"]
-        ]
-
-    return charts
 templates = Jinja2Templates(directory="app/templates")
 
 
@@ -232,7 +164,7 @@ def activity_detail(request: Request, activity_id: int, db: Session = Depends(ge
     power_zones = safe_json_loads(activity.power_zones_json)
 
     # Parse time-series data for area charts
-    chart_data = _parse_activity_charts(laps)
+    chart_data = parse_activity_charts(laps)
 
     # Get AI insight for this activity
     insight = (

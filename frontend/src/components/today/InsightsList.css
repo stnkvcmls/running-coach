@@ -1,0 +1,37 @@
+.insights-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.insight-card {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.insight-card:hover {
+  background: var(--bg-hover);
+}
+
+.insight-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.insight-summary {
+  flex: 1;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.insight-content {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+}

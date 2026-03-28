@@ -1,0 +1,16 @@
+.daily-detail {
+  min-height: 100dvh;
+  background: var(--bg);
+}
+
+.daily-detail .detail-body {
+  padding: 16px;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.daily-detail .workout-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}

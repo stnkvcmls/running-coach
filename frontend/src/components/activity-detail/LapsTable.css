@@ -1,0 +1,43 @@
+.laps-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.laps-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.laps-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.laps-table th {
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--bg-input);
+  white-space: nowrap;
+}
+
+.laps-table td {
+  padding: 8px 12px;
+  color: var(--text);
+  border-top: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.lap-num {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.laps-table tr:hover td {
+  background: var(--bg-hover);
+}
