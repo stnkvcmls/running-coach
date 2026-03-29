@@ -9,6 +9,7 @@ import ActivityDetailView from './components/activity-detail/ActivityDetailView'
 import DailySummariesView from './components/daily/DailySummariesView'
 import DailyDetailView from './components/daily/DailyDetailView'
 import SettingsView from './components/settings/SettingsView'
+import WorkoutDetailView from './components/workout-detail/WorkoutDetailView'
 
 interface DateContextType {
   selectedDate: Date
@@ -29,7 +30,7 @@ export default function App() {
   const [calendarExpanded, setCalendarExpanded] = useState(false)
   const location = useLocation()
 
-  const isDetailPage = location.pathname.startsWith('/activities/') || location.pathname.startsWith('/daily/')
+  const isDetailPage = location.pathname.startsWith('/activities/') || location.pathname.startsWith('/daily/') || location.pathname.startsWith('/workouts/')
   const showCalendar = !isDetailPage
 
   return (
@@ -59,6 +60,7 @@ export default function App() {
             <Route path="/activities/:id" element={<ActivityDetailView />} />
             <Route path="/daily" element={<DailySummariesView />} />
             <Route path="/daily/:id" element={<DailyDetailView />} />
+            <Route path="/workouts/:id" element={<WorkoutDetailView />} />
             <Route path="/settings" element={<SettingsView />} />
           </Routes>
         </main>

@@ -7,6 +7,7 @@ import type {
   DailySummaryResponse,
   DailySummaryDetail,
   CalendarDay,
+  CalendarEvent,
   InsightResponse,
   SettingsResponse,
 } from './types'
@@ -61,6 +62,14 @@ export function useCalendarWeek(date: string) {
   return useQuery({
     queryKey: ['calendar-week', date],
     queryFn: () => apiGet<CalendarDay[]>(`/calendar/week?date=${date}`),
+  })
+}
+
+export function useCalendarEvent(id: number) {
+  return useQuery({
+    queryKey: ['calendar-event', id],
+    queryFn: () => apiGet<CalendarEvent>(`/calendar-events/${id}`),
+    enabled: id > 0,
   })
 }
 

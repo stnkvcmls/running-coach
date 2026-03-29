@@ -361,6 +361,16 @@ def api_calendar_week(
     return result
 
 
+# --- Calendar Event Detail ---
+
+@api_router.get("/calendar-events/{event_id}", response_model=CalendarEventResponse)
+def api_calendar_event_detail(event_id: int, db: Session = Depends(get_db)):
+    event = db.query(GarminCalendarEvent).filter(GarminCalendarEvent.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Calendar event not found")
+    return _enrich_event_with_steps(event)
+
+
 # --- Insights ---
 
 @api_router.get("/insights", response_model=list[InsightResponse])

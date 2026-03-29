@@ -1,5 +1,11 @@
 .scheduled-workout-card {
   overflow: hidden;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.scheduled-workout-card:active {
+  transform: scale(0.98);
 }
 
 /* Header */
