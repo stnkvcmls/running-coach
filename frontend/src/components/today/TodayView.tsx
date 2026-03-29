@@ -84,7 +84,7 @@ export default function TodayView() {
       {/* Week overview chart */}
       {data?.weekly_data && data.weekly_data.length > 0 && (
         <section className="today-section">
-          <h2 className="section-title">Week {format(selectedDate, 'w')} Overview</h2>
+          <h2 className="section-title">Week {format(selectedDate, 'I')} Overview</h2>
           <WeekOverview data={data.weekly_data} />
         </section>
       )}

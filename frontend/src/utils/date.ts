@@ -1,4 +1,4 @@
-import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, addMonths, subMonths, startOfMonth, eachDayOfInterval, getDay, isSameDay, isToday as fnsIsToday, parseISO } from 'date-fns'
+import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, addMonths, subMonths, startOfMonth, eachDayOfInterval, getDay, isSameDay, isToday as fnsIsToday, parseISO, getISOWeek, getISOWeeksInYear } from 'date-fns'
 
 export { format, addWeeks, subWeeks, addMonths, subMonths, startOfMonth, isSameDay, parseISO }
 
@@ -37,12 +37,9 @@ export function isToday(date: Date): boolean {
 }
 
 export function getWeekNumber(date: Date): number {
-  const startOfYear = new Date(date.getFullYear(), 0, 1)
-  const diff = date.getTime() - startOfYear.getTime()
-  return Math.ceil((diff / 86400000 + startOfYear.getDay() + 1) / 7)
+  return getISOWeek(date)
 }
 
 export function getTotalWeeksInYear(year: number): number {
-  const dec31 = new Date(year, 11, 31)
-  return getWeekNumber(dec31)
+  return getISOWeeksInYear(new Date(year, 6, 1))
 }
