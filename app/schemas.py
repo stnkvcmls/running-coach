@@ -99,6 +99,9 @@ class ActivityDetail(BaseModel):
     # Related insight
     insight: InsightResponse | None = None
 
+    # Scheduled workout for this activity's date
+    scheduled_workout: "CalendarEventResponse | None" = None
+
     class Config:
         from_attributes = True
 

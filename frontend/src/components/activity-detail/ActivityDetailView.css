@@ -74,3 +74,8 @@
 .analyze-btn:disabled {
   opacity: 0.6;
 }
+
+.workout-description-card {
+  overflow: hidden;
+  padding: 0;
+}

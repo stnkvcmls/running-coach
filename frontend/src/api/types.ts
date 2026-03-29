@@ -54,6 +54,7 @@ export interface ActivityDetail extends ActivitySummary {
   chart_data: Record<string, ChartSeries> | null
   metric_zones: Record<string, MetricZone[]> | null
   insight: InsightResponse | null
+  scheduled_workout: CalendarEvent | null
 }
 
 export interface ChartSeries {

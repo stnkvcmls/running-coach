@@ -174,6 +174,21 @@ def api_activity_detail(activity_id: int, db: Session = Depends(get_db)):
             MetricZoneResponse.model_validate(z)
         )
 
+    # Find scheduled workout for this activity's date
+    scheduled_workout = None
+    if activity.started_at:
+        activity_date = activity.started_at.date() if isinstance(activity.started_at, datetime) else activity.started_at
+        workout_event = (
+            db.query(GarminCalendarEvent)
+            .filter(
+                GarminCalendarEvent.date == activity_date,
+                GarminCalendarEvent.event_type == "workout",
+            )
+            .first()
+        )
+        if workout_event:
+            scheduled_workout = _enrich_event_with_steps(workout_event)
+
     result = ActivityDetail.model_validate(activity)
     result.splits = splits
     result.hr_zones = hr_zones
@@ -182,6 +197,7 @@ def api_activity_detail(activity_id: int, db: Session = Depends(get_db)):
     result.chart_data = chart_data
     result.metric_zones = metric_zones
     result.insight = InsightResponse.model_validate(insight) if insight else None
+    result.scheduled_workout = scheduled_workout
     return result
 
 

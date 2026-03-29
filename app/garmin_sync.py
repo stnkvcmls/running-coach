@@ -629,8 +629,6 @@ def sync_calendar() -> int:
         try:
             seen_garmin_ids = set()
             for evt in all_events:
-                if evt["date"] < today:
-                    continue
                 seen_garmin_ids.add(evt["garmin_id"])
                 # Upsert
                 existing = db.query(GarminCalendarEvent).filter(

@@ -9,6 +9,7 @@ import ChartTabs from './ChartTabs'
 import HrZonesChart from './HrZonesChart'
 import LapsTable from './LapsTable'
 import AiInsightCard from './AiInsightCard'
+import WorkoutSteps from '../today/WorkoutSteps'
 import './ActivityDetailView.css'
 
 export default function ActivityDetailView() {
@@ -79,6 +80,16 @@ export default function ActivityDetailView() {
       <div className="detail-body">
         {/* Primary stats */}
         <StatGrid stats={primaryStats} columns={3} large />
+
+        {/* Workout Description */}
+        {activity.scheduled_workout?.workout_steps && activity.scheduled_workout.workout_steps.length > 0 && (
+          <section className="detail-section">
+            <h3 className="section-title">Description</h3>
+            <div className="card workout-description-card">
+              <WorkoutSteps steps={activity.scheduled_workout.workout_steps} />
+            </div>
+          </section>
+        )}
 
         {/* Secondary stats */}
         {secondaryStats.length > 0 && <StatGrid stats={secondaryStats} columns={3} />}
