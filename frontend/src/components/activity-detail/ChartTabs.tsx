@@ -1,6 +1,9 @@
 import { useState } from 'react'
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import type { ChartSeries } from '../../api/types'
+import {
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  ScatterChart, Scatter, ReferenceLine,
+} from 'recharts'
+import type { ChartSeries, MetricZone } from '../../api/types'
 import './ChartTabs.css'
 
 const chartColors: Record<string, string> = {
@@ -17,11 +20,30 @@ const chartColors: Record<string, string> = {
   stamina: '#a29bfe',
 }
 
-interface Props {
-  chartData: Record<string, ChartSeries>
+const SCATTER_METRICS = new Set(['cadence', 'stride', 'gct', 'vert_osc', 'vert_ratio'])
+
+function getDotColor(value: number, zones: MetricZone[]): string {
+  for (const zone of zones) {
+    const aboveMin = zone.min_value === null || value >= zone.min_value
+    const belowMax = zone.max_value === null || value < zone.max_value
+    if (aboveMin && belowMax) return zone.zone_color
+  }
+  // Check the last zone (unbounded max) separately with inclusive check
+  for (const zone of zones) {
+    if (zone.max_value === null) {
+      const aboveMin = zone.min_value === null || value >= zone.min_value
+      if (aboveMin) return zone.zone_color
+    }
+  }
+  return '#6c5ce7'
 }
 
-export default function ChartTabs({ chartData }: Props) {
+interface Props {
+  chartData: Record<string, ChartSeries>
+  metricZones?: Record<string, MetricZone[]> | null
+}
+
+export default function ChartTabs({ chartData, metricZones }: Props) {
   const keys = Object.keys(chartData)
   const [activeKey, setActiveKey] = useState(keys[0] || '')
 
@@ -31,10 +53,88 @@ export default function ChartTabs({ chartData }: Props) {
   if (!series) return null
 
   const color = chartColors[activeKey] || '#6c5ce7'
-  const data = series.data.map((v, i) => ({ i, v }))
+  const isScatter = SCATTER_METRICS.has(activeKey)
+  const zones = metricZones?.[activeKey]
 
   // Reverse Y for pace (lower pace = faster = better)
   const reversed = activeKey === 'pace'
+
+  const tooltipStyle = {
+    background: '#1a1a2e',
+    border: '1px solid #2d2d44',
+    borderRadius: 8,
+    fontSize: 12,
+    color: '#e0e0e0',
+  }
+
+  const formatValue = (value: any) => {
+    if (value === null || value === undefined) return ['-', series.label]
+    const num = Number(value)
+    if (activeKey === 'pace') {
+      const m = Math.floor(num)
+      const s = Math.round((num - m) * 60)
+      return [`${m}:${s.toString().padStart(2, '0')}`, series.label]
+    }
+    return [`${num.toFixed(1)} ${series.unit}`, series.label]
+  }
+
+  if (isScatter) {
+    const scatterData = series.data
+      .map((v, i) => ({ x: i, y: v }))
+      .filter((d): d is { x: number; y: number } => d.y !== null)
+
+    const average = scatterData.length > 0
+      ? scatterData.reduce((sum, d) => sum + d.y, 0) / scatterData.length
+      : 0
+
+    return (
+      <div>
+        <div className="chart-tabs">
+          {keys.map(k => (
+            <button
+              key={k}
+              className={`chart-tab ${k === activeKey ? 'active' : ''}`}
+              onClick={() => setActiveKey(k)}
+            >
+              {chartData[k].label}
+            </button>
+          ))}
+        </div>
+        <div className="card chart-card">
+          <ResponsiveContainer width="100%" height={200}>
+            <ScatterChart margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
+              <XAxis dataKey="x" hide type="number" domain={['dataMin', 'dataMax']} />
+              <YAxis dataKey="y" hide domain={['auto', 'auto']} />
+              <Tooltip
+                contentStyle={tooltipStyle}
+                formatter={(value: any) => formatValue(value)}
+                labelFormatter={() => ''}
+              />
+              <ReferenceLine
+                y={average}
+                stroke="#888"
+                strokeDasharray="6 4"
+                strokeWidth={1.5}
+              />
+              <Scatter
+                data={scatterData}
+                fill={color}
+                shape={(props: any) => {
+                  const dotColor = zones && zones.length > 0
+                    ? getDotColor(props.payload.y, zones)
+                    : color
+                  return <circle cx={props.cx} cy={props.cy} r={2.5} fill={dotColor} />
+                }}
+              />
+            </ScatterChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    )
+  }
+
+  // Area chart for non-scatter metrics
+  const data = series.data.map((v, i) => ({ i, v }))
 
   return (
     <div>
@@ -65,23 +165,8 @@ export default function ChartTabs({ chartData }: Props) {
               domain={['auto', 'auto']}
             />
             <Tooltip
-              contentStyle={{
-                background: '#1a1a2e',
-                border: '1px solid #2d2d44',
-                borderRadius: 8,
-                fontSize: 12,
-                color: '#e0e0e0',
-              }}
-              formatter={(value: any) => {
-                if (value === null || value === undefined) return ['-', series.label]
-                const num = Number(value)
-                if (activeKey === 'pace') {
-                  const m = Math.floor(num)
-                  const s = Math.round((num - m) * 60)
-                  return [`${m}:${s.toString().padStart(2, '0')}`, series.label]
-                }
-                return [`${num.toFixed(1)} ${series.unit}`, series.label]
-              }}
+              contentStyle={tooltipStyle}
+              formatter={formatValue}
               labelFormatter={() => ''}
             />
             <Area

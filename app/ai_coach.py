@@ -8,7 +8,7 @@ from sqlalchemy import func
 
 from app.config import settings
 from app.database import db_session
-from app.models import Activity, DailySummary, GarminCalendarEvent, Insight
+from app.models import Activity, DailySummary, GarminCalendarEvent, Insight, MetricZone
 
 logger = logging.getLogger(__name__)
 
@@ -29,10 +29,35 @@ Your approach:
 When race goals are provided, frame training recommendations around race preparation:
 - Suggest appropriate workout types for the training phase
 - Flag if training volume or intensity needs adjustment
-- Consider tapering needs as race day approaches"""
+- Consider tapering needs as race day approaches
+
+Running Dynamics Zone Reference (Garmin percentile-based):
+- Cadence: Excellent >185 spm (top 5%), Above Avg 174-185 (70-95%), Average 163-173 (30-69%), Below Avg 151-162 (5-29%), Poor <151 (bottom 5%)
+- GCT: Excellent <208 ms (top 5%), Above Avg 208-240 (70-95%), Average 241-272 (30-69%), Below Avg 273-305 (5-29%), Poor >305 (bottom 5%)
+- Vertical Oscillation: Excellent <6.4 cm (top 5%), Above Avg 6.4-8.1 (70-95%), Average 8.1-9.7 (30-69%), Below Avg 9.7-11.5 (5-29%), Poor >11.5 (bottom 5%)
+- Vertical Ratio: Excellent <6.1% (top 5%), Above Avg 6.1-7.4 (70-95%), Average 7.4-8.6 (30-69%), Below Avg 8.6-10.1 (5-29%), Poor >10.1 (bottom 5%)
+When a runner's metrics fall outside the average zone, note this and suggest corrective drills if appropriate."""
 
 
-def _format_activity_context(activity: Activity) -> str:
+def _classify_metric(value: float, zones: list[MetricZone]) -> str:
+    """Classify a metric value into its zone and return a descriptive string."""
+    for zone in zones:
+        above_min = zone.min_value is None or value >= zone.min_value
+        below_max = zone.max_value is None or value < zone.max_value
+        if above_min and below_max:
+            label = zone.zone_name.replace("_", " ").title()
+            return f" ({label} zone, {zone.percentile_label} percentile)"
+    # Check unbounded max zones
+    for zone in zones:
+        if zone.max_value is None:
+            above_min = zone.min_value is None or value >= zone.min_value
+            if above_min:
+                label = zone.zone_name.replace("_", " ").title()
+                return f" ({label} zone, {zone.percentile_label} percentile)"
+    return ""
+
+
+def _format_activity_context(activity: Activity, zones_by_metric: dict[str, list[MetricZone]] | None = None) -> str:
     parts = [
         f"**{activity.name}** ({activity.activity_type})",
         f"Date: {activity.started_at.strftime('%Y-%m-%d %H:%M') if activity.started_at else 'unknown'}",
@@ -52,7 +77,8 @@ def _format_activity_context(activity: Activity) -> str:
     if activity.max_hr:
         parts.append(f"Max HR: {activity.max_hr} bpm")
     if activity.avg_cadence:
-        parts.append(f"Cadence: {activity.avg_cadence:.0f} spm")
+        zone_str = _classify_metric(activity.avg_cadence, zones_by_metric.get("cadence", [])) if zones_by_metric else ""
+        parts.append(f"Cadence: {activity.avg_cadence:.0f} spm{zone_str}")
     if activity.avg_stride:
         parts.append(f"Stride: {activity.avg_stride:.2f} m")
     if activity.elevation_gain:
@@ -68,11 +94,14 @@ def _format_activity_context(activity: Activity) -> str:
 
     # Running dynamics
     if activity.avg_ground_contact_time:
-        parts.append(f"Ground Contact Time: {activity.avg_ground_contact_time:.0f} ms")
+        zone_str = _classify_metric(activity.avg_ground_contact_time, zones_by_metric.get("gct", [])) if zones_by_metric else ""
+        parts.append(f"Ground Contact Time: {activity.avg_ground_contact_time:.0f} ms{zone_str}")
     if activity.avg_vertical_oscillation:
-        parts.append(f"Vertical Oscillation: {activity.avg_vertical_oscillation:.1f} cm")
+        zone_str = _classify_metric(activity.avg_vertical_oscillation, zones_by_metric.get("vert_osc", [])) if zones_by_metric else ""
+        parts.append(f"Vertical Oscillation: {activity.avg_vertical_oscillation:.1f} cm{zone_str}")
     if activity.avg_vertical_ratio:
-        parts.append(f"Vertical Ratio: {activity.avg_vertical_ratio:.1f}%")
+        zone_str = _classify_metric(activity.avg_vertical_ratio, zones_by_metric.get("vert_ratio", [])) if zones_by_metric else ""
+        parts.append(f"Vertical Ratio: {activity.avg_vertical_ratio:.1f}%{zone_str}")
 
     # Power metrics
     if activity.normalized_power:
@@ -375,11 +404,20 @@ def _call_claude(context: str, trigger_type: str) -> tuple[str, str, str]:
     return content, summary, category
 
 
+def _load_zones(db: Session) -> dict[str, list[MetricZone]]:
+    """Load metric zones from the database, grouped by metric_key."""
+    zones_by_metric: dict[str, list[MetricZone]] = {}
+    for z in db.query(MetricZone).all():
+        zones_by_metric.setdefault(z.metric_key, []).append(z)
+    return zones_by_metric
+
+
 def analyze_activity(activity: Activity):
     """Generate AI insight for a new activity."""
     with db_session() as db:
         try:
-            activity_context = _format_activity_context(activity)
+            zones_by_metric = _load_zones(db)
+            activity_context = _format_activity_context(activity, zones_by_metric)
             full_context = _build_context(db, "activity", activity_context)
             content, summary, category = _call_claude(full_context, "activity")
 
@@ -446,7 +484,8 @@ def analyze_activity_force(activity_id: int):
                 Insight.trigger_id == activity.id,
             ).delete()
 
-            activity_context = _format_activity_context(activity)
+            zones_by_metric = _load_zones(db)
+            activity_context = _format_activity_context(activity, zones_by_metric)
             full_context = _build_context(db, "activity", activity_context)
             content, summary, category = _call_claude(full_context, "activity")
 
@@ -525,7 +564,8 @@ def weekly_review():
                 logger.info("No activities this week, skipping weekly review")
                 return
 
-            activity_summaries = "\n\n".join(_format_activity_context(a) for a in week_activities)
+            zones_by_metric = _load_zones(db)
+            activity_summaries = "\n\n".join(_format_activity_context(a, zones_by_metric) for a in week_activities)
             trigger_data = f"## Weekly Review ({week_start} to {date.today()})\n\n{activity_summaries}"
             full_context = _build_context(db, "weekly_review", trigger_data)
             content, summary, category = _call_claude(full_context, "weekly_review")

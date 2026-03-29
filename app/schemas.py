@@ -37,6 +37,18 @@ class InsightResponse(BaseModel):
         from_attributes = True
 
 
+class MetricZoneResponse(BaseModel):
+    metric_key: str
+    zone_name: str
+    zone_color: str
+    percentile_label: str
+    min_value: float | None = None
+    max_value: float | None = None
+
+    class Config:
+        from_attributes = True
+
+
 class ActivityDetail(BaseModel):
     id: int
     garmin_id: int | None = None
@@ -80,6 +92,9 @@ class ActivityDetail(BaseModel):
     weather: Any | None = None
     power_zones: Any | None = None
     chart_data: dict | None = None
+
+    # Metric zone boundaries
+    metric_zones: dict[str, list[MetricZoneResponse]] | None = None
 
     # Related insight
     insight: InsightResponse | None = None

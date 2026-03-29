@@ -150,6 +150,18 @@ class GarminCalendarEvent(Base):
     synced_at = Column(DateTime, default=_utcnow)
 
 
+class MetricZone(Base):
+    __tablename__ = "metric_zones"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    metric_key = Column(String(50), nullable=False, index=True)
+    zone_name = Column(String(20), nullable=False)
+    zone_color = Column(String(20), nullable=False)
+    percentile_label = Column(String(20), nullable=False)
+    min_value = Column(Float, nullable=True)
+    max_value = Column(Float, nullable=True)
+
+
 class SyncStatus(Base):
     __tablename__ = "sync_status"
 

@@ -9,7 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Activity, DailySummary, GarminCalendarEvent, Insight, SyncStatus
+from app.models import Activity, DailySummary, GarminCalendarEvent, Insight, MetricZone, SyncStatus
 from app.schemas import (
     ActivityDetail,
     ActivitySummary,
@@ -18,6 +18,7 @@ from app.schemas import (
     DailySummaryDetail,
     DailySummaryResponse,
     InsightResponse,
+    MetricZoneResponse,
     RaceInfo,
     SettingsResponse,
     TodayResponse,
@@ -152,12 +153,20 @@ def api_activity_detail(activity_id: int, db: Session = Depends(get_db)):
         .first()
     )
 
+    zones = db.query(MetricZone).all()
+    metric_zones: dict[str, list[MetricZoneResponse]] = {}
+    for z in zones:
+        metric_zones.setdefault(z.metric_key, []).append(
+            MetricZoneResponse.model_validate(z)
+        )
+
     result = ActivityDetail.model_validate(activity)
     result.splits = splits
     result.hr_zones = hr_zones
     result.weather = weather
     result.power_zones = power_zones
     result.chart_data = chart_data
+    result.metric_zones = metric_zones
     result.insight = InsightResponse.model_validate(insight) if insight else None
     return result
 

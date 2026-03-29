@@ -113,7 +113,7 @@ export default function ActivityDetailView() {
         {/* Time-series charts */}
         {activity.chart_data && Object.keys(activity.chart_data).length > 0 && (
           <section className="detail-section">
-            <ChartTabs chartData={activity.chart_data} />
+            <ChartTabs chartData={activity.chart_data} metricZones={activity.metric_zones} />
           </section>
         )}
 

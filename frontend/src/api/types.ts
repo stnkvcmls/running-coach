@@ -52,6 +52,7 @@ export interface ActivityDetail extends ActivitySummary {
   weather: any
   power_zones: any
   chart_data: Record<string, ChartSeries> | null
+  metric_zones: Record<string, MetricZone[]> | null
   insight: InsightResponse | null
 }
 
@@ -59,6 +60,15 @@ export interface ChartSeries {
   label: string
   unit: string
   data: (number | null)[]
+}
+
+export interface MetricZone {
+  metric_key: string
+  zone_name: string
+  zone_color: string
+  percentile_label: string
+  min_value: number | null
+  max_value: number | null
 }
 
 export interface DailySummaryResponse {
