@@ -129,6 +129,20 @@ class DailySummaryDetail(BaseModel):
     insight: InsightResponse | None = None
 
 
+class WorkoutStepResponse(BaseModel):
+    step_order: int
+    step_type: str  # warmup, cooldown, interval, rest, repeat, recovery
+    end_condition: str | None = None  # distance, time, lap_button
+    end_condition_value: float | None = None
+    end_condition_display: str | None = None  # "2.4 km", "90s"
+    target_type: str | None = None  # pace, heart_rate, open
+    target_display: str | None = None  # "4:25/km", "conversational pace"
+    description: str | None = None  # extra note
+    activity_type: str | None = None  # run, rest
+    repeat_count: int | None = None
+    steps: list["WorkoutStepResponse"] | None = None
+
+
 class CalendarEventResponse(BaseModel):
     id: int
     event_type: str | None = None
@@ -140,6 +154,7 @@ class CalendarEventResponse(BaseModel):
     priority: str | None = None
     workout_type: str | None = None
     workout_description: str | None = None
+    workout_steps: list[WorkoutStepResponse] | None = None
 
     class Config:
         from_attributes = True
@@ -171,6 +186,7 @@ class TodayResponse(BaseModel):
     weekly_data: list[WeeklyMileage] = []
     insights: list[InsightResponse] = []
     next_race: RaceInfo | None = None
+    scheduled_events: list[CalendarEventResponse] = []
 
 
 class SettingsResponse(BaseModel):

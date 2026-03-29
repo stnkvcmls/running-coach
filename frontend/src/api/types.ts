@@ -94,6 +94,20 @@ export interface DailySummaryDetail {
   insight: InsightResponse | null
 }
 
+export interface WorkoutStep {
+  step_order: number
+  step_type: string
+  end_condition: string | null
+  end_condition_value: number | null
+  end_condition_display: string | null
+  target_type: string | null
+  target_display: string | null
+  description: string | null
+  activity_type: string | null
+  repeat_count: number | null
+  steps: WorkoutStep[] | null
+}
+
 export interface CalendarEvent {
   id: number
   event_type: string | null
@@ -105,6 +119,7 @@ export interface CalendarEvent {
   priority: string | null
   workout_type: string | null
   workout_description: string | null
+  workout_steps: WorkoutStep[] | null
 }
 
 export interface CalendarDay {
@@ -133,6 +148,7 @@ export interface TodayResponse {
   weekly_data: WeeklyMileage[]
   insights: InsightResponse[]
   next_race: RaceInfo | null
+  scheduled_events: CalendarEvent[]
 }
 
 export interface SettingsResponse {

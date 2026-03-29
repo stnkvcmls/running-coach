@@ -2,6 +2,7 @@ import { useDateContext } from '../../App'
 import { useToday } from '../../api/hooks'
 import { formatDateKey, format, isToday as checkIsToday } from '../../utils/date'
 import WorkoutCard from './WorkoutCard'
+import ScheduledWorkoutCard from './ScheduledWorkoutCard'
 import WeekOverview from './WeekOverview'
 import InsightsList from './InsightsList'
 import './TodayView.css'
@@ -32,6 +33,18 @@ export default function TodayView() {
           <div className="card empty-state">No workouts on this day</div>
         )}
       </section>
+
+      {/* Scheduled workouts */}
+      {data?.scheduled_events && data.scheduled_events.length > 0 && (
+        <section className="today-section">
+          <h2 className="section-title">Scheduled</h2>
+          <div className="workout-list">
+            {data.scheduled_events.map(e => (
+              <ScheduledWorkoutCard key={e.id} event={e} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Next Race */}
       {data?.next_race && (
