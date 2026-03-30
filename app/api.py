@@ -487,9 +487,25 @@ def _format_pace(meters_per_sec: float) -> str:
     return f"{mins}:{secs:02d}/km"
 
 
+def _garmin_str(value) -> str:
+    """Extract a string from a Garmin field that may be a str or dict with a *Key sub-field."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        # Garmin often wraps values like {"stepTypeKey": "warmup", "stepTypeId": 1}
+        for k, v in value.items():
+            if k.endswith("Key") and isinstance(v, str):
+                return v
+        # Fallback: return first string value
+        for v in value.values():
+            if isinstance(v, str):
+                return v
+    return ""
+
+
 def _parse_step_target(step: dict) -> tuple[str | None, str | None]:
     """Parse target type and display from a Garmin workout step."""
-    target_type_raw = step.get("targetType") or step.get("type") or ""
+    target_type_raw = _garmin_str(step.get("targetType") or step.get("type") or "")
     target_type_lower = target_type_raw.lower().replace(".", "_") if target_type_raw else ""
 
     if "pace" in target_type_lower or "speed" in target_type_lower:
@@ -523,7 +539,7 @@ def _classify_activity_type(step_type: str) -> str:
 
 def _parse_single_step(step: dict, order: int) -> WorkoutStepResponse:
     """Parse a single Garmin workout step into a WorkoutStepResponse."""
-    step_type_raw = (step.get("stepType") or step.get("type") or "interval").lower()
+    step_type_raw = _garmin_str(step.get("stepType") or step.get("type") or "interval").lower()
     # Normalize step type names
     step_type_map = {
         "warmup": "warmup", "warm_up": "warmup", "warm up": "warmup",
@@ -536,7 +552,7 @@ def _parse_single_step(step: dict, order: int) -> WorkoutStepResponse:
     step_type = step_type_map.get(step_type_raw, step_type_raw)
 
     # End condition (distance or time)
-    end_condition_raw = (step.get("endCondition") or step.get("conditionType") or "").lower()
+    end_condition_raw = _garmin_str(step.get("endCondition") or step.get("conditionType") or "").lower()
     end_condition_raw = end_condition_raw.replace(".", "_")
     end_value = step.get("endConditionValue") or step.get("conditionValue")
 
@@ -595,6 +611,16 @@ def _parse_workout_steps(raw_json_str: str) -> list[WorkoutStepResponse]:
         return []
 
     steps_raw = data.get("workoutSteps") or data.get("steps") or []
+
+    # Garmin workout API nests steps inside workoutSegments
+    if not steps_raw:
+        segments = data.get("workoutSegments") or []
+        for seg in segments:
+            if isinstance(seg, dict):
+                seg_steps = seg.get("workoutSteps") or seg.get("steps") or []
+                if isinstance(seg_steps, list):
+                    steps_raw.extend(seg_steps)
+
     if not isinstance(steps_raw, list):
         return []
 
