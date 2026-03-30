@@ -57,7 +57,7 @@
             {% if d in activities_by_date %}
             <div class="day-dots">
                 {% for a in activities_by_date[d][:3] %}
-                <span class="dot {% if 'run' in (a.activity_type or '') %}run{% elif 'cycling' in (a.activity_type or '') or 'biking' in (a.activity_type or '') %}cycle{% else %}other{% endif %}" title="{{ a.name }}: {{ a.distance_m | distance_km }}km"></span>
+                <a href="/activity/{{ a.id }}" class="dot {% if 'run' in (a.activity_type or '') %}run{% elif 'cycling' in (a.activity_type or '') or 'biking' in (a.activity_type or '') %}cycle{% else %}other{% endif %}" title="{{ a.name }}: {{ a.distance_m | distance_km }}km"></a>
                 {% endfor %}
             </div>
             {% endif %}
