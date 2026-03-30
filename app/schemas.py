@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
 from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class ActivitySummary(BaseModel):
@@ -112,6 +113,16 @@ class ActivityDetail(BaseModel):
 
     # Scheduled workout for this activity's date
     scheduled_workout: "CalendarEventResponse | None" = None
+
+    @field_validator('feedback_tags', mode='before')
+    @classmethod
+    def parse_feedback_tags(cls, v: Any) -> list[str] | None:
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except (json.JSONDecodeError, TypeError):
+                return None
+        return v
 
     class Config:
         from_attributes = True
