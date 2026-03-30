@@ -598,6 +598,17 @@ def _race_distance_label(distance_m: float | None) -> str | None:
     return f"{distance_m / 1000:.1f}km"
 
 
+def _fetch_workout_details(client: Garmin, workout_id) -> dict | None:
+    """Fetch full workout details including steps from Garmin workout service."""
+    try:
+        data = client.connectapi(f"/workout-service/workout/{workout_id}")
+        if isinstance(data, dict):
+            return data
+    except Exception as e:
+        logger.debug("Failed to fetch workout details for %s: %s", workout_id, e)
+    return None
+
+
 def sync_calendar() -> int:
     """Sync Garmin calendar events (races + workouts). Returns count of upserted events."""
     logger.info("Syncing Garmin calendar...")
@@ -624,6 +635,24 @@ def sync_calendar() -> int:
             time.sleep(0.3)
         except Exception:
             logger.exception("Failed to fetch calendar for %d-%02d", year, month)
+
+    # Fetch full workout details (including steps) for workout events
+    for evt in all_events:
+        if evt["event_type"] != "workout":
+            continue
+        raw = json.loads(evt["raw_json"]) if evt["raw_json"] else {}
+        workout_id = raw.get("workoutId") or raw.get("id")
+        if not workout_id:
+            continue
+        # Skip if raw_json already has workoutSteps (re-sync case)
+        if raw.get("workoutSteps"):
+            continue
+        time.sleep(0.3)
+        workout_data = _fetch_workout_details(client, workout_id)
+        if workout_data:
+            # Merge full workout data into the calendar item raw_json
+            raw["workoutSteps"] = workout_data.get("workoutSteps") or workout_data.get("steps")
+            evt["raw_json"] = json.dumps(raw, default=str)
 
     with db_session() as db:
         try:
