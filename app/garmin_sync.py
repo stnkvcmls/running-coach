@@ -644,15 +644,14 @@ def sync_calendar() -> int:
         workout_id = raw.get("workoutId") or raw.get("id")
         if not workout_id:
             continue
-        # Skip if raw_json already has workoutSteps (re-sync case)
-        if raw.get("workoutSteps"):
+        # Skip if raw_json already has workout steps data (re-sync case)
+        if raw.get("workoutSteps") or raw.get("workoutSegments"):
             continue
         time.sleep(0.3)
         workout_data = _fetch_workout_details(client, workout_id)
         if workout_data:
-            # Merge full workout data into the calendar item raw_json
-            raw["workoutSteps"] = workout_data.get("workoutSteps") or workout_data.get("steps")
-            evt["raw_json"] = json.dumps(raw, default=str)
+            # Store the full workout response as raw_json so step parsing can find the data
+            evt["raw_json"] = json.dumps(workout_data, default=str)
 
     with db_session() as db:
         try:

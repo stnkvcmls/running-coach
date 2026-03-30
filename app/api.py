@@ -570,6 +570,16 @@ def _parse_workout_steps(raw_json_str: str) -> list[WorkoutStepResponse]:
         return []
 
     steps_raw = data.get("workoutSteps") or data.get("steps") or []
+
+    # Garmin workout API nests steps inside workoutSegments
+    if not steps_raw:
+        segments = data.get("workoutSegments") or []
+        for seg in segments:
+            if isinstance(seg, dict):
+                seg_steps = seg.get("workoutSteps") or seg.get("steps") or []
+                if isinstance(seg_steps, list):
+                    steps_raw.extend(seg_steps)
+
     if not isinstance(steps_raw, list):
         return []
 
