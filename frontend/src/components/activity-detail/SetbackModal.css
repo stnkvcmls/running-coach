@@ -1,0 +1,134 @@
+.setback-modal__overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+
+.setback-modal__content {
+  background: var(--bg-card);
+  border-radius: 16px 16px 0 0;
+  padding: 24px 20px;
+  width: 100%;
+  max-width: 480px;
+  max-height: 80vh;
+  overflow-y: auto;
+  position: relative;
+}
+
+.setback-modal__close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  transition: background 0.15s;
+}
+
+.setback-modal__close:hover {
+  background: var(--bg-hover);
+}
+
+.setback-modal__title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 4px;
+}
+
+.setback-modal__subtitle {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin: 0 0 20px;
+}
+
+.setback-modal__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.setback-modal__chip {
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.setback-modal__chip:hover {
+  border-color: var(--accent);
+}
+
+.setback-modal__chip--selected {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.setback-modal__other-input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  background: var(--bg);
+  color: var(--text);
+  resize: vertical;
+  margin-bottom: 16px;
+}
+
+.setback-modal__other-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.setback-modal__actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.setback-modal__skip {
+  padding: 10px 24px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: none;
+  border-radius: 20px;
+  transition: color 0.15s;
+}
+
+.setback-modal__skip:hover {
+  color: var(--text);
+}
+
+.setback-modal__submit {
+  padding: 10px 24px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 20px;
+  transition: opacity 0.15s;
+}
+
+.setback-modal__submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

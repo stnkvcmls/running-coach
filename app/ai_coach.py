@@ -36,7 +36,9 @@ Running Dynamics Zone Reference (Garmin percentile-based):
 - GCT: Excellent <208 ms (top 5%), Above Avg 208-240 (70-95%), Average 241-272 (30-69%), Below Avg 273-305 (5-29%), Poor >305 (bottom 5%)
 - Vertical Oscillation: Excellent <6.4 cm (top 5%), Above Avg 6.4-8.1 (70-95%), Average 8.1-9.7 (30-69%), Below Avg 9.7-11.5 (5-29%), Poor >11.5 (bottom 5%)
 - Vertical Ratio: Excellent <6.1% (top 5%), Above Avg 6.1-7.4 (70-95%), Average 7.4-8.6 (30-69%), Below Avg 8.6-10.1 (5-29%), Poor >10.1 (bottom 5%)
-When a runner's metrics fall outside the average zone, note this and suggest corrective drills if appropriate."""
+When a runner's metrics fall outside the average zone, note this and suggest corrective drills if appropriate.
+
+When user feedback is provided (rating, reported issues, comments), prioritize addressing those specific concerns in your analysis. If the user reports setbacks like tough paces, not feeling well, or conditions issues, offer practical advice tailored to those reported problems."""
 
 
 def _classify_metric(value: float, zones: list[MetricZone]) -> str:
@@ -503,6 +505,62 @@ def analyze_activity_force(activity_id: int):
             logger.info("AI re-analysis complete for activity %s: %s", activity.id, summary[:80])
         except Exception:
             logger.exception("AI re-analysis failed for activity %s", activity_id)
+
+
+def analyze_activity_with_feedback(activity_id: int):
+    """Generate AI insight for an activity, incorporating user feedback."""
+    with db_session() as db:
+        try:
+            activity = db.query(Activity).get(activity_id)
+            if not activity:
+                logger.warning("Activity %s not found for feedback analysis", activity_id)
+                return
+
+            # Delete existing insight for this activity
+            db.query(Insight).filter(
+                Insight.trigger_type == "activity",
+                Insight.trigger_id == activity.id,
+            ).delete()
+
+            zones_by_metric = _load_zones(db)
+            activity_context = _format_activity_context(activity, zones_by_metric)
+
+            # Append user feedback to context
+            feedback_parts = []
+            if activity.feedback_rating == "good":
+                feedback_parts.append("The runner reported this workout went well.")
+            elif activity.feedback_rating == "bad":
+                feedback_parts.append("The runner reported issues with this workout.")
+                if activity.feedback_tags:
+                    try:
+                        tags = json.loads(activity.feedback_tags)
+                        if tags:
+                            feedback_parts.append(f"Issues reported: {', '.join(tags)}")
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                if activity.feedback_text:
+                    feedback_parts.append(f'Additional comments: "{activity.feedback_text}"')
+
+            if feedback_parts:
+                activity_context += "\n\n## User Feedback\n" + "\n".join(feedback_parts)
+
+            full_context = _build_context(db, "activity", activity_context)
+            content, summary, category = _call_claude(full_context, "activity")
+
+            insight = Insight(
+                created_at=datetime.now(timezone.utc),
+                trigger_type="activity",
+                trigger_id=activity.id,
+                content=content,
+                summary=summary,
+                category=category,
+            )
+            db.add(insight)
+            activity.ai_analyzed = True
+            db.commit()
+            logger.info("AI feedback analysis complete for activity %s: %s", activity.id, summary[:80])
+        except Exception:
+            logger.exception("AI feedback analysis failed for activity %s", activity_id)
 
 
 def backfill_missing_insights():

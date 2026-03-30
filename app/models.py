@@ -84,6 +84,11 @@ class Activity(Base):
     typed_splits_json = Column(Text)
     power_zones_json = Column(Text)
 
+    # User feedback
+    feedback_rating = Column(String(10), nullable=True)   # "good" or "bad"
+    feedback_tags = Column(Text, nullable=True)            # JSON array of setback tags
+    feedback_text = Column(Text, nullable=True)            # optional custom text
+
 
 class DailySummary(Base):
     __tablename__ = "daily_summaries"

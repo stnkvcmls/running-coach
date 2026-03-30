@@ -24,16 +24,10 @@ scheduler = BackgroundScheduler()
 
 
 def _scheduled_activity_sync():
-    """Scheduled job: sync activities, calendar, and trigger AI for new ones."""
+    """Scheduled job: sync activities and calendar."""
     from app.garmin_sync import sync_activities, sync_calendar
-    from app.ai_coach import analyze_activity
 
-    new_activities = sync_activities()
-    for activity in new_activities:
-        try:
-            analyze_activity(activity)
-        except Exception:
-            logger.exception("AI analysis failed for activity %s", activity.id)
+    sync_activities()
 
     try:
         sync_calendar()
@@ -64,7 +58,7 @@ def _scheduled_weekly_review():
 def _run_backfill():
     """Run historical backfill in a background thread."""
     from app.garmin_sync import backfill_activities, backfill_daily_summaries
-    from app.ai_coach import weekly_review, backfill_missing_insights
+    from app.ai_coach import weekly_review
 
     logger.info("Starting historical backfill...")
     backfill_activities()
@@ -74,11 +68,6 @@ def _run_backfill():
         weekly_review()
     except Exception:
         logger.exception("Initial weekly review failed")
-    logger.info("Backfilling missing AI insights for recent data...")
-    try:
-        backfill_missing_insights()
-    except Exception:
-        logger.exception("Insight backfill failed")
 
 
 @asynccontextmanager

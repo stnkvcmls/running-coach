@@ -71,6 +71,9 @@ def _migrate_db():
         "walk_time_sec": "FLOAT",
         "typed_splits_json": "TEXT",
         "power_zones_json": "TEXT",
+        "feedback_rating": "VARCHAR(10)",
+        "feedback_tags": "TEXT",
+        "feedback_text": "TEXT",
     }
     try:
         with engine.connect() as conn:

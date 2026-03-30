@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -47,6 +47,12 @@ class MetricZoneResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class FeedbackRequest(BaseModel):
+    rating: Literal["good", "bad"]
+    tags: list[str] | None = None
+    text: str | None = None
 
 
 class ActivityDetail(BaseModel):
@@ -95,6 +101,11 @@ class ActivityDetail(BaseModel):
 
     # Metric zone boundaries
     metric_zones: dict[str, list[MetricZoneResponse]] | None = None
+
+    # User feedback
+    feedback_rating: str | None = None
+    feedback_tags: list[str] | None = None
+    feedback_text: str | None = None
 
     # Related insight
     insight: InsightResponse | None = None
