@@ -1,0 +1,71 @@
+.feedback-prompt {
+  text-align: center;
+  padding: 24px 16px;
+}
+
+.feedback-prompt__question {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 4px;
+}
+
+.feedback-prompt__hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 0 0 20px;
+}
+
+.feedback-prompt__actions {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+}
+
+.feedback-prompt__thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  color: var(--text-muted);
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.feedback-prompt__thumb:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: scale(1.08);
+}
+
+.feedback-prompt__thumb--up:hover {
+  border-color: #2ecc71;
+  color: #2ecc71;
+}
+
+.feedback-prompt__thumb--down:hover {
+  border-color: #e74c3c;
+  color: #e74c3c;
+}
+
+.feedback-prompt__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  padding: 8px 0;
+}
+
+.feedback-prompt__spinner {
+  animation: feedback-spin 1s linear infinite;
+}
+
+@keyframes feedback-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

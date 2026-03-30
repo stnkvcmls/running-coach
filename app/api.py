@@ -17,6 +17,7 @@ from app.schemas import (
     CalendarEventResponse,
     DailySummaryDetail,
     DailySummaryResponse,
+    FeedbackRequest,
     InsightResponse,
     MetricZoneResponse,
     RaceInfo,
@@ -198,6 +199,7 @@ def api_activity_detail(activity_id: int, db: Session = Depends(get_db)):
     result.metric_zones = metric_zones
     result.insight = InsightResponse.model_validate(insight) if insight else None
     result.scheduled_workout = scheduled_workout
+    result.feedback_tags = safe_json_loads(activity.feedback_tags)
     return result
 
 
@@ -411,6 +413,29 @@ def api_trigger_analysis(activity_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Activity not found")
     from app.ai_coach import analyze_activity_force
     threading.Thread(target=analyze_activity_force, args=(activity_id,), daemon=True).start()
+    return {"status": "accepted"}
+
+
+@api_router.post("/activities/{activity_id}/feedback")
+def api_submit_feedback(activity_id: int, feedback: FeedbackRequest, db: Session = Depends(get_db)):
+    activity = db.query(Activity).filter(Activity.id == activity_id).first()
+    if not activity:
+        raise HTTPException(status_code=404, detail="Activity not found")
+
+    activity.feedback_rating = feedback.rating
+    activity.feedback_tags = json.dumps(feedback.tags) if feedback.tags else None
+    activity.feedback_text = feedback.text
+    activity.ai_analyzed = False
+
+    # Delete existing insight
+    db.query(Insight).filter(
+        Insight.trigger_type == "activity",
+        Insight.trigger_id == activity.id,
+    ).delete()
+    db.commit()
+
+    from app.ai_coach import analyze_activity_with_feedback
+    threading.Thread(target=analyze_activity_with_feedback, args=(activity_id,), daemon=True).start()
     return {"status": "accepted"}
 
 

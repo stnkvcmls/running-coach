@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, RotateCcw } from 'lucide-react'
+import { ArrowLeft, RotateCcw, Loader } from 'lucide-react'
 import { useActivity, useTriggerAnalysis } from '../../api/hooks'
 import { getActivityColor, colorMap } from '../../utils/colors'
 import { formatDistance, formatDuration, formatPace } from '../../utils/formatting'
@@ -9,6 +9,7 @@ import ChartTabs from './ChartTabs'
 import HrZonesChart from './HrZonesChart'
 import LapsTable from './LapsTable'
 import AiInsightCard from './AiInsightCard'
+import FeedbackPrompt from './FeedbackPrompt'
 import WorkoutSteps from '../today/WorkoutSteps'
 import './ActivityDetailView.css'
 
@@ -131,29 +132,24 @@ export default function ActivityDetailView() {
         {/* Splits / Laps */}
         {activity.splits && <LapsTable splits={activity.splits} />}
 
-        {/* AI Insight */}
+        {/* AI Insight / Feedback */}
         {activity.insight ? (
           <AiInsightCard
             insight={activity.insight}
             onReanalyze={() => triggerAnalysis.mutate(activity.id)}
             isAnalyzing={triggerAnalysis.isPending}
           />
-        ) : (
+        ) : activity.feedback_rating ? (
           <section className="detail-section">
-            <div className="card">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span className="section-title" style={{ margin: 0 }}>AI Analysis</span>
-                <button
-                  className="analyze-btn"
-                  onClick={() => triggerAnalysis.mutate(activity.id)}
-                  disabled={triggerAnalysis.isPending}
-                >
-                  <RotateCcw size={14} />
-                  {triggerAnalysis.isPending ? 'Analyzing...' : 'Analyze'}
-                </button>
+            <div className="card" style={{ textAlign: 'center', padding: '24px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                <Loader size={18} style={{ animation: 'feedback-spin 1s linear infinite' }} />
+                <span>Generating insights...</span>
               </div>
             </div>
           </section>
+        ) : (
+          <FeedbackPrompt activityId={activity.id} />
         )}
       </div>
     </div>

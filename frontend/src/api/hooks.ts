@@ -8,6 +8,7 @@ import type {
   DailySummaryDetail,
   CalendarDay,
   CalendarEvent,
+  FeedbackRequest,
   InsightResponse,
   SettingsResponse,
 } from './types'
@@ -105,6 +106,19 @@ export function useTriggerAnalysis() {
     mutationFn: (id: number) => apiPost<{ status: string }>(`/activities/${id}/analyze`),
     onSuccess: (_, id) => {
       setTimeout(() => qc.invalidateQueries({ queryKey: ['activity', id] }), 5000)
+    },
+  })
+}
+
+export function useSubmitFeedback() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, feedback }: { id: number; feedback: FeedbackRequest }) =>
+      apiPost<{ status: string }>(`/activities/${id}/feedback`, feedback),
+    onSuccess: (_, { id }) => {
+      qc.invalidateQueries({ queryKey: ['activity', id] })
+      setTimeout(() => qc.invalidateQueries({ queryKey: ['activity', id] }), 5000)
+      setTimeout(() => qc.invalidateQueries({ queryKey: ['activity', id] }), 12000)
     },
   })
 }

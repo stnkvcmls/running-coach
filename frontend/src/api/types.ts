@@ -23,6 +23,12 @@ export interface InsightResponse {
   category: string | null
 }
 
+export interface FeedbackRequest {
+  rating: 'good' | 'bad'
+  tags?: string[]
+  text?: string
+}
+
 export interface ActivityDetail extends ActivitySummary {
   elevation_loss: number | null
   max_elevation: number | null
@@ -53,6 +59,9 @@ export interface ActivityDetail extends ActivitySummary {
   power_zones: any
   chart_data: Record<string, ChartSeries> | null
   metric_zones: Record<string, MetricZone[]> | null
+  feedback_rating: string | null
+  feedback_tags: string[] | null
+  feedback_text: string | null
   insight: InsightResponse | null
   scheduled_workout: CalendarEvent | null
 }
