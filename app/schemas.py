@@ -194,6 +194,7 @@ class CalendarDay(BaseModel):
 class WeeklyMileage(BaseModel):
     label: str
     km: float
+    by_type: dict[str, float] = {}  # activity category -> km
 
 
 class RaceInfo(BaseModel):

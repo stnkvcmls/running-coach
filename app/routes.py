@@ -90,12 +90,12 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             .first()
         )
 
-    # Weekly mileage (last 8 weeks) - single query
+    # Weekly mileage (last 8 weeks) - split by activity type
     week_start_base = date.today() - timedelta(days=date.today().weekday())
     eight_weeks_ago = week_start_base - timedelta(weeks=7)
 
-    all_distances = (
-        db.query(Activity.started_at, Activity.distance_m)
+    all_activities = (
+        db.query(Activity.started_at, Activity.distance_m, Activity.activity_type)
         .filter(
             Activity.started_at >= datetime.combine(eight_weeks_ago, datetime.min.time()),
             Activity.distance_m.isnot(None),
@@ -103,24 +103,44 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         .all()
     )
 
-    # Bucket into weeks
+    def _categorize_activity_type(activity_type: str | None) -> str:
+        """Group similar activity types into categories."""
+        if not activity_type:
+            return "other"
+        activity_type = activity_type.lower()
+        if "run" in activity_type:
+            return "run"
+        elif "cycling" in activity_type or "biking" in activity_type:
+            return "bike"
+        elif "swim" in activity_type:
+            return "swim"
+        elif "walk" in activity_type or "hik" in activity_type:
+            return "walk"
+        return "other"
+
+    # Bucket into weeks with activity type breakdown
     weekly_buckets = {}
     for w in range(7, -1, -1):
         ws = week_start_base - timedelta(weeks=w)
-        weekly_buckets[ws] = 0.0
+        weekly_buckets[ws] = {}
 
-    for a_started, a_dist in all_distances:
-        if a_started is None:
+    for a_started, a_dist, a_type in all_activities:
+        if a_started is None or not a_dist:
             continue
         a_date = a_started.date() if isinstance(a_started, datetime) else a_started
-        # Calculate the Monday of the week containing this activity
         activity_week_start = a_date - timedelta(days=a_date.weekday())
-        if activity_week_start in weekly_buckets:
-            weekly_buckets[activity_week_start] += a_dist or 0
+        if activity_week_start not in weekly_buckets:
+            continue
+        category = _categorize_activity_type(a_type)
+        weekly_buckets[activity_week_start][category] = weekly_buckets[activity_week_start].get(category, 0) + a_dist / 1000
 
     weekly_data = [
-        {"label": ws.strftime("%b %d"), "km": round(dist / 1000, 1)}
-        for ws, dist in sorted(weekly_buckets.items())
+        {
+            "label": ws.strftime("%b %d"),
+            "km": round(sum(by_type.values()), 1),
+            "by_type": {k: round(v, 1) for k, v in by_type.items()}
+        }
+        for ws, by_type in sorted(weekly_buckets.items())
     ]
 
     # Next race (from Garmin calendar)
