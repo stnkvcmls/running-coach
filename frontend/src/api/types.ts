@@ -141,6 +141,7 @@ export interface CalendarDay {
 export interface WeeklyMileage {
   label: string
   km: number
+  by_type: Record<string, number>  // activity category -> km
 }
 
 export interface RaceInfo {
