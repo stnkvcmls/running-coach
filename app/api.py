@@ -74,11 +74,10 @@ def api_today(
         if a_started is None:
             continue
         a_date = a_started.date() if isinstance(a_started, datetime) else a_started
-        days_from_base = (week_start_base - a_date).days
-        week_idx = days_from_base // 7
-        ws = week_start_base - timedelta(weeks=week_idx)
-        if ws in weekly_buckets:
-            weekly_buckets[ws] += a_dist or 0
+        # Calculate the Monday of the week containing this activity
+        activity_week_start = a_date - timedelta(days=a_date.weekday())
+        if activity_week_start in weekly_buckets:
+            weekly_buckets[activity_week_start] += a_dist or 0
     weekly_data = [
         WeeklyMileage(label=ws.strftime("%b %d"), km=round(dist / 1000, 1))
         for ws, dist in sorted(weekly_buckets.items())
