@@ -518,20 +518,38 @@ def _parse_calendar_response(data: dict) -> list[dict]:
         if item_type in ("race", "event"):
             event_id = item.get("eventId") or item.get("id") or ""
             garmin_id = f"race_{event_id}_{event_date.isoformat()}"
-            distance_m = item.get("raceDistance")
+
+            # Distance: try multiple field names used by Garmin API
+            distance_m = item.get("distance") or item.get("raceDistance")
+            completion_target = item.get("completionTarget") or {}
+            # completionTarget.value with unit "meter" is distance, not time
+            ct_value = completion_target.get("value")
+            ct_unit = (completion_target.get("unit") or "").lower()
+            if not distance_m and ct_value and ct_unit in ("meter", "meters", "m"):
+                distance_m = float(ct_value)
             distance_label = _race_distance_label(distance_m)
 
+            # Goal time: check dedicated time fields first
             goal_time_sec = None
-            goal_time_raw = item.get("raceGoalTime") or item.get("completionTarget", {}).get("value")
+            goal_time_raw = (
+                item.get("goalTimeInSeconds")
+                or item.get("raceGoalTime")
+                or item.get("duration")
+            )
+            # Only use completionTarget if its unit indicates time, not distance
+            if not goal_time_raw and ct_value and ct_unit in ("second", "seconds", "s", "millisecond", "milliseconds", "ms"):
+                goal_time_raw = ct_value
             if goal_time_raw and isinstance(goal_time_raw, (int, float)):
                 # Garmin may return milliseconds; if value > 24h in seconds, assume ms
                 goal_time_sec = int(goal_time_raw / 1000) if goal_time_raw > 86400 else int(goal_time_raw)
 
-            priority = _parse_race_priority(item.get("racePriority"))
+            # Priority: try multiple field names
+            priority_raw = item.get("priority") or item.get("racePriority") or item.get("eventPriority")
+            priority = _parse_race_priority(priority_raw)
 
             logger.info(
                 "Calendar race/event: id=%s title=%r priority_raw=%r priority=%s goal=%s dist=%s",
-                event_id, item.get("title"), item.get("racePriority"), priority, goal_time_sec, distance_m
+                event_id, item.get("title"), priority_raw, priority, goal_time_sec, distance_m
             )
 
             events.append({
