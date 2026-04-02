@@ -543,8 +543,15 @@ def _parse_calendar_response(data: dict) -> list[dict]:
                 # Garmin may return milliseconds; if value > 24h in seconds, assume ms
                 goal_time_sec = int(goal_time_raw / 1000) if goal_time_raw > 86400 else int(goal_time_raw)
 
-            # Priority: try multiple field names
+            # Priority: try multiple field names.
+            # Garmin calendar API uses "primaryEvent": true/false rather than a priority string.
             priority_raw = item.get("priority") or item.get("racePriority") or item.get("eventPriority")
+            if priority_raw is None:
+                primary_event = item.get("primaryEvent")
+                if primary_event is True:
+                    priority_raw = "PRIMARY"
+                elif primary_event is False:
+                    priority_raw = "SECONDARY"
             priority = _parse_race_priority(priority_raw)
 
             logger.info(
