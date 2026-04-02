@@ -150,6 +150,8 @@ export interface RaceInfo {
   date: string
   distance_label: string | null
   days_away: number
+  goal_time_sec: number | null
+  priority: string | null
 }
 
 export interface TodayResponse {

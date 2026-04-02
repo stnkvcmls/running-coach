@@ -203,6 +203,8 @@ class RaceInfo(BaseModel):
     date: date
     distance_label: str | None = None
     days_away: int
+    goal_time_sec: int | None = None
+    priority: str | None = None
 
 
 class TodayResponse(BaseModel):
