@@ -233,12 +233,21 @@ def _format_daily_context(summary: DailySummary) -> str:
     return "\n".join(parts)
 
 
-def _build_context(db: Session, trigger_type: str, trigger_data: str) -> str:
-    """Build full context for AI analysis."""
+def _build_context(db: Session, trigger_type: str, trigger_data: str, reference_date: date | None = None) -> str:
+    """Build full context for AI analysis.
+
+    Args:
+        reference_date: The date to use as "today" for temporal context.
+                        Defaults to date.today() if not provided.
+    """
+    if reference_date is None:
+        reference_date = date.today()
+    ref_datetime = datetime.combine(reference_date, datetime.min.time(), tzinfo=timezone.utc)
+
     sections = [f"## Current Data\n{trigger_data}"]
 
     # Recent activities (last 14 days)
-    cutoff = datetime.now(timezone.utc) - timedelta(days=14)
+    cutoff = ref_datetime - timedelta(days=14)
     recent_activities = (
         db.query(Activity)
         .filter(Activity.started_at >= cutoff)
@@ -264,7 +273,7 @@ def _build_context(db: Session, trigger_type: str, trigger_data: str) -> str:
     # Weekly volume (last 8 weeks)
     weeks = []
     for w in range(8):
-        week_start = date.today() - timedelta(days=date.today().weekday() + 7 * w)
+        week_start = reference_date - timedelta(days=reference_date.weekday() + 7 * w)
         week_end = week_start + timedelta(days=7)
         result = (
             db.query(
@@ -313,7 +322,7 @@ def _build_context(db: Session, trigger_type: str, trigger_data: str) -> str:
         db.query(GarminCalendarEvent)
         .filter(
             GarminCalendarEvent.event_type == "race",
-            GarminCalendarEvent.date >= date.today(),
+            GarminCalendarEvent.date >= reference_date,
         )
         .order_by(GarminCalendarEvent.date.asc())
         .all()
@@ -321,7 +330,7 @@ def _build_context(db: Session, trigger_type: str, trigger_data: str) -> str:
     if upcoming_races:
         race_lines = []
         for r in upcoming_races:
-            days_until = (r.date - date.today()).days
+            days_until = (r.date - reference_date).days
             goal = ""
             if r.goal_time_sec:
                 gh = r.goal_time_sec // 3600
@@ -418,9 +427,10 @@ def analyze_activity(activity: Activity):
     """Generate AI insight for a new activity."""
     with db_session() as db:
         try:
+            activity_date = activity.started_at.date() if isinstance(activity.started_at, datetime) else activity.started_at
             zones_by_metric = _load_zones(db)
             activity_context = _format_activity_context(activity, zones_by_metric)
-            full_context = _build_context(db, "activity", activity_context)
+            full_context = _build_context(db, "activity", activity_context, reference_date=activity_date)
             content, summary, category = _call_claude(full_context, "activity")
 
             insight = Insight(
@@ -448,7 +458,7 @@ def analyze_daily_summary(daily: DailySummary):
     with db_session() as db:
         try:
             daily_context = _format_daily_context(daily)
-            full_context = _build_context(db, "daily_summary", daily_context)
+            full_context = _build_context(db, "daily_summary", daily_context, reference_date=daily.date)
             content, summary, category = _call_claude(full_context, "daily_summary")
 
             insight = Insight(
@@ -486,9 +496,10 @@ def analyze_activity_force(activity_id: int):
                 Insight.trigger_id == activity.id,
             ).delete()
 
+            activity_date = activity.started_at.date() if isinstance(activity.started_at, datetime) else activity.started_at
             zones_by_metric = _load_zones(db)
             activity_context = _format_activity_context(activity, zones_by_metric)
-            full_context = _build_context(db, "activity", activity_context)
+            full_context = _build_context(db, "activity", activity_context, reference_date=activity_date)
             content, summary, category = _call_claude(full_context, "activity")
 
             insight = Insight(
@@ -544,7 +555,8 @@ def analyze_activity_with_feedback(activity_id: int):
             if feedback_parts:
                 activity_context += "\n\n## User Feedback\n" + "\n".join(feedback_parts)
 
-            full_context = _build_context(db, "activity", activity_context)
+            activity_date = activity.started_at.date() if isinstance(activity.started_at, datetime) else activity.started_at
+            full_context = _build_context(db, "activity", activity_context, reference_date=activity_date)
             content, summary, category = _call_claude(full_context, "activity")
 
             insight = Insight(
