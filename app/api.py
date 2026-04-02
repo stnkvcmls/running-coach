@@ -130,6 +130,8 @@ def api_today(
             date=next_race_row.date,
             distance_label=next_race_row.distance_label,
             days_away=(next_race_row.date - date.today()).days,
+            goal_time_sec=next_race_row.goal_time_sec,
+            priority=next_race_row.priority,
         )
 
     # Scheduled workout events for the selected date

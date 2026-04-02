@@ -1,11 +1,19 @@
 import { useDateContext } from '../../App'
 import { useToday } from '../../api/hooks'
 import { formatDateKey, format, isToday as checkIsToday } from '../../utils/date'
+import { formatDuration } from '../../utils/formatting'
 import WorkoutCard from './WorkoutCard'
 import ScheduledWorkoutCard from './ScheduledWorkoutCard'
 import WeekOverview from './WeekOverview'
 import InsightsList from './InsightsList'
 import './TodayView.css'
+
+function formatPriority(priority: string | null): string | null {
+  if (priority === 'A') return 'Primary'
+  if (priority === 'B') return 'Secondary'
+  if (priority === 'C') return 'C Priority'
+  return null
+}
 
 export default function TodayView() {
   const { selectedDate } = useDateContext()
@@ -50,10 +58,20 @@ export default function TodayView() {
       {data?.next_race && (
         <section className="today-section">
           <div className="card race-card">
+            {formatPriority(data.next_race.priority) && (
+              <div className="race-priority-badge">
+                {formatPriority(data.next_race.priority)}
+              </div>
+            )}
             <div className="race-days">{data.next_race.days_away} days</div>
             <div className="race-name">{data.next_race.title}</div>
             {data.next_race.distance_label && (
               <div className="race-distance">{data.next_race.distance_label}</div>
+            )}
+            {data.next_race.goal_time_sec != null && (
+              <div className="race-goal-time">
+                Goal: {formatDuration(data.next_race.goal_time_sec)}
+              </div>
             )}
           </div>
         </section>
