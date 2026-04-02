@@ -112,27 +112,29 @@ def api_today(
         db.query(Insight).order_by(Insight.created_at.desc()).limit(5).all()
     )
 
-    # Next race
-    next_race_row = (
+    # Next 2 upcoming races
+    next_race_rows = (
         db.query(GarminCalendarEvent)
         .filter(
             GarminCalendarEvent.event_type == "race",
             GarminCalendarEvent.date >= date.today(),
         )
         .order_by(GarminCalendarEvent.date.asc())
-        .first()
+        .limit(2)
+        .all()
     )
-    next_race = None
-    if next_race_row:
-        next_race = RaceInfo(
-            id=next_race_row.id,
-            title=next_race_row.title,
-            date=next_race_row.date,
-            distance_label=next_race_row.distance_label,
-            days_away=(next_race_row.date - date.today()).days,
-            goal_time_sec=next_race_row.goal_time_sec,
-            priority=next_race_row.priority,
+    next_races = [
+        RaceInfo(
+            id=row.id,
+            title=row.title,
+            date=row.date,
+            distance_label=row.distance_label,
+            days_away=(row.date - date.today()).days,
+            goal_time_sec=row.goal_time_sec,
+            priority=row.priority,
         )
+        for row in next_race_rows
+    ]
 
     # Scheduled workout events for the selected date
     scheduled_events_rows = (
@@ -152,7 +154,7 @@ def api_today(
         daily_summary=DailySummaryResponse.model_validate(daily_summary) if daily_summary else None,
         weekly_data=weekly_data,
         insights=[InsightResponse.model_validate(i) for i in latest_insights],
-        next_race=next_race,
+        next_races=next_races,
         scheduled_events=scheduled_events,
     )
 

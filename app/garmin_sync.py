@@ -546,6 +546,8 @@ def _parse_calendar_response(data: dict) -> list[dict]:
             # Priority: try multiple field names
             priority_raw = item.get("priority") or item.get("racePriority") or item.get("eventPriority")
             priority = _parse_race_priority(priority_raw)
+            if not priority and item.get("primaryEvent") is True:
+                priority = "A"
 
             logger.info(
                 "Calendar race/event: id=%s title=%r priority_raw=%r priority=%s goal=%s dist=%s",
@@ -627,6 +629,46 @@ def _fetch_workout_details(client: Garmin, workout_id) -> dict | None:
     return None
 
 
+def _fetch_race_event_details(client: Garmin, event_item: dict) -> dict | None:
+    """Fetch full race/event details from Garmin to get goal time."""
+    uuid = event_item.get("shareableEventUuid") or event_item.get("eventUuid")
+    event_id = event_item.get("eventId") or event_item.get("id")
+
+    endpoints: list[str] = []
+    if uuid:
+        endpoints.append(f"/calendar-service/event/{uuid}")
+    if event_id:
+        endpoints.append(f"/calendar-service/event/{event_id}")
+
+    for endpoint in endpoints:
+        try:
+            data = client.connectapi(endpoint)
+            if isinstance(data, dict):
+                return data
+        except Exception as e:
+            logger.debug("Failed to fetch race details from %s: %s", endpoint, e)
+    return None
+
+
+def _extract_goal_time_from_details(detail: dict) -> int | None:
+    """Extract goal time in seconds from a race event detail response."""
+    for field in ("goalTimeInSeconds", "raceGoalTime", "goalTime", "targetTime", "duration"):
+        val = detail.get(field)
+        if val and isinstance(val, (int, float)):
+            # Garmin may return milliseconds; if value > 24h in seconds, assume ms
+            return int(val / 1000) if val > 86400 else int(val)
+
+    ct = detail.get("completionTarget") or {}
+    ct_val = ct.get("value")
+    ct_unit = (ct.get("unit") or "").lower()
+    if ct_val and ct_unit in ("second", "seconds", "s"):
+        return int(ct_val)
+    if ct_val and ct_unit in ("millisecond", "milliseconds", "ms"):
+        return int(ct_val / 1000)
+
+    return None
+
+
 def sync_calendar() -> int:
     """Sync Garmin calendar events (races + workouts). Returns count of upserted events."""
     logger.info("Syncing Garmin calendar...")
@@ -670,6 +712,24 @@ def sync_calendar() -> int:
         if workout_data:
             # Store the full workout response as raw_json so step parsing can find the data
             evt["raw_json"] = json.dumps(workout_data, default=str)
+
+    # Fetch full details for race events to get goal time
+    for evt in all_events:
+        if evt["event_type"] != "race":
+            continue
+        if evt.get("goal_time_sec"):
+            continue  # Already have goal time from calendar response
+        raw = json.loads(evt["raw_json"]) if evt["raw_json"] else {}
+        time.sleep(0.3)
+        detail = _fetch_race_event_details(client, raw)
+        if detail:
+            goal_time = _extract_goal_time_from_details(detail)
+            if goal_time:
+                evt["goal_time_sec"] = goal_time
+                logger.info("Got goal time %ds for race %s", goal_time, evt["title"])
+            # Store detail in raw_json for future reference
+            raw["_eventDetail"] = detail
+            evt["raw_json"] = json.dumps(raw, default=str)
 
     with db_session() as db:
         try:
