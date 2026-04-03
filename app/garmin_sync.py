@@ -630,71 +630,44 @@ def _fetch_workout_details(client: Garmin, workout_id) -> dict | None:
 
 
 def _fetch_race_event_details(client: Garmin, event_item: dict) -> dict | None:
-    """Fetch full race/event details from Garmin to get goal time."""
+    """Fetch full race/event details from Garmin shareable event endpoint."""
     uuid = event_item.get("shareableEventUuid") or event_item.get("eventUuid")
-    event_id = event_item.get("eventId") or event_item.get("id")
-
-    endpoints: list[str] = []
-    if uuid:
-        endpoints.append(f"/calendar-service/event/{uuid}")
-    if event_id:
-        endpoints.append(f"/calendar-service/event/{event_id}")
-
-    logger.info(
-        "Race detail fetch: uuid=%s eventId=%s endpoints=%s",
-        uuid, event_id, endpoints,
-    )
-
-    if not endpoints:
-        logger.info("No uuid or eventId available for race detail fetch")
+    if not uuid:
+        logger.debug("No shareableEventUuid for race detail fetch")
         return None
 
-    for endpoint in endpoints:
-        try:
-            logger.info("Trying race detail endpoint: %s", endpoint)
-            data = client.connectapi(endpoint)
-            if isinstance(data, dict):
-                logger.info(
-                    "Race detail response from %s: keys=%s",
-                    endpoint, list(data.keys()),
-                )
-                return data
-            else:
-                logger.info(
-                    "Race detail response from %s was not a dict: type=%s",
-                    endpoint, type(data).__name__,
-                )
-        except Exception as e:
-            logger.info("Failed to fetch race details from %s: %s", endpoint, e)
+    endpoint = f"/calendar-service/event/{uuid}/shareable"
+    try:
+        data = client.connectapi(endpoint)
+        if isinstance(data, dict):
+            logger.info("Race detail response keys: %s", list(data.keys()))
+            return data
+        logger.debug("Race detail response was not a dict: type=%s", type(data).__name__)
+    except Exception as e:
+        logger.info("Failed to fetch race details from %s: %s", endpoint, e)
     return None
 
 
 def _extract_goal_time_from_details(detail: dict) -> int | None:
     """Extract goal time in seconds from a race event detail response."""
-    time_fields = ("goalTimeInSeconds", "raceGoalTime", "goalTime", "targetTime", "duration")
-    field_values = {f: detail.get(f) for f in time_fields}
-    logger.info("Goal time field check: %s", field_values)
+    # Primary: eventCustomization.customGoal (from /shareable endpoint)
+    customization = detail.get("eventCustomization") or {}
+    custom_goal = customization.get("customGoal") or {}
+    cg_val = custom_goal.get("value")
+    cg_unit = (custom_goal.get("unitType") or custom_goal.get("unit") or "").lower()
+    if cg_val and isinstance(cg_val, (int, float)) and cg_unit == "time":
+        logger.info("Found goal time via customGoal: %.0fs", cg_val)
+        return int(cg_val)
 
-    for field in time_fields:
-        val = field_values[field]
+    # Fallback: top-level time fields
+    for field in ("goalTimeInSeconds", "raceGoalTime", "goalTime", "targetTime"):
+        val = detail.get(field)
         if val and isinstance(val, (int, float)):
-            # Garmin may return milliseconds; if value > 24h in seconds, assume ms
             result = int(val / 1000) if val > 86400 else int(val)
-            logger.info("Found goal time via field %s: raw=%s -> %ds", field, val, result)
+            logger.info("Found goal time via field %s: %ds", field, result)
             return result
 
-    ct = detail.get("completionTarget") or {}
-    logger.info("completionTarget: %s", ct)
-    ct_val = ct.get("value")
-    ct_unit = (ct.get("unit") or "").lower()
-    if ct_val and ct_unit in ("second", "seconds", "s"):
-        logger.info("Found goal time via completionTarget (seconds): %s", ct_val)
-        return int(ct_val)
-    if ct_val and ct_unit in ("millisecond", "milliseconds", "ms"):
-        logger.info("Found goal time via completionTarget (ms): %s", ct_val)
-        return int(ct_val / 1000)
-
-    logger.info("No goal time found in detail response")
+    logger.debug("No goal time found in detail response")
     return None
 
 
@@ -742,34 +715,43 @@ def sync_calendar() -> int:
             # Store the full workout response as raw_json so step parsing can find the data
             evt["raw_json"] = json.dumps(workout_data, default=str)
 
-    # Fetch full details for race events to get goal time
+    # Fetch full details for race events to get goal time and priority
     race_events = [e for e in all_events if e["event_type"] == "race"]
     logger.info("Found %d race events to fetch details for", len(race_events))
     for evt in race_events:
-        if evt.get("goal_time_sec"):
-            logger.info("Race %r already has goal_time_sec=%s, skipping detail fetch", evt["title"], evt["goal_time_sec"])
-            continue
         raw = json.loads(evt["raw_json"]) if evt["raw_json"] else {}
-        logger.info(
-            "Fetching details for race %r: raw_json keys=%s, shareableEventUuid=%s, eventId=%s",
-            evt["title"], list(raw.keys()),
-            raw.get("shareableEventUuid"), raw.get("eventId"),
-        )
+        uuid = raw.get("shareableEventUuid")
+        if not uuid:
+            logger.debug("Race %r has no shareableEventUuid, skipping detail fetch", evt["title"])
+            continue
         time.sleep(0.3)
         detail = _fetch_race_event_details(client, raw)
-        if detail:
-            logger.info("Race detail for %r: response keys=%s", evt["title"], list(detail.keys()))
+        if not detail:
+            logger.info("No detail response for race %r", evt["title"])
+            continue
+
+        # Extract goal time from eventCustomization.customGoal
+        if not evt.get("goal_time_sec"):
             goal_time = _extract_goal_time_from_details(detail)
             if goal_time:
                 evt["goal_time_sec"] = goal_time
-                logger.info("Got goal time %ds for race %s", goal_time, evt["title"])
-            else:
-                logger.info("No goal time extracted for race %r from detail response", evt["title"])
-            # Store detail in raw_json for future reference
-            raw["_eventDetail"] = detail
-            evt["raw_json"] = json.dumps(raw, default=str)
-        else:
-            logger.info("No detail response received for race %r", evt["title"])
+                logger.info("Race %r: goal_time=%ds", evt["title"], goal_time)
+
+        # Extract priority from isPrimaryEvent
+        customization = detail.get("eventCustomization") or {}
+        if not evt.get("priority") and customization.get("isPrimaryEvent") is True:
+            evt["priority"] = "A"
+            logger.info("Race %r: set priority=A from isPrimaryEvent", evt["title"])
+
+        # Log race predictions if available
+        projected = customization.get("projectedRaceTimeDurationSeconds")
+        predicted = customization.get("predictedRaceTimeDurationSeconds")
+        if projected or predicted:
+            logger.info("Race %r: projected=%s predicted=%s", evt["title"], projected, predicted)
+
+        # Store detail in raw_json for future reference
+        raw["_eventDetail"] = detail
+        evt["raw_json"] = json.dumps(raw, default=str)
 
     with db_session() as db:
         try:
