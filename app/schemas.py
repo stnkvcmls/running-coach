@@ -213,7 +213,7 @@ class TodayResponse(BaseModel):
     daily_summary: DailySummaryResponse | None = None
     weekly_data: list[WeeklyMileage] = []
     insights: list[InsightResponse] = []
-    next_race: RaceInfo | None = None
+    next_races: list[RaceInfo] = []
     scheduled_events: list[CalendarEventResponse] = []
 
 

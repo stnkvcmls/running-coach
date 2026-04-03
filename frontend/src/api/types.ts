@@ -160,7 +160,7 @@ export interface TodayResponse {
   daily_summary: DailySummaryResponse | null
   weekly_data: WeeklyMileage[]
   insights: InsightResponse[]
-  next_race: RaceInfo | null
+  next_races: RaceInfo[]
   scheduled_events: CalendarEvent[]
 }
 

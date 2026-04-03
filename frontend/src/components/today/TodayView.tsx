@@ -54,26 +54,28 @@ export default function TodayView() {
         </section>
       )}
 
-      {/* Next Race */}
-      {data?.next_race && (
+      {/* Upcoming Races */}
+      {data?.next_races && data.next_races.length > 0 && (
         <section className="today-section">
-          <div className="card race-card">
-            {formatPriority(data.next_race.priority) && (
-              <div className="race-priority-badge">
-                {formatPriority(data.next_race.priority)}
-              </div>
-            )}
-            <div className="race-days">{data.next_race.days_away} days</div>
-            <div className="race-name">{data.next_race.title}</div>
-            {data.next_race.distance_label && (
-              <div className="race-distance">{data.next_race.distance_label}</div>
-            )}
-            {data.next_race.goal_time_sec != null && (
-              <div className="race-goal-time">
-                Goal: {formatDuration(data.next_race.goal_time_sec)}
-              </div>
-            )}
-          </div>
+          {data.next_races.map(race => (
+            <div key={race.id} className="card race-card">
+              {formatPriority(race.priority) && (
+                <div className="race-priority-badge">
+                  {formatPriority(race.priority)}
+                </div>
+              )}
+              <div className="race-days">{race.days_away} days</div>
+              <div className="race-name">{race.title}</div>
+              {race.distance_label && (
+                <div className="race-distance">{race.distance_label}</div>
+              )}
+              {race.goal_time_sec != null && (
+                <div className="race-goal-time">
+                  Goal: {formatDuration(race.goal_time_sec)}
+                </div>
+              )}
+            </div>
+          ))}
         </section>
       )}
 
