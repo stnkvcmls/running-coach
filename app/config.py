@@ -5,6 +5,7 @@ class Settings(BaseSettings):
     garmin_email: str = ""
     garmin_password: str = ""
     anthropic_api_key: str = ""
+    gemini_api_key: str = ""
     timezone: str = "UTC"
     db_path: str = "/data/running_coach.db"
     garmin_token_dir: str = "/data/garmin_tokens"

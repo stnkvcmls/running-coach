@@ -168,3 +168,15 @@ export interface SettingsResponse {
   sync_statuses: Record<string, { value: string; updated_at: string | null }>
   counts: Record<string, number>
 }
+
+export interface AiConfigResponse {
+  provider: string
+  model: string
+  available_providers: string[]
+  available_models: Record<string, string[]>
+}
+
+export interface AiConfigRequest {
+  provider: string
+  model: string
+}

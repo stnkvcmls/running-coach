@@ -3,12 +3,13 @@ import logging
 from datetime import datetime, date, timedelta, timezone
 
 import anthropic
+import google.generativeai as genai
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.config import settings
 from app.database import db_session
-from app.models import Activity, DailySummary, GarminCalendarEvent, Insight, MetricZone
+from app.models import Activity, DailySummary, GarminCalendarEvent, Insight, MetricZone, SyncStatus
 
 logger = logging.getLogger(__name__)
 
@@ -380,22 +381,8 @@ def _build_context(db: Session, trigger_type: str, trigger_data: str, reference_
     return "\n\n".join(sections)
 
 
-def _call_claude(context: str, trigger_type: str) -> tuple[str, str, str]:
-    """Call Claude API and return (content, summary, category)."""
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-
-    user_prompt = f"Analyze this {trigger_type} data and provide coaching insights:\n\n{context}"
-
-    response = client.messages.create(
-        model=settings.ai_model,
-        max_tokens=1024,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_prompt}],
-    )
-
-    content = response.content[0].text
-
-    # Extract summary (first line starting with **Summary:**)
+def _extract_summary_and_category(content: str, trigger_type: str) -> tuple[str, str]:
+    """Extract summary line and category from AI response text."""
     summary = ""
     for line in content.split("\n"):
         if line.strip().startswith("**Summary:**"):
@@ -403,16 +390,55 @@ def _call_claude(context: str, trigger_type: str) -> tuple[str, str, str]:
             break
     if not summary:
         summary = content.split("\n")[0][:200]
-
-    # Determine category
     category_map = {
         "activity": "workout_analysis",
         "daily_summary": "recovery",
         "weekly_review": "training_plan",
     }
-    category = category_map.get(trigger_type, "recommendation")
+    return summary, category_map.get(trigger_type, "recommendation")
 
+
+def _call_claude(context: str, trigger_type: str, model: str) -> tuple[str, str, str]:
+    """Call Claude API and return (content, summary, category)."""
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    user_prompt = f"Analyze this {trigger_type} data and provide coaching insights:\n\n{context}"
+    response = client.messages.create(
+        model=model,
+        max_tokens=1024,
+        system=SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": user_prompt}],
+    )
+    content = response.content[0].text
+    summary, category = _extract_summary_and_category(content, trigger_type)
     return content, summary, category
+
+
+def _call_gemini(context: str, trigger_type: str, model: str) -> tuple[str, str, str]:
+    """Call Gemini API and return (content, summary, category)."""
+    genai.configure(api_key=settings.gemini_api_key)
+    gemini_model = genai.GenerativeModel(model_name=model, system_instruction=SYSTEM_PROMPT)
+    user_prompt = f"Analyze this {trigger_type} data and provide coaching insights:\n\n{context}"
+    response = gemini_model.generate_content(user_prompt)
+    content = response.text
+    summary, category = _extract_summary_and_category(content, trigger_type)
+    return content, summary, category
+
+
+def _get_ai_config(db: Session) -> tuple[str, str]:
+    """Return (provider, model) from DB, falling back to env defaults."""
+    provider_row = db.query(SyncStatus).filter(SyncStatus.key == "ai_provider").first()
+    model_row = db.query(SyncStatus).filter(SyncStatus.key == "ai_model").first()
+    provider = provider_row.value if provider_row else "claude"
+    model = model_row.value if model_row else settings.ai_model
+    return provider, model
+
+
+def _call_ai(db: Session, context: str, trigger_type: str) -> tuple[str, str, str]:
+    """Dispatch to the configured AI provider and return (content, summary, category)."""
+    provider, model = _get_ai_config(db)
+    if provider == "gemini":
+        return _call_gemini(context, trigger_type, model)
+    return _call_claude(context, trigger_type, model)
 
 
 def _load_zones(db: Session) -> dict[str, list[MetricZone]]:
@@ -431,7 +457,7 @@ def analyze_activity(activity: Activity):
             zones_by_metric = _load_zones(db)
             activity_context = _format_activity_context(activity, zones_by_metric)
             full_context = _build_context(db, "activity", activity_context, reference_date=activity_date)
-            content, summary, category = _call_claude(full_context, "activity")
+            content, summary, category = _call_ai(db, full_context, "activity")
 
             insight = Insight(
                 created_at=datetime.now(timezone.utc),
@@ -459,7 +485,7 @@ def analyze_daily_summary(daily: DailySummary):
         try:
             daily_context = _format_daily_context(daily)
             full_context = _build_context(db, "daily_summary", daily_context, reference_date=daily.date)
-            content, summary, category = _call_claude(full_context, "daily_summary")
+            content, summary, category = _call_ai(db, full_context, "daily_summary")
 
             insight = Insight(
                 created_at=datetime.now(timezone.utc),
@@ -500,7 +526,7 @@ def analyze_activity_force(activity_id: int):
             zones_by_metric = _load_zones(db)
             activity_context = _format_activity_context(activity, zones_by_metric)
             full_context = _build_context(db, "activity", activity_context, reference_date=activity_date)
-            content, summary, category = _call_claude(full_context, "activity")
+            content, summary, category = _call_ai(db, full_context, "activity")
 
             insight = Insight(
                 created_at=datetime.now(timezone.utc),
@@ -557,7 +583,7 @@ def analyze_activity_with_feedback(activity_id: int):
 
             activity_date = activity.started_at.date() if isinstance(activity.started_at, datetime) else activity.started_at
             full_context = _build_context(db, "activity", activity_context, reference_date=activity_date)
-            content, summary, category = _call_claude(full_context, "activity")
+            content, summary, category = _call_ai(db, full_context, "activity")
 
             insight = Insight(
                 created_at=datetime.now(timezone.utc),
@@ -638,7 +664,7 @@ def weekly_review():
             activity_summaries = "\n\n".join(_format_activity_context(a, zones_by_metric) for a in week_activities)
             trigger_data = f"## Weekly Review ({week_start} to {date.today()})\n\n{activity_summaries}"
             full_context = _build_context(db, "weekly_review", trigger_data)
-            content, summary, category = _call_claude(full_context, "weekly_review")
+            content, summary, category = _call_ai(db, full_context, "weekly_review")
 
             insight = Insight(
                 created_at=datetime.now(timezone.utc),
