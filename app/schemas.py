@@ -220,3 +220,15 @@ class TodayResponse(BaseModel):
 class SettingsResponse(BaseModel):
     sync_statuses: dict[str, Any] = {}
     counts: dict[str, int] = {}
+
+
+class AiConfigResponse(BaseModel):
+    provider: str
+    model: str
+    available_providers: list[str]
+    available_models: dict[str, list[str]]
+
+
+class AiConfigRequest(BaseModel):
+    provider: str
+    model: str

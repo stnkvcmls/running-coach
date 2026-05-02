@@ -96,3 +96,37 @@
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+.ai-config {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+}
+
+.ai-config-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.ai-config-label select {
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 0.88rem;
+}
+
+.ai-config-label select:disabled {
+  opacity: 0.6;
+}
+
+.ai-config-error {
+  font-size: 0.78rem;
+  color: #e74c3c;
+}

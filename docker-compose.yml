@@ -10,6 +10,7 @@ services:
       - GARMIN_EMAIL=${GARMIN_EMAIL}
       - GARMIN_PASSWORD=${GARMIN_PASSWORD}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - TIMEZONE=${TIMEZONE:-UTC}
       - DB_PATH=${DB_PATH:-/data/running_coach.db}
       - GARMIN_TOKEN_DIR=${GARMIN_TOKEN_DIR:-/data/garmin_tokens}

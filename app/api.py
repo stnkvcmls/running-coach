@@ -13,6 +13,8 @@ from app.models import Activity, DailySummary, GarminCalendarEvent, Insight, Met
 from app.schemas import (
     ActivityDetail,
     ActivitySummary,
+    AiConfigRequest,
+    AiConfigResponse,
     CalendarDay,
     CalendarEventResponse,
     DailySummaryDetail,
@@ -31,6 +33,11 @@ from app.utils import safe_json_loads, parse_activity_charts
 logger = logging.getLogger(__name__)
 
 api_router = APIRouter(prefix="/api/v1", tags=["api"])
+
+AVAILABLE_MODELS: dict[str, list[str]] = {
+    "claude": ["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
+    "gemini": ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"],
+}
 
 
 # --- Today ---
@@ -429,6 +436,44 @@ def api_settings(db: Session = Depends(get_db)):
         "calendar_events": db.query(func.count(GarminCalendarEvent.id)).scalar() or 0,
     }
     return SettingsResponse(sync_statuses=sync_statuses, counts=counts)
+
+
+@api_router.get("/ai-config", response_model=AiConfigResponse)
+def api_get_ai_config(db: Session = Depends(get_db)):
+    from app.config import settings as app_settings
+    provider_row = db.query(SyncStatus).filter(SyncStatus.key == "ai_provider").first()
+    model_row = db.query(SyncStatus).filter(SyncStatus.key == "ai_model").first()
+    provider = provider_row.value if provider_row else "claude"
+    model = model_row.value if model_row else app_settings.ai_model
+    return AiConfigResponse(
+        provider=provider,
+        model=model,
+        available_providers=list(AVAILABLE_MODELS.keys()),
+        available_models=AVAILABLE_MODELS,
+    )
+
+
+@api_router.post("/ai-config", response_model=AiConfigResponse)
+def api_set_ai_config(config: AiConfigRequest, db: Session = Depends(get_db)):
+    if config.provider not in AVAILABLE_MODELS:
+        raise HTTPException(status_code=400, detail=f"Unknown provider: {config.provider}")
+    if config.model not in AVAILABLE_MODELS[config.provider]:
+        raise HTTPException(status_code=400, detail=f"Model {config.model} not valid for {config.provider}")
+
+    for key, value in [("ai_provider", config.provider), ("ai_model", config.model)]:
+        row = db.query(SyncStatus).filter(SyncStatus.key == key).first()
+        if row:
+            row.value = value
+        else:
+            db.add(SyncStatus(key=key, value=value))
+    db.commit()
+
+    return AiConfigResponse(
+        provider=config.provider,
+        model=config.model,
+        available_providers=list(AVAILABLE_MODELS.keys()),
+        available_models=AVAILABLE_MODELS,
+    )
 
 
 # --- Actions ---

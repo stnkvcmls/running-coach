@@ -11,6 +11,8 @@ import type {
   FeedbackRequest,
   InsightResponse,
   SettingsResponse,
+  AiConfigResponse,
+  AiConfigRequest,
 } from './types'
 
 export function useToday(date: string) {
@@ -119,6 +121,24 @@ export function useSubmitFeedback() {
       qc.invalidateQueries({ queryKey: ['activity', id] })
       setTimeout(() => qc.invalidateQueries({ queryKey: ['activity', id] }), 5000)
       setTimeout(() => qc.invalidateQueries({ queryKey: ['activity', id] }), 12000)
+    },
+  })
+}
+
+export function useAiConfig() {
+  return useQuery({
+    queryKey: ['ai-config'],
+    queryFn: () => apiGet<AiConfigResponse>('/ai-config'),
+  })
+}
+
+export function useSetAiConfig() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (config: AiConfigRequest) =>
+      apiPost<AiConfigResponse>('/ai-config', config),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ai-config'] })
     },
   })
 }
