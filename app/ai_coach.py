@@ -441,6 +441,27 @@ def _call_ai(db: Session, context: str, trigger_type: str) -> tuple[str, str, st
     return _call_claude(context, trigger_type, model)
 
 
+def _save_error_insight(activity_id: int, exc: Exception) -> None:
+    """Persist a failure insight so the UI can show an error and allow retry."""
+    try:
+        with db_session() as db:
+            db.query(Insight).filter(
+                Insight.trigger_type == "activity",
+                Insight.trigger_id == activity_id,
+            ).delete()
+            db.add(Insight(
+                created_at=datetime.now(timezone.utc),
+                trigger_type="activity",
+                trigger_id=activity_id,
+                content=f"Analysis failed: {exc}\n\nCheck your AI backend configuration and use **Re-analyze** to retry.",
+                summary="Analysis failed — use Re-analyze to retry",
+                category="recommendation",
+            ))
+            db.commit()
+    except Exception:
+        logger.exception("Failed to save error insight for activity %s", activity_id)
+
+
 def _load_zones(db: Session) -> dict[str, list[MetricZone]]:
     """Load metric zones from the database, grouped by metric_key."""
     zones_by_metric: dict[str, list[MetricZone]] = {}
@@ -540,8 +561,9 @@ def analyze_activity_force(activity_id: int):
             activity.ai_analyzed = True
             db.commit()
             logger.info("AI re-analysis complete for activity %s: %s", activity.id, summary[:80])
-        except Exception:
+        except Exception as exc:
             logger.exception("AI re-analysis failed for activity %s", activity_id)
+            _save_error_insight(activity_id, exc)
 
 
 def analyze_activity_with_feedback(activity_id: int):
@@ -597,8 +619,9 @@ def analyze_activity_with_feedback(activity_id: int):
             activity.ai_analyzed = True
             db.commit()
             logger.info("AI feedback analysis complete for activity %s: %s", activity.id, summary[:80])
-        except Exception:
+        except Exception as exc:
             logger.exception("AI feedback analysis failed for activity %s", activity_id)
+            _save_error_insight(activity_id, exc)
 
 
 def backfill_missing_insights():
