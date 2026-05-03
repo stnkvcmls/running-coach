@@ -36,7 +36,15 @@ api_router = APIRouter(prefix="/api/v1", tags=["api"])
 
 AVAILABLE_MODELS: dict[str, list[str]] = {
     "claude": ["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
-    "gemini": ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"],
+    "gemini": [
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-3-flash",
+        "gemini-3.1-flash-lite",
+        "gemma-2-2b-it",
+        "gemma-4-26b-it",
+        "gemma-4-31b-it",
+    ],
 }
 
 
