@@ -1,5 +1,5 @@
-import { useState, createContext, useContext } from 'react'
-import { Routes, Route, useLocation } from 'react-router-dom'
+import { useState, useEffect, createContext, useContext } from 'react'
+import { Routes, Route, useLocation, useNavigate } from 'react-router-dom'
 import TopBar from './components/layout/TopBar'
 import BottomNav from './components/layout/BottomNav'
 import CalendarContainer from './components/layout/CalendarContainer'
@@ -10,6 +10,8 @@ import DailySummariesView from './components/daily/DailySummariesView'
 import DailyDetailView from './components/daily/DailyDetailView'
 import SettingsView from './components/settings/SettingsView'
 import WorkoutDetailView from './components/workout-detail/WorkoutDetailView'
+import OnboardingView from './components/onboarding/OnboardingView'
+import { useAthleteProfile } from './api/hooks'
 
 interface DateContextType {
   selectedDate: Date
@@ -29,8 +31,18 @@ export default function App() {
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [calendarExpanded, setCalendarExpanded] = useState(false)
   const location = useLocation()
+  const navigate = useNavigate()
 
-  const isDetailPage = location.pathname.startsWith('/activities/') || location.pathname.startsWith('/daily/') || location.pathname.startsWith('/workouts/')
+  // First-run: redirect to onboarding when no athlete profile exists yet.
+  const { data: profile, isLoading: profileLoading } = useAthleteProfile()
+  useEffect(() => {
+    if (!profileLoading && profile === null && location.pathname !== '/onboarding') {
+      navigate('/onboarding', { replace: true })
+    }
+  }, [profileLoading, profile, location.pathname, navigate])
+
+  const isOnboarding = location.pathname === '/onboarding'
+  const isDetailPage = isOnboarding || location.pathname.startsWith('/activities/') || location.pathname.startsWith('/daily/') || location.pathname.startsWith('/workouts/')
   const showCalendar = !isDetailPage
 
   return (
@@ -62,6 +74,7 @@ export default function App() {
             <Route path="/daily/:id" element={<DailyDetailView />} />
             <Route path="/workouts/:id" element={<WorkoutDetailView />} />
             <Route path="/settings" element={<SettingsView />} />
+            <Route path="/onboarding" element={<OnboardingView />} />
           </Routes>
         </main>
         {!isDetailPage && <BottomNav />}

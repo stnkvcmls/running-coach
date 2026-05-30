@@ -174,3 +174,29 @@ class SyncStatus(Base):
     key = Column(String(100), unique=True, nullable=False)
     value = Column(Text)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
+class AthleteProfile(Base):
+    """Single-athlete profile feeding personalization and the AI context.
+
+    The app is single-user, so this table holds at most one row (accessed
+    via ``.first()``).
+    """
+
+    __tablename__ = "athlete_profiles"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(Text, nullable=True)
+    date_of_birth = Column(Date, nullable=True)
+    weight_kg = Column(Float, nullable=True)
+    goal_race = Column(Text, nullable=True)
+    goal_race_date = Column(Date, nullable=True)
+    threshold_pace_min_km = Column(Float, nullable=True)
+    threshold_hr = Column(Integer, nullable=True)
+    max_hr = Column(Integer, nullable=True)
+    resting_hr = Column(Integer, nullable=True)
+    injury_history = Column(Text, nullable=True)
+    weekly_availability = Column(Text, nullable=True)
+    training_preferences = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=_utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)

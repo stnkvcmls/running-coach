@@ -1,4 +1,14 @@
 import json
+from datetime import date
+
+
+def calculate_age(dob: date | None, reference: date | None = None) -> int | None:
+    """Return age in whole years from a date of birth, or None if unset."""
+    if dob is None:
+        return None
+    today = reference or date.today()
+    years = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+    return years if years >= 0 else None
 
 
 def safe_json_loads(raw: str | None):

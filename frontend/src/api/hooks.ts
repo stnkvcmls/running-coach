@@ -13,6 +13,8 @@ import type {
   SettingsResponse,
   AiConfigResponse,
   AiConfigRequest,
+  AthleteProfile,
+  AthleteProfileRequest,
 } from './types'
 
 export function useToday(date: string) {
@@ -139,6 +141,24 @@ export function useSetAiConfig() {
       apiPost<AiConfigResponse>('/ai-config', config),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['ai-config'] })
+    },
+  })
+}
+
+export function useAthleteProfile() {
+  return useQuery({
+    queryKey: ['athlete-profile'],
+    queryFn: () => apiGet<AthleteProfile | null>('/athlete-profile'),
+  })
+}
+
+export function useUpdateAthleteProfile() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (profile: AthleteProfileRequest) =>
+      apiPost<AthleteProfile>('/athlete-profile', profile),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['athlete-profile'] })
     },
   })
 }

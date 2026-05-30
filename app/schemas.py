@@ -232,3 +232,40 @@ class AiConfigResponse(BaseModel):
 class AiConfigRequest(BaseModel):
     provider: str
     model: str
+
+
+class AthleteProfileRequest(BaseModel):
+    name: str | None = None
+    date_of_birth: date | None = None
+    weight_kg: float | None = None
+    goal_race: str | None = None
+    goal_race_date: date | None = None
+    threshold_pace_min_km: float | None = None
+    threshold_hr: int | None = None
+    max_hr: int | None = None
+    resting_hr: int | None = None
+    injury_history: str | None = None
+    weekly_availability: str | None = None
+    training_preferences: str | None = None
+
+
+class AthleteProfileResponse(BaseModel):
+    id: int
+    name: str | None = None
+    date_of_birth: date | None = None
+    age: int | None = None
+    weight_kg: float | None = None
+    goal_race: str | None = None
+    goal_race_date: date | None = None
+    threshold_pace_min_km: float | None = None
+    threshold_hr: int | None = None
+    max_hr: int | None = None
+    resting_hr: int | None = None
+    injury_history: str | None = None
+    weekly_availability: str | None = None
+    training_preferences: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    class Config:
+        from_attributes = True

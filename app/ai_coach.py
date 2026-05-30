@@ -9,7 +9,16 @@ from sqlalchemy import func
 
 from app.config import settings
 from app.database import db_session
-from app.models import Activity, DailySummary, GarminCalendarEvent, Insight, MetricZone, SyncStatus
+from app.models import (
+    Activity,
+    AthleteProfile,
+    DailySummary,
+    GarminCalendarEvent,
+    Insight,
+    MetricZone,
+    SyncStatus,
+)
+from app.utils import calculate_age
 
 logger = logging.getLogger(__name__)
 
@@ -234,6 +243,47 @@ def _format_daily_context(summary: DailySummary) -> str:
     return "\n".join(parts)
 
 
+def _format_athlete_profile_context(profile: AthleteProfile, reference_date: date | None = None) -> str:
+    """Format the athlete profile as a markdown block, emitting only set fields."""
+    ref = reference_date or date.today()
+    lines = []
+    if profile.name:
+        lines.append(f"- Name: {profile.name}")
+    age = calculate_age(profile.date_of_birth, ref)
+    if age is not None:
+        lines.append(f"- Age: {age}")
+    if profile.weight_kg:
+        lines.append(f"- Weight: {profile.weight_kg:.1f} kg")
+    if profile.goal_race:
+        goal = f"- Goal Race: {profile.goal_race}"
+        if profile.goal_race_date:
+            days_until = (profile.goal_race_date - ref).days
+            goal += f" on {profile.goal_race_date} ({days_until} days away)"
+        lines.append(goal)
+    elif profile.goal_race_date:
+        days_until = (profile.goal_race_date - ref).days
+        lines.append(f"- Goal Race Date: {profile.goal_race_date} ({days_until} days away)")
+    if profile.threshold_pace_min_km:
+        p_min = int(profile.threshold_pace_min_km)
+        p_sec = int((profile.threshold_pace_min_km - p_min) * 60)
+        lines.append(f"- Threshold Pace: {p_min}:{p_sec:02d}/km")
+    if profile.threshold_hr:
+        lines.append(f"- Threshold HR: {profile.threshold_hr} bpm")
+    if profile.max_hr:
+        lines.append(f"- Max HR: {profile.max_hr} bpm")
+    if profile.resting_hr:
+        lines.append(f"- Resting HR: {profile.resting_hr} bpm")
+    if profile.weekly_availability:
+        lines.append(f"- Weekly Availability: {profile.weekly_availability}")
+    if profile.training_preferences:
+        lines.append(f"- Training Preferences: {profile.training_preferences}")
+    if profile.injury_history:
+        lines.append(f"- Injury History: {profile.injury_history}")
+    if not lines:
+        return ""
+    return "## Athlete Profile\n" + "\n".join(lines)
+
+
 def _build_context(db: Session, trigger_type: str, trigger_data: str, reference_date: date | None = None) -> str:
     """Build full context for AI analysis.
 
@@ -246,6 +296,13 @@ def _build_context(db: Session, trigger_type: str, trigger_data: str, reference_
     ref_datetime = datetime.combine(reference_date, datetime.min.time(), tzinfo=timezone.utc)
 
     sections = [f"## Current Data\n{trigger_data}"]
+
+    # Athlete profile (baseline personalization — lands right after Current Data)
+    profile = db.query(AthleteProfile).first()
+    if profile:
+        profile_context = _format_athlete_profile_context(profile, reference_date)
+        if profile_context:
+            sections.insert(1, profile_context)
 
     # Recent activities (last 14 days)
     cutoff = ref_datetime - timedelta(days=14)
