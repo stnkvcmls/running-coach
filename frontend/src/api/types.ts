@@ -180,3 +180,37 @@ export interface AiConfigRequest {
   provider: string
   model: string
 }
+
+export interface AthleteProfile {
+  id: number
+  name: string | null
+  date_of_birth: string | null
+  age: number | null
+  weight_kg: number | null
+  goal_race: string | null
+  goal_race_date: string | null
+  threshold_pace_min_km: number | null
+  threshold_hr: number | null
+  max_hr: number | null
+  resting_hr: number | null
+  injury_history: string | null
+  weekly_availability: string | null
+  training_preferences: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface AthleteProfileRequest {
+  name?: string | null
+  date_of_birth?: string | null
+  weight_kg?: number | null
+  goal_race?: string | null
+  goal_race_date?: string | null
+  threshold_pace_min_km?: number | null
+  threshold_hr?: number | null
+  max_hr?: number | null
+  resting_hr?: number | null
+  injury_history?: string | null
+  weekly_availability?: string | null
+  training_preferences?: string | null
+}

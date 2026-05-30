@@ -9,12 +9,22 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Activity, DailySummary, GarminCalendarEvent, Insight, MetricZone, SyncStatus
+from app.models import (
+    Activity,
+    AthleteProfile,
+    DailySummary,
+    GarminCalendarEvent,
+    Insight,
+    MetricZone,
+    SyncStatus,
+)
 from app.schemas import (
     ActivityDetail,
     ActivitySummary,
     AiConfigRequest,
     AiConfigResponse,
+    AthleteProfileRequest,
+    AthleteProfileResponse,
     CalendarDay,
     CalendarEventResponse,
     DailySummaryDetail,
@@ -28,7 +38,7 @@ from app.schemas import (
     WeeklyMileage,
     WorkoutStepResponse,
 )
-from app.utils import safe_json_loads, parse_activity_charts
+from app.utils import safe_json_loads, parse_activity_charts, calculate_age
 
 logger = logging.getLogger(__name__)
 
@@ -482,6 +492,36 @@ def api_set_ai_config(config: AiConfigRequest, db: Session = Depends(get_db)):
         available_providers=list(AVAILABLE_MODELS.keys()),
         available_models=AVAILABLE_MODELS,
     )
+
+
+# --- Athlete Profile ---
+
+
+def _profile_response(profile: AthleteProfile) -> AthleteProfileResponse:
+    """Build a response, deriving age from date_of_birth."""
+    result = AthleteProfileResponse.model_validate(profile)
+    result.age = calculate_age(profile.date_of_birth)
+    return result
+
+
+@api_router.get("/athlete-profile", response_model=AthleteProfileResponse | None)
+def api_get_athlete_profile(db: Session = Depends(get_db)):
+    profile = db.query(AthleteProfile).first()
+    return _profile_response(profile) if profile else None
+
+
+@api_router.post("/athlete-profile", response_model=AthleteProfileResponse)
+def api_set_athlete_profile(profile_data: AthleteProfileRequest, db: Session = Depends(get_db)):
+    profile = db.query(AthleteProfile).first()
+    if profile is None:
+        profile = AthleteProfile(**profile_data.model_dump(exclude_unset=True))
+        db.add(profile)
+    else:
+        for key, value in profile_data.model_dump(exclude_unset=True).items():
+            setattr(profile, key, value)
+    db.commit()
+    db.refresh(profile)
+    return _profile_response(profile)
 
 
 # --- Actions ---

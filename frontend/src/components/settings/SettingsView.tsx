@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { useSettings, useTriggerSync, useAiConfig, useSetAiConfig } from '../../api/hooks'
+import AthleteProfileSection from './AthleteProfileSection'
 import './SettingsView.css'
 
 const PROVIDER_LABELS: Record<string, string> = {
@@ -70,6 +71,9 @@ export default function SettingsView() {
 
   return (
     <div className="settings-view">
+      {/* Athlete profile */}
+      <AthleteProfileSection />
+
       {/* AI backend selector */}
       <AiBackendSection />
 
