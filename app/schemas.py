@@ -249,6 +249,18 @@ class AthleteProfileRequest(BaseModel):
     training_preferences: str | None = None
 
 
+class GarminProfileSuggestion(BaseModel):
+    """Garmin-derived profile values offered to the user (not persisted)."""
+
+    name: str | None = None
+    date_of_birth: date | None = None
+    weight_kg: float | None = None
+    threshold_pace_min_km: float | None = None
+    threshold_hr: int | None = None
+    max_hr: int | None = None
+    resting_hr: int | None = None
+
+
 class AthleteProfileResponse(BaseModel):
     id: int
     name: str | None = None

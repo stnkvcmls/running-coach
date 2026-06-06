@@ -50,3 +50,32 @@ panicked on import in this container; fixed by `pip install --upgrade cryptograp
 — an environment fix, not a code change. The pre-existing Pydantic class-based
 `Config` deprecation warnings were left untouched to stay in scope.
 
+---
+
+# Follow-up · Import profile from Garmin (suggest-and-confirm)
+
+Decision: pull Garmin-known physiology and offer it as a one-click "Import from
+Garmin" suggestion in the profile form. Nothing persists until the user hits Save
+(no auto-overwrite scheduler).
+
+- [x] `app/garmin_sync.py` — `_map_profile_suggestions()` (pure mapping) +
+      `fetch_profile_suggestions()` (live calls: `get_full_name`,
+      `get_userprofile_settings`, latest `DailySummary.resting_hr`)
+- [x] `app/schemas.py` — `GarminProfileSuggestion`
+- [x] `app/api.py` — `GET /athlete-profile/garmin-suggestions` (502 on Garmin failure)
+- [x] `frontend/src/api/types.ts` + `hooks.ts` — type + `useGarminProfileSuggestions`
+- [x] `frontend/src/components/profile/ProfileForm.tsx` — "Import from Garmin" button
+- [x] `tests/test_garmin_suggestions.py` — mapping conversions (grams→kg, m/s→pace, omit missing)
+
+### Review
+Implemented suggest-and-confirm Garmin import. An "Import from Garmin" button in
+the shared `ProfileForm` calls `GET /athlete-profile/garmin-suggestions`, which
+pulls name, DOB, weight, threshold pace/HR, max HR (from `get_userprofile_settings`)
+and resting HR (latest synced `DailySummary`). Returned values prefill the form
+only — nothing persists until the user hits Save. The mapping is a pure function
+(`_map_profile_suggestions`, unit-tested for unit conversions and omission of
+missing/zero fields). Made the `garminconnect` import lazy in `garmin_sync.py`
+(its top-level `withings_sync` import is fragile) so the module's pure helpers are
+importable/testable without the SDK. `pytest` → 9 passed; `tsc`/`build` clean.
+
+

@@ -15,6 +15,7 @@ import type {
   AiConfigRequest,
   AthleteProfile,
   AthleteProfileRequest,
+  GarminProfileSuggestion,
 } from './types'
 
 export function useToday(date: string) {
@@ -160,5 +161,13 @@ export function useUpdateAthleteProfile() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['athlete-profile'] })
     },
+  })
+}
+
+// Triggered on demand (button click), so a mutation fits better than a query.
+export function useGarminProfileSuggestions() {
+  return useMutation({
+    mutationFn: () =>
+      apiGet<GarminProfileSuggestion>('/athlete-profile/garmin-suggestions'),
   })
 }

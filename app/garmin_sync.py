@@ -1,24 +1,31 @@
+from __future__ import annotations
+
 import json
 import logging
 import threading
 import time
 from datetime import datetime, date, timedelta, timezone
+from typing import TYPE_CHECKING
 
-from garminconnect import Garmin
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import db_session
 from app.models import Activity, DailySummary, GarminCalendarEvent, SyncStatus
 
+if TYPE_CHECKING:
+    from garminconnect import Garmin
+
 logger = logging.getLogger(__name__)
 
-_garmin_client: Garmin | None = None
+_garmin_client: "Garmin | None" = None
 _garmin_lock = threading.Lock()
 
 
-def get_garmin_client() -> Garmin:
+def get_garmin_client() -> "Garmin":
     """Get or create an authenticated Garmin client."""
+    from garminconnect import Garmin
+
     global _garmin_client
     with _garmin_lock:
         if _garmin_client is not None:
@@ -39,6 +46,76 @@ def get_garmin_client() -> Garmin:
         _garmin_client = client
         logger.info("Garmin authenticated as %s", client.get_full_name())
         return client
+
+
+def _map_profile_suggestions(full_name: str | None, user_data: dict, resting_hr: int | None) -> dict:
+    """Map raw Garmin profile data to AthleteProfile fields (pure, no network).
+
+    Only non-null values are returned, so the caller/form merges suggestions
+    without clobbering existing entries. Garmin stores weight in grams and
+    lactate-threshold speed in m/s, both converted here.
+    """
+    user_data = user_data or {}
+    out: dict = {}
+
+    if full_name:
+        out["name"] = full_name
+
+    birth = user_data.get("birthDate") or user_data.get("birthdate")
+    if birth:
+        out["date_of_birth"] = birth
+
+    weight_g = user_data.get("weight")
+    if weight_g:
+        out["weight_kg"] = round(weight_g / 1000, 1)
+
+    speed = user_data.get("lactateThresholdSpeed")  # m/s
+    if speed and speed > 0:
+        out["threshold_pace_min_km"] = round(1000 / (speed * 60), 2)
+
+    thr_hr = user_data.get("lactateThresholdHeartRate")
+    if thr_hr:
+        out["threshold_hr"] = int(thr_hr)
+
+    max_hr = user_data.get("maxHeartRate") or user_data.get("maxHr")
+    if max_hr:
+        out["max_hr"] = int(max_hr)
+
+    if resting_hr:
+        out["resting_hr"] = int(resting_hr)
+
+    return out
+
+
+def fetch_profile_suggestions(db: Session) -> dict:
+    """Pull current physiological data from Garmin as profile suggestions.
+
+    Makes live Garmin calls; the resulting dict is NOT persisted — it feeds the
+    "Import from Garmin" prompt in the profile form.
+    """
+    client = get_garmin_client()
+
+    try:
+        full_name = client.get_full_name()
+    except Exception:
+        full_name = None
+
+    try:
+        profile_settings = client.get_userprofile_settings() or {}
+    except Exception:
+        logger.exception("Failed to fetch Garmin user profile settings")
+        profile_settings = {}
+    user_data = profile_settings.get("userData") or {}
+
+    latest = (
+        db.query(DailySummary)
+        .filter(DailySummary.resting_hr.isnot(None))
+        .order_by(DailySummary.date.desc())
+        .first()
+    )
+    resting_hr = latest.resting_hr if latest else None
+
+    return _map_profile_suggestions(full_name, user_data, resting_hr)
 
 
 def _get_sync_status(db: Session, key: str) -> str | None:

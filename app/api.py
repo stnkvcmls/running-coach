@@ -30,6 +30,7 @@ from app.schemas import (
     DailySummaryDetail,
     DailySummaryResponse,
     FeedbackRequest,
+    GarminProfileSuggestion,
     InsightResponse,
     MetricZoneResponse,
     RaceInfo,
@@ -508,6 +509,19 @@ def _profile_response(profile: AthleteProfile) -> AthleteProfileResponse:
 def api_get_athlete_profile(db: Session = Depends(get_db)):
     profile = db.query(AthleteProfile).first()
     return _profile_response(profile) if profile else None
+
+
+@api_router.get("/athlete-profile/garmin-suggestions", response_model=GarminProfileSuggestion)
+def api_garmin_profile_suggestions(db: Session = Depends(get_db)):
+    """Fetch current physiological data from Garmin to prefill the profile form."""
+    from app.garmin_sync import fetch_profile_suggestions
+
+    try:
+        suggestions = fetch_profile_suggestions(db)
+    except Exception:
+        logger.exception("Failed to fetch Garmin profile suggestions")
+        raise HTTPException(status_code=502, detail="Could not reach Garmin")
+    return GarminProfileSuggestion(**suggestions)
 
 
 @api_router.post("/athlete-profile", response_model=AthleteProfileResponse)

@@ -200,6 +200,16 @@ export interface AthleteProfile {
   updated_at: string | null
 }
 
+export interface GarminProfileSuggestion {
+  name: string | null
+  date_of_birth: string | null
+  weight_kg: number | null
+  threshold_pace_min_km: number | null
+  threshold_hr: number | null
+  max_hr: number | null
+  resting_hr: number | null
+}
+
 export interface AthleteProfileRequest {
   name?: string | null
   date_of_birth?: string | null

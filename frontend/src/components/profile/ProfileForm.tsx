@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import type { AthleteProfile, AthleteProfileRequest } from '../../api/types'
+import { Download } from 'lucide-react'
+import { useGarminProfileSuggestions } from '../../api/hooks'
+import type { AthleteProfile, AthleteProfileRequest, GarminProfileSuggestion } from '../../api/types'
 import './ProfileForm.css'
 
 interface ProfileFormProps {
@@ -63,12 +65,32 @@ function toRequest(f: FormState): AthleteProfileRequest {
   }
 }
 
+// Merge non-null Garmin suggestions into the form without clobbering other fields.
+function applySuggestions(prev: FormState, s: GarminProfileSuggestion): FormState {
+  const next = { ...prev }
+  const keys: (keyof GarminProfileSuggestion & keyof FormState)[] = [
+    'name', 'date_of_birth', 'weight_kg', 'threshold_pace_min_km', 'threshold_hr', 'max_hr', 'resting_hr',
+  ]
+  for (const key of keys) {
+    const value = s[key]
+    if (value !== null && value !== undefined) next[key] = String(value)
+  }
+  return next
+}
+
 export default function ProfileForm({ initial, onSubmit, isPending, isError, submitLabel = 'Save' }: ProfileFormProps) {
   const [form, setForm] = useState<FormState>(() => toFormState(initial))
+  const garmin = useGarminProfileSuggestions()
 
   const set = (key: keyof FormState) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => setForm(prev => ({ ...prev, [key]: e.target.value }))
+
+  const handleImport = () => {
+    garmin.mutate(undefined, {
+      onSuccess: data => setForm(prev => applySuggestions(prev, data)),
+    })
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -77,6 +99,24 @@ export default function ProfileForm({ initial, onSubmit, isPending, isError, sub
 
   return (
     <form className="profile-form" onSubmit={handleSubmit}>
+      <div className="profile-form__import">
+        <button
+          type="button"
+          className="profile-form__import-btn"
+          onClick={handleImport}
+          disabled={garmin.isPending}
+        >
+          <Download size={16} />
+          {garmin.isPending ? 'Importing…' : 'Import from Garmin'}
+        </button>
+        {garmin.isSuccess && !garmin.isPending && (
+          <span className="profile-form__import-hint">Imported — review and Save to keep.</span>
+        )}
+        {garmin.isError && (
+          <span className="profile-form__error">Could not reach Garmin</span>
+        )}
+      </div>
+
       <div className="profile-form__field">
         <label htmlFor="pf-name">Name</label>
         <input id="pf-name" type="text" value={form.name} onChange={set('name')} />
