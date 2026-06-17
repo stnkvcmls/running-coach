@@ -1,11 +1,12 @@
 import { NavLink } from 'react-router-dom'
-import { CalendarDays, Activity, BarChart3, Settings } from 'lucide-react'
+import { CalendarDays, Activity, BarChart3, TrendingUp, Settings } from 'lucide-react'
 import './BottomNav.css'
 
 const tabs = [
   { to: '/', icon: CalendarDays, label: 'Today', end: true },
   { to: '/activities', icon: Activity, label: 'Activities' },
   { to: '/daily', icon: BarChart3, label: 'Summaries' },
+  { to: '/trends', icon: TrendingUp, label: 'Wellness' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ]
 
