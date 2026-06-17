@@ -7,6 +7,7 @@ import google.generativeai as genai
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
+from app import training_load
 from app.config import settings
 from app.database import db_session
 from app.models import (
@@ -29,6 +30,7 @@ Your approach:
 - Analyze pacing strategy, HR drift, cadence, and training effect
 - Analyze running dynamics (ground contact time, vertical oscillation, vertical ratio) for form assessment when available
 - Use power metrics (NP, TSS, IF) for training load analysis when available
+- When a Training Load section is present, read CTL (Fitness), ATL (Fatigue), and TSB (Form = CTL − ATL) together: negative TSB means accumulated fatigue (productive while building, but watch for overreaching), positive TSB means freshness/taper. Comment on fitness trend and freshness, and flag rapid fatigue spikes.
 - Consider respiration rate trends for effort assessment
 - Consider recovery indicators (sleep, stress, resting HR, body battery)
 - Tailor advice to upcoming races when applicable
@@ -303,6 +305,12 @@ def _build_context(db: Session, trigger_type: str, trigger_data: str, reference_
         profile_context = _format_athlete_profile_context(profile, reference_date)
         if profile_context:
             sections.insert(1, profile_context)
+
+    # Training load (Fitness/Fatigue/Form) as of the reference date
+    load_point = training_load.current_load(db, as_of=reference_date)
+    load_context = training_load.format_training_load_context(load_point)
+    if load_context:
+        sections.insert(2 if len(sections) > 1 else 1, load_context)
 
     # Recent activities (last 14 days)
     cutoff = ref_datetime - timedelta(days=14)
