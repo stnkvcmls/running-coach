@@ -90,6 +90,22 @@ def _migrate_db():
     except Exception:
         logger.debug("Migration skipped (table may not exist yet)")
 
+    new_profile_columns = {"threshold_power": "INTEGER"}
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(text("PRAGMA table_info(athlete_profiles)")).fetchall()
+            existing = {row[1] for row in rows}
+            added = []
+            for col, dtype in new_profile_columns.items():
+                if col not in existing:
+                    conn.execute(text(f"ALTER TABLE athlete_profiles ADD COLUMN {col} {dtype}"))
+                    added.append(col)
+            conn.commit()
+            if added:
+                logger.info("Migrated athlete_profiles table: added %s", ", ".join(added))
+    except Exception:
+        logger.debug("Migration skipped (athlete_profiles table may not exist yet)")
+
 
 def _seed_metric_zones():
     """Populate metric_zones table with Garmin percentile zone boundaries."""
@@ -140,9 +156,53 @@ def _seed_metric_zones():
         logger.debug("metric_zones seeding skipped (table may not exist yet)")
 
 
+def _seed_zone_configs():
+    """Populate zone_configs table with Coggan-style threshold-anchored defaults."""
+    logger = logging.getLogger(__name__)
+    try:
+        with engine.connect() as conn:
+            count = conn.execute(text("SELECT COUNT(*) FROM zone_configs")).scalar()
+            if count and count > 0:
+                return
+
+            zones = [
+                # HR zones (% of threshold HR; higher % = higher HR = harder)
+                ("hr", 1, "Recovery",   "#2ecc71", None,  81.0),
+                ("hr", 2, "Aerobic",    "#3498db", 81.0,  90.0),
+                ("hr", 3, "Tempo",      "#f39c12", 90.0,  96.0),
+                ("hr", 4, "Threshold",  "#e67e22", 96.0,  103.0),
+                ("hr", 5, "VO2max",     "#e74c3c", 103.0, None),
+                # Pace zones (% of threshold pace in min/km; higher % = slower pace = easier)
+                ("pace", 1, "Easy",       "#2ecc71", 115.0, None),
+                ("pace", 2, "Aerobic",    "#3498db", 106.0, 115.0),
+                ("pace", 3, "Tempo",      "#f39c12", 100.0, 106.0),
+                ("pace", 4, "Threshold",  "#e67e22", 94.0,  100.0),
+                ("pace", 5, "Speed",      "#e74c3c", None,  94.0),
+                # Power zones (% of FTP; higher % = higher power = harder)
+                ("power", 1, "Recovery",   "#2ecc71", None,  55.0),
+                ("power", 2, "Endurance",  "#3498db", 55.0,  75.0),
+                ("power", 3, "Tempo",      "#f39c12", 75.0,  90.0),
+                ("power", 4, "Threshold",  "#e67e22", 90.0,  105.0),
+                ("power", 5, "VO2max",     "#e74c3c", 105.0, None),
+            ]
+            for zone_type, zone_number, zone_name, zone_color, min_pct, max_pct in zones:
+                conn.execute(
+                    text(
+                        "INSERT INTO zone_configs (zone_type, zone_number, zone_name, zone_color, min_pct, max_pct) "
+                        "VALUES (:zt, :zn, :zname, :zc, :mn, :mx)"
+                    ),
+                    {"zt": zone_type, "zn": zone_number, "zname": zone_name, "zc": zone_color, "mn": min_pct, "mx": max_pct},
+                )
+            conn.commit()
+            logger.info("Seeded zone_configs table with %d rows", len(zones))
+    except Exception:
+        logger.debug("zone_configs seeding skipped (table may not exist yet)")
+
+
 def init_db():
     from app import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
     _migrate_db()
     _seed_metric_zones()
+    _seed_zone_configs()
