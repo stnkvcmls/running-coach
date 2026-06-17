@@ -29,6 +29,19 @@ export interface FeedbackRequest {
   text?: string
 }
 
+export interface WorkoutAdherence {
+  planned_distance_m: number | null
+  actual_distance_m: number | null
+  distance_pct: number | null
+  planned_pace_display: string | null
+  actual_pace_display: string | null
+  pace_delta_sec_per_km: number | null  // positive = slower than planned
+  planned_intervals: number | null
+  actual_laps: number | null
+  adherence_score: number              // 0–100
+  summary: string
+}
+
 export interface ActivityDetail extends ActivitySummary {
   elevation_loss: number | null
   max_elevation: number | null
@@ -64,6 +77,7 @@ export interface ActivityDetail extends ActivitySummary {
   feedback_text: string | null
   insight: InsightResponse | null
   scheduled_workout: CalendarEvent | null
+  adherence: WorkoutAdherence | null
 }
 
 export interface ChartSeries {

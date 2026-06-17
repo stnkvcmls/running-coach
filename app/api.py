@@ -38,9 +38,11 @@ from app.schemas import (
     TrainingLoadResponse,
     TrainingReadiness,
     WeeklyMileage,
+    WorkoutAdherence,
     WorkoutStepResponse,
 )
 from app import training_load
+from app import adherence as adherence_mod
 from app.utils import safe_json_loads, parse_activity_charts, calculate_age
 
 logger = logging.getLogger(__name__)
@@ -264,6 +266,7 @@ def api_activity_detail(activity_id: int, db: Session = Depends(get_db)):
 
     # Find scheduled workout for this activity's date
     scheduled_workout = None
+    activity_adherence = None
     if activity.started_at:
         activity_date = activity.started_at.date() if isinstance(activity.started_at, datetime) else activity.started_at
         workout_event = (
@@ -276,6 +279,9 @@ def api_activity_detail(activity_id: int, db: Session = Depends(get_db)):
         )
         if workout_event:
             scheduled_workout = _enrich_event_with_steps(workout_event)
+            if workout_event.raw_json:
+                workout_steps = adherence_mod.parse_workout_steps(workout_event.raw_json)
+                activity_adherence = adherence_mod.compute_adherence(activity, workout_steps)
 
     result = ActivityDetail.model_validate(activity)
     result.splits = splits
@@ -286,6 +292,7 @@ def api_activity_detail(activity_id: int, db: Session = Depends(get_db)):
     result.metric_zones = metric_zones
     result.insight = InsightResponse.model_validate(insight) if insight else None
     result.scheduled_workout = scheduled_workout
+    result.adherence = activity_adherence
     result.feedback_tags = safe_json_loads(activity.feedback_tags)
     return result
 
@@ -610,192 +617,13 @@ def api_trigger_sync(sync_type: str):
     return {"status": "accepted"}
 
 
-# --- Workout Step Parsing ---
-
-def _format_step_distance(meters: float) -> str:
-    """Format distance in meters to human-readable string."""
-    if meters >= 1000:
-        km = meters / 1000
-        return f"{km:g}km" if km == int(km) else f"{km:.1f}km"
-    return f"{int(meters)}m"
-
-
-def _format_step_duration(seconds: float) -> str:
-    """Format duration in seconds to human-readable string."""
-    seconds = int(seconds)
-    if seconds >= 60:
-        m = seconds // 60
-        s = seconds % 60
-        if s > 0:
-            return f"{m}:{s:02d}"
-        return f"{m} min"
-    return f"{seconds}s"
-
-
-def _format_pace(meters_per_sec: float) -> str:
-    """Convert m/s to min:sec/km pace string."""
-    if meters_per_sec <= 0:
-        return ""
-    pace_sec_per_km = 1000.0 / meters_per_sec
-    mins = int(pace_sec_per_km // 60)
-    secs = int(pace_sec_per_km % 60)
-    return f"{mins}:{secs:02d}/km"
-
-
-def _garmin_str(value) -> str:
-    """Extract a string from a Garmin field that may be a str or dict with a *Key sub-field."""
-    if isinstance(value, str):
-        return value
-    if isinstance(value, dict):
-        # Garmin often wraps values like {"stepTypeKey": "warmup", "stepTypeId": 1}
-        for k, v in value.items():
-            if k.endswith("Key") and isinstance(v, str):
-                return v
-        # Fallback: return first string value
-        for v in value.values():
-            if isinstance(v, str):
-                return v
-    return ""
-
-
-def _parse_step_target(step: dict) -> tuple[str | None, str | None]:
-    """Parse target type and display from a Garmin workout step."""
-    target_type_raw = _garmin_str(step.get("targetType") or step.get("type") or "")
-    target_type_lower = target_type_raw.lower().replace(".", "_") if target_type_raw else ""
-
-    if "pace" in target_type_lower or "speed" in target_type_lower:
-        val1 = step.get("targetValueOne") or step.get("targetValue")
-        val2 = step.get("targetValueTwo")
-        if val1 and isinstance(val1, (int, float)) and val1 > 0:
-            pace1 = _format_pace(val1)
-            if val2 and isinstance(val2, (int, float)) and val2 > 0 and val2 != val1:
-                pace2 = _format_pace(val2)
-                return "pace", f"{pace2} - {pace1}" if val2 > val1 else f"{pace1} - {pace2}"
-            return "pace", pace1
-        zone = step.get("targetValueOne") or step.get("zoneNumber")
-        if zone:
-            return "pace", f"Pace Zone {zone}"
-        return "pace", None
-
-    if "heart" in target_type_lower:
-        zone = step.get("zoneNumber") or step.get("targetValueOne")
-        if zone:
-            return "heart_rate", f"HR Zone {int(zone)}"
-        return "heart_rate", None
-
-    return "open", None
-
-
-def _classify_activity_type(step_type: str) -> str:
-    """Determine if the step is a run or rest activity."""
-    rest_types = {"rest", "recovery", "recover"}
-    return "rest" if step_type in rest_types else "run"
-
-
-def _parse_single_step(step: dict, order: int) -> WorkoutStepResponse:
-    """Parse a single Garmin workout step into a WorkoutStepResponse."""
-    step_type_raw = _garmin_str(step.get("stepType") or step.get("type") or "interval").lower()
-    # Normalize step type names
-    step_type_map = {
-        "warmup": "warmup", "warm_up": "warmup", "warm up": "warmup",
-        "cooldown": "cooldown", "cool_down": "cooldown", "cool down": "cooldown",
-        "interval": "interval", "active": "interval",
-        "rest": "rest", "recovery": "rest", "recover": "rest",
-        "repeat": "repeat",
-        "other": "interval",
-    }
-    step_type = step_type_map.get(step_type_raw, step_type_raw)
-
-    # End condition (distance or time)
-    end_condition_raw = _garmin_str(step.get("endCondition") or step.get("conditionType") or "").lower()
-    end_condition_raw = end_condition_raw.replace(".", "_")
-    end_value = step.get("endConditionValue") or step.get("conditionValue")
-
-    end_condition = None
-    end_condition_display = None
-    if "distance" in end_condition_raw and end_value:
-        end_condition = "distance"
-        end_condition_display = _format_step_distance(float(end_value))
-    elif "time" in end_condition_raw and end_value:
-        end_condition = "time"
-        end_condition_display = _format_step_duration(float(end_value))
-    elif "lap" in end_condition_raw:
-        end_condition = "lap_button"
-        end_condition_display = "Lap Button"
-
-    # Target (pace, HR, open)
-    target_type, target_display = _parse_step_target(step)
-
-    # Description / notes
-    description = step.get("description") or step.get("stepDescription") or None
-
-    # For repeat steps, parse nested steps
-    repeat_count = None
-    nested_steps = None
-    if step_type == "repeat":
-        repeat_count = step.get("repeatCount") or step.get("numberOfIterations")
-        if repeat_count:
-            repeat_count = int(repeat_count)
-        child_steps = step.get("workoutSteps") or step.get("steps") or []
-        if isinstance(child_steps, list) and child_steps:
-            nested_steps = [
-                _parse_single_step(s, i + 1)
-                for i, s in enumerate(child_steps)
-            ]
-
-    return WorkoutStepResponse(
-        step_order=order,
-        step_type=step_type,
-        end_condition=end_condition,
-        end_condition_value=float(end_value) if end_value else None,
-        end_condition_display=end_condition_display,
-        target_type=target_type,
-        target_display=target_display,
-        description=description,
-        activity_type=_classify_activity_type(step_type),
-        repeat_count=repeat_count,
-        steps=nested_steps,
-    )
-
-
-def _parse_workout_steps(raw_json_str: str) -> list[WorkoutStepResponse]:
-    """Parse Garmin raw_json into structured workout steps."""
-    try:
-        data = json.loads(raw_json_str)
-    except (json.JSONDecodeError, TypeError):
-        return []
-
-    steps_raw = data.get("workoutSteps") or data.get("steps") or []
-
-    # Garmin workout API nests steps inside workoutSegments
-    if not steps_raw:
-        segments = data.get("workoutSegments") or []
-        for seg in segments:
-            if isinstance(seg, dict):
-                seg_steps = seg.get("workoutSteps") or seg.get("steps") or []
-                if isinstance(seg_steps, list):
-                    steps_raw.extend(seg_steps)
-
-    if not isinstance(steps_raw, list):
-        return []
-
-    result = []
-    order = 1
-    for s in steps_raw:
-        if not isinstance(s, dict):
-            continue
-        parsed = _parse_single_step(s, order)
-        result.append(parsed)
-        order += 1
-
-    return result
-
+# --- Workout Step Parsing (delegated to app.adherence) ---
 
 def _enrich_event_with_steps(event: GarminCalendarEvent) -> CalendarEventResponse:
     """Convert a GarminCalendarEvent to CalendarEventResponse with parsed workout steps."""
     resp = CalendarEventResponse.model_validate(event)
     if event.event_type == "workout" and event.raw_json:
-        steps = _parse_workout_steps(event.raw_json)
+        steps = adherence_mod.parse_workout_steps(event.raw_json)
         if steps:
             resp.workout_steps = steps
     return resp

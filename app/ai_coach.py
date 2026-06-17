@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app import training_load
+from app import adherence as adherence_mod
 from app.config import settings
 from app.database import db_session
 from app.models import (
@@ -561,6 +562,22 @@ def analyze_activity(activity: Activity):
             activity_date = activity.started_at.date() if isinstance(activity.started_at, datetime) else activity.started_at
             zones_by_metric = _load_zones(db)
             activity_context = _format_activity_context(activity, zones_by_metric)
+
+            # Append workout adherence section if a workout was scheduled for this date
+            workout_event = (
+                db.query(GarminCalendarEvent)
+                .filter(
+                    GarminCalendarEvent.date == activity_date,
+                    GarminCalendarEvent.event_type == "workout",
+                )
+                .first()
+            )
+            if workout_event and workout_event.raw_json:
+                workout_steps = adherence_mod.parse_workout_steps(workout_event.raw_json)
+                adherence_result = adherence_mod.compute_adherence(activity, workout_steps)
+                if adherence_result:
+                    activity_context += "\n\n" + adherence_mod.format_adherence_context(adherence_result)
+
             full_context = _build_context(db, "activity", activity_context, reference_date=activity_date)
             content, summary, category = _call_ai(db, full_context, "activity")
 
