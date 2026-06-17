@@ -34,6 +34,13 @@ export function useTrainingLoad(days = 90) {
   })
 }
 
+export function useWellnessTrends(days = 90) {
+  return useQuery({
+    queryKey: ['wellness-trends', days],
+    queryFn: () => apiGet<DailySummaryResponse[]>(`/wellness-trends?days=${days}`),
+  })
+}
+
 export function useActivities(page: number, type?: string) {
   const params = new URLSearchParams({ page: String(page), limit: '30' })
   if (type) params.set('type', type)

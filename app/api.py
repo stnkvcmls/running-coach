@@ -225,6 +225,23 @@ def api_training_load(
     return TrainingLoadResponse(points=points, current=points[-1] if points else None)
 
 
+# --- Wellness Trends ---
+
+@api_router.get("/wellness-trends", response_model=list[DailySummaryResponse])
+def api_wellness_trends(
+    days: int = Query(90, ge=7, le=365),
+    db: Session = Depends(get_db),
+):
+    cutoff = date.today() - timedelta(days=days)
+    summaries = (
+        db.query(DailySummary)
+        .filter(DailySummary.date >= cutoff)
+        .order_by(DailySummary.date.asc())
+        .all()
+    )
+    return [DailySummaryResponse.model_validate(s) for s in summaries]
+
+
 # --- Activities ---
 
 @api_router.get("/activities", response_model=list[ActivitySummary])
