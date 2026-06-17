@@ -11,6 +11,7 @@ import LapsTable from './LapsTable'
 import AiInsightCard from './AiInsightCard'
 import FeedbackPrompt from './FeedbackPrompt'
 import WorkoutSteps from '../today/WorkoutSteps'
+import AdherenceCard from './AdherenceCard'
 import './ActivityDetailView.css'
 
 export default function ActivityDetailView() {
@@ -89,6 +90,13 @@ export default function ActivityDetailView() {
             <div className="card workout-description-card">
               <WorkoutSteps steps={activity.scheduled_workout.workout_steps} />
             </div>
+          </section>
+        )}
+
+        {/* Workout Adherence */}
+        {activity.adherence && (
+          <section className="detail-section">
+            <AdherenceCard adherence={activity.adherence} />
           </section>
         )}
 

@@ -4,10 +4,11 @@ from datetime import date
 import pytest
 
 from app import api
+from app import adherence as adh
 from app.models import GarminCalendarEvent
 
 
-# --- Formatters ---
+# --- Formatters (now in app.adherence) ---
 
 @pytest.mark.parametrize("meters,expected", [
     (500, "500m"),
@@ -18,7 +19,7 @@ from app.models import GarminCalendarEvent
     (1500, "1.5km"),
 ])
 def test_format_step_distance(meters, expected):
-    assert api._format_step_distance(meters) == expected
+    assert adh._format_step_distance(meters) == expected
 
 
 @pytest.mark.parametrize("seconds,expected", [
@@ -30,7 +31,7 @@ def test_format_step_distance(meters, expected):
     (600, "10 min"),
 ])
 def test_format_step_duration(seconds, expected):
-    assert api._format_step_duration(seconds) == expected
+    assert adh._format_step_duration(seconds) == expected
 
 
 @pytest.mark.parametrize("mps,expected", [
@@ -40,33 +41,33 @@ def test_format_step_duration(seconds, expected):
     (1000 / 265, "4:25/km"),   # 265 s/km
 ])
 def test_format_pace(mps, expected):
-    assert api._format_pace(mps) == expected
+    assert adh._format_pace(mps) == expected
 
 
 # --- _garmin_str ---
 
 def test_garmin_str_plain_string():
-    assert api._garmin_str("warmup") == "warmup"
+    assert adh._garmin_str("warmup") == "warmup"
 
 
 def test_garmin_str_key_dict():
-    assert api._garmin_str({"stepTypeKey": "warmup", "stepTypeId": 1}) == "warmup"
+    assert adh._garmin_str({"stepTypeKey": "warmup", "stepTypeId": 1}) == "warmup"
 
 
 def test_garmin_str_fallback_string_value():
-    assert api._garmin_str({"foo": 1, "bar": "value"}) == "value"
+    assert adh._garmin_str({"foo": 1, "bar": "value"}) == "value"
 
 
 def test_garmin_str_empty():
-    assert api._garmin_str(123) == ""
-    assert api._garmin_str({"id": 5}) == ""
+    assert adh._garmin_str(123) == ""
+    assert adh._garmin_str({"id": 5}) == ""
 
 
 # --- _parse_step_target ---
 
 def test_parse_step_target_pace_range():
     step = {"targetType": "pace.zone", "targetValueOne": 1000 / 300, "targetValueTwo": 1000 / 280}
-    target_type, display = api._parse_step_target(step)
+    target_type, display = adh._parse_step_target(step)
     assert target_type == "pace"
     # Both bounds are rendered as a range.
     assert display == "4:40/km - 5:00/km"
@@ -74,21 +75,21 @@ def test_parse_step_target_pace_range():
 
 def test_parse_step_target_single_pace():
     step = {"targetType": "speed", "targetValueOne": 1000 / 300}
-    target_type, display = api._parse_step_target(step)
+    target_type, display = adh._parse_step_target(step)
     assert target_type == "pace"
     assert display == "5:00/km"
 
 
 def test_parse_step_target_heart_rate_zone():
     step = {"targetType": "heart.rate.zone", "zoneNumber": 3}
-    target_type, display = api._parse_step_target(step)
+    target_type, display = adh._parse_step_target(step)
     assert target_type == "heart_rate"
     assert display == "HR Zone 3"
 
 
 def test_parse_step_target_open():
-    assert api._parse_step_target({"targetType": "open"}) == ("open", None)
-    assert api._parse_step_target({}) == ("open", None)
+    assert adh._parse_step_target({"targetType": "open"}) == ("open", None)
+    assert adh._parse_step_target({}) == ("open", None)
 
 
 # --- _classify_activity_type ---
@@ -101,7 +102,7 @@ def test_parse_step_target_open():
     ("warmup", "run"),
 ])
 def test_classify_activity_type(step_type, expected):
-    assert api._classify_activity_type(step_type) == expected
+    assert adh._classify_activity_type(step_type) == expected
 
 
 # --- _parse_single_step ---
@@ -115,7 +116,7 @@ def test_parse_single_step_interval_distance():
         "targetValueOne": 1000 / 300,
         "description": "Hard effort",
     }
-    parsed = api._parse_single_step(step, order=2)
+    parsed = adh._parse_single_step(step, order=2)
     assert parsed.step_order == 2
     assert parsed.step_type == "interval"
     assert parsed.end_condition == "distance"
@@ -127,7 +128,7 @@ def test_parse_single_step_interval_distance():
 
 
 def test_parse_single_step_time_and_lap_button():
-    timed = api._parse_single_step(
+    timed = adh._parse_single_step(
         {"stepType": "rest", "endCondition": "time", "endConditionValue": 90}, 1
     )
     assert timed.step_type == "rest"
@@ -135,15 +136,15 @@ def test_parse_single_step_time_and_lap_button():
     assert timed.end_condition_display == "1:30"
     assert timed.activity_type == "rest"
 
-    lap = api._parse_single_step({"stepType": "interval", "endCondition": "lap.button"}, 1)
+    lap = adh._parse_single_step({"stepType": "interval", "endCondition": "lap.button"}, 1)
     assert lap.end_condition == "lap_button"
     assert lap.end_condition_display == "Lap Button"
 
 
 def test_parse_single_step_type_normalization():
-    assert api._parse_single_step({"stepType": "warm_up"}, 1).step_type == "warmup"
-    assert api._parse_single_step({"stepType": "cool_down"}, 1).step_type == "cooldown"
-    assert api._parse_single_step({"stepType": "active"}, 1).step_type == "interval"
+    assert adh._parse_single_step({"stepType": "warm_up"}, 1).step_type == "warmup"
+    assert adh._parse_single_step({"stepType": "cool_down"}, 1).step_type == "cooldown"
+    assert adh._parse_single_step({"stepType": "active"}, 1).step_type == "interval"
 
 
 def test_parse_single_step_repeat_with_nested():
@@ -155,7 +156,7 @@ def test_parse_single_step_repeat_with_nested():
             {"stepType": "rest", "endCondition": "time", "endConditionValue": 60},
         ],
     }
-    parsed = api._parse_single_step(step, 1)
+    parsed = adh._parse_single_step(step, 1)
     assert parsed.step_type == "repeat"
     assert parsed.repeat_count == 4
     assert parsed.steps is not None and len(parsed.steps) == 2
@@ -163,14 +164,14 @@ def test_parse_single_step_repeat_with_nested():
     assert parsed.steps[1].step_type == "rest"
 
 
-# --- _parse_workout_steps ---
+# --- parse_workout_steps ---
 
 def test_parse_workout_steps_top_level():
     raw = json.dumps({"workoutSteps": [
         {"stepType": "warmup", "endCondition": "time", "endConditionValue": 600},
         {"stepType": "interval", "endCondition": "distance", "endConditionValue": 5000},
     ]})
-    steps = api._parse_workout_steps(raw)
+    steps = adh.parse_workout_steps(raw)
     assert len(steps) == 2
     assert [s.step_order for s in steps] == [1, 2]
 
@@ -179,18 +180,18 @@ def test_parse_workout_steps_from_segments():
     raw = json.dumps({"workoutSegments": [
         {"workoutSteps": [{"stepType": "interval", "endCondition": "lap.button"}]},
     ]})
-    steps = api._parse_workout_steps(raw)
+    steps = adh.parse_workout_steps(raw)
     assert len(steps) == 1
     assert steps[0].step_type == "interval"
 
 
 def test_parse_workout_steps_invalid_json():
-    assert api._parse_workout_steps("{bad json") == []
+    assert adh.parse_workout_steps("{bad json") == []
 
 
 def test_parse_workout_steps_skips_non_dicts():
     raw = json.dumps({"steps": ["not a dict", {"stepType": "interval"}]})
-    steps = api._parse_workout_steps(raw)
+    steps = adh.parse_workout_steps(raw)
     assert len(steps) == 1
 
 

@@ -56,6 +56,19 @@ class FeedbackRequest(BaseModel):
     text: str | None = None
 
 
+class WorkoutAdherence(BaseModel):
+    planned_distance_m: float | None = None
+    actual_distance_m: float | None = None
+    distance_pct: float | None = None          # actual / planned × 100, capped at 100
+    planned_pace_display: str | None = None    # e.g. "4:30/km"
+    actual_pace_display: str | None = None     # e.g. "4:38/km"
+    pace_delta_sec_per_km: float | None = None # positive = slower than planned
+    planned_intervals: int | None = None
+    actual_laps: int | None = None
+    adherence_score: float                     # 0–100 composite
+    summary: str                               # human-readable verdict
+
+
 class ActivityDetail(BaseModel):
     id: int
     garmin_id: int | None = None
@@ -113,6 +126,9 @@ class ActivityDetail(BaseModel):
 
     # Scheduled workout for this activity's date
     scheduled_workout: "CalendarEventResponse | None" = None
+
+    # Workout adherence comparison (planned vs actual)
+    adherence: "WorkoutAdherence | None" = None
 
     @field_validator('feedback_tags', mode='before')
     @classmethod
