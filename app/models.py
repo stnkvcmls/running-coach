@@ -193,6 +193,7 @@ class AthleteProfile(Base):
     goal_race_date = Column(Date, nullable=True)
     threshold_pace_min_km = Column(Float, nullable=True)
     threshold_hr = Column(Integer, nullable=True)
+    threshold_power = Column(Integer, nullable=True)
     max_hr = Column(Integer, nullable=True)
     resting_hr = Column(Integer, nullable=True)
     injury_history = Column(Text, nullable=True)
@@ -200,3 +201,25 @@ class AthleteProfile(Base):
     training_preferences = Column(Text, nullable=True)
     created_at = Column(DateTime, default=_utcnow)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
+class ZoneConfig(Base):
+    """Custom threshold-anchored zones for HR, pace, and power.
+
+    Boundaries are stored as percentages of the relevant threshold value
+    (threshold_hr, threshold_pace_min_km, or threshold_power from AthleteProfile).
+    min_pct=None means no lower bound; max_pct=None means no upper bound.
+    For pace zones a higher percentage means a slower (easier) pace.
+    """
+
+    __tablename__ = "zone_configs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    zone_type = Column(String(20), nullable=False, index=True)  # "hr", "pace", "power"
+    zone_number = Column(Integer, nullable=False)               # 1–5
+    zone_name = Column(String(50), nullable=False)
+    zone_color = Column(String(20), nullable=False)
+    min_pct = Column(Float, nullable=True)   # lower % of threshold (null = no lower bound)
+    max_pct = Column(Float, nullable=True)   # upper % of threshold (null = no upper bound)
+
+    __table_args__ = (UniqueConstraint("zone_type", "zone_number", name="uq_zone_type_number"),)

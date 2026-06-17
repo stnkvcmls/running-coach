@@ -229,6 +229,7 @@ export interface AthleteProfile {
   goal_race_date: string | null
   threshold_pace_min_km: number | null
   threshold_hr: number | null
+  threshold_power: number | null
   max_hr: number | null
   resting_hr: number | null
   injury_history: string | null
@@ -246,9 +247,44 @@ export interface AthleteProfileRequest {
   goal_race_date?: string | null
   threshold_pace_min_km?: number | null
   threshold_hr?: number | null
+  threshold_power?: number | null
   max_hr?: number | null
   resting_hr?: number | null
   injury_history?: string | null
   weekly_availability?: string | null
   training_preferences?: string | null
+}
+
+export interface ZoneConfig {
+  id: number
+  zone_type: string
+  zone_number: number
+  zone_name: string
+  zone_color: string
+  min_pct: number | null
+  max_pct: number | null
+  computed_min: number | null
+  computed_max: number | null
+}
+
+export interface ZoneConfigUpdate {
+  zone_type: string
+  zone_number: number
+  zone_name?: string | null
+  zone_color?: string | null
+  min_pct?: number | null
+  max_pct?: number | null
+}
+
+export interface ZoneConfigBulkUpdate {
+  zones: ZoneConfigUpdate[]
+}
+
+export interface ZoneConfigsResponse {
+  hr: ZoneConfig[]
+  pace: ZoneConfig[]
+  power: ZoneConfig[]
+  threshold_hr: number | null
+  threshold_pace_min_km: number | null
+  threshold_power: number | null
 }

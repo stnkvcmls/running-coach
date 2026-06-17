@@ -17,6 +17,7 @@ from app.models import (
     Insight,
     MetricZone,
     SyncStatus,
+    ZoneConfig,
 )
 from app.schemas import (
     ActivityDetail,
@@ -40,6 +41,9 @@ from app.schemas import (
     WeeklyMileage,
     WorkoutAdherence,
     WorkoutStepResponse,
+    ZoneConfigBulkUpdate,
+    ZoneConfigResponse,
+    ZoneConfigsResponse,
 )
 from app import training_load
 from app import adherence as adherence_mod
@@ -564,6 +568,67 @@ def api_set_athlete_profile(profile_data: AthleteProfileRequest, db: Session = D
     db.commit()
     db.refresh(profile)
     return _profile_response(profile)
+
+
+# --- Zone Configs ---
+
+def _compute_zone_bounds(zones: list, threshold: float | None) -> list[ZoneConfigResponse]:
+    """Build ZoneConfigResponse list, computing absolute bound values from the threshold."""
+    result = []
+    for z in zones:
+        resp = ZoneConfigResponse.model_validate(z)
+        if threshold is not None and threshold > 0:
+            if z.min_pct is not None:
+                resp.computed_min = round(threshold * z.min_pct / 100, 1)
+            if z.max_pct is not None:
+                resp.computed_max = round(threshold * z.max_pct / 100, 1)
+        result.append(resp)
+    return result
+
+
+def _build_zones_response(db: Session) -> ZoneConfigsResponse:
+    profile = db.query(AthleteProfile).first()
+    threshold_hr = profile.threshold_hr if profile else None
+    threshold_pace = profile.threshold_pace_min_km if profile else None
+    threshold_power = profile.threshold_power if profile else None
+
+    all_zones = db.query(ZoneConfig).order_by(ZoneConfig.zone_type, ZoneConfig.zone_number).all()
+
+    return ZoneConfigsResponse(
+        hr=_compute_zone_bounds([z for z in all_zones if z.zone_type == "hr"], threshold_hr),
+        pace=_compute_zone_bounds([z for z in all_zones if z.zone_type == "pace"], threshold_pace),
+        power=_compute_zone_bounds([z for z in all_zones if z.zone_type == "power"], threshold_power),
+        threshold_hr=threshold_hr,
+        threshold_pace_min_km=threshold_pace,
+        threshold_power=threshold_power,
+    )
+
+
+@api_router.get("/zones", response_model=ZoneConfigsResponse)
+def api_get_zones(db: Session = Depends(get_db)):
+    return _build_zones_response(db)
+
+
+@api_router.put("/zones", response_model=ZoneConfigsResponse)
+def api_update_zones(update: ZoneConfigBulkUpdate, db: Session = Depends(get_db)):
+    for zu in update.zones:
+        zone = (
+            db.query(ZoneConfig)
+            .filter(ZoneConfig.zone_type == zu.zone_type, ZoneConfig.zone_number == zu.zone_number)
+            .first()
+        )
+        if zone is None:
+            continue
+        if zu.zone_name is not None:
+            zone.zone_name = zu.zone_name
+        if zu.zone_color is not None:
+            zone.zone_color = zu.zone_color
+        if "min_pct" in zu.model_fields_set:
+            zone.min_pct = zu.min_pct
+        if "max_pct" in zu.model_fields_set:
+            zone.max_pct = zu.max_pct
+    db.commit()
+    return _build_zones_response(db)
 
 
 # --- Actions ---

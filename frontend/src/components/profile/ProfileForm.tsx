@@ -18,6 +18,7 @@ interface FormState {
   goal_race_date: string
   threshold_pace_min_km: string
   threshold_hr: string
+  threshold_power: string
   max_hr: string
   resting_hr: string
   injury_history: string
@@ -35,6 +36,7 @@ function toFormState(p?: AthleteProfile | null): FormState {
     goal_race_date: s(p?.goal_race_date),
     threshold_pace_min_km: s(p?.threshold_pace_min_km),
     threshold_hr: s(p?.threshold_hr),
+    threshold_power: s(p?.threshold_power),
     max_hr: s(p?.max_hr),
     resting_hr: s(p?.resting_hr),
     injury_history: s(p?.injury_history),
@@ -55,6 +57,7 @@ function toRequest(f: FormState): AthleteProfileRequest {
     goal_race_date: text(f.goal_race_date),
     threshold_pace_min_km: num(f.threshold_pace_min_km),
     threshold_hr: num(f.threshold_hr),
+    threshold_power: num(f.threshold_power),
     max_hr: num(f.max_hr),
     resting_hr: num(f.resting_hr),
     injury_history: text(f.injury_history),
@@ -112,6 +115,13 @@ export default function ProfileForm({ initial, onSubmit, isPending, isError, sub
         <div className="profile-form__field">
           <label htmlFor="pf-thr-hr">Threshold HR (bpm)</label>
           <input id="pf-thr-hr" type="number" min="0" value={form.threshold_hr} onChange={set('threshold_hr')} />
+        </div>
+      </div>
+
+      <div className="profile-form__row">
+        <div className="profile-form__field">
+          <label htmlFor="pf-ftp">FTP / Threshold power (W)</label>
+          <input id="pf-ftp" type="number" min="0" value={form.threshold_power} onChange={set('threshold_power')} />
         </div>
       </div>
 

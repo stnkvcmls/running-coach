@@ -19,6 +19,7 @@ from app.models import (
     Insight,
     MetricZone,
     SyncStatus,
+    ZoneConfig,
 )
 from app.utils import calculate_age
 
@@ -55,7 +56,7 @@ When user feedback is provided (rating, reported issues, comments), prioritize a
 
 
 def _classify_metric(value: float, zones: list[MetricZone]) -> str:
-    """Classify a metric value into its zone and return a descriptive string."""
+    """Classify a metric value into its percentile zone and return a descriptive string."""
     for zone in zones:
         above_min = zone.min_value is None or value >= zone.min_value
         below_max = zone.max_value is None or value < zone.max_value
@@ -72,7 +73,26 @@ def _classify_metric(value: float, zones: list[MetricZone]) -> str:
     return ""
 
 
-def _format_activity_context(activity: Activity, zones_by_metric: dict[str, list[MetricZone]] | None = None) -> str:
+def _classify_by_zones(value: float, configs: list[ZoneConfig], threshold: float | None) -> str:
+    """Classify a value against threshold-anchored ZoneConfig entries."""
+    if not configs or not threshold or threshold <= 0:
+        return ""
+    for cfg in sorted(configs, key=lambda z: z.zone_number):
+        above_min = cfg.min_pct is None or value >= threshold * cfg.min_pct / 100
+        below_max = cfg.max_pct is None or value < threshold * cfg.max_pct / 100
+        if above_min and below_max:
+            return f" (Zone {cfg.zone_number}: {cfg.zone_name})"
+    return ""
+
+
+def _format_activity_context(
+    activity: Activity,
+    zones_by_metric: dict[str, list[MetricZone]] | None = None,
+    hr_zone_configs: list[ZoneConfig] | None = None,
+    pace_zone_configs: list[ZoneConfig] | None = None,
+    threshold_hr: int | None = None,
+    threshold_pace: float | None = None,
+) -> str:
     parts = [
         f"**{activity.name}** ({activity.activity_type})",
         f"Date: {activity.started_at.strftime('%Y-%m-%d %H:%M') if activity.started_at else 'unknown'}",
@@ -86,9 +106,11 @@ def _format_activity_context(activity: Activity, zones_by_metric: dict[str, list
     if activity.avg_pace_min_km:
         pace_min = int(activity.avg_pace_min_km)
         pace_sec = int((activity.avg_pace_min_km - pace_min) * 60)
-        parts.append(f"Avg Pace: {pace_min}:{pace_sec:02d} /km")
+        zone_str = _classify_by_zones(activity.avg_pace_min_km, pace_zone_configs or [], threshold_pace)
+        parts.append(f"Avg Pace: {pace_min}:{pace_sec:02d} /km{zone_str}")
     if activity.avg_hr:
-        parts.append(f"Avg HR: {activity.avg_hr} bpm")
+        zone_str = _classify_by_zones(activity.avg_hr, hr_zone_configs or [], threshold_hr)
+        parts.append(f"Avg HR: {activity.avg_hr} bpm{zone_str}")
     if activity.max_hr:
         parts.append(f"Max HR: {activity.max_hr} bpm")
     if activity.avg_cadence:
@@ -272,6 +294,8 @@ def _format_athlete_profile_context(profile: AthleteProfile, reference_date: dat
         lines.append(f"- Threshold Pace: {p_min}:{p_sec:02d}/km")
     if profile.threshold_hr:
         lines.append(f"- Threshold HR: {profile.threshold_hr} bpm")
+    if getattr(profile, "threshold_power", None):
+        lines.append(f"- Threshold Power (FTP): {profile.threshold_power} W")
     if profile.max_hr:
         lines.append(f"- Max HR: {profile.max_hr} bpm")
     if profile.resting_hr:
@@ -555,13 +579,30 @@ def _load_zones(db: Session) -> dict[str, list[MetricZone]]:
     return zones_by_metric
 
 
+def _load_zone_configs(db: Session) -> dict:
+    """Load custom threshold-anchored zone configs and profile thresholds."""
+    profile = db.query(AthleteProfile).first()
+    all_zones = db.query(ZoneConfig).order_by(ZoneConfig.zone_type, ZoneConfig.zone_number).all()
+    return {
+        "hr": [z for z in all_zones if z.zone_type == "hr"],
+        "pace": [z for z in all_zones if z.zone_type == "pace"],
+        "threshold_hr": profile.threshold_hr if profile else None,
+        "threshold_pace": profile.threshold_pace_min_km if profile else None,
+    }
+
+
 def analyze_activity(activity: Activity):
     """Generate AI insight for a new activity."""
     with db_session() as db:
         try:
             activity_date = activity.started_at.date() if isinstance(activity.started_at, datetime) else activity.started_at
             zones_by_metric = _load_zones(db)
-            activity_context = _format_activity_context(activity, zones_by_metric)
+            zc = _load_zone_configs(db)
+            activity_context = _format_activity_context(
+                activity, zones_by_metric,
+                hr_zone_configs=zc["hr"], pace_zone_configs=zc["pace"],
+                threshold_hr=zc["threshold_hr"], threshold_pace=zc["threshold_pace"],
+            )
 
             # Append workout adherence section if a workout was scheduled for this date
             workout_event = (
@@ -646,7 +687,12 @@ def analyze_activity_force(activity_id: int):
 
             activity_date = activity.started_at.date() if isinstance(activity.started_at, datetime) else activity.started_at
             zones_by_metric = _load_zones(db)
-            activity_context = _format_activity_context(activity, zones_by_metric)
+            zc = _load_zone_configs(db)
+            activity_context = _format_activity_context(
+                activity, zones_by_metric,
+                hr_zone_configs=zc["hr"], pace_zone_configs=zc["pace"],
+                threshold_hr=zc["threshold_hr"], threshold_pace=zc["threshold_pace"],
+            )
             full_context = _build_context(db, "activity", activity_context, reference_date=activity_date)
             content, summary, category = _call_ai(db, full_context, "activity")
 
@@ -683,7 +729,12 @@ def analyze_activity_with_feedback(activity_id: int):
             ).delete()
 
             zones_by_metric = _load_zones(db)
-            activity_context = _format_activity_context(activity, zones_by_metric)
+            zc = _load_zone_configs(db)
+            activity_context = _format_activity_context(
+                activity, zones_by_metric,
+                hr_zone_configs=zc["hr"], pace_zone_configs=zc["pace"],
+                threshold_hr=zc["threshold_hr"], threshold_pace=zc["threshold_pace"],
+            )
 
             # Append user feedback to context
             feedback_parts = []
@@ -785,7 +836,15 @@ def weekly_review():
                 return
 
             zones_by_metric = _load_zones(db)
-            activity_summaries = "\n\n".join(_format_activity_context(a, zones_by_metric) for a in week_activities)
+            zc = _load_zone_configs(db)
+            activity_summaries = "\n\n".join(
+                _format_activity_context(
+                    a, zones_by_metric,
+                    hr_zone_configs=zc["hr"], pace_zone_configs=zc["pace"],
+                    threshold_hr=zc["threshold_hr"], threshold_pace=zc["threshold_pace"],
+                )
+                for a in week_activities
+            )
             trigger_data = f"## Weekly Review ({week_start} to {date.today()})\n\n{activity_summaries}"
             full_context = _build_context(db, "weekly_review", trigger_data)
             content, summary, category = _call_ai(db, full_context, "weekly_review")

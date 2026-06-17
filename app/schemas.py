@@ -282,6 +282,7 @@ class AthleteProfileRequest(BaseModel):
     goal_race_date: date | None = None
     threshold_pace_min_km: float | None = None
     threshold_hr: int | None = None
+    threshold_power: int | None = None
     max_hr: int | None = None
     resting_hr: int | None = None
     injury_history: str | None = None
@@ -299,6 +300,7 @@ class AthleteProfileResponse(BaseModel):
     goal_race_date: date | None = None
     threshold_pace_min_km: float | None = None
     threshold_hr: int | None = None
+    threshold_power: int | None = None
     max_hr: int | None = None
     resting_hr: int | None = None
     injury_history: str | None = None
@@ -309,3 +311,40 @@ class AthleteProfileResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ZoneConfigResponse(BaseModel):
+    id: int
+    zone_type: str
+    zone_number: int
+    zone_name: str
+    zone_color: str
+    min_pct: float | None = None
+    max_pct: float | None = None
+    computed_min: float | None = None  # absolute value in native units (bpm, min/km, W)
+    computed_max: float | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class ZoneConfigUpdate(BaseModel):
+    zone_type: str
+    zone_number: int
+    zone_name: str | None = None
+    zone_color: str | None = None
+    min_pct: float | None = None
+    max_pct: float | None = None
+
+
+class ZoneConfigBulkUpdate(BaseModel):
+    zones: list[ZoneConfigUpdate]
+
+
+class ZoneConfigsResponse(BaseModel):
+    hr: list[ZoneConfigResponse] = []
+    pace: list[ZoneConfigResponse] = []
+    power: list[ZoneConfigResponse] = []
+    threshold_hr: int | None = None
+    threshold_pace_min_km: float | None = None
+    threshold_power: int | None = None

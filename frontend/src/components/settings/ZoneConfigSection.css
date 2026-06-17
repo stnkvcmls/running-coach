@@ -1,0 +1,138 @@
+.zone-section-desc {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin: -8px 0 12px;
+  line-height: 1.5;
+}
+
+.zone-config-card {
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.zone-type-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.zone-type-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.zone-type-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.zone-type-threshold {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.zone-type-no-threshold {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.zone-table {
+  display: grid;
+  gap: 6px;
+}
+
+.zone-table-head {
+  display: grid;
+  grid-template-columns: 28px 1fr 70px 70px 110px;
+  gap: 8px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0 2px;
+}
+
+.zone-table-head span:last-child {
+  text-align: right;
+}
+
+.zone-row {
+  display: grid;
+  grid-template-columns: 28px 1fr 70px 70px 110px;
+  gap: 8px;
+  align-items: center;
+}
+
+/* 4-column layout when no computed values shown */
+.zone-table-head:not(:has(span:nth-child(5))) {
+  grid-template-columns: 28px 1fr 70px 70px;
+}
+
+.zone-row:not(:has(.zone-computed)) {
+  grid-template-columns: 28px 1fr 70px 70px;
+}
+
+.zone-num {
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.zone-name-input {
+  background: var(--surface-2, #1e1e2e);
+  border: 1px solid var(--border, #2d2d44);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  padding: 4px 8px;
+  width: 100%;
+}
+
+.zone-pct-input {
+  background: var(--surface-2, #1e1e2e);
+  border: 1px solid var(--border, #2d2d44);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  padding: 4px 6px;
+  text-align: right;
+  width: 100%;
+}
+
+.zone-name-input:focus,
+.zone-pct-input:focus {
+  outline: none;
+  border-color: var(--accent, #6c5ce7);
+}
+
+.zone-computed {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.zone-save-btn {
+  align-self: flex-start;
+  background: var(--accent, #6c5ce7);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 18px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.zone-save-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.zone-save-btn:hover:not(:disabled) {
+  opacity: 0.88;
+}

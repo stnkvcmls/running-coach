@@ -7,6 +7,7 @@ import { format, parseISO } from '../../utils/date'
 import StatGrid from './StatGrid'
 import ChartTabs from './ChartTabs'
 import HrZonesChart from './HrZonesChart'
+import PaceZonesChart from './PaceZonesChart'
 import LapsTable from './LapsTable'
 import AiInsightCard from './AiInsightCard'
 import FeedbackPrompt from './FeedbackPrompt'
@@ -129,6 +130,11 @@ export default function ActivityDetailView() {
 
         {/* HR Zones */}
         {activity.hr_zones && <HrZonesChart zones={activity.hr_zones} />}
+
+        {/* Pace Zones (custom threshold-anchored) */}
+        {activity.chart_data?.pace && (
+          <PaceZonesChart paceSeries={activity.chart_data.pace} />
+        )}
 
         {/* Time-series charts */}
         {activity.chart_data && Object.keys(activity.chart_data).length > 0 && (

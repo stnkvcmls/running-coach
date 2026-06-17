@@ -1,0 +1,10 @@
+.pace-zones-card {
+  padding: 16px 12px 12px;
+}
+
+.pace-zones-note {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin: 6px 0 0;
+  text-align: center;
+}

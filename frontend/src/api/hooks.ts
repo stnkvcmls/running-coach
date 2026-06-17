@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiPost } from './client'
+import { apiGet, apiPost, apiPut } from './client'
 import type {
   TodayResponse,
   ActivitySummary,
@@ -16,6 +16,8 @@ import type {
   AthleteProfile,
   AthleteProfileRequest,
   TrainingLoadResponse,
+  ZoneConfigBulkUpdate,
+  ZoneConfigsResponse,
 } from './types'
 
 export function useToday(date: string) {
@@ -167,6 +169,25 @@ export function useUpdateAthleteProfile() {
       apiPost<AthleteProfile>('/athlete-profile', profile),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['athlete-profile'] })
+      qc.invalidateQueries({ queryKey: ['zone-configs'] })
+    },
+  })
+}
+
+export function useZoneConfigs() {
+  return useQuery({
+    queryKey: ['zone-configs'],
+    queryFn: () => apiGet<ZoneConfigsResponse>('/zones'),
+  })
+}
+
+export function useUpdateZoneConfigs() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (update: ZoneConfigBulkUpdate) =>
+      apiPut<ZoneConfigsResponse>('/zones', update),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['zone-configs'] })
     },
   })
 }
