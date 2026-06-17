@@ -312,6 +312,25 @@ def _build_context(db: Session, trigger_type: str, trigger_data: str, reference_
     if load_context:
         sections.insert(2 if len(sections) > 1 else 1, load_context)
 
+    # Training readiness (composite of sleep, stress, body battery, acute load)
+    today_summary = db.query(DailySummary).filter(DailySummary.date == reference_date).first()
+    rhr_cutoff = reference_date - timedelta(days=7)
+    recent_rhr_rows = (
+        db.query(DailySummary.resting_hr)
+        .filter(
+            DailySummary.date >= rhr_cutoff,
+            DailySummary.date < reference_date,
+            DailySummary.resting_hr.isnot(None),
+        )
+        .all()
+    )
+    recent_rhr = [row[0] for row in recent_rhr_rows]
+    readiness = training_load.compute_readiness(today_summary, load_point, recent_rhr)
+    readiness_context = training_load.format_readiness_context(readiness)
+    if readiness_context:
+        insert_pos = min(3, len(sections))
+        sections.insert(insert_pos, readiness_context)
+
     # Recent activities (last 14 days)
     cutoff = ref_datetime - timedelta(days=14)
     recent_activities = (

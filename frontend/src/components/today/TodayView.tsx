@@ -6,6 +6,7 @@ import WorkoutCard from './WorkoutCard'
 import ScheduledWorkoutCard from './ScheduledWorkoutCard'
 import WeekOverview from './WeekOverview'
 import TrainingLoadChart from './TrainingLoadChart'
+import ReadinessCard from './ReadinessCard'
 import InsightsList from './InsightsList'
 import './TodayView.css'
 
@@ -77,6 +78,13 @@ export default function TodayView() {
               )}
             </div>
           ))}
+        </section>
+      )}
+
+      {/* Training Readiness */}
+      {data?.readiness && (
+        <section className="today-section">
+          <ReadinessCard readiness={data.readiness} />
         </section>
       )}
 

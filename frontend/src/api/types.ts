@@ -162,6 +162,15 @@ export interface TrainingLoadPoint {
   tsb: number  // Form (CTL − ATL)
 }
 
+export interface TrainingReadiness {
+  score: number
+  label: string
+  sleep_component: number | null
+  recovery_component: number | null
+  fatigue_component: number | null
+  rhr_component: number | null
+}
+
 export interface TrainingLoadResponse {
   points: TrainingLoadPoint[]
   current: TrainingLoadPoint | null
@@ -176,6 +185,7 @@ export interface TodayResponse {
   next_races: RaceInfo[]
   scheduled_events: CalendarEvent[]
   training_load: TrainingLoadPoint | null
+  readiness: TrainingReadiness | null
 }
 
 export interface SettingsResponse {
