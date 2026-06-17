@@ -1,63 +1,67 @@
-# P0-2 · Training Load model (CTL/ATL/TSB)
+# Project-wide unit tests + coverage CI
 
-Compute Fitness (CTL), Fatigue (ATL), Form (TSB) from per-activity TSS, surface a
-PMC-style chart on Today, and feed the current snapshot into the AI context.
+Add comprehensive unit tests across the whole backend and a GitHub Actions
+workflow that runs them with code coverage on every push to any branch.
 
-## Backend
-- [x] `app/training_load.py` (new) — per-activity TSS with estimation fallback
-      (power → pace-rTSS → hr-TSS → duration), daily EWMA series (CTL 42d, ATL 7d,
-      TSB = CTL − ATL), `current_load()`, and AI-context formatter.
-- [x] `app/schemas.py` — `TrainingLoadPoint`, `TrainingLoadResponse`; add
-      `training_load` snapshot to `TodayResponse`.
-- [x] `app/api.py` — `GET /training-load` trends endpoint; include current snapshot in `/today`.
-- [x] `app/ai_coach.py` — inject `## Training Load` section into `_build_context`
-      (+ a system-prompt line on reading CTL/ATL/TSB together).
+## Test suite (pytest)
+- [x] `tests/test_utils.py` — `calculate_age`, `safe_json_loads`, `parse_activity_charts`
+- [x] `tests/test_training_load.py` (existing) + edge cases for IF cap / HR fallback / `_interpret_tsb`
+- [x] `tests/test_api_helpers.py` — workout step parsing, distance/duration/pace formatters, `_parse_date`
+- [x] `tests/test_api_endpoints.py` — activities, daily-summaries, calendar, insights, settings, ai-config, sync, feedback, analyze
+- [x] `tests/test_ai_coach.py` — context formatters, summary/category extraction, provider dispatch (mocked), analyze flows (mocked)
+- [x] `tests/test_garmin_sync.py` — field extraction, timestamp/date/priority parsing, calendar response parsing, sync-status, `_store_activity` (mocked client)
+- [x] `tests/test_routes.py` — Jinja template filters + HTML endpoints
+- [x] `tests/test_main.py` — scheduled job wrappers (mocked sync/AI)
+- [x] `tests/test_database.py` — `get_db`/`db_session` generators, `init_db`/seed idempotency
 
-## Frontend
-- [x] `frontend/src/api/types.ts` — TrainingLoad types + `training_load` on TodayResponse.
-- [x] `frontend/src/api/hooks.ts` — `useTrainingLoad`.
-- [x] `frontend/src/components/today/TrainingLoadChart.tsx` (+ css) — Recharts PMC chart.
-- [x] `frontend/src/components/today/TodayView.tsx` — render the chart section.
+## Config
+- [x] `pyproject.toml` — pytest + coverage config (`--cov=app`, fail-under threshold)
+- [x] `requirements-dev.txt` — add `pytest-cov`
 
-## Tests
-- [x] `tests/test_training_load.py` — TSS estimation, EWMA series, current snapshot,
-      AI-context injection, `/training-load` + `/today` endpoints (12 tests).
+## CI
+- [x] `.github/workflows/tests.yml` — run on push to any branch; install deps, run pytest with coverage, upload report
 
 ## Verification
-- [x] `pytest -q` → 20 passed (12 new + 8 pre-existing)
-- [x] `tsc --noEmit` clean + `npm run build` succeeds
+- [x] `pytest --cov=app` passes locally with high coverage
 
 ## Review
 
-Implemented P0-2 (Training Load model, CTL/ATL/TSB) end-to-end and within scope.
+Added a project-wide pytest suite and a CI workflow that runs it with code
+coverage on every push to any branch.
 
-**Backend:** New `app/training_load.py` derives per-activity TSS, preferring the
-stored power `training_stress_score` and falling back through pace-based rTSS →
-HR-based hrTSS → a duration-only floor so non-power runs still contribute. It
-builds a daily EWMA series (CTL = 42-day, ATL = 7-day, both via the
-`alpha = 1 − exp(−1/N)` impulse-response form TrainingPeaks uses) seeded from the
-first activity, with TSB = CTL − ATL. `current_load()` returns the latest snapshot;
-`compute_load_series()` returns the trailing window. The estimators use the
-`AthleteProfile` thresholds from P0-1 (with `max_hr × 0.9` as a threshold-HR
-fallback). `_build_context` inserts a `## Training Load` section (Fitness/Fatigue/
-Form + a plain-language form reading) right after the profile, and a system-prompt
-line teaches the coach to read the three series together.
+**Tests (237 total, up from 20).** New files cover the whole backend:
+- `test_utils.py` — age math, JSON guard, activity chart parsing (pace/cadence conversions).
+- `test_api_helpers.py` — workout-step parsing, distance/duration/pace formatters, date parsing.
+- `test_api_endpoints.py` — every API route (activities, daily summaries, calendar
+  month/week, insights, settings, ai-config, athlete-profile, analyze/feedback/sync),
+  including 404 and validation paths. Background-job targets are stubbed so action
+  handlers don't spawn real work.
+- `test_ai_coach.py` — context formatters, summary/category extraction, provider
+  dispatch (Claude/Gemini mocked), and the analyze/force/feedback/weekly flows with
+  the AI call and `db_session` redirected to the in-memory DB.
+- `test_garmin_sync.py` — field/timestamp/date/priority/calendar parsing, sync-status
+  helpers, `_store_activity`, and the `sync_*` / `backfill_*` orchestrators with a
+  mocked Garmin client.
+- `test_routes.py` — Jinja filters and every HTML page/redirect.
+- `test_main.py` — scheduled-job wrappers and the SPA catch-all guard.
+- `test_database.py` — session generator/context-manager lifecycle and seed idempotency.
+- `test_training_load_edge.py` — TSB interpretation bands, IF cap, HR-threshold fallback.
 
-**API:** `GET /training-load?days=&date=` returns points + current; `/today` now
-carries a `training_load` snapshot computed as of the selected date.
+**Coverage: 89%** overall (`app/` only; templates omitted). Per-module: utils/models/
+config 100%, schemas 99%, training_load 99%, api 95%, routes 93%, database 89%,
+ai_coach 87%, garmin_sync 78%, main 70% (the async lifespan/scheduler is integration-
+level and left uncovered).
 
-**Frontend:** `TrainingLoadChart` (Recharts `ComposedChart`) shows a 90-day PMC —
-CTL area, ATL line, TSB line on a secondary axis with a zero reference — plus three
-headline stat tiles and a colour-coded Form badge. Rendered on Today only when a
-snapshot exists; the headline uses the `/today` snapshot while the chart pulls the
-series from the dedicated endpoint.
+**Config.** `pyproject.toml` sets pytest `testpaths`, silences the pre-existing
+Pydantic/genai deprecation noise, and configures coverage (source=`app`, templates
+omitted, `fail_under=80`). `pytest-cov` added to `requirements-dev.txt`.
 
-**Tests:** 12 new pytest tests cover TSS estimation (all four sources + zero-
-duration), EWMA seeding, window capping, fatigue decay on rest, AI-context
-injection (present/absent), and both endpoints. Full suite: 20 passed.
+**CI.** `.github/workflows/tests.yml` runs on push to any branch (plus PRs and manual
+dispatch): sets up Python 3.11 with pip caching, installs `requirements-dev.txt`, runs
+`pytest` with coverage and `--cov-fail-under=80`, and uploads the coverage/junit XML as
+an artifact. `DB_PATH`/`GARMIN_TOKEN_DIR` are pointed at the runner temp dir so the
+real engine initialises without needing `/data`.
 
-**Notes / out of scope:** Chose a same-day `TSB = CTL − ATL` (matching the plan's
-stated definition) over TrainingPeaks' yesterday-based variant — simpler and within
-the doc. No `DailyLoad` cache table: the series recomputes cheaply for a single user.
-The pre-existing Pydantic `Config` deprecation warnings and the bundle-size warning
-(recharts) were left untouched to stay in scope.
+**Notes.** Tests mock all external I/O (Garmin, Anthropic, Gemini) — no network or
+credentials needed. The conftest gained a `routes_client` fixture and a
+`patch_db_session` helper that redirects background-job `db_session()` onto the test DB.
