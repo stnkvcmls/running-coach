@@ -15,12 +15,20 @@ import type {
   AiConfigRequest,
   AthleteProfile,
   AthleteProfileRequest,
+  TrainingLoadResponse,
 } from './types'
 
 export function useToday(date: string) {
   return useQuery({
     queryKey: ['today', date],
     queryFn: () => apiGet<TodayResponse>(`/today?date=${date}`),
+  })
+}
+
+export function useTrainingLoad(days = 90) {
+  return useQuery({
+    queryKey: ['training-load', days],
+    queryFn: () => apiGet<TrainingLoadResponse>(`/training-load?days=${days}`),
   })
 }
 

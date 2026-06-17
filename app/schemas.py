@@ -207,6 +207,19 @@ class RaceInfo(BaseModel):
     priority: str | None = None
 
 
+class TrainingLoadPoint(BaseModel):
+    date: date
+    tss: float
+    ctl: float  # Chronic Training Load — "Fitness" (42-day EWMA)
+    atl: float  # Acute Training Load — "Fatigue" (7-day EWMA)
+    tsb: float  # Training Stress Balance — "Form" (CTL − ATL)
+
+
+class TrainingLoadResponse(BaseModel):
+    points: list[TrainingLoadPoint] = []
+    current: TrainingLoadPoint | None = None
+
+
 class TodayResponse(BaseModel):
     selected_date: date
     activities: list[ActivitySummary] = []
@@ -215,6 +228,7 @@ class TodayResponse(BaseModel):
     insights: list[InsightResponse] = []
     next_races: list[RaceInfo] = []
     scheduled_events: list[CalendarEventResponse] = []
+    training_load: TrainingLoadPoint | None = None
 
 
 class SettingsResponse(BaseModel):

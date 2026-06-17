@@ -1,0 +1,163 @@
+"""Training Load model — CTL / ATL / TSB (the TrainingPeaks PMC).
+
+Derives a daily Fitness/Fatigue/Form series from per-activity Training Stress
+Score (TSS). Activities that already carry a power-derived ``training_stress_score``
+use it directly; the rest fall back to an estimated load (pace-based rTSS, then
+HR-based hrTSS, then a duration-only floor) so non-power runs still contribute.
+
+- **CTL** (Chronic Training Load, "Fitness") — 42-day exponentially-weighted average of TSS.
+- **ATL** (Acute Training Load, "Fatigue") — 7-day exponentially-weighted average of TSS.
+- **TSB** (Training Stress Balance, "Form") — CTL − ATL.
+"""
+
+import math
+from collections import defaultdict
+from datetime import date, datetime, timedelta
+
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
+from app.models import Activity, AthleteProfile
+from app.schemas import TrainingLoadPoint
+
+CTL_DAYS = 42
+ATL_DAYS = 7
+
+# EWMA smoothing constants: alpha = 1 - exp(-1/N), the impulse-response form
+# TrainingPeaks uses for the Performance Management Chart.
+_CTL_ALPHA = 1 - math.exp(-1 / CTL_DAYS)
+_ATL_ALPHA = 1 - math.exp(-1 / ATL_DAYS)
+
+# Intensity assumed for a run with no power, pace, or HR reference available.
+_DEFAULT_IF = 0.70
+# Cap estimated intensity so a single fluky data point can't explode the load.
+_MAX_IF = 1.50
+
+
+def _intensity_to_tss(duration_hr: float, intensity: float) -> float:
+    """TSS for a session of ``duration_hr`` hours at a given intensity factor."""
+    intensity = min(intensity, _MAX_IF)
+    return duration_hr * intensity ** 2 * 100.0
+
+
+def estimate_tss(activity: Activity, profile: AthleteProfile | None) -> tuple[float, str]:
+    """Return ``(tss, source)`` for one activity.
+
+    Source is one of ``power`` (stored), ``pace``, ``hr``, ``duration``, or
+    ``none`` (no usable duration).
+    """
+    if activity.training_stress_score and activity.training_stress_score > 0:
+        return float(activity.training_stress_score), "power"
+
+    duration_hr = (activity.duration_sec or 0) / 3600.0
+    if duration_hr <= 0:
+        return 0.0, "none"
+
+    # Pace-based rTSS: intensity = threshold_pace / actual_pace (min/km), so a
+    # faster (smaller) pace yields a higher intensity factor.
+    thr_pace = profile.threshold_pace_min_km if profile else None
+    if thr_pace and activity.avg_pace_min_km and activity.avg_pace_min_km > 0:
+        intensity = thr_pace / activity.avg_pace_min_km
+        return _intensity_to_tss(duration_hr, intensity), "pace"
+
+    # HR-based hrTSS: intensity = avg_hr / threshold_hr. Fall back to ~90% of
+    # max HR as a threshold estimate when an explicit threshold isn't set.
+    thr_hr = None
+    if profile:
+        thr_hr = profile.threshold_hr or (round(profile.max_hr * 0.9) if profile.max_hr else None)
+    if thr_hr and activity.avg_hr and activity.avg_hr > 0:
+        intensity = activity.avg_hr / thr_hr
+        return _intensity_to_tss(duration_hr, intensity), "hr"
+
+    # Duration-only floor so the session still registers some load.
+    return _intensity_to_tss(duration_hr, _DEFAULT_IF), "duration"
+
+
+def _daily_tss(db: Session, end_date: date, profile: AthleteProfile | None) -> dict[date, float]:
+    """Sum estimated TSS per calendar day up to and including ``end_date``."""
+    end_dt = datetime.combine(end_date + timedelta(days=1), datetime.min.time())
+    activities = (
+        db.query(Activity)
+        .filter(Activity.started_at.isnot(None), Activity.started_at < end_dt)
+        .all()
+    )
+    totals: dict[date, float] = defaultdict(float)
+    for a in activities:
+        day = a.started_at.date() if isinstance(a.started_at, datetime) else a.started_at
+        tss, _ = estimate_tss(a, profile)
+        if tss > 0:
+            totals[day] += tss
+    return totals
+
+
+def _compute_full_series(db: Session, end_date: date) -> list[TrainingLoadPoint]:
+    """Build the daily CTL/ATL/TSB series from the first activity to ``end_date``."""
+    first_started = db.query(func.min(Activity.started_at)).scalar()
+    if first_started is None:
+        return []
+    start_date = first_started.date() if isinstance(first_started, datetime) else first_started
+    if start_date > end_date:
+        return []
+
+    profile = db.query(AthleteProfile).first()
+    daily = _daily_tss(db, end_date, profile)
+
+    series: list[TrainingLoadPoint] = []
+    ctl = 0.0
+    atl = 0.0
+    day = start_date
+    while day <= end_date:
+        tss = daily.get(day, 0.0)
+        ctl += (tss - ctl) * _CTL_ALPHA
+        atl += (tss - atl) * _ATL_ALPHA
+        series.append(
+            TrainingLoadPoint(
+                date=day,
+                tss=round(tss, 1),
+                ctl=round(ctl, 1),
+                atl=round(atl, 1),
+                tsb=round(ctl - atl, 1),
+            )
+        )
+        day += timedelta(days=1)
+    return series
+
+
+def compute_load_series(db: Session, end_date: date | None = None, days: int = 90) -> list[TrainingLoadPoint]:
+    """Return the last ``days`` of the CTL/ATL/TSB series ending at ``end_date``."""
+    end_date = end_date or date.today()
+    full = _compute_full_series(db, end_date)
+    if days and days > 0:
+        return full[-days:]
+    return full
+
+
+def current_load(db: Session, as_of: date | None = None) -> TrainingLoadPoint | None:
+    """Return the most recent CTL/ATL/TSB snapshot as of ``as_of``."""
+    full = _compute_full_series(db, as_of or date.today())
+    return full[-1] if full else None
+
+
+def _interpret_tsb(tsb: float) -> str:
+    """Plain-language reading of Training Stress Balance (form)."""
+    if tsb > 15:
+        return "very fresh / detraining risk"
+    if tsb > 5:
+        return "fresh, tapered"
+    if tsb >= -10:
+        return "neutral / race-ready range"
+    if tsb >= -30:
+        return "productive training fatigue"
+    return "high fatigue — overreaching risk"
+
+
+def format_training_load_context(point: TrainingLoadPoint | None) -> str:
+    """Render the current training load as a markdown ``## Training Load`` section."""
+    if point is None:
+        return ""
+    return (
+        "## Training Load\n"
+        f"- Fitness (CTL, 42d): {point.ctl:.0f}\n"
+        f"- Fatigue (ATL, 7d): {point.atl:.0f}\n"
+        f"- Form (TSB = CTL − ATL): {point.tsb:+.0f} ({_interpret_tsb(point.tsb)})"
+    )

@@ -5,6 +5,7 @@ import { formatDuration } from '../../utils/formatting'
 import WorkoutCard from './WorkoutCard'
 import ScheduledWorkoutCard from './ScheduledWorkoutCard'
 import WeekOverview from './WeekOverview'
+import TrainingLoadChart from './TrainingLoadChart'
 import InsightsList from './InsightsList'
 import './TodayView.css'
 
@@ -111,6 +112,14 @@ export default function TodayView() {
               )}
             </div>
           </div>
+        </section>
+      )}
+
+      {/* Training load (Fitness / Fatigue / Form) */}
+      {data?.training_load && (
+        <section className="today-section">
+          <h2 className="section-title">Training Load</h2>
+          <TrainingLoadChart current={data.training_load} />
         </section>
       )}
 

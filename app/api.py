@@ -35,9 +35,11 @@ from app.schemas import (
     RaceInfo,
     SettingsResponse,
     TodayResponse,
+    TrainingLoadResponse,
     WeeklyMileage,
     WorkoutStepResponse,
 )
+from app import training_load
 from app.utils import safe_json_loads, parse_activity_charts, calculate_age
 
 logger = logging.getLogger(__name__)
@@ -173,6 +175,9 @@ def api_today(
     )
     scheduled_events = [_enrich_event_with_steps(e) for e in scheduled_events_rows]
 
+    # Current training load snapshot (Fitness/Fatigue/Form) as of the selected date
+    current_load = training_load.current_load(db, as_of=selected)
+
     return TodayResponse(
         selected_date=selected,
         activities=[ActivitySummary.model_validate(a) for a in activities],
@@ -181,7 +186,21 @@ def api_today(
         insights=[InsightResponse.model_validate(i) for i in latest_insights],
         next_races=next_races,
         scheduled_events=scheduled_events,
+        training_load=current_load,
     )
+
+
+# --- Training Load (CTL/ATL/TSB) ---
+
+@api_router.get("/training-load", response_model=TrainingLoadResponse)
+def api_training_load(
+    days: int = Query(90, ge=7, le=365),
+    date_str: str = Query(None, alias="date"),
+    db: Session = Depends(get_db),
+):
+    end_date = _parse_date(date_str) if date_str else date.today()
+    points = training_load.compute_load_series(db, end_date=end_date, days=days)
+    return TrainingLoadResponse(points=points, current=points[-1] if points else None)
 
 
 # --- Activities ---

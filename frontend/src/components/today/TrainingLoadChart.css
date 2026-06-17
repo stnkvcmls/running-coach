@@ -1,0 +1,76 @@
+.training-load {
+  padding: 16px;
+}
+
+.tl-stats {
+  display: flex;
+  justify-content: space-around;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.tl-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+}
+
+.tl-stat-label {
+  font-size: 11px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tl-stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.tl-stat-sub {
+  font-size: 10px;
+  color: #666;
+}
+
+.tl-form-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
+.tl-form-fresh { background: rgba(0, 184, 148, 0.18); color: #00b894; }
+.tl-form-neutral { background: rgba(108, 92, 231, 0.18); color: #a29bfe; }
+.tl-form-building { background: rgba(225, 112, 85, 0.18); color: #e17055; }
+.tl-form-fatigued { background: rgba(231, 76, 60, 0.2); color: #e74c3c; }
+
+.tl-chart {
+  width: 100%;
+}
+
+.tl-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #2d2d44;
+  justify-content: center;
+}
+
+.tl-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #888;
+}
+
+.tl-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}

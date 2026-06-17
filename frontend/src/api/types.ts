@@ -154,6 +154,19 @@ export interface RaceInfo {
   priority: string | null
 }
 
+export interface TrainingLoadPoint {
+  date: string
+  tss: number
+  ctl: number  // Fitness (42-day EWMA)
+  atl: number  // Fatigue (7-day EWMA)
+  tsb: number  // Form (CTL − ATL)
+}
+
+export interface TrainingLoadResponse {
+  points: TrainingLoadPoint[]
+  current: TrainingLoadPoint | null
+}
+
 export interface TodayResponse {
   selected_date: string
   activities: ActivitySummary[]
@@ -162,6 +175,7 @@ export interface TodayResponse {
   insights: InsightResponse[]
   next_races: RaceInfo[]
   scheduled_events: CalendarEvent[]
+  training_load: TrainingLoadPoint | null
 }
 
 export interface SettingsResponse {
