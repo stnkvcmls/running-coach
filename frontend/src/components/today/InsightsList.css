@@ -33,5 +33,43 @@
   font-size: 0.82rem;
   line-height: 1.6;
   color: var(--text-secondary);
-  white-space: pre-wrap;
+}
+
+.insight-content p {
+  margin: 0 0 8px;
+}
+
+.insight-content p:last-child {
+  margin-bottom: 0;
+}
+
+.insight-content ul,
+.insight-content ol {
+  margin: 6px 0 8px;
+  padding-left: 20px;
+}
+
+.insight-content li {
+  margin-bottom: 4px;
+}
+
+.insight-content h1,
+.insight-content h2,
+.insight-content h3 {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 12px 0 6px;
+}
+
+.insight-content strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.insight-content code {
+  background: var(--bg-hover);
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-size: 0.78rem;
 }

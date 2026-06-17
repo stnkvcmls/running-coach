@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Lightbulb, ChevronDown, ChevronUp } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
 import type { InsightResponse } from '../../api/types'
 import './InsightsList.css'
 
@@ -37,7 +38,9 @@ function InsightCard({ insight }: { insight: InsightResponse }) {
         {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
       </div>
       {expanded && insight.content && (
-        <div className="insight-content">{insight.content}</div>
+        <div className="insight-content">
+          <ReactMarkdown>{insight.content}</ReactMarkdown>
+        </div>
       )}
     </div>
   )

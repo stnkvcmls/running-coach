@@ -1,4 +1,5 @@
 import { Lightbulb, RotateCcw } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
 import type { InsightResponse } from '../../api/types'
 import './AiInsightCard.css'
 
@@ -27,10 +28,14 @@ export default function AiInsightCard({ insight, onReanalyze, isAnalyzing }: Pro
           </button>
         </div>
         {insight.summary && (
-          <div className="ai-summary">{insight.summary}</div>
+          <div className="ai-summary">
+            <ReactMarkdown>{insight.summary}</ReactMarkdown>
+          </div>
         )}
         {insight.content && (
-          <div className="ai-content">{insight.content}</div>
+          <div className="ai-content">
+            <ReactMarkdown>{insight.content}</ReactMarkdown>
+          </div>
         )}
       </div>
     </section>
