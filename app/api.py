@@ -36,6 +36,7 @@ from app.schemas import (
     SettingsResponse,
     TodayResponse,
     TrainingLoadResponse,
+    TrainingReadiness,
     WeeklyMileage,
     WorkoutStepResponse,
 )
@@ -178,6 +179,20 @@ def api_today(
     # Current training load snapshot (Fitness/Fatigue/Form) as of the selected date
     current_load = training_load.current_load(db, as_of=selected)
 
+    # Resting HR from the 7 days before the selected date (for trend comparison)
+    rhr_cutoff = selected - timedelta(days=7)
+    recent_rhr_rows = (
+        db.query(DailySummary.resting_hr)
+        .filter(
+            DailySummary.date >= rhr_cutoff,
+            DailySummary.date < selected,
+            DailySummary.resting_hr.isnot(None),
+        )
+        .all()
+    )
+    recent_rhr = [row[0] for row in recent_rhr_rows]
+    readiness = training_load.compute_readiness(daily_summary, current_load, recent_rhr)
+
     return TodayResponse(
         selected_date=selected,
         activities=[ActivitySummary.model_validate(a) for a in activities],
@@ -187,6 +202,7 @@ def api_today(
         next_races=next_races,
         scheduled_events=scheduled_events,
         training_load=current_load,
+        readiness=readiness,
     )
 
 

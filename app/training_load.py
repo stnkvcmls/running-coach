@@ -17,8 +17,8 @@ from datetime import date, datetime, timedelta
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models import Activity, AthleteProfile
-from app.schemas import TrainingLoadPoint
+from app.models import Activity, AthleteProfile, DailySummary
+from app.schemas import TrainingLoadPoint, TrainingReadiness
 
 CTL_DAYS = 42
 ATL_DAYS = 7
@@ -151,6 +151,98 @@ def _interpret_tsb(tsb: float) -> str:
     return "high fatigue — overreaching risk"
 
 
+def _readiness_label(score: int) -> str:
+    if score >= 86:
+        return "Excellent"
+    if score >= 71:
+        return "Very Good"
+    if score >= 51:
+        return "Good"
+    if score >= 31:
+        return "Fair"
+    return "Low"
+
+
+def compute_readiness(
+    daily: DailySummary | None,
+    load_point: TrainingLoadPoint | None,
+    recent_rhr: list[int],
+) -> TrainingReadiness | None:
+    """Compute a composite 0–100 readiness score from wellness and load inputs.
+
+    Components (each 0–100):
+    - sleep_component: average of Garmin sleep_score and a duration-based score
+    - recovery_component: average of inverted stress and body_battery_high
+    - fatigue_component: 100 − ATL (capped 0–100); higher = less fatigued
+    - rhr_component: resting HR today vs 7-day average; lower today = better
+
+    Any missing component is excluded from the weighted average so a partial
+    data day still yields a meaningful score.
+    """
+    # Weights — must sum to 1.0
+    WEIGHTS = {"sleep": 0.30, "recovery": 0.35, "fatigue": 0.25, "rhr": 0.10}
+
+    # Sleep component
+    sleep_scores: list[int] = []
+    if daily and daily.sleep_score is not None:
+        sleep_scores.append(int(min(100, max(0, daily.sleep_score))))
+    if daily and daily.sleep_seconds is not None:
+        hours = daily.sleep_seconds / 3600.0
+        # 5 h or below → 0, 8 h → 100, linear
+        dur_score = int(min(100, max(0, (hours - 5.0) / 3.0 * 100)))
+        sleep_scores.append(dur_score)
+    sleep_component = int(sum(sleep_scores) / len(sleep_scores)) if sleep_scores else None
+
+    # Recovery component (stress inverted + body battery)
+    recovery_scores: list[int] = []
+    if daily and daily.stress_avg is not None:
+        recovery_scores.append(int(min(100, max(0, 100 - daily.stress_avg))))
+    if daily and daily.body_battery_high is not None:
+        recovery_scores.append(int(min(100, max(0, daily.body_battery_high))))
+    recovery_component = (
+        int(sum(recovery_scores) / len(recovery_scores)) if recovery_scores else None
+    )
+
+    # Fatigue component (ATL-based)
+    fatigue_component = (
+        int(min(100, max(0, 100 - load_point.atl))) if load_point is not None else None
+    )
+
+    # RHR trend component
+    rhr_component = None
+    if daily and daily.resting_hr and recent_rhr:
+        avg_rhr = sum(recent_rhr) / len(recent_rhr)
+        delta = daily.resting_hr - avg_rhr  # positive = elevated (bad)
+        # delta −5 → 100 pts, delta 0 → 75 pts, delta +10 → 0 pts
+        rhr_component = int(min(100, max(0, 75 - delta * 7.5)))
+
+    # Weighted composite
+    weighted_sum = 0.0
+    total_weight = 0.0
+    for comp_val, weight in (
+        (sleep_component, WEIGHTS["sleep"]),
+        (recovery_component, WEIGHTS["recovery"]),
+        (fatigue_component, WEIGHTS["fatigue"]),
+        (rhr_component, WEIGHTS["rhr"]),
+    ):
+        if comp_val is not None:
+            weighted_sum += comp_val * weight
+            total_weight += weight
+
+    if total_weight == 0.0:
+        return None
+
+    score = int(round(weighted_sum / total_weight))
+    return TrainingReadiness(
+        score=score,
+        label=_readiness_label(score),
+        sleep_component=sleep_component,
+        recovery_component=recovery_component,
+        fatigue_component=fatigue_component,
+        rhr_component=rhr_component,
+    )
+
+
 def format_training_load_context(point: TrainingLoadPoint | None) -> str:
     """Render the current training load as a markdown ``## Training Load`` section."""
     if point is None:
@@ -161,3 +253,19 @@ def format_training_load_context(point: TrainingLoadPoint | None) -> str:
         f"- Fatigue (ATL, 7d): {point.atl:.0f}\n"
         f"- Form (TSB = CTL − ATL): {point.tsb:+.0f} ({_interpret_tsb(point.tsb)})"
     )
+
+
+def format_readiness_context(readiness: TrainingReadiness | None) -> str:
+    """Render the readiness score as a markdown ``## Training Readiness`` section."""
+    if readiness is None:
+        return ""
+    lines = [f"- Score: {readiness.score}/100 ({readiness.label})"]
+    if readiness.sleep_component is not None:
+        lines.append(f"- Sleep: {readiness.sleep_component}/100")
+    if readiness.recovery_component is not None:
+        lines.append(f"- Recovery (stress/body battery): {readiness.recovery_component}/100")
+    if readiness.fatigue_component is not None:
+        lines.append(f"- Freshness (fatigue): {readiness.fatigue_component}/100")
+    if readiness.rhr_component is not None:
+        lines.append(f"- Resting HR trend: {readiness.rhr_component}/100")
+    return "## Training Readiness\n" + "\n".join(lines)

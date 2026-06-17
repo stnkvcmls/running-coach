@@ -215,6 +215,15 @@ class TrainingLoadPoint(BaseModel):
     tsb: float  # Training Stress Balance — "Form" (CTL − ATL)
 
 
+class TrainingReadiness(BaseModel):
+    score: int           # 0-100 composite readiness
+    label: str           # "Low", "Fair", "Good", "Very Good", "Excellent"
+    sleep_component: int | None = None      # 0-100, from sleep duration + quality
+    recovery_component: int | None = None   # 0-100, from stress + body battery
+    fatigue_component: int | None = None    # 0-100, ATL-based (higher = less fatigued)
+    rhr_component: int | None = None        # 0-100, resting HR trend vs 7d avg
+
+
 class TrainingLoadResponse(BaseModel):
     points: list[TrainingLoadPoint] = []
     current: TrainingLoadPoint | None = None
@@ -229,6 +238,7 @@ class TodayResponse(BaseModel):
     next_races: list[RaceInfo] = []
     scheduled_events: list[CalendarEventResponse] = []
     training_load: TrainingLoadPoint | None = None
+    readiness: TrainingReadiness | None = None
 
 
 class SettingsResponse(BaseModel):
