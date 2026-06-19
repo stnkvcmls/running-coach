@@ -379,3 +379,42 @@ class ThresholdApplyRequest(BaseModel):
     # Which estimated fields to write to the profile. Omit/empty → apply all
     # available estimates.
     fields: list[str] | None = None
+
+
+class TrainingPlanDayResponse(BaseModel):
+    id: int
+    plan_id: int
+    day_date: date
+    day_of_week: str
+    week_number: int
+    workout_type: str
+    target_distance_m: float | None = None
+    target_pace_min_km: float | None = None
+    target_pace_display: str | None = None
+    description: str | None = None
+    notes: str | None = None
+    week_theme: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class TrainingPlanWeek(BaseModel):
+    week_number: int
+    week_start: date
+    week_end: date
+    theme: str | None = None
+    days: list[TrainingPlanDayResponse] = []
+
+
+class TrainingPlanResponse(BaseModel):
+    id: int
+    generated_at: datetime
+    week_start: date
+    plan_weeks: int
+    phase: str | None = None
+    overview: str | None = None
+    weeks: list[TrainingPlanWeek] = []
+
+    class Config:
+        from_attributes = True

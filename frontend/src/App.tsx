@@ -12,6 +12,7 @@ import SettingsView from './components/settings/SettingsView'
 import WorkoutDetailView from './components/workout-detail/WorkoutDetailView'
 import OnboardingView from './components/onboarding/OnboardingView'
 import WellnessTrendsView from './components/trends/WellnessTrendsView'
+import PlanView from './components/plan/PlanView'
 import { useAthleteProfile } from './api/hooks'
 
 interface DateContextType {
@@ -75,6 +76,7 @@ export default function App() {
             <Route path="/daily/:id" element={<DailyDetailView />} />
             <Route path="/workouts/:id" element={<WorkoutDetailView />} />
             <Route path="/trends" element={<WellnessTrendsView />} />
+            <Route path="/plan" element={<PlanView />} />
             <Route path="/settings" element={<SettingsView />} />
             <Route path="/onboarding" element={<OnboardingView />} />
           </Routes>

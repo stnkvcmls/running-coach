@@ -227,3 +227,40 @@ class ZoneConfig(Base):
     max_pct = Column(Float, nullable=True)   # upper % of threshold (null = no upper bound)
 
     __table_args__ = (UniqueConstraint("zone_type", "zone_number", name="uq_zone_type_number"),)
+
+
+class TrainingPlan(Base):
+    """AI-generated periodized training plan.
+
+    At most one active plan exists at a time (identified by the latest
+    ``generated_at``). Older plans are retained for comparison.
+    """
+
+    __tablename__ = "training_plans"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    generated_at = Column(DateTime, default=_utcnow, index=True)
+    week_start = Column(Date, nullable=False)   # Monday of week 1
+    plan_weeks = Column(Integer, default=4)
+    phase = Column(Text, nullable=True)          # base, build, peak, taper
+    overview = Column(Text, nullable=True)        # AI narrative overview
+    raw_json = Column(Text, nullable=True)        # full AI JSON output
+
+
+class TrainingPlanDay(Base):
+    """One scheduled day within a TrainingPlan."""
+
+    __tablename__ = "training_plan_days"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    plan_id = Column(Integer, nullable=False, index=True)   # → TrainingPlan.id
+    day_date = Column(Date, nullable=False, index=True)
+    day_of_week = Column(Text, nullable=False)               # "Monday" … "Sunday"
+    week_number = Column(Integer, nullable=False, default=1) # 1-based week within plan
+    workout_type = Column(Text, nullable=False)              # easy, tempo, long, interval, rest, cross
+    target_distance_m = Column(Float, nullable=True)
+    target_pace_min_km = Column(Float, nullable=True)
+    target_pace_display = Column(Text, nullable=True)        # "5:15/km"
+    description = Column(Text, nullable=True)
+    notes = Column(Text, nullable=True)
+    week_theme = Column(Text, nullable=True)                 # e.g. "Aerobic Base"
