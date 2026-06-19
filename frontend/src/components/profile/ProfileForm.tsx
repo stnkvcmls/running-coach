@@ -26,6 +26,25 @@ interface FormState {
   training_preferences: string
 }
 
+function paceToMmSs(val: number | null | undefined): string {
+  if (val === null || val === undefined) return ''
+  const mins = Math.floor(val)
+  const secs = Math.round((val - mins) * 60)
+  return `${mins}:${String(secs).padStart(2, '0')}`
+}
+
+function mmSsToFloat(val: string): number | null {
+  if (val.trim() === '') return null
+  const parts = val.split(':')
+  if (parts.length === 2) {
+    const mins = parseInt(parts[0], 10)
+    const secs = parseInt(parts[1], 10)
+    if (!isNaN(mins) && !isNaN(secs)) return mins + secs / 60
+  }
+  const n = parseFloat(val)
+  return isNaN(n) ? null : n
+}
+
 function toFormState(p?: AthleteProfile | null): FormState {
   const s = (v: string | number | null | undefined) => (v === null || v === undefined ? '' : String(v))
   return {
@@ -34,7 +53,7 @@ function toFormState(p?: AthleteProfile | null): FormState {
     weight_kg: s(p?.weight_kg),
     goal_race: s(p?.goal_race),
     goal_race_date: s(p?.goal_race_date),
-    threshold_pace_min_km: s(p?.threshold_pace_min_km),
+    threshold_pace_min_km: paceToMmSs(p?.threshold_pace_min_km),
     threshold_hr: s(p?.threshold_hr),
     threshold_power: s(p?.threshold_power),
     max_hr: s(p?.max_hr),
@@ -55,7 +74,7 @@ function toRequest(f: FormState): AthleteProfileRequest {
     weight_kg: num(f.weight_kg),
     goal_race: text(f.goal_race),
     goal_race_date: text(f.goal_race_date),
-    threshold_pace_min_km: num(f.threshold_pace_min_km),
+    threshold_pace_min_km: mmSsToFloat(f.threshold_pace_min_km),
     threshold_hr: num(f.threshold_hr),
     threshold_power: num(f.threshold_power),
     max_hr: num(f.max_hr),
@@ -112,8 +131,8 @@ export default function ProfileForm({ initial, onSubmit, isPending, isError, sub
 
       <div className="profile-form__row">
         <div className="profile-form__field">
-          <label htmlFor="pf-pace">Threshold pace (min/km)</label>
-          <input id="pf-pace" type="number" step="0.01" min="0" value={form.threshold_pace_min_km} onChange={set('threshold_pace_min_km')} />
+          <label htmlFor="pf-pace">Threshold pace (mm:ss/km)</label>
+          <input id="pf-pace" type="text" placeholder="mm:ss" value={form.threshold_pace_min_km} onChange={set('threshold_pace_min_km')} />
         </div>
         <div className="profile-form__field">
           <label htmlFor="pf-thr-hr">Threshold HR (bpm)</label>
@@ -135,7 +154,8 @@ export default function ProfileForm({ initial, onSubmit, isPending, isError, sub
         </div>
         <div className="profile-form__field">
           <label htmlFor="pf-rest-hr">Resting HR (bpm)</label>
-          <input id="pf-rest-hr" type="number" min="0" value={form.resting_hr} onChange={set('resting_hr')} />
+          <input id="pf-rest-hr" type="number" min="0" value={form.resting_hr} disabled readOnly />
+          <span className="profile-form__hint">Synced from Garmin</span>
         </div>
       </div>
 
