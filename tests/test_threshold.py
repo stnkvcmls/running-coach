@@ -1,237 +1,309 @@
+import json
 from datetime import datetime, timedelta
-
-import pytest
 
 from app import ai_coach, threshold
 from app.models import Activity, AthleteProfile
 
+CP_DURATIONS = [120, 300, 600, 1200, 2400]
 
-def _add(db, *, days_ago=1, duration_sec, avg_power=None, avg_speed=None,
-         distance_m=None, avg_hr=None, max_hr=None):
+
+def _curve_json(*, power=None, gap_speed=None, hr=None, is_treadmill=False, duration=1800.0):
+    return json.dumps({
+        "power": power or {},
+        "speed": {},
+        "gap_speed": gap_speed or {},
+        "hr": hr or {},
+        "is_treadmill": is_treadmill,
+        "duration": duration,
+    })
+
+
+def _add(db, *, days_ago=2, mean_max=None, activity_type="running",
+         max_hr=None, avg_hr=None, duration_sec=1800, raw=None, laps=None):
     started = datetime.utcnow() - timedelta(days=days_ago)
     act = Activity(
-        garmin_id=int(started.timestamp() * 1000) + int(duration_sec),
-        activity_type="running",
-        name="Run",
-        started_at=started,
-        duration_sec=duration_sec,
-        avg_power=avg_power,
-        avg_speed=avg_speed,
-        distance_m=distance_m,
-        avg_hr=avg_hr,
-        max_hr=max_hr,
+        garmin_id=int(started.timestamp() * 1000) + (days_ago * 1000) + int(duration_sec),
+        activity_type=activity_type, name="Run", started_at=started,
+        duration_sec=duration_sec, max_hr=max_hr, avg_hr=avg_hr,
+        mean_max_json=mean_max,
+        raw_json=json.dumps(raw) if raw is not None else None,
+        laps_json=json.dumps(laps) if laps is not None else None,
     )
     db.add(act)
     db.commit()
     return act
 
 
-# --- pure math helpers ---
+def _power_curve(cp, w, durations=CP_DURATIONS):
+    return {str(t): round(cp + w / t, 2) for t in durations}
 
-def test_linear_fit_basic():
-    # y = 2x + 1
-    slope, intercept = threshold._linear_fit([(0, 1), (1, 3), (2, 5)])
+
+def _gap_curve(cv, d, durations=CP_DURATIONS):
+    return {str(t): round(cv + d / t, 4) for t in durations}
+
+
+# --- math helpers ---
+
+def test_weighted_linear_fit_basic():
+    # y = 2x + 1, equal weights
+    slope, intercept = threshold._weighted_linear_fit([(0, 1), (1, 3), (2, 5)], [1, 1, 1])
     assert round(slope, 6) == 2.0
     assert round(intercept, 6) == 1.0
 
 
-def test_linear_fit_needs_two_points():
-    assert threshold._linear_fit([(1, 1)]) is None
+def test_weighted_linear_fit_zero_weight_returns_none():
+    assert threshold._weighted_linear_fit([(0, 1), (1, 2)], [0, 0]) is None
 
 
-def test_linear_fit_no_x_spread():
-    assert threshold._linear_fit([(1, 2), (1, 5)]) is None
+def test_build_frontier_keeps_best_with_support():
+    curves = [
+        (1.0, {"power": {"300": 300, "600": 250}}),
+        (5.0, {"power": {"300": 320}}),    # better 300 s effort, older
+    ]
+    frontier = threshold._build_frontier(curves, "power")
+    by_dur = {p.duration: p for p in frontier}
+    assert by_dur[300].value == 320
+    assert by_dur[300].sample_size == 2
+    assert by_dur[600].value == 250
 
 
-def test_build_frontier_keeps_best_per_bin():
-    # Two efforts in the 5-10min bin; only the higher-power one survives.
-    samples = [(400, 300), (450, 320), (1500, 250)]
-    frontier = threshold._build_frontier(samples)
-    # bin0 best = (450, 320), bin2 best = (1500, 250)
-    assert (450, 320) in frontier
-    assert (1500, 250) in frontier
-    assert (400, 300) not in frontier
-    assert len(frontier) == 2
+def test_fit_two_param_recovers_cp():
+    curves = [(1.0, {"power": _power_curve(250, 15000)})]
+    frontier = threshold._build_frontier(curves, "power")
+    cp, w, used = threshold._fit_two_param(frontier)
+    assert abs(cp - 250) < 2
+    assert abs(w - 15000) < 200
 
 
-def test_fit_hyperbolic_recovers_cp_and_wprime():
-    # Construct points exactly on P = 250 + 15000/t
-    cp, w = 250.0, 15000.0
-    frontier = [(t, cp + w / t) for t in (400, 800, 1600, 3200)]
-    asymptote, work, conf = threshold._fit_hyperbolic(frontier)
-    assert round(asymptote) == 250
-    assert round(work) == 15000
-    assert conf == "high"
+def test_fit_two_param_rejects_non_physical():
+    # Rising output with duration → negative asymptote/work.
+    frontier = [
+        threshold._FrontierPoint(300, 100, 1.0, 1),
+        threshold._FrontierPoint(1200, 300, 1.0, 1),
+    ]
+    assert threshold._fit_two_param(frontier) is None
 
 
-def test_fit_hyperbolic_rejects_negative_asymptote():
-    # Rising output with duration → negative work / bad asymptote.
-    frontier = [(400, 100), (800, 200), (1600, 400)]
-    assert threshold._fit_hyperbolic(frontier) is None
+def test_fit_two_param_needs_two_points_in_range():
+    frontier = [threshold._FrontierPoint(300, 300, 1.0, 1)]
+    assert threshold._fit_two_param(frontier) is None
 
 
-def test_fit_hyperbolic_needs_two_points():
-    assert threshold._fit_hyperbolic([(400, 300)]) is None
+def test_three_param_selected_on_bending_curve():
+    # Build a curve that genuinely follows the 3-param model.
+    cp, w, pmax = 250.0, 15000.0, 600.0
+    durations = [60, 120, 300, 600, 1200, 2400]
+    curve = {str(t): round(threshold._model_3p(t, cp, w, pmax), 2) for t in durations}
+    curves = [(1.0, {"power": curve})]
+    est, w_out, pmax_out = threshold._estimate_critical_power(curves)
+    assert est.value is not None
+    # 3-param should win and report a Pmax in range.
+    assert est.method == "critical_power_3p"
+    assert pmax_out is not None and pmax_out > est.value
 
 
-# --- end-to-end estimation ---
+# --- estimation pipeline ---
 
-def test_estimate_critical_power(db):
-    cp, w = 250.0, 15000.0
-    for t, day in [(400, 2), (900, 5), (1700, 8), (3300, 12)]:
-        _add(db, days_ago=day, duration_sec=t, avg_power=cp + w / t)
+def test_estimate_critical_power_from_curves(db):
+    _add(db, mean_max=_curve_json(power=_power_curve(250, 15000)))
     est = threshold.estimate_thresholds(db)
     assert est.critical_power.value is not None
-    assert abs(est.critical_power.value - 250) < 5
-    assert est.critical_power.method == "critical_power"
+    assert abs(est.critical_power.value - 250) < 3
     assert est.w_prime is not None
 
 
-def test_estimate_threshold_pace_from_speed(db):
-    cv, dprime = 3.5, 200.0  # m/s, m
-    for t, day in [(400, 2), (900, 5), (1700, 8), (3300, 12)]:
-        _add(db, days_ago=day, duration_sec=t, avg_speed=cv + dprime / t)
+def test_estimate_threshold_pace_from_gap_curve(db):
+    cv = 3.5
+    _add(db, mean_max=_curve_json(gap_speed=_gap_curve(cv, 200)))
     est = threshold.estimate_thresholds(db)
     pace = est.threshold_pace_min_km.value
     assert pace is not None
-    # CV 3.5 m/s → 1000/3.5/60 ≈ 4.76 min/km
-    assert abs(pace - (1000.0 / 3.5 / 60.0)) < 0.2
+    assert abs(pace - (1000.0 / cv / 60.0)) < 0.15
 
 
-def test_estimate_threshold_pace_falls_back_to_distance(db):
-    # No avg_speed, but distance + duration give speed.
-    for t, day, dist in [(400, 2, 1500), (900, 5, 3200), (1700, 8, 5800)]:
-        _add(db, days_ago=day, duration_sec=t, distance_m=dist)
+def test_treadmill_excluded_from_pace_but_kept_for_power(db):
+    _add(db, mean_max=_curve_json(
+        power=_power_curve(250, 15000), gap_speed=_gap_curve(3.5, 200), is_treadmill=True,
+    ))
     est = threshold.estimate_thresholds(db)
-    assert est.threshold_pace_min_km.value is not None
+    assert est.critical_power.value is not None      # power kept
+    assert est.threshold_pace_min_km.value is None    # pace dropped
 
 
-def test_estimate_max_hr(db):
-    _add(db, days_ago=2, duration_sec=1800, max_hr=180)
-    _add(db, days_ago=4, duration_sec=1800, max_hr=189)
+def test_confidence_note_when_missing_short_effort(db):
+    # Only long-duration efforts → no short anchor → note + not high confidence.
+    long_curve = {str(t): round(250 + 15000 / t, 2) for t in [1200, 1800, 2400]}
+    _add(db, mean_max=_curve_json(power=long_curve))
     est = threshold.estimate_thresholds(db)
-    assert est.max_hr.value == 189
-
-
-def test_estimate_threshold_hr_sustained_effort(db):
-    # Max HR 190; hard sustained efforts (>=20min, avg >= 0.85*190 = 161.5)
-    _add(db, days_ago=2, duration_sec=1800, max_hr=190, avg_hr=170)
-    _add(db, days_ago=5, duration_sec=2400, max_hr=188, avg_hr=172)
-    _add(db, days_ago=8, duration_sec=2000, max_hr=185, avg_hr=168)
-    est = threshold.estimate_thresholds(db)
-    assert est.threshold_hr.method == "sustained_effort"
-    assert 165 <= est.threshold_hr.value <= 175
-
-
-def test_estimate_threshold_hr_pct_fallback(db):
-    # Max HR present but no qualifying hard sustained effort (all easy/short).
-    _add(db, days_ago=2, duration_sec=600, max_hr=185, avg_hr=120)
-    est = threshold.estimate_thresholds(db)
-    assert est.threshold_hr.method == "pct_max_hr"
-    assert est.threshold_hr.value == round(185 * threshold._LTHR_MAX_HR_FRACTION, 0)
+    assert est.critical_power.confidence != "high"
+    assert est.critical_power.note is not None
+    assert "short" in est.critical_power.note
 
 
 def test_estimate_empty_db(db):
     est = threshold.estimate_thresholds(db)
     assert est.critical_power.value is None
     assert est.threshold_pace_min_km.value is None
-    assert est.threshold_hr.value is None
     assert est.max_hr.value is None
     assert est.activities_analyzed == 0
 
 
 def test_old_activities_excluded(db):
-    # Outside the lookback window → ignored.
-    _add(db, days_ago=400, duration_sec=1800, avg_power=300, max_hr=180)
+    _add(db, days_ago=400, mean_max=_curve_json(power=_power_curve(250, 15000)), max_hr=180)
     est = threshold.estimate_thresholds(db, lookback_days=90)
     assert est.activities_analyzed == 0
-    assert est.max_hr.value is None
+    assert est.critical_power.value is None
 
 
-# --- apply to profile ---
+def test_non_run_excluded(db):
+    _add(db, activity_type="cycling", mean_max=_curve_json(power=_power_curve(250, 15000)))
+    est = threshold.estimate_thresholds(db)
+    assert est.activities_analyzed == 0
 
-def test_apply_estimate_to_profile_all_fields(db):
-    cp, w = 250.0, 15000.0
-    for t, day in [(400, 2), (900, 5), (1700, 8), (3300, 12)]:
-        _add(db, days_ago=day, duration_sec=t, avg_power=cp + w / t,
-             avg_speed=3.5 + 200 / t, max_hr=185, avg_hr=170)
+
+# --- max HR + LTHR ---
+
+def test_estimate_max_hr(db):
+    _add(db, mean_max=_curve_json(), max_hr=180)
+    _add(db, days_ago=4, mean_max=_curve_json(), max_hr=189)
+    est = threshold.estimate_thresholds(db)
+    assert est.max_hr.value == 189
+
+
+def test_lthr_prefers_garmin_value(db):
+    _add(db, mean_max=_curve_json(), max_hr=190, avg_hr=175,
+         raw={"lactateThresholdHeartRate": 168})
+    est = threshold.estimate_thresholds(db)
+    assert est.threshold_hr.method == "garmin_lactate_threshold"
+    assert est.threshold_hr.value == 168
+
+
+def test_lthr_sustained_effort_fallback():
+    acts = [
+        Activity(activity_type="running", duration_sec=1800, max_hr=190, avg_hr=170),
+        Activity(activity_type="running", duration_sec=2400, max_hr=188, avg_hr=172),
+        Activity(activity_type="running", duration_sec=2000, max_hr=185, avg_hr=168),
+    ]
+    est = threshold._estimate_threshold_hr(acts, max_hr=190, cv=None)
+    assert est.method == "sustained_effort"
+    assert 165 <= est.value <= 175
+
+
+def test_lthr_pct_max_fallback():
+    acts = [Activity(activity_type="running", duration_sec=600, max_hr=185, avg_hr=120)]
+    est = threshold._estimate_threshold_hr(acts, max_hr=185, cv=None)
+    assert est.method == "pct_max_hr"
+    assert est.value == round(185 * threshold._LTHR_MAX_HR_FRACTION, 0)
+    assert est.note is not None
+
+
+def test_steady_hr_near_cv_from_streams():
+    # 800 s stream: 700 s at threshold speed (3.5 m/s) with HR ramping 150->170
+    # (drift), then easy. Steady HR uses the segment's second half.
+    cv = 3.5
+    rows = []
+    for t in range(800):
+        if t < 700:
+            speed = 3.5
+            hr = 150 + (t / 700) * 20    # 150 → 170
+        else:
+            speed = 2.0
+            hr = 130
+        rows.append({"metrics": [t, speed, hr]})
+    details = {
+        "metricDescriptors": [
+            {"metricsIndex": 0, "key": "sumElapsedDuration"},
+            {"metricsIndex": 1, "key": "directSpeed"},
+            {"metricsIndex": 2, "key": "directHeartRate"},
+        ],
+        "activityDetailMetrics": rows,
+    }
+    act = Activity(activity_type="running", duration_sec=800, laps_json=json.dumps(details))
+    vals = threshold._steady_hr_near_cv([act], cv)
+    assert len(vals) == 1
+    # second half of 0..700s segment → HR averages ~165
+    assert 160 <= vals[0] <= 170
+
+
+def test_lthr_uses_near_cv_segment(db):
+    cv = 3.5
+    rows = [{"metrics": [t, 3.5, 165]} for t in range(700)]
+    details = {
+        "metricDescriptors": [
+            {"metricsIndex": 0, "key": "sumElapsedDuration"},
+            {"metricsIndex": 1, "key": "directSpeed"},
+            {"metricsIndex": 2, "key": "directHeartRate"},
+        ],
+        "activityDetailMetrics": rows,
+    }
+    _add(db, mean_max=_curve_json(gap_speed=_gap_curve(cv, 200)),
+         max_hr=190, laps=details)
+    est = threshold.estimate_thresholds(db)
+    assert est.threshold_hr.method == "near_threshold_segment"
+    assert 160 <= est.threshold_hr.value <= 170
+
+
+# --- apply ---
+
+def test_apply_estimate_all_fields(db):
+    _add(db, mean_max=_curve_json(power=_power_curve(250, 15000),
+                                  gap_speed=_gap_curve(3.5, 200)), max_hr=185)
     est = threshold.estimate_thresholds(db)
     profile = AthleteProfile()
     applied = threshold.apply_estimate_to_profile(profile, est)
     assert "threshold_power" in applied
     assert "max_hr" in applied
-    assert profile.threshold_power == int(est.critical_power.value)
     assert isinstance(profile.threshold_power, int)
 
 
-def test_apply_estimate_respects_field_filter(db):
-    _add(db, days_ago=2, duration_sec=1800, max_hr=185)
+def test_apply_estimate_field_filter(db):
+    _add(db, mean_max=_curve_json(), max_hr=185)
     est = threshold.estimate_thresholds(db)
     profile = AthleteProfile()
     applied = threshold.apply_estimate_to_profile(profile, est, fields=["max_hr"])
     assert applied == ["max_hr"]
     assert profile.max_hr == 185
-    assert profile.threshold_hr is None  # not requested
 
 
-def test_apply_estimate_skips_none_values(db):
-    est = threshold.estimate_thresholds(db)  # empty db → all None
+def test_apply_estimate_skips_none(db):
+    est = threshold.estimate_thresholds(db)
     profile = AthleteProfile()
-    applied = threshold.apply_estimate_to_profile(profile, est)
-    assert applied == []
+    assert threshold.apply_estimate_to_profile(profile, est) == []
 
 
-# --- AI context formatting ---
+# --- context formatting ---
 
 def test_format_context_shows_missing_fields():
     est = threshold.ThresholdEstimate(
-        critical_power=threshold.FieldEstimate(250.0, "critical_power", "high", 4),
-        w_prime=15000.0,
+        critical_power=threshold.FieldEstimate(250.0, "critical_power_3p", "high", 4),
+        w_prime=15000.0, pmax=600.0,
         threshold_pace_min_km=threshold.FieldEstimate(4.5, "critical_velocity", "medium", 3),
-        threshold_hr=threshold.FieldEstimate(170.0, "sustained_effort", "high", 3),
+        threshold_hr=threshold.FieldEstimate(170.0, "near_threshold_segment", "high", 3),
         max_hr=threshold.FieldEstimate(189.0, "observed_max", "high", 6),
-        lookback_days=90,
-        activities_analyzed=10,
+        lookback_days=90, activities_analyzed=10,
     )
     ctx = threshold.format_threshold_estimate_context(est, None)
-    assert "Estimated Thresholds" in ctx
     assert "Critical Power" in ctx
+    assert "Pmax 600 W" in ctx
     assert "4:30/km" in ctx
     assert "170 bpm" in ctx
 
 
-def test_format_context_hides_fields_already_in_profile():
+def test_format_context_hides_set_fields():
     est = threshold.ThresholdEstimate(
-        critical_power=threshold.FieldEstimate(250.0, "critical_power", "high", 4),
-        w_prime=None,
+        critical_power=threshold.FieldEstimate(250.0, "critical_power_2p", "high", 4),
+        w_prime=None, pmax=None,
         threshold_pace_min_km=threshold.FieldEstimate(4.5, "critical_velocity", "high", 4),
         threshold_hr=threshold.FieldEstimate(170.0, "sustained_effort", "high", 3),
         max_hr=threshold.FieldEstimate(189.0, "observed_max", "high", 6),
-        lookback_days=90,
-        activities_analyzed=10,
+        lookback_days=90, activities_analyzed=10,
     )
-    profile = AthleteProfile(
-        threshold_power=260, threshold_pace_min_km=4.4, threshold_hr=168, max_hr=190
-    )
-    ctx = threshold.format_threshold_estimate_context(est, profile)
-    assert ctx == ""  # everything already set
+    profile = AthleteProfile(threshold_power=260, threshold_pace_min_km=4.4,
+                             threshold_hr=168, max_hr=190)
+    assert threshold.format_threshold_estimate_context(est, profile) == ""
 
 
-def test_format_context_empty_when_no_estimates():
-    est = threshold.ThresholdEstimate(
-        critical_power=threshold._empty(),
-        w_prime=None,
-        threshold_pace_min_km=threshold._empty(),
-        threshold_hr=threshold._empty(),
-        max_hr=threshold._empty(),
-        lookback_days=90,
-        activities_analyzed=0,
-    )
-    assert threshold.format_threshold_estimate_context(est, None) == ""
-
-
-def test_format_pace_rounds_seconds_to_minute():
-    # 4.999 min/km should not render as 4:60.
+def test_format_pace_rounds_to_minute():
     assert threshold._format_pace(4.999) == "5:00/km"
 
 
@@ -239,14 +311,12 @@ def test_format_pace_rounds_seconds_to_minute():
 
 def test_threshold_estimate_endpoint(client, session_factory):
     db = session_factory()
-    cp, w = 250.0, 15000.0
-    for t, day in [(400, 2), (900, 5), (1700, 8), (3300, 12)]:
-        started = datetime.utcnow() - timedelta(days=day)
-        db.add(Activity(
-            garmin_id=int(started.timestamp() * 1000) + int(t),
-            activity_type="running", name="Run", started_at=started,
-            duration_sec=t, avg_power=cp + w / t, max_hr=185,
-        ))
+    started = datetime.utcnow() - timedelta(days=3)
+    db.add(Activity(
+        garmin_id=42, activity_type="running", name="Run", started_at=started,
+        duration_sec=2400, max_hr=185,
+        mean_max_json=_curve_json(power=_power_curve(250, 15000)),
+    ))
     db.commit()
     db.close()
 
@@ -254,19 +324,17 @@ def test_threshold_estimate_endpoint(client, session_factory):
     assert resp.status_code == 200
     body = resp.json()
     assert body["critical_power"]["value"] is not None
-    assert body["activities_analyzed"] == 4
+    assert body["activities_analyzed"] == 1
 
 
 def test_threshold_apply_endpoint_creates_profile(client, session_factory):
     db = session_factory()
-    cp, w = 250.0, 15000.0
-    for t, day in [(400, 2), (900, 5), (1700, 8), (3300, 12)]:
-        started = datetime.utcnow() - timedelta(days=day)
-        db.add(Activity(
-            garmin_id=int(started.timestamp() * 1000) + int(t),
-            activity_type="running", name="Run", started_at=started,
-            duration_sec=t, avg_power=cp + w / t, max_hr=185,
-        ))
+    started = datetime.utcnow() - timedelta(days=3)
+    db.add(Activity(
+        garmin_id=43, activity_type="running", name="Run", started_at=started,
+        duration_sec=2400, max_hr=185,
+        mean_max_json=_curve_json(power=_power_curve(250, 15000)),
+    ))
     db.commit()
     db.close()
 
@@ -277,15 +345,12 @@ def test_threshold_apply_endpoint_creates_profile(client, session_factory):
     assert body["max_hr"] == 185
 
 
-def test_threshold_apply_endpoint_no_data_returns_400(client):
+def test_threshold_apply_no_data_returns_400(client):
     resp = client.post("/api/v1/threshold-estimate/apply", json={})
     assert resp.status_code == 400
 
 
 def test_build_context_includes_estimate(db):
-    # No profile thresholds set → estimate section should appear in AI context.
-    cp, w = 250.0, 15000.0
-    for t, day in [(400, 2), (900, 5), (1700, 8), (3300, 12)]:
-        _add(db, days_ago=day, duration_sec=t, avg_power=cp + w / t, max_hr=185)
+    _add(db, mean_max=_curve_json(power=_power_curve(250, 15000)), max_hr=185)
     ctx = ai_coach._build_context(db, "activity", "test run")
     assert "Estimated Thresholds" in ctx

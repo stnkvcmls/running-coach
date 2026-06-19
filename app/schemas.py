@@ -352,14 +352,16 @@ class ZoneConfigsResponse(BaseModel):
 
 class ThresholdEstimateField(BaseModel):
     value: float | None = None
-    method: str | None = None          # e.g. "critical_power", "critical_velocity"
+    method: str | None = None          # e.g. "critical_power_2p", "critical_velocity"
     confidence: str | None = None      # "low" | "medium" | "high"
     sample_size: int = 0
+    note: str | None = None            # guidance when the fit is poorly constrained
 
 
 class ThresholdEstimateResponse(BaseModel):
     critical_power: ThresholdEstimateField          # W (≈ running FTP)
     w_prime: float | None = None                    # J (anaerobic work capacity)
+    pmax: float | None = None                       # W (3-param model max power)
     threshold_pace_min_km: ThresholdEstimateField
     threshold_hr: ThresholdEstimateField            # LTHR, bpm
     max_hr: ThresholdEstimateField                  # bpm

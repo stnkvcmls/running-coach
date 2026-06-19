@@ -84,6 +84,10 @@ class Activity(Base):
     typed_splits_json = Column(Text)
     power_zones_json = Column(Text)
 
+    # Mean-maximal curves (best sustained power / GAP-speed / HR per duration),
+    # computed from the per-sample detail streams. See app/streams.py.
+    mean_max_json = Column(Text)
+
     # User feedback
     feedback_rating = Column(String(10), nullable=True)   # "good" or "bad"
     feedback_tags = Column(Text, nullable=True)            # JSON array of setback tags
