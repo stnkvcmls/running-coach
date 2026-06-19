@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { Download, RefreshCw } from 'lucide-react'
 import { useSettings, useTriggerSync, useAiConfig, useSetAiConfig } from '../../api/hooks'
 import AthleteProfileSection from './AthleteProfileSection'
 import ThresholdEstimateSection from './ThresholdEstimateSection'
@@ -64,6 +64,29 @@ function AiBackendSection() {
   )
 }
 
+const EXPORT_LINKS = [
+  { label: 'Activities CSV', url: '/api/v1/export/activities?format=csv', filename: 'activities.csv' },
+  { label: 'Activities JSON', url: '/api/v1/export/activities?format=json', filename: 'activities.json' },
+  { label: 'Insights CSV', url: '/api/v1/export/insights?format=csv', filename: 'insights.csv' },
+  { label: 'Insights JSON', url: '/api/v1/export/insights?format=json', filename: 'insights.json' },
+]
+
+function DataExportSection() {
+  return (
+    <section className="settings-section">
+      <h2 className="section-title">Data Export</h2>
+      <div className="export-buttons">
+        {EXPORT_LINKS.map(({ label, url, filename }) => (
+          <a key={url} href={url} download={filename} className="sync-btn export-btn">
+            <Download size={16} />
+            {label}
+          </a>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 export default function SettingsView() {
   const { data, isLoading } = useSettings()
   const syncMutation = useTriggerSync()
@@ -84,6 +107,9 @@ export default function SettingsView() {
 
       {/* AI backend selector */}
       <AiBackendSection />
+
+      {/* Data export */}
+      <DataExportSection />
 
       {/* Database stats */}
       <section className="settings-section">
