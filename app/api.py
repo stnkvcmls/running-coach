@@ -1,10 +1,13 @@
 import calendar as cal_mod
+import csv
+import io
 import json
 import logging
 import threading
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -842,6 +845,72 @@ def api_trigger_sync(sync_type: str):
     else:
         raise HTTPException(status_code=400, detail=f"Unknown sync type: {sync_type}")
     return {"status": "accepted"}
+
+
+# --- Data Export ---
+
+@api_router.get("/export/activities")
+def api_export_activities(
+    format: str = Query("csv", pattern="^(csv|json)$"),
+    db: Session = Depends(get_db),
+):
+    activities = db.query(Activity).order_by(Activity.started_at.desc()).all()
+
+    if format == "json":
+        data = [ActivitySummary.model_validate(a).model_dump() for a in activities]
+        content = json.dumps(data, default=str, indent=2)
+        return Response(
+            content=content,
+            media_type="application/json",
+            headers={"Content-Disposition": "attachment; filename=activities.json"},
+        )
+
+    fields = [
+        "id", "garmin_id", "activity_type", "name", "started_at",
+        "duration_sec", "distance_m", "avg_hr", "max_hr",
+        "avg_pace_min_km", "calories", "elevation_gain",
+    ]
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=fields, extrasaction="ignore")
+    writer.writeheader()
+    for a in activities:
+        row = ActivitySummary.model_validate(a).model_dump()
+        writer.writerow({k: ("" if row[k] is None else str(row[k])) for k in fields})
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode()),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=activities.csv"},
+    )
+
+
+@api_router.get("/export/insights")
+def api_export_insights(
+    format: str = Query("csv", pattern="^(csv|json)$"),
+    db: Session = Depends(get_db),
+):
+    insights = db.query(Insight).order_by(Insight.created_at.desc()).all()
+
+    if format == "json":
+        data = [InsightResponse.model_validate(i).model_dump() for i in insights]
+        content = json.dumps(data, default=str, indent=2)
+        return Response(
+            content=content,
+            media_type="application/json",
+            headers={"Content-Disposition": "attachment; filename=insights.json"},
+        )
+
+    fields = ["id", "created_at", "trigger_type", "trigger_id", "category", "summary", "content"]
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=fields, extrasaction="ignore")
+    writer.writeheader()
+    for i in insights:
+        row = InsightResponse.model_validate(i).model_dump()
+        writer.writerow({k: ("" if row[k] is None else str(row[k])) for k in fields})
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode()),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=insights.csv"},
+    )
 
 
 # --- Workout Step Parsing (delegated to app.adherence) ---

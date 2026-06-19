@@ -130,3 +130,14 @@
   font-size: 0.78rem;
   color: #e74c3c;
 }
+
+.export-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.export-btn {
+  text-decoration: none;
+  text-align: center;
+}
