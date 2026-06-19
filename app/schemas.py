@@ -57,8 +57,10 @@ class FeedbackRequest(BaseModel):
 
 
 class WorkoutAdherence(BaseModel):
-    planned_distance_m: float | None = None
-    actual_distance_m: float | None = None
+    planned_distance_m: float | None = None    # running periods only (rest excluded)
+    planned_rest_distance_m: float | None = None
+    actual_distance_m: float | None = None     # running distance (rest excluded)
+    actual_rest_distance_m: float | None = None  # distance covered during rest laps
     distance_pct: float | None = None          # actual / planned × 100, capped at 100
     planned_pace_display: str | None = None    # e.g. "4:30/km"
     actual_pace_display: str | None = None     # e.g. "4:38/km"

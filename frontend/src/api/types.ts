@@ -30,8 +30,10 @@ export interface FeedbackRequest {
 }
 
 export interface WorkoutAdherence {
-  planned_distance_m: number | null
-  actual_distance_m: number | null
+  planned_distance_m: number | null        // running periods only (rest excluded)
+  planned_rest_distance_m: number | null
+  actual_distance_m: number | null         // running distance (rest excluded)
+  actual_rest_distance_m: number | null    // distance covered during rest laps
   distance_pct: number | null
   planned_pace_display: string | null
   actual_pace_display: string | null

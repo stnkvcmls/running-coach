@@ -34,8 +34,7 @@ def _format_pace(meters_per_sec: float) -> str:
     if meters_per_sec <= 0:
         return ""
     pace_sec_per_km = 1000.0 / meters_per_sec
-    mins = int(pace_sec_per_km // 60)
-    secs = int(pace_sec_per_km % 60)
+    mins, secs = divmod(int(round(pace_sec_per_km)), 60)
     return f"{mins}:{secs:02d}/km"
 
 
@@ -215,6 +214,86 @@ def _parse_pace_display(pace_display: str) -> float | None:
     return _parse_single_pace(pace_str)
 
 
+# Lap intensity types that represent rest/recovery (not running distance).
+_REST_INTENSITY_TYPES = {"REST", "RECOVERY"}
+
+
+def _step_distance_m(step: WorkoutStepResponse, pace_sec_per_km: float | None) -> float | None:
+    """Distance contribution of a single step.
+
+    Distance-based steps return their value directly. Time-based steps are
+    converted to distance using ``pace_sec_per_km`` (the step's own target pace
+    or a fallback). Returns ``None`` when the step has no measurable distance
+    (e.g. a time-based step with no pace available, or a lap-button step).
+    """
+    if step.end_condition == "distance" and step.end_condition_value:
+        return step.end_condition_value
+    if step.end_condition == "time" and step.end_condition_value and pace_sec_per_km:
+        return step.end_condition_value / pace_sec_per_km * 1000.0
+    return None
+
+
+def _actual_from_splits(
+    activity: Activity,
+) -> tuple[float | None, float | None, float | None]:
+    """Derive running/rest distance and running-only pace from Garmin laps.
+
+    Reads ``activity.splits_json`` (``lapDTOs``) and classifies each lap by its
+    ``intensityType``: REST/RECOVERY laps count as rest, everything else as
+    running. Returns ``(running_dist_m, rest_dist_m, running_pace_sec_per_km)``.
+
+    Falls back to the activity totals (whole-activity distance and average
+    pace, no rest split) when per-lap data is unavailable or unusable.
+    """
+    running_dist = 0.0
+    rest_dist = 0.0
+    running_dur = 0.0
+    saw_lap = False
+
+    if activity.splits_json:
+        try:
+            data = json.loads(activity.splits_json)
+        except (json.JSONDecodeError, TypeError):
+            data = None
+        laps = data.get("lapDTOs") if isinstance(data, dict) else None
+        if isinstance(laps, list):
+            for lap in laps:
+                if not isinstance(lap, dict):
+                    continue
+                dist = lap.get("distance")
+                if not isinstance(dist, (int, float)) or dist <= 0:
+                    continue
+                saw_lap = True
+                intensity = str(lap.get("intensityType") or "").upper()
+                if intensity in _REST_INTENSITY_TYPES:
+                    rest_dist += dist
+                else:
+                    running_dist += dist
+                    dur = (
+                        lap.get("duration")
+                        or lap.get("movingDuration")
+                        or lap.get("elapsedDuration")
+                    )
+                    if isinstance(dur, (int, float)) and dur > 0:
+                        running_dur += dur
+
+    if not saw_lap:
+        # Fallback: no per-lap data — use whole-activity totals, no rest split.
+        actual_pace_sec = (
+            activity.avg_pace_min_km * 60 if activity.avg_pace_min_km else None
+        )
+        return activity.distance_m, None, actual_pace_sec
+
+    running_pace_sec = (
+        running_dur / (running_dist / 1000.0) if running_dist > 0 and running_dur > 0 else None
+    )
+    return (
+        running_dist or None,
+        rest_dist or None,
+        running_pace_sec,
+    )
+
+
 def compute_adherence(
     activity: Activity,
     workout_steps: list[WorkoutStepResponse],
@@ -228,13 +307,9 @@ def compute_adherence(
 
     flat = _flatten_steps(workout_steps)
 
-    # --- Planned distance (sum of all distance-based steps, including recovery) ---
-    planned_distance_m: float | None = None
-    for step in flat:
-        if step.end_condition == "distance" and step.end_condition_value:
-            planned_distance_m = (planned_distance_m or 0.0) + step.end_condition_value
-
     # --- Planned pace: first interval step with a concrete pace target ---
+    # Computed first so it can serve as the fallback pace when converting
+    # time-based steps (warmup/cooldown/intervals given in time) to distance.
     planned_pace_display: str | None = None
     planned_pace_sec: float | None = None
     for step in flat:
@@ -244,6 +319,23 @@ def compute_adherence(
                 planned_pace_display = step.target_display
                 planned_pace_sec = parsed
                 break
+
+    # --- Planned distance: running periods only (warmup + cooldown + intervals).
+    # Rest/recovery is excluded and tracked separately. Time-based running steps
+    # are converted to distance via their own target pace, falling back to the
+    # workout's planned interval pace. ---
+    planned_distance_m: float | None = None
+    planned_rest_distance_m: float | None = None
+    for step in flat:
+        step_pace = _parse_pace_display(step.target_display) if step.target_display else None
+        pace = step_pace or planned_pace_sec
+        dist = _step_distance_m(step, pace)
+        if dist is None:
+            continue
+        if step.activity_type == "rest":
+            planned_rest_distance_m = (planned_rest_distance_m or 0.0) + dist
+        else:
+            planned_distance_m = (planned_distance_m or 0.0) + dist
 
     # --- Planned interval count (unique interval steps after expansion) ---
     planned_intervals = sum(1 for s in flat if s.step_type == "interval") or None
@@ -258,19 +350,19 @@ def compute_adherence(
         except (json.JSONDecodeError, TypeError):
             pass
 
-    # --- Actual pace display ---
-    actual_pace_display: str | None = None
-    actual_pace_sec: float | None = None
-    if activity.avg_pace_min_km:
-        p_min = int(activity.avg_pace_min_km)
-        p_sec = int((activity.avg_pace_min_km - p_min) * 60)
-        actual_pace_display = f"{p_min}:{p_sec:02d}/km"
-        actual_pace_sec = activity.avg_pace_min_km * 60
+    # --- Actual running distance / rest distance / running-only pace ---
+    actual_distance_m, actual_rest_distance_m, actual_pace_sec = _actual_from_splits(activity)
 
-    # --- Distance adherence ---
+    actual_pace_display: str | None = None
+    if actual_pace_sec:
+        p_min = int(actual_pace_sec // 60)
+        p_sec = int(actual_pace_sec % 60)
+        actual_pace_display = f"{p_min}:{p_sec:02d}/km"
+
+    # --- Distance adherence (running-only on both sides) ---
     distance_pct: float | None = None
-    if planned_distance_m and activity.distance_m:
-        distance_pct = min(100.0, (activity.distance_m / planned_distance_m) * 100.0)
+    if planned_distance_m and actual_distance_m:
+        distance_pct = min(100.0, (actual_distance_m / planned_distance_m) * 100.0)
 
     # --- Pace delta (positive = slower than plan) ---
     pace_delta_sec: float | None = None
@@ -301,10 +393,14 @@ def compute_adherence(
         summary_parts.append(f"{delta_str}/km {direction} than target")
     if not summary_parts:
         summary_parts.append("Workout completed (no distance/pace plan to compare)")
+    if actual_rest_distance_m:
+        summary_parts.append(f"{int(round(actual_rest_distance_m))} m in rest")
 
     return WorkoutAdherence(
         planned_distance_m=planned_distance_m,
-        actual_distance_m=activity.distance_m,
+        planned_rest_distance_m=planned_rest_distance_m,
+        actual_distance_m=actual_distance_m,
+        actual_rest_distance_m=actual_rest_distance_m,
         distance_pct=round(distance_pct, 1) if distance_pct is not None else None,
         planned_pace_display=planned_pace_display,
         actual_pace_display=actual_pace_display,
@@ -320,9 +416,14 @@ def format_adherence_context(adherence: WorkoutAdherence) -> str:
     """Format adherence data as a markdown section for the AI coach."""
     lines = [f"## Workout Adherence\n{adherence.summary}"]
     if adherence.planned_distance_m is not None and adherence.actual_distance_m is not None:
+        rest_note = (
+            f" (+{int(round(adherence.actual_rest_distance_m))} m rest)"
+            if adherence.actual_rest_distance_m
+            else ""
+        )
         lines.append(
-            f"Distance: planned {adherence.planned_distance_m / 1000:.2f} km"
-            f" / actual {adherence.actual_distance_m / 1000:.2f} km"
+            f"Distance (running only): planned {adherence.planned_distance_m / 1000:.2f} km"
+            f" / actual {adherence.actual_distance_m / 1000:.2f} km{rest_note}"
             + (f" ({adherence.distance_pct:.0f}%)" if adherence.distance_pct is not None else "")
         )
     if adherence.planned_pace_display and adherence.actual_pace_display:
