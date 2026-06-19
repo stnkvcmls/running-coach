@@ -18,6 +18,8 @@ import type {
   TrainingLoadResponse,
   ZoneConfigBulkUpdate,
   ZoneConfigsResponse,
+  ThresholdEstimateResponse,
+  ThresholdApplyRequest,
 } from './types'
 
 export function useToday(date: string) {
@@ -185,6 +187,26 @@ export function useZoneConfigs() {
   return useQuery({
     queryKey: ['zone-configs'],
     queryFn: () => apiGet<ZoneConfigsResponse>('/zones'),
+  })
+}
+
+export function useThresholdEstimate() {
+  return useQuery({
+    queryKey: ['threshold-estimate'],
+    queryFn: () => apiGet<ThresholdEstimateResponse>('/threshold-estimate'),
+  })
+}
+
+export function useApplyThresholdEstimate() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (req: ThresholdApplyRequest) =>
+      apiPost<AthleteProfile>('/threshold-estimate/apply', req),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['athlete-profile'] })
+      qc.invalidateQueries({ queryKey: ['zone-configs'] })
+      qc.invalidateQueries({ queryKey: ['threshold-estimate'] })
+    },
   })
 }
 

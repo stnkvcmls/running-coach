@@ -348,3 +348,32 @@ class ZoneConfigsResponse(BaseModel):
     threshold_hr: int | None = None
     threshold_pace_min_km: float | None = None
     threshold_power: int | None = None
+
+
+class ThresholdEstimateField(BaseModel):
+    value: float | None = None
+    method: str | None = None          # e.g. "critical_power", "critical_velocity"
+    confidence: str | None = None      # "low" | "medium" | "high"
+    sample_size: int = 0
+
+
+class ThresholdEstimateResponse(BaseModel):
+    critical_power: ThresholdEstimateField          # W (≈ running FTP)
+    w_prime: float | None = None                    # J (anaerobic work capacity)
+    threshold_pace_min_km: ThresholdEstimateField
+    threshold_hr: ThresholdEstimateField            # LTHR, bpm
+    max_hr: ThresholdEstimateField                  # bpm
+    lookback_days: int
+    activities_analyzed: int
+
+    # Current profile values, for side-by-side comparison in the UI.
+    current_threshold_power: int | None = None
+    current_threshold_pace_min_km: float | None = None
+    current_threshold_hr: int | None = None
+    current_max_hr: int | None = None
+
+
+class ThresholdApplyRequest(BaseModel):
+    # Which estimated fields to write to the profile. Omit/empty → apply all
+    # available estimates.
+    fields: list[str] | None = None

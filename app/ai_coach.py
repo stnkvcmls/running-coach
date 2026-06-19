@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app import training_load
+from app import threshold as threshold_mod
 from app import adherence as adherence_mod
 from app.config import settings
 from app.database import db_session
@@ -330,6 +331,16 @@ def _build_context(db: Session, trigger_type: str, trigger_data: str, reference_
         profile_context = _format_athlete_profile_context(profile, reference_date)
         if profile_context:
             sections.insert(1, profile_context)
+
+    # Auto-derived thresholds — surface only the ones the athlete hasn't set so the
+    # AI still has a reference for Critical Power / threshold pace / LTHR.
+    try:
+        estimate = threshold_mod.estimate_thresholds(db)
+        estimate_context = threshold_mod.format_threshold_estimate_context(estimate, profile)
+        if estimate_context:
+            sections.insert(min(2, len(sections)), estimate_context)
+    except Exception:
+        logger.debug("Threshold estimate skipped", exc_info=True)
 
     # Training load (Fitness/Fatigue/Form) as of the reference date
     load_point = training_load.current_load(db, as_of=reference_date)
