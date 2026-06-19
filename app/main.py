@@ -37,8 +37,13 @@ def _scheduled_activity_sync():
 
 def _scheduled_daily_sync():
     """Scheduled job: sync daily summary and trigger AI."""
-    from app.garmin_sync import sync_daily_summary
+    from app.garmin_sync import sync_athlete_profile, sync_daily_summary
     from app.ai_coach import analyze_daily_summary
+
+    try:
+        sync_athlete_profile()
+    except Exception:
+        logger.exception("Athlete profile sync failed")
 
     summary = sync_daily_summary()
     if summary:
@@ -57,10 +62,14 @@ def _scheduled_weekly_review():
 
 def _run_backfill():
     """Run historical backfill in a background thread."""
-    from app.garmin_sync import backfill_activities, backfill_daily_summaries
+    from app.garmin_sync import backfill_activities, backfill_daily_summaries, sync_athlete_profile
     from app.ai_coach import weekly_review
 
     logger.info("Starting historical backfill...")
+    try:
+        sync_athlete_profile()
+    except Exception:
+        logger.exception("Athlete profile sync failed")
     backfill_activities()
     backfill_daily_summaries()
     logger.info("Backfill complete. Generating initial training summary...")

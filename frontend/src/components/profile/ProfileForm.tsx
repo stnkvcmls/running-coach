@@ -82,17 +82,20 @@ export default function ProfileForm({ initial, onSubmit, isPending, isError, sub
     <form className="profile-form" onSubmit={handleSubmit}>
       <div className="profile-form__field">
         <label htmlFor="pf-name">Name</label>
-        <input id="pf-name" type="text" value={form.name} onChange={set('name')} />
+        <input id="pf-name" type="text" value={form.name} disabled readOnly />
+        <span className="profile-form__hint">Synced from Garmin</span>
       </div>
 
       <div className="profile-form__row">
         <div className="profile-form__field">
           <label htmlFor="pf-dob">Date of birth</label>
-          <input id="pf-dob" type="date" value={form.date_of_birth} onChange={set('date_of_birth')} />
+          <input id="pf-dob" type="date" value={form.date_of_birth} disabled readOnly />
+          <span className="profile-form__hint">Synced from Garmin</span>
         </div>
         <div className="profile-form__field">
           <label htmlFor="pf-weight">Weight (kg)</label>
-          <input id="pf-weight" type="number" step="0.1" min="0" value={form.weight_kg} onChange={set('weight_kg')} />
+          <input id="pf-weight" type="number" step="0.1" min="0" value={form.weight_kg} disabled readOnly />
+          <span className="profile-form__hint">Synced from Garmin</span>
         </div>
       </div>
 

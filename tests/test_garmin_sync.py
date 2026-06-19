@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from app import garmin_sync
-from app.models import Activity, DailySummary, GarminCalendarEvent, SyncStatus
+from app.models import Activity, AthleteProfile, DailySummary, GarminCalendarEvent, SyncStatus
 
 
 # --- _parse_garmin_ts ---
@@ -384,6 +384,72 @@ def test_sync_daily_summary_updates_existing(db, patch_db_session, monkeypatch):
     db.expire_all()
     assert db.query(DailySummary).filter(DailySummary.date == date(2026, 6, 10)).count() == 1
     assert db.query(DailySummary).filter(DailySummary.date == date(2026, 6, 10)).first().steps == 9999
+
+
+# --- athlete profile sync (Garmin client mocked) ---
+
+def _profile_client(weight_grams=70500, birth="1990-04-15"):
+    fake_client = MagicMock()
+    fake_client.get_full_name.return_value = "Jane Runner"
+    fake_client.get_user_profile.return_value = {
+        "userData": {"birthDate": birth, "weight": weight_grams}
+    }
+    return fake_client
+
+
+def test_fetch_garmin_profile_fields_from_user_data():
+    fields = garmin_sync._fetch_garmin_profile_fields(_profile_client())
+    assert fields["name"] == "Jane Runner"
+    assert fields["date_of_birth"] == date(1990, 4, 15)
+    assert fields["weight_kg"] == 70.5
+
+
+def test_fetch_garmin_profile_fields_weight_fallback():
+    fake_client = _profile_client(weight_grams=None)
+    fake_client.get_body_composition.return_value = {
+        "dateWeightList": [
+            {"date": "2026-06-01", "weight": 71000},
+            {"date": "2026-06-10", "weight": 70200},
+        ]
+    }
+    fields = garmin_sync._fetch_garmin_profile_fields(fake_client)
+    assert fields["weight_kg"] == 70.2  # latest non-null entry
+
+
+def test_fetch_garmin_profile_fields_tolerates_missing_data():
+    fake_client = MagicMock()
+    fake_client.get_full_name.return_value = None
+    fake_client.get_user_profile.return_value = {}
+    fake_client.get_body_composition.return_value = {}
+    assert garmin_sync._fetch_garmin_profile_fields(fake_client) == {}
+
+
+def test_sync_athlete_profile_creates_row(db, patch_db_session, monkeypatch):
+    patch_db_session(garmin_sync)
+    monkeypatch.setattr(garmin_sync, "get_garmin_client", _profile_client)
+
+    profile = garmin_sync.sync_athlete_profile()
+    assert profile is not None
+    stored = db.query(AthleteProfile).first()
+    assert stored.name == "Jane Runner"
+    assert stored.date_of_birth == date(1990, 4, 15)
+    assert stored.weight_kg == 70.5
+
+
+def test_sync_athlete_profile_overwrites_garmin_fields_but_keeps_others(db, patch_db_session, monkeypatch):
+    patch_db_session(garmin_sync)
+    db.add(AthleteProfile(name="Old Name", weight_kg=80.0, goal_race="Berlin Marathon"))
+    db.commit()
+
+    monkeypatch.setattr(garmin_sync, "get_garmin_client", _profile_client)
+    garmin_sync.sync_athlete_profile()
+    db.expire_all()
+
+    stored = db.query(AthleteProfile).first()
+    assert db.query(AthleteProfile).count() == 1
+    assert stored.name == "Jane Runner"
+    assert stored.weight_kg == 70.5
+    assert stored.goal_race == "Berlin Marathon"  # non-Garmin field untouched
 
 
 def test_backfill_activities_walks_pages(db, patch_db_session, monkeypatch):
