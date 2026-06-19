@@ -45,7 +45,7 @@
 
 .te-label {
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text);
   display: flex;
   flex-direction: column;
 }
@@ -58,7 +58,7 @@
 
 .te-value {
   font-variant-numeric: tabular-nums;
-  color: var(--text-primary);
+  color: var(--text);
 }
 
 .te-current {

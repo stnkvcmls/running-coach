@@ -68,7 +68,7 @@
 
 .adherence-actual {
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text);
 }
 
 .adherence-delta {

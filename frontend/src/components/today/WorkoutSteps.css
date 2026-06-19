@@ -28,6 +28,11 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.sw-section-header--repeat .sw-section-label,
+.sw-section-header--session .sw-section-label {
   color: rgba(255, 255, 255, 0.9);
 }
 
