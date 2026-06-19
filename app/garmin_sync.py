@@ -381,7 +381,7 @@ def _fetch_latest_garmin_weight(client: Garmin) -> float | None:
 
 
 def _fetch_garmin_profile_fields(client: Garmin) -> dict:
-    """Pull name, date of birth, and weight (kg) from Garmin user settings."""
+    """Pull name, date of birth, weight (kg), and resting HR from Garmin."""
     fields: dict = {}
 
     try:
@@ -406,13 +406,25 @@ def _fetch_garmin_profile_fields(client: Garmin) -> dict:
     if weight_g:
         fields["weight_kg"] = round(weight_g / 1000, 1)
 
+    # Resting HR: try today then yesterday (today's value may not be available yet)
+    try:
+        for delta in (0, 1):
+            day_str = (date.today() - timedelta(days=delta)).isoformat()
+            stats = client.get_stats(day_str) or {}
+            rhr = stats.get("restingHeartRate")
+            if rhr:
+                fields["resting_hr"] = rhr
+                break
+    except Exception:
+        logger.debug("Could not fetch Garmin resting HR", exc_info=True)
+
     return fields
 
 
 def sync_athlete_profile() -> AthleteProfile | None:
-    """Sync name, date of birth, and weight from Garmin into the athlete profile.
+    """Sync name, date of birth, weight, and resting HR from Garmin into the athlete profile.
 
-    These three fields are Garmin-managed (read-only in the UI), so the local
+    These fields are Garmin-managed (read-only in the UI), so the local
     values are always overwritten to stay in sync with Garmin.
     """
     logger.info("Syncing athlete profile from Garmin...")
