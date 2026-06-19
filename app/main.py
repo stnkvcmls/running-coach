@@ -167,11 +167,6 @@ from app.api import api_router  # noqa: E402
 
 app.include_router(api_router)
 
-# Import HTML routes (legacy Jinja2 templates) under /legacy prefix
-from app.routes import router  # noqa: E402
-
-app.include_router(router, prefix="/legacy")
-
 
 # SPA: serve React index.html for all non-API, non-static paths
 from fastapi.responses import FileResponse  # noqa: E402
@@ -180,8 +175,7 @@ from fastapi.responses import FileResponse  # noqa: E402
 @app.get("/{full_path:path}", include_in_schema=False)
 async def spa_catch_all(full_path: str):
     """Serve the React SPA for client-side routing."""
-    # Don't intercept API or static file requests
-    if full_path.startswith("api/") or full_path.startswith("static/") or full_path.startswith("assets/") or full_path.startswith("legacy/"):
+    if full_path.startswith("api/") or full_path.startswith("static/") or full_path.startswith("assets/"):
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Not found")
     index_path = os.path.join(frontend_dist, "index.html")
