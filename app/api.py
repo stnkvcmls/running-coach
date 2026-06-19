@@ -63,7 +63,7 @@ logger = logging.getLogger(__name__)
 api_router = APIRouter(prefix="/api/v1", tags=["api"])
 
 AVAILABLE_MODELS: dict[str, list[str]] = {
-    "claude": ["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
+    "claude": ["claude-opus-4-8", "claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
     "gemini": [
         "gemini-2.5-flash",
         "gemini-2.5-flash-lite",
