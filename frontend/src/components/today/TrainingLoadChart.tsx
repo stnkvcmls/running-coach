@@ -10,6 +10,8 @@ import {
 } from 'recharts'
 import { useTrainingLoad } from '../../api/hooks'
 import type { TrainingLoadPoint } from '../../api/types'
+import { useTheme } from '../../App'
+import { getChartTickColor } from '../../utils/theme'
 import './TrainingLoadChart.css'
 
 interface Props {
@@ -34,29 +36,35 @@ function formLabel(tsb: number): string {
   return 'High fatigue'
 }
 
-function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) {
-  if (!active || !payload || !payload.length) return null
-  const byKey: Record<string, number> = {}
-  payload.forEach(p => { byKey[p.dataKey] = p.value })
-  return (
-    <div style={{
-      background: '#1a1a2e',
-      border: '1px solid #2d2d44',
-      borderRadius: 8,
-      padding: '8px 12px',
-      fontSize: 12,
-      color: '#e0e0e0',
-    }}>
-      <div style={{ fontWeight: 600, marginBottom: 4 }}>{label}</div>
-      <div style={{ color: CTL_COLOR }}>Fitness: {byKey.ctl?.toFixed(0)}</div>
-      <div style={{ color: ATL_COLOR }}>Fatigue: {byKey.atl?.toFixed(0)}</div>
-      <div style={{ color: TSB_COLOR }}>Form: {byKey.tsb >= 0 ? '+' : ''}{byKey.tsb?.toFixed(0)}</div>
-    </div>
-  )
-}
-
 export default function TrainingLoadChart({ current }: Props) {
   const { data } = useTrainingLoad(90)
+  const { theme } = useTheme()
+  const tickColor = getChartTickColor(theme)
+  const tooltipBg = theme === 'light' ? '#ffffff' : '#1a1a2e'
+  const tooltipBorder = theme === 'light' ? '#e0e4ec' : '#2d2d44'
+  const tooltipText = theme === 'light' ? '#1a1a2e' : '#e0e0e0'
+  const refLineColor = theme === 'light' ? '#e0e4ec' : '#2d2d44'
+
+  function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) {
+    if (!active || !payload || !payload.length) return null
+    const byKey: Record<string, number> = {}
+    payload.forEach(p => { byKey[p.dataKey] = p.value })
+    return (
+      <div style={{
+        background: tooltipBg,
+        border: `1px solid ${tooltipBorder}`,
+        borderRadius: 8,
+        padding: '8px 12px',
+        fontSize: 12,
+        color: tooltipText,
+      }}>
+        <div style={{ fontWeight: 600, marginBottom: 4 }}>{label}</div>
+        <div style={{ color: CTL_COLOR }}>Fitness: {byKey.ctl?.toFixed(0)}</div>
+        <div style={{ color: ATL_COLOR }}>Fatigue: {byKey.atl?.toFixed(0)}</div>
+        <div style={{ color: TSB_COLOR }}>Form: {byKey.tsb >= 0 ? '+' : ''}{byKey.tsb?.toFixed(0)}</div>
+      </div>
+    )
+  }
   const points = data?.points ?? []
 
   const chartData = points.map(p => ({
@@ -100,15 +108,15 @@ export default function TrainingLoadChart({ current }: Props) {
               </defs>
               <XAxis
                 dataKey="label"
-                tick={{ fontSize: 10, fill: '#888' }}
+                tick={{ fontSize: 10, fill: tickColor }}
                 axisLine={false}
                 tickLine={false}
                 minTickGap={28}
               />
-              <YAxis yAxisId="load" tick={{ fontSize: 10, fill: '#888' }} axisLine={false} tickLine={false} width={28} />
+              <YAxis yAxisId="load" tick={{ fontSize: 10, fill: tickColor }} axisLine={false} tickLine={false} width={28} />
               <YAxis yAxisId="form" orientation="right" hide />
               <Tooltip content={<CustomTooltip />} />
-              <ReferenceLine yAxisId="form" y={0} stroke="#2d2d44" strokeDasharray="3 3" />
+              <ReferenceLine yAxisId="form" y={0} stroke={refLineColor} strokeDasharray="3 3" />
               <Area
                 yAxisId="load"
                 type="monotone"

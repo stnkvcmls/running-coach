@@ -29,11 +29,35 @@ export function useDateContext() {
   return useContext(DateContext)
 }
 
+interface ThemeContextType {
+  theme: 'dark' | 'light'
+  toggleTheme: () => void
+}
+
+export const ThemeContext = createContext<ThemeContextType>({
+  theme: 'dark',
+  toggleTheme: () => {},
+})
+
+export function useTheme() {
+  return useContext(ThemeContext)
+}
+
 export default function App() {
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [calendarExpanded, setCalendarExpanded] = useState(false)
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    return (localStorage.getItem('theme') as 'dark' | 'light') || 'dark'
+  })
   const location = useLocation()
   const navigate = useNavigate()
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem('theme', theme)
+  }, [theme])
+
+  const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark')
 
   // First-run: redirect to onboarding when no athlete profile exists yet.
   const { data: profile, isLoading: profileLoading } = useAthleteProfile()
@@ -48,6 +72,7 @@ export default function App() {
   const showCalendar = !isDetailPage
 
   return (
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
     <DateContext.Provider value={{ selectedDate, setSelectedDate }}>
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
         {showCalendar && (
@@ -84,5 +109,6 @@ export default function App() {
         {!isDetailPage && <BottomNav />}
       </div>
     </DateContext.Provider>
+    </ThemeContext.Provider>
   )
 }

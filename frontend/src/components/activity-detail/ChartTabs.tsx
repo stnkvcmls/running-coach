@@ -4,6 +4,8 @@ import {
   ScatterChart, Scatter, ReferenceLine,
 } from 'recharts'
 import type { ChartSeries, MetricZone } from '../../api/types'
+import { useTheme } from '../../App'
+import { getChartTooltipStyle } from '../../utils/theme'
 import './ChartTabs.css'
 
 const chartColors: Record<string, string> = {
@@ -46,6 +48,7 @@ interface Props {
 export default function ChartTabs({ chartData, metricZones }: Props) {
   const keys = Object.keys(chartData)
   const [activeKey, setActiveKey] = useState(keys[0] || '')
+  const { theme } = useTheme()
 
   if (keys.length === 0) return null
 
@@ -59,13 +62,7 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
   // Reverse Y for pace (lower pace = faster = better)
   const reversed = activeKey === 'pace'
 
-  const tooltipStyle = {
-    background: '#1a1a2e',
-    border: '1px solid #2d2d44',
-    borderRadius: 8,
-    fontSize: 12,
-    color: '#e0e0e0',
-  }
+  const tooltipStyle = getChartTooltipStyle(theme)
 
   const formatValue = (value: any) => {
     if (value === null || value === undefined) return ['-', series.label]
