@@ -1,289 +1,214 @@
-# Running Coach — Improvement Plan
+# Running Coach — Improvement Plan (v2)
 
-_Last updated: 2026-05-30_
+_Last updated: 2026-06-19_
 
-This document benchmarks Running Coach against five comparable training apps, maps the
-gaps, and proposes prioritized, concrete improvements. It is a **plan only** — no code has
-been changed.
+The previous improvement plan (2026-05-30) has been **fully delivered** — athlete
+profile, CTL/ATL/TSB training load, readiness, workout adherence, custom
+threshold-anchored zones, Critical-Power/threshold auto-estimation, AI-generated
+training plans, wellness trends, data export, a ~270-test suite, AI retry/backoff,
+legacy-route removal, and dark mode all now ship. This v2 plan benchmarks the app
+**as it exists today** (see [`CURRENT_STATE.md`](./CURRENT_STATE.md)) against the
+same competitive set and targets the *next* tier of gaps.
 
-Read alongside [`CURRENT_STATE.md`](./CURRENT_STATE.md), which describes the app as it
-exists today.
-
----
-
-## 1. Methodology & comparison set
-
-The five apps were chosen to span the two dominant paradigms in the running-coach space:
-
-- **Prescriptive coaching** — tells the athlete what to do next: **Runna**, **Garmin Coach**, **Stryd**.
-- **Analytical training-load platforms** — model and visualize fitness/fatigue/load: **TrainingPeaks**, **Intervals.icu**.
-
-Each was reviewed specifically for features transferable to *this* app: a single-user,
-Garmin-synced, AI-coached, self-hosted tool.
-
-### The central finding
-
-Running Coach already **syncs** most of the raw data the leaders are built on — per-activity
-Training Stress Score, Intensity Factor, Normalized Power, sleep duration/score, stress,
-resting HR, body battery, and full scheduled-workout step definitions. What it lacks is the
-layer that **derives and surfaces** the higher-order metrics those competitors revolve
-around: fitness/fatigue/form, training readiness, athlete-specific zones, workout adherence,
-and prescriptive plans.
-
-**Consequence:** the highest-leverage improvements are mostly *compute → surface → feed the
-AI* on data that already exists in the database, not new Garmin sync work. This keeps effort
-low relative to impact.
+It is a **plan only** — no code has been changed.
 
 ---
 
-## 2. Competitive landscape
+## 1. Comparison set & central finding
 
-### Runna — adaptive plans + deep personalization
-Runna builds a personalized plan from an extensive onboarding quiz (goal race/distance,
-current pace, ability, weekly schedule, preferences) and **re-adapts the plan weekly** as the
-athlete progresses, adjusts their schedule, or misses sessions. Advanced customization lets
-users tune the number of hard runs per week, their intensity, and long-run structure. Beyond
-running it offers holistic support: strength & conditioning, nutrition, running form, and
-injury management. Integrates with Garmin, Apple Watch, Coros, Strava.
+| App | Paradigm | What it does that we don't (yet) |
+|---|---|---|
+| **Runna** | Adaptive prescriptive plans | **Plan Realignment** when ≥3 sessions / a week are missed; pushes workouts to Garmin/Apple/COROS; strength/yoga/pilates |
+| **TrainingPeaks** | Analytical + structured workouts | Pushes structured workouts to the Garmin calendar/device; ACWR & ramp-rate on the dashboard |
+| **Garmin Coach / DSW** | Readiness-driven daily adaptation | Training Readiness uses **HRV status** + acute:chronic load ratio; day-to-day suggested workouts; race predictor |
+| **Stryd** | Power-based | **Power-Duration Curve** UI + Race Power Calculator (race predictions & pacing from the 90-day curve) |
+| **Intervals.icu** | Open analytics | 42-day **power/pace curve**, **time-in-zone** distribution, fitness/fatigue across the season |
 
-**Relevant to us:** an athlete profile fed from onboarding; adaptive *prescriptive* plans;
-surfacing the holistic topics (strength/nutrition/injury) our AI prompt already references but
-the UI never exposes.
+**Central finding (v2):** last cycle closed the *derivation* gap — the app now
+computes the higher-order metrics (load, readiness, thresholds, CP/CV curves).
+The remaining gaps are about **closing the loop and surfacing what's already
+computed**:
 
-### TrainingPeaks — the Performance Management Chart
-TrainingPeaks centers on the **PMC**, which graphs three derived series from per-workout TSS:
-- **CTL** (Chronic Training Load = "Fitness") — 42-day exponentially-weighted average of TSS.
-- **ATL** (Acute Training Load = "Fatigue") — 7-day exponentially-weighted average of TSS.
-- **TSB** (Training Stress Balance = "Form") — CTL − ATL.
+1. The AI plan is **open-loop** — it doesn't react to whether prior planned
+   sessions were actually completed, and there's no realignment when life
+   interrupts (Runna/Garmin both adapt).
+2. Plans **never reach the watch** — the athlete can't execute the prescription
+   on-device (Runna/TrainingPeaks/Garmin all push workouts).
+3. Rich data is **computed but invisible** — mean-maximal power/velocity curves
+   (`Activity.mean_max_json`) and the CP/CV model are used only internally; no
+   power-duration curve, race predictions, ACWR, or time-in-zone view exists.
+4. **HRV** — the single biggest input Garmin's readiness uses that we don't sync.
 
-TSS itself is scored from workout duration and intensity relative to threshold (pace, HR, or
-power). Tapering shows up as TSB rising into positive territory on race day.
-
-**Relevant to us:** we store `training_stress_score` per activity but never aggregate it.
-CTL/ATL/TSB is a near-free win that adds a whole analytical dimension.
-
-### Garmin Coach / Daily Suggested Workouts — readiness-driven adaptation
-Garmin's adaptive plans adjust day-by-day using VO2max, lactate threshold, training load
-(acute + chronic), recovery time, and sleep, with periodization (base → build → peak → taper
-→ race). **Training Readiness** combines recovery time, sleep quality, HRV status, and acute
-load into a single morning score (shown in a "Morning Report" with the day's suggested
-workout). Daily Suggested Workouts give flexible day-to-day guidance without committing to a
-full plan.
-
-**Relevant to us:** a composite **Training Readiness** score is computable today from
-`DailySummary` fields we already sync (sleep, stress, resting HR, body battery) plus acute
-load — surfaced as a daily card and fed to the AI.
-
-### Stryd — auto-calculated Critical Power & auto-adjusting zones
-Stryd automatically derives **Critical Power** from recent training (initial estimate after
-~3 runs, and a single-run estimation path) and uses it to set power zones that **auto-adjust
-as fitness changes**. Testing plans seed the baseline.
-
-**Relevant to us:** we collect power and pace but use only hardcoded percentile bands for
-running-dynamics metrics. We can auto-derive threshold/CP from power+pace history and build
-athlete-specific power/pace zones that move with fitness.
-
-### Intervals.icu — analytics, custom zones, openness
-A free platform offering the Fitness/Fatigue/Form chart, broad **wellness** tracking (sleep,
-HRV, readiness, stress, mood, weight, plus user-defined custom fields), fully **custom zones**
-anchored to FTP/LTHR/custom values with time-in-zone analysis, and an **open REST API with
-webhooks and data export/import**.
-
-**Relevant to us:** wellness/sleep trend surfacing (our sleep data is synced but unused),
-athlete-configurable zones, and data export.
+As before, most high-leverage items reuse data **already in the database**.
 
 ---
 
-## 3. Gap matrix
+## 2. Gap matrix (today)
 
-Legend: ✓ = full, ◑ = partial, ✗ = absent.
+Legend: ✓ full · ◑ partial · ✗ absent
 
-| Capability | Running Coach (today) | Runna | TrainingPeaks | Garmin Coach | Stryd | Intervals.icu |
+| Capability | Running Coach (today) | Runna | TrainingPeaks | Garmin | Stryd | Intervals.icu |
 |---|---|---|---|---|---|---|
-| Athlete profile / onboarding | ✗ | ✓ | ✓ | ✓ | ◑ | ✓ |
-| Adaptive prescriptive plan | ✗ | ✓ | ◑ | ✓ | ◑ | ◑ |
-| Fitness/Fatigue/Form (CTL/ATL/TSB) | ✗ (TSS stored, not aggregated) | ◑ | ✓ | ◑ | ✗ | ✓ |
-| Training readiness score | ✗ (inputs synced) | ◑ | ✗ | ✓ | ✗ | ◑ |
-| Custom / threshold-anchored zones | ✗ (hardcoded percentile only) | ◑ | ✓ | ◑ | ✓ | ✓ |
-| Threshold / Critical Power auto-calc | ✗ | ◑ | ◑ | ✓ | ✓ | ◑ |
-| Workout adherence (planned vs actual) | ✗ (plan displayed only) | ✓ | ✓ | ✓ | ◑ | ◑ |
-| Wellness / sleep analytics | ✗ (synced, unused) | ◑ | ◑ | ✓ | ✗ | ✓ |
-| Data export / open API | ✗ | ✗ | ✓ | ◑ | ◑ | ✓ |
-| Strength / nutrition / injury support | ✗ (prompt only) | ✓ | ◑ | ◑ | ✗ | ✗ |
-| Automated tests / quality harness | ✗ | n/a | n/a | n/a | n/a | n/a |
-
-The pattern is consistent: the columns are full where Running Coach is empty, and most of
-our empties are *derivation/surfacing* gaps rather than *data* gaps.
+| Closed-loop / adaptive plan (uses adherence + readiness) | ✗ (open-loop, weekly regen) | ✓ | ◑ | ✓ | ◑ | ◑ |
+| Plan "realignment" after missed sessions | ✗ | ✓ | ◑ | ✓ | ◑ | ◑ |
+| Push structured workout to device | ✗ | ✓ | ✓ | ✓ | ◑ | ◑ |
+| HRV in readiness | ✗ (not synced) | ◑ | ✗ | ✓ | ✗ | ✓ |
+| ACWR / ramp-rate / injury flag | ✗ (ATL+CTL exist) | ◑ | ✓ | ✓ | ✗ | ◑ |
+| Power-Duration / pace curve UI | ✗ (computed, not shown) | ✗ | ◑ | ◑ | ✓ | ✓ |
+| Race-time predictions & pacing | ✗ (Garmin pred. logged only) | ◑ | ◑ | ✓ | ✓ | ◑ |
+| Time-in-zone / intensity distribution | ✗ (zones exist) | ◑ | ✓ | ✓ | ◑ | ✓ |
+| Per-interval adherence (lap↔step) | ◑ (whole-activity avgs) | ✓ | ✓ | ✓ | ◑ | ◑ |
+| Strength / cross-training in plan | ✗ (prompt only) | ✓ | ◑ | ◑ | ✗ | ✗ |
 
 ---
 
-## 4. Prioritized improvements
+## 3. Prioritized improvements
 
-Ordered by **impact ÷ effort**, favoring already-synced data first. Effort key:
-**S** ≈ <1 day, **M** ≈ 1–3 days, **L** ≈ several days. Each item lists what it does, why
-(with the competitor that validates it), rough effort, and the files it touches.
+Ordered by **impact ÷ effort**, favoring data already in the DB. Effort key:
+**S** ≈ <1 day · **M** ≈ 1–3 days · **L** ≈ several days.
 
-### P0 — Foundational, high leverage
+### P0 — High leverage, data already present
 
-#### P0-1 · Athlete Profile
-**What:** Add an `AthleteProfile` (age, weight, goal race + date, threshold pace/HR, max &
-resting HR, injury history, weekly availability, training preferences) with a
-settings/onboarding screen, and inject it into the AI context builder.
-**Rationale:** Every prescriptive competitor personalizes heavily — Runna's onboarding quiz,
-Garmin's physiological inputs. Our AI currently knows *nothing* about the athlete beyond
-recent activity data (a `CURRENT_STATE.md` "Notable Gap"). This is the single biggest lever
-and a prerequisite for P1-3, P2-1, and P2-2.
+#### P0-1 · ACWR + ramp rate + injury-risk flag
+**What:** Add Acute:Chronic Workload Ratio (`ATL/CTL`), 7-/28-day ramp rate, and a
+"sweet spot" band (≈0.8–1.3) to the training-load model; surface a risk chip on
+Today and a band on the load chart; feed it to the AI context.
+**Rationale:** TrainingPeaks and Garmin both surface ACWR/ramp as the headline
+injury-risk signal. We already compute ATL and CTL — the ratio is essentially free
+and turns existing numbers into actionable guidance.
+**Effort:** S.
+**Files:** `app/training_load.py` (extend `TrainingLoadPoint`/`current_load`, add
+`format_*_context`), `app/api.py` (`/training-load`, `/today`), `app/ai_coach.py`
+(`_build_context`), `frontend/src/components/today/TrainingLoadChart.tsx` + types.
+
+#### P0-2 · Power-Duration & pace curve view + race predictions
+**What:** New endpoint that aggregates per-activity `mean_max_json` into the
+athlete's power-duration and velocity-duration curves, overlays the CP/CV model
+fit from `app/threshold.py`, and derives **race-time predictions** per standard
+distance (5K/10K/HM/M). Also persist Garmin's `projectedRaceTimeDuration…`
+(currently only logged at `garmin_sync.py:864`) for comparison. Render a Stryd-style
+curve + a race-prediction table.
+**Rationale:** Stryd's PDC + Race Power Calculator and Intervals.icu's power curve
+are flagship features. The curves and CP/CV model **already exist** and are unused
+by the UI — this is pure surfacing of computed data.
 **Effort:** M.
-**Files:** `app/models.py` (new model), `app/database.py` (migration/seed via existing
-column-migration helper), `app/schemas.py`, `app/api.py` (profile GET/POST), `app/ai_coach.py`
-(`_build_context`, ~line 237), `frontend/src/api/types.ts` + `hooks.ts`, new
-`frontend/src/components/settings/*` profile form + first-run onboarding component.
+**Files:** `app/threshold.py` (reuse fit; add distance→time helper), new
+`app/api.py` endpoint (aggregate `Activity.mean_max_json`), `app/garmin_sync.py`
+(store race predictions), new `frontend/src/components/trends/*` curve chart +
+`hooks.ts`/`types.ts`.
 
-#### P0-2 · Training Load model (CTL/ATL/TSB)
-**What:** A new `app/training_load.py` that computes daily CTL (42-day EWMA), ATL (7-day EWMA),
-and TSB from `Activity.training_stress_score`, with an estimated-load fallback (HR- or
-pace-based rTSS) for runs lacking power. Surface it as a PMC-style Fitness/Fatigue/Form chart
-on Today/Trends, and feed current CTL/ATL/TSB into the AI context.
-**Rationale:** The core of TrainingPeaks and Intervals.icu. We already store TSS per activity
-but never aggregate it — a high-value, low-data-cost addition that gives the AI a real sense
-of fitness trend and freshness.
+#### P0-3 · Closed-loop plan generation (adherence + readiness aware)
+**What:** Feed recent **workout adherence** (from `app/adherence.py`) and
+readiness/load trend into `_build_plan_context`, and have generation account for
+completed vs missed sessions when shaping the next block.
+**Rationale:** Today the plan is regenerated weekly from profile/load/volume but is
+blind to whether the athlete actually did the prescribed work — the core of
+Garmin DSW and Runna adaptation. Makes the plan genuinely responsive.
 **Effort:** M.
-**Files:** new `app/training_load.py`; optional `DailyLoad` cache table in `app/models.py`;
-`app/api.py` (extend `/today`, add a trends endpoint); `app/ai_coach.py` (`_build_context`);
-new Recharts component under `frontend/src/components/today/*`; `hooks.ts` + `types.ts`.
+**Files:** `app/ai_coach.py` (`_build_plan_context` ~line 954, `generate_training_plan`),
+reuse `app/adherence.py` `compute_adherence`/`format_adherence_context`; possibly
+link `TrainingPlanDay` ↔ executed `Activity`.
 
-### P1 — High impact, builds on P0
+### P1 — Closing the loop & higher fidelity
 
-#### P1-1 · Training Readiness score
-**What:** A composite daily readiness score from `DailySummary` fields (sleep duration/score,
-resting HR trend, stress, body battery) combined with acute load (ATL from P0-2). Surface as a
-Today "readiness" card and feed it to the AI.
-**Rationale:** Garmin's Training Readiness / Morning Report. Every input is already synced —
-this directly addresses the "Sleep Data Not Acted On" gap in `CURRENT_STATE.md`.
-**Effort:** S–M.
-**Files:** helper in `app/training_load.py` (or new `app/readiness.py`); `app/api.py`
-(`/today`); `app/ai_coach.py`; `frontend/src/components/today/*`.
-
-#### P1-2 · Workout adherence (planned vs actual)
-**What:** Compare a completed activity to its linked `GarminCalendarEvent` workout — planned
-vs actual distance, pace, and intervals — reusing the existing step parsers
-(`_parse_workout_steps` / `_parse_single_step` in `app/api.py`). Show an adherence summary on
-Activity Detail and include it in analysis/feedback context.
-**Rationale:** Runna and Garmin grade execution against the plan; we display the scheduled
-workout but never compare it ("Workout Adherence Not Tracked" gap).
+#### P1-1 · Plan realignment after missed sessions
+**What:** Detect when N+ scheduled `TrainingPlanDay`s have passed without a matching
+activity and offer "shift / skip / regenerate" — surfaced as a banner on Plan/Today
+and an endpoint that triggers an adaptive regen.
+**Rationale:** Runna's Plan Realignment; prevents a missed week from invalidating the
+whole plan. Builds directly on P0-3.
 **Effort:** M.
-**Files:** new comparison helper (reusing `app/api.py` step parsers, ~lines 540–726);
-`app/ai_coach.py` (`_format_activity_context`, ~line 63); `frontend/src/components/activity-detail/*`.
+**Files:** `app/api.py` (realignment endpoint), `app/ai_coach.py` (regen entry),
+`frontend/src/components/plan/PlanView.tsx` + `today/*` banner.
 
-#### P1-3 · Custom, threshold-anchored zones
-**What:** Let the athlete configure HR/pace/power zones anchored to threshold or CP (from the
-P0-1 profile / P2-2 estimation), replacing the hardcoded percentile-only bands for those
-metrics. Use them in charts, time-in-zone analysis, and AI context.
-**Rationale:** Stryd, Intervals.icu, and TrainingPeaks all use athlete-specific zones; ours are
-seeded percentile bands the user can't change ("No Custom HR/Power Zones" gap).
+#### P1-2 · HRV sync → readiness
+**What:** Sync Garmin HRV (overnight/status) into `DailySummary`, add it as a
+readiness component, and chart it in Wellness Trends.
+**Rationale:** HRV status is a core Garmin Training Readiness factor we omit; the
+`garminconnect` lib exposes HRV. Improves the readiness score's fidelity and the AI's
+recovery picture.
 **Effort:** M.
-**Files:** `app/models.py` (extend `MetricZone` or add `ZoneConfig`); `app/database.py`
-(seeding); `app/api.py`; settings UI; `frontend/src/components/activity-detail/*` charts;
-`app/ai_coach.py` (`_classify_metric`, ~line 45).
+**Files:** `app/garmin_sync.py` (fetch HRV in daily sync), `app/models.py`
+(`DailySummary.hrv*` columns), `app/database.py` (column migration),
+`app/training_load.py` (`compute_readiness` weights/component), `app/schemas.py`,
+`frontend/src/components/trends/WellnessTrendsView.tsx`.
 
-### P2 — Higher effort, transformative
+#### P1-3 · Push structured workouts to the Garmin device
+**What:** Translate a `TrainingPlanDay` (or scheduled workout) into a Garmin
+structured-workout payload, upload it, and schedule it on the Garmin calendar so it
+appears on the watch.
+**Rationale:** The single biggest "closing the loop" feature — Runna, TrainingPeaks,
+and Garmin all do it. Turns the app from advisory into executable on-device. Reuses the
+step grammar already in `app/adherence.py`.
+**Effort:** L (new write-path to Garmin; needs careful auth/error handling and a
+confidence check on the unofficial API).
+**Files:** `app/garmin_sync.py` (new `push_workout`/`schedule_workout`),
+new translator module (plan/step → Garmin JSON, mirroring `adherence.parse_workout_steps`),
+`app/api.py` (push endpoint), `frontend/src/components/plan/*` + `today/*` "Send to watch".
 
-#### P2-1 · AI-generated prescriptive plan
-**What:** Use profile + training load + readiness to generate a structured, periodized weekly
-plan stored in a new `TrainingPlan` model and rendered in a plan view, with weekly
-re-adaptation (a scheduler job alongside the existing weekly review).
-**Rationale:** Runna's and Garmin's adaptive plans. This moves the app from purely reactive to
-prescriptive — the central gap in `CURRENT_STATE.md` ("No Training Plan / Prescriptive
-Features"). It depends on P0/P1 being in place to be credible.
-**Effort:** L.
-**Files:** `app/models.py`; `app/ai_coach.py` (new generation function near `weekly_review`,
-~line 670); `app/api.py`; `app/main.py` (scheduler hook); new `frontend/src/components/plan/*`.
+### P2 — Depth & coaching breadth
 
-#### P2-2 · Threshold / Critical Power auto-estimation
-**What:** Derive threshold pace/HR and Critical Power from recent power+pace history
-(Stryd-style power-duration analysis), populating the profile and feeding P1-3 zones.
-**Rationale:** Stryd's auto-calculated CP; removes manual threshold entry and keeps zones
-current as fitness changes.
-**Effort:** M–L.
-**Files:** new `app/threshold.py`; `app/models.py` (store on profile); `app/ai_coach.py`;
-`app/api.py`.
+#### P2-1 · Time-in-zone / intensity distribution
+**What:** Aggregate time in HR/pace/power zones (from detail streams + `ZoneConfig`)
+per activity and per week; show polarization (easy/moderate/hard split) and feed it to
+the AI.
+**Rationale:** Intervals.icu/TrainingPeaks staple; lets the coach judge whether the
+athlete is training polarized vs grey-zone. Zones and streams already exist.
+**Effort:** M.
+**Files:** new helper (reuse `app/streams.parse_streams` + `_classify_by_zones`),
+`app/api.py`, `frontend/src/components/trends/*` / `activity-detail/*`,
+`app/ai_coach.py` context.
 
-#### P2-3 · Wellness & sleep trends view
-**What:** A dedicated trends view charting sleep, resting HR, stress, and body battery over
-time.
-**Rationale:** Intervals.icu wellness tracking; finally *acts on* the synced-but-unused sleep
-data beyond the readiness score.
-**Effort:** S–M.
-**Files:** `app/api.py`; new `frontend/src/components/trends/*`; `hooks.ts` + `types.ts`.
+#### P2-2 · Per-interval adherence (lap ↔ step alignment)
+**What:** Align executed laps to planned interval steps for per-rep pace/distance
+deltas, instead of whole-activity averages.
+**Rationale:** Addresses the "adherence is coarse" gap in `CURRENT_STATE.md`; matches
+Runna/TrainingPeaks execution grading.
+**Effort:** M.
+**Files:** `app/adherence.py` (`compute_adherence`), `frontend/src/components/activity-detail/AdherenceCard.tsx`.
 
-### P3 — Hygiene & openness (largely independent)
+#### P2-3 · Strength & cross-training in plans
+**What:** Have plan generation prescribe strength/cross days (the `TrainingPlanDay`
+`workout_type` already allows `cross`) with concrete guidance, and render them.
+**Rationale:** Runna's holistic support; the AI prompt references injury prevention but
+the plan surface never prescribes supporting work.
+**Effort:** M. **Files:** `app/ai_coach.py` (plan prompt/schema),
+`frontend/src/components/plan/*`.
 
-#### P3-1 · Data export
-**What:** CSV/JSON export endpoints for activities and insights, with a download control in
-Settings.
-**Rationale:** Intervals.icu's openness; addresses the "No Data Export" gap.
-**Effort:** S. **Files:** `app/api.py`; settings UI.
+### P3 — Hygiene & scale (largely independent)
 
-#### P3-2 · Test harness
-**What:** pytest for the backend, Vitest for the frontend, wired into CI.
-**Rationale:** Zero tests today ("No Tests" gap). This is a prerequisite for safely shipping
-the P0–P2 changes — ideally land before P2.
-**Effort:** M. **Files:** new `tests/`, `pyproject.toml`/`pytest.ini`, frontend Vitest config,
-a GitHub Actions workflow.
-
-#### P3-3 · AI error handling & retry
-**What:** Distinguish transient vs fatal failures, add backoff/retry, and improve the user-
-facing message.
-**Rationale:** "AI Error Handling is Thin" gap. **Effort:** S. **Files:** `app/ai_coach.py`
-(`_save_error_insight`, `_call_ai`).
-
-#### P3-4 · Remove legacy Jinja routes/templates
-**What:** Delete the deprecated `/legacy` Jinja routes and templates now superseded by the SPA.
-**Rationale:** "Legacy Code Debt" gap (~431 dead lines). **Effort:** S. **Files:** delete
-`app/routes.py` and `app/templates/`, unwire in `app/main.py`.
-
-#### P3-5 · Dependency & model refresh
-**What:** Bump `anthropic` off the pinned `0.42.0` and verify configured model IDs
-(`claude-opus-4-7`, `claude-sonnet-4-6`) are current.
-**Rationale:** "Anthropic SDK Version" gap. Verify against release notes rather than blind-
-bumping (the SDK has breaking changes across minors). **Effort:** S. **Files:**
-`requirements.txt`, `app/config.py`, `app/ai_coach.py`.
-
-#### P3-6 · Dark mode
-**What:** Add a theme toggle and dark palette.
-**Rationale:** "No Dark Mode" gap; low-stakes UX polish. **Effort:** S. **Files:**
-`frontend/src/components/layout/*` + theme/styles.
+- **P3-1 · Cache/incrementalize load & threshold compute** — `training_load` and
+  `threshold` recompute from full history per request. Cache a daily series or memoize.
+  *Impact: latency as history grows.* **M.** Files: `app/training_load.py`,
+  `app/threshold.py`, optional cache table in `app/models.py`.
+- **P3-2 · Move the AI model catalog to config** — the selectable model list is
+  hard-coded in `app/api.py`; lift to config + validate the stored model is allowed.
+  **S.** Files: `app/config.py`, `app/api.py`, `app/ai_coach.py`.
+- **P3-3 · Adopt Alembic** — replace the hand-rolled column-add helper in
+  `app/database.py` for safe schema evolution. **M.** Files: `app/database.py`, new
+  `alembic/`.
+- **P3-4 · Deployment hardening (optional auth)** — the app is single-user with no
+  auth; add a simple access guard before any non-private exposure. **S–M.** Files:
+  `app/main.py`, `app/api.py`.
 
 ---
 
-## 5. Suggested sequencing
+## 4. Suggested sequencing
 
-- **Phase A — context foundation:** P0-1 (Athlete Profile) + P0-2 (Training Load). Immediately
-  enriches every AI insight and unlocks later work.
-- **Phase B — surfacing synced data:** P1-1 (Readiness), P1-2 (Adherence), P1-3 (Custom Zones).
-  All build on Phase A and mostly use data already in the DB.
-- **Phase C — the prescriptive leap:** P2-1 (Plan generation), P2-2 (Threshold/CP), P2-3
-  (Wellness trends).
-- **Throughout:** P3 hygiene items run in parallel. **Land P3-2 (tests) before Phase C.**
+- **Phase A — surface what's computed:** P0-1 (ACWR), P0-2 (PDC + race predictions).
+  Pure wins on existing data.
+- **Phase B — make the plan responsive:** P0-3 (closed-loop) → P1-1 (realignment).
+- **Phase C — richer inputs & the watch loop:** P1-2 (HRV), P1-3 (push to device).
+- **Phase D — depth:** P2 items. **Throughout:** P3 hygiene in parallel; keep the
+  test suite green (coverage gate is 80%).
 
 ---
 
-## 6. Sources
+## 5. Sources
 
-- Runna — [Personalized training plans](https://www.runna.com/training/training-plans),
-  [Custom distance plans](https://www.runna.com/training/custom-distance-training-plan),
-  [Training preferences](https://support.runna.com/en/articles/10393191-how-to-use-training-preferences-in-the-runna-app),
-  [Adjusting your schedule](https://support.runna.com/en/articles/6206024-adjusting-your-running-schedule)
-- TrainingPeaks — [Performance Management Chart](https://help.trainingpeaks.com/hc/en-us/articles/204071874-Performance-Management-Chart-PMC),
-  [A Coach's Guide to ATL, CTL & TSB](https://www.trainingpeaks.com/coach-blog/a-coachs-guide-to-atl-ctl-tsb/),
-  [Thresholds 411](https://www.trainingpeaks.com/learn/articles/thresholds-411/)
-- Garmin Coach — [Overview](https://www.garmin.com/en-US/garmin-coach/overview/),
-  [Training plans for runners](https://www.garmin.com/en-US/blog/fitness/garmin-training-plans-for-runners/),
-  [Daily Suggested Workouts](https://www.garmin.com/en-US/garmin-technology/running-science/physiological-measurements/daily-suggested-workouts-feature/),
-  [Coach vs Daily Suggested Workouts](https://www.wareable.com/garmin/garmin-coach-vs-daily-suggested-workouts-key-differences)
-- Stryd — [Auto-calculated Critical Power](https://blog.stryd.com/2019/07/09/introducing-auto-calculated-critical-power/),
-  [Single-run CP estimation](https://blog.stryd.com/2025/02/20/new-feature-update-start-power-based-training-with-stryd-after-just-one-run/),
-  [Critical Power definition](https://help.stryd.com/en/articles/6879345-critical-power-definition)
-- Intervals.icu — [Home](https://www.intervals.icu/),
-  [Fitness, Fatigue & Form chart](https://www.intervals.icu/features/fitness-chart/),
-  [Wellness integration](https://www.intervals.icu/features/wellness)
+- Runna — [Plan Realignment](https://support.runna.com/en/articles/10026375-how-to-use-the-plan-realignment-feature), [Key features](https://support.runna.com/en/articles/10473504-guide-to-key-runna-features), [2026 beginner plans](https://www.runna.com/press/runna-introduces-updated-beginner-running-plans-for-2026)
+- TrainingPeaks — [Structured Workout Builder](https://help.trainingpeaks.com/hc/en-us/articles/235164967-Structured-Workout-Builder), [Garmin integration how-to](https://www.trainingpeaks.com/blog/a-quick-how-to-guide-for-trainingpeaks-garmin-users/), [Garmin partner page](https://www.trainingpeaks.com/partners/garmin/)
+- Garmin — [Training Readiness factors](https://the5krunner.com/garmin-features/training/training-readiness/), [Training Load (acute/chronic)](https://www.shoulditrain.com/blog/garmin-training-load-explained), [Daily Suggested Workouts](https://the5krunner.com/garmin-features/training/daily-suggested-workouts/)
+- Stryd — [Power Duration Curve](https://help.stryd.com/en/articles/6879351-power-duration-curve-pdc), [Race Power Calculator](https://help.stryd.com/en/articles/6879547-race-power-calculator), [Plan/build/execute your race](https://blog.stryd.com/2025/04/15/how-to-plan-build-and-execute-your-best-race-with-stryd/)
+- Intervals.icu — [Power Curve](https://www.intervals.icu/features/power-curve/), [Activity Power Charts (time in zone)](https://www.intervals.icu/features/power-charts/), [Fitness/Fatigue/Form](https://www.intervals.icu/features/fitness-chart/)
+- Tooling — [python-garminconnect (HRV, race predictions, workout upload/scheduling)](https://github.com/cyberjunky/python-garminconnect)
