@@ -573,14 +573,24 @@ def api_get_athlete_profile(db: Session = Depends(get_db)):
     return _profile_response(profile) if profile else None
 
 
+# Name, date of birth, and weight are always sourced from Garmin and are not
+# user-editable, so ignore any client-supplied values for these fields.
+GARMIN_MANAGED_PROFILE_FIELDS = {"name", "date_of_birth", "weight_kg"}
+
+
 @api_router.post("/athlete-profile", response_model=AthleteProfileResponse)
 def api_set_athlete_profile(profile_data: AthleteProfileRequest, db: Session = Depends(get_db)):
+    updates = {
+        key: value
+        for key, value in profile_data.model_dump(exclude_unset=True).items()
+        if key not in GARMIN_MANAGED_PROFILE_FIELDS
+    }
     profile = db.query(AthleteProfile).first()
     if profile is None:
-        profile = AthleteProfile(**profile_data.model_dump(exclude_unset=True))
+        profile = AthleteProfile(**updates)
         db.add(profile)
     else:
-        for key, value in profile_data.model_dump(exclude_unset=True).items():
+        for key, value in updates.items():
             setattr(profile, key, value)
     db.commit()
     db.refresh(profile)

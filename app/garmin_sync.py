@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import db_session
-from app.models import Activity, DailySummary, GarminCalendarEvent, SyncStatus
+from app.models import Activity, AthleteProfile, DailySummary, GarminCalendarEvent, SyncStatus
 
 logger = logging.getLogger(__name__)
 
@@ -342,6 +342,90 @@ def sync_daily_summary(target_date: date | None = None) -> DailySummary | None:
 
         except Exception:
             logger.exception("Daily summary sync failed for %s", date_str)
+            return None
+
+
+# Athlete profile fields that are always sourced from Garmin (read-only in the UI).
+GARMIN_PROFILE_FIELDS = ("name", "date_of_birth", "weight_kg")
+
+
+def _fetch_latest_garmin_weight(client: Garmin) -> float | None:
+    """Return the most recent weight (in grams) from Garmin body composition."""
+    try:
+        today = date.today()
+        start = today - timedelta(days=30)
+        data = client.get_body_composition(start.isoformat(), today.isoformat()) or {}
+        latest = None
+        for measurement in data.get("dateWeightList") or []:
+            weight = measurement.get("weight")
+            if weight:
+                latest = weight  # list is chronological; keep the last non-null
+        return latest
+    except Exception:
+        logger.debug("Could not fetch Garmin body composition weight", exc_info=True)
+        return None
+
+
+def _fetch_garmin_profile_fields(client: Garmin) -> dict:
+    """Pull name, date of birth, and weight (kg) from Garmin user settings."""
+    fields: dict = {}
+
+    try:
+        name = client.get_full_name()
+        if name:
+            fields["name"] = name
+    except Exception:
+        logger.debug("Could not fetch Garmin full name", exc_info=True)
+
+    user_data: dict = {}
+    try:
+        settings_data = client.get_user_profile() or {}
+        user_data = settings_data.get("userData") or {}
+    except Exception:
+        logger.debug("Could not fetch Garmin user settings", exc_info=True)
+
+    dob = _parse_calendar_date(user_data.get("birthDate"))
+    if dob:
+        fields["date_of_birth"] = dob
+
+    weight_g = user_data.get("weight") or _fetch_latest_garmin_weight(client)
+    if weight_g:
+        fields["weight_kg"] = round(weight_g / 1000, 1)
+
+    return fields
+
+
+def sync_athlete_profile() -> AthleteProfile | None:
+    """Sync name, date of birth, and weight from Garmin into the athlete profile.
+
+    These three fields are Garmin-managed (read-only in the UI), so the local
+    values are always overwritten to stay in sync with Garmin.
+    """
+    logger.info("Syncing athlete profile from Garmin...")
+    client = get_garmin_client()
+
+    with db_session() as db:
+        try:
+            fields = _fetch_garmin_profile_fields(client)
+            if not fields:
+                logger.info("No Garmin profile fields available to sync")
+                return None
+
+            profile = db.query(AthleteProfile).first()
+            if profile is None:
+                profile = AthleteProfile(**fields)
+                db.add(profile)
+            else:
+                for key, value in fields.items():
+                    setattr(profile, key, value)
+
+            db.commit()
+            db.refresh(profile)
+            _set_sync_status(db, "last_profile_sync", datetime.now(timezone.utc).isoformat())
+            logger.info("Athlete profile synced from Garmin: %s", ", ".join(fields))
+            return profile
+        except Exception:
+            logger.exception("Athlete profile sync failed")
             return None
 
 
