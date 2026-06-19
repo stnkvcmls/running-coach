@@ -294,11 +294,13 @@ export interface ThresholdEstimateField {
   method: string | null
   confidence: string | null
   sample_size: number
+  note: string | null
 }
 
 export interface ThresholdEstimateResponse {
   critical_power: ThresholdEstimateField
   w_prime: number | null
+  pmax: number | null
   threshold_pace_min_km: ThresholdEstimateField
   threshold_hr: ThresholdEstimateField
   max_hr: ThresholdEstimateField

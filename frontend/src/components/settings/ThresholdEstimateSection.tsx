@@ -47,7 +47,10 @@ export default function ThresholdEstimateSection() {
       display: (v) => `${Math.round(v)} W`,
       current: d.current_threshold_power,
       currentDisplay: (v) => `${Math.round(v)} W`,
-      extra: d.w_prime != null ? `W' ${Math.round(d.w_prime)} J` : undefined,
+      extra: [
+        d.w_prime != null ? `W' ${Math.round(d.w_prime)} J` : null,
+        d.pmax != null ? `Pmax ${Math.round(d.pmax)} W` : null,
+      ].filter(Boolean).join(' · ') || undefined,
     },
     {
       label: 'Threshold Pace',
@@ -119,6 +122,18 @@ export default function ThresholdEstimateSection() {
                 </div>
               ))}
             </div>
+
+            {rows.some((r) => r.field.value != null && r.field.note) && (
+              <ul className="te-notes">
+                {rows
+                  .filter((r) => r.field.value != null && r.field.note)
+                  .map((r) => (
+                    <li key={r.label}>
+                      <strong>{r.label}:</strong> {r.field.note}
+                    </li>
+                  ))}
+              </ul>
+            )}
 
             <button
               className="te-apply-btn"

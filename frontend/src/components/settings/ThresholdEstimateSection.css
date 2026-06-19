@@ -90,6 +90,17 @@
   color: #e74c3c;
 }
 
+.te-notes {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
 .te-apply-btn {
   align-self: flex-start;
   background: var(--accent, #6c5ce7);

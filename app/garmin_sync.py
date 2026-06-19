@@ -7,6 +7,7 @@ from datetime import datetime, date, timedelta, timezone
 from garminconnect import Garmin
 from sqlalchemy.orm import Session
 
+from app import streams
 from app.config import settings
 from app.database import db_session
 from app.models import Activity, AthleteProfile, DailySummary, GarminCalendarEvent, SyncStatus
@@ -194,14 +195,26 @@ def _store_activity(db: Session, summary: dict, details: dict, skip_ai: bool = F
     act_summary = (details or {}).get("activity_summary") or {}
     power_zones = act_summary.get("powerZoneSummaries")
 
-    # Fetch laps from the summary's built-in laps if available
+    # Fetch the per-sample detail streams (power/speed/HR/elevation time series).
+    # Request high chart resolution so short-duration efforts aren't smoothed
+    # away (needed for accurate mean-maximal curves), and skip the GPS polyline
+    # we don't use.
     laps = None
     try:
         client = get_garmin_client()
-        laps_data = client.get_activity_details(garmin_id)
-        laps = laps_data
+        laps = client.get_activity_details(garmin_id, maxchart=10000, maxpoly=0)
     except Exception as e:
         logger.debug("No detailed data for %s: %s", garmin_id, e)
+
+    # Mean-maximal curves derived from those streams.
+    mean_max = None
+    if laps:
+        try:
+            curves = streams.compute_curves_from_details(laps, fields.get("activity_type"))
+            if curves:
+                mean_max = json.dumps(curves)
+        except Exception as e:
+            logger.debug("Could not compute mean-max curves for %s: %s", garmin_id, e)
 
     activity = Activity(
         **fields,
@@ -213,6 +226,7 @@ def _store_activity(db: Session, summary: dict, details: dict, skip_ai: bool = F
         weather_json=json.dumps(details.get("weather")) if details.get("weather") else None,
         typed_splits_json=json.dumps(typed_splits) if typed_splits else None,
         power_zones_json=json.dumps(power_zones) if power_zones else None,
+        mean_max_json=mean_max,
         raw_json=json.dumps(summary, default=str),
         synced_at=datetime.now(timezone.utc),
         ai_analyzed=skip_ai,
