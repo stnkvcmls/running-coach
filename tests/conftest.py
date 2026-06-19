@@ -49,25 +49,6 @@ def client(session_factory):
 
 
 @pytest.fixture
-def routes_client(session_factory):
-    """TestClient wired to the legacy Jinja HTML routes."""
-    from app.routes import router
-
-    app = FastAPI()
-    app.include_router(router)
-
-    def override_get_db():
-        session = session_factory()
-        try:
-            yield session
-        finally:
-            session.close()
-
-    app.dependency_overrides[get_db] = override_get_db
-    return TestClient(app)
-
-
-@pytest.fixture
 def patch_db_session(session_factory, monkeypatch):
     """Return a helper that points a module's ``db_session`` at the test DB.
 
