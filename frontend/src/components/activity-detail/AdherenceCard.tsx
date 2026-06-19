@@ -52,7 +52,10 @@ export default function AdherenceCard({ adherence }: Props) {
                 {((adherence.planned_distance_m ?? 0) / 1000).toFixed(2)} km planned
               </span>
               <span className="adherence-actual">
-                {((adherence.actual_distance_m ?? 0) / 1000).toFixed(2)} km actual
+                {((adherence.actual_distance_m ?? 0) / 1000).toFixed(2)} km
+                {adherence.actual_rest_distance_m
+                  ? ` (+${Math.round(adherence.actual_rest_distance_m)} m rest)`
+                  : ''} actual
               </span>
               {adherence.distance_pct !== null && (
                 <span

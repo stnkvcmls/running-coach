@@ -19,10 +19,11 @@ def make_steps(raw_list):
 
 
 class FakeActivity:
-    def __init__(self, distance_m=None, avg_pace_min_km=None, laps_json=None):
+    def __init__(self, distance_m=None, avg_pace_min_km=None, laps_json=None, splits_json=None):
         self.distance_m = distance_m
         self.avg_pace_min_km = avg_pace_min_km
         self.laps_json = laps_json
+        self.splits_json = splits_json
 
 
 # ---------------------------------------------------------------------------
@@ -209,6 +210,174 @@ def test_compute_adherence_no_distance_no_pace():
     assert result.planned_pace_display is None
     assert result.adherence_score == 100.0
     assert "no distance" in result.summary.lower()
+
+
+# ---------------------------------------------------------------------------
+# Rest-aware distance & pace (running-only)
+# ---------------------------------------------------------------------------
+
+def test_planned_distance_excludes_rest():
+    """Rest steps are excluded from planned distance and tracked separately."""
+    steps = make_steps([
+        {"stepType": "warmup", "endCondition": "distance", "endConditionValue": 1000},
+        {"stepType": "repeat", "repeatCount": 4, "workoutSteps": [
+            {"stepType": "interval", "endCondition": "distance", "endConditionValue": 1000,
+             "targetType": "pace", "targetValueOne": 1000 / 240},  # 4:00/km
+            {"stepType": "rest", "endCondition": "distance", "endConditionValue": 200},
+        ]},
+        {"stepType": "cooldown", "endCondition": "distance", "endConditionValue": 1000},
+    ])
+    activity = FakeActivity(distance_m=6800.0)
+    result = adh.compute_adherence(activity, steps)
+
+    # running = 1000 warmup + 4×1000 intervals + 1000 cooldown = 6000
+    assert result.planned_distance_m == pytest.approx(6000.0)
+    # rest = 4 × 200 = 800
+    assert result.planned_rest_distance_m == pytest.approx(800.0)
+
+
+def test_planned_distance_time_based_running_interval():
+    """A running interval given in time is converted to distance via its pace."""
+    steps = make_steps([
+        {"stepType": "repeat", "repeatCount": 6, "workoutSteps": [
+            {"stepType": "interval", "endCondition": "time", "endConditionValue": 60,
+             "targetType": "pace", "targetValueOne": 1000 / 240},  # 4:00/km → 250 m/min
+            {"stepType": "rest", "endCondition": "time", "endConditionValue": 90},
+        ]},
+    ])
+    activity = FakeActivity(distance_m=1500.0)
+    result = adh.compute_adherence(activity, steps)
+
+    # 6 × (60s at 4:00/km = 250 m) = 1500 m running
+    assert result.planned_distance_m == pytest.approx(1500.0)
+
+
+def test_time_interval_without_pace_uses_planned_pace_fallback():
+    """A time-based step with no target falls back to the workout's planned pace."""
+    steps = make_steps([
+        {"stepType": "warm_up", "endCondition": "time", "endConditionValue": 240},  # no pace
+        {"stepType": "interval", "endCondition": "distance", "endConditionValue": 3000,
+         "targetType": "pace", "targetValueOne": 1000 / 240},  # 4:00/km
+    ])
+    activity = FakeActivity(distance_m=4000.0)
+    result = adh.compute_adherence(activity, steps)
+
+    # warmup 240s @ 4:00/km (fallback) = 1000 m, + 3000 m interval = 4000 m
+    assert result.planned_distance_m == pytest.approx(4000.0)
+
+
+def test_actual_from_splits_rest_and_running_pace():
+    """Actual running/rest distance and running-only pace come from lapDTOs."""
+    steps = make_steps([
+        {"stepType": "interval", "endCondition": "distance", "endConditionValue": 6000,
+         "targetType": "pace", "targetValueOne": 1000 / 240},  # 4:00/km plan
+    ])
+    laps = {"lapDTOs": [
+        {"distance": 3000, "duration": 720, "intensityType": "ACTIVE"},   # 4:00/km
+        {"distance": 245, "duration": 90, "intensityType": "REST"},
+        {"distance": 3000, "duration": 720, "intensityType": "ACTIVE"},   # 4:00/km
+        {"distance": 245, "duration": 90, "intensityType": "RECOVERY"},
+    ]}
+    activity = FakeActivity(
+        distance_m=6490.0, avg_pace_min_km=5.0,  # overall avg slower (includes rest)
+        splits_json=json.dumps(laps),
+    )
+    result = adh.compute_adherence(activity, steps)
+
+    assert result.actual_distance_m == pytest.approx(6000.0)        # running only
+    assert result.actual_rest_distance_m == pytest.approx(490.0)    # rest laps
+    assert result.actual_pace_display == "4:00/km"                  # running-only, not 5:00
+    assert result.pace_delta_sec_per_km == pytest.approx(0.0, abs=1.0)
+    assert "490 m in rest" in result.summary
+
+
+def test_worked_example_8km_plus_490m_rest():
+    """Reproduce the target: 8.00 km planned / 8.00 km (+490 m rest) actual."""
+    steps = make_steps([
+        {"stepType": "warmup", "endCondition": "distance", "endConditionValue": 1000},
+        {"stepType": "repeat", "repeatCount": 6, "workoutSteps": [
+            {"stepType": "interval", "endCondition": "distance", "endConditionValue": 1000,
+             "targetType": "pace", "targetValueOne": 1000 / 240},
+            {"stepType": "rest", "endCondition": "time", "endConditionValue": 90},
+        ]},
+        {"stepType": "cooldown", "endCondition": "distance", "endConditionValue": 1000},
+    ])
+    # 6 running laps + warmup + cooldown = 8 running laps (8 km), 6 rest laps (490 m)
+    lap_dtos = (
+        [{"distance": 1000, "duration": 240, "intensityType": "WARMUP"}]
+        + [
+            lap
+            for _ in range(6)
+            for lap in (
+                {"distance": 1000, "duration": 240, "intensityType": "INTERVAL"},
+                {"distance": 81.67, "duration": 90, "intensityType": "REST"},
+            )
+        ]
+        + [{"distance": 1000, "duration": 240, "intensityType": "COOLDOWN"}]
+    )
+    activity = FakeActivity(distance_m=8490.0, splits_json=json.dumps({"lapDTOs": lap_dtos}))
+    result = adh.compute_adherence(activity, steps)
+
+    assert result.planned_distance_m == pytest.approx(8000.0)
+    assert f"{result.actual_distance_m / 1000:.2f}" == "8.00"
+    assert int(round(result.actual_rest_distance_m)) == 490
+    assert result.distance_pct == 100.0
+
+
+def test_actual_fallback_no_splits_uses_totals():
+    """Without lapDTOs, actual falls back to activity totals (no rest split)."""
+    steps = make_steps([
+        {"stepType": "interval", "endCondition": "distance", "endConditionValue": 5000},
+    ])
+    activity = FakeActivity(distance_m=4800.0, avg_pace_min_km=4.5)
+    result = adh.compute_adherence(activity, steps)
+
+    assert result.actual_distance_m == 4800.0
+    assert result.actual_rest_distance_m is None
+    assert result.actual_pace_display == "4:30/km"
+
+
+def test_actual_pace_excludes_warmup_cooldown():
+    """Warmup/cooldown laps count toward distance but not the pace average.
+
+    The intervals are run on target (4:00/km) while the warmup/cooldown are
+    easy (6:00/km). Pace adherence should reflect the on-target intervals, not
+    a blended average dragged slower by the easy laps.
+    """
+    steps = make_steps([
+        {"stepType": "warmup", "endCondition": "distance", "endConditionValue": 1000},
+        {"stepType": "interval", "endCondition": "distance", "endConditionValue": 4000,
+         "targetType": "pace", "targetValueOne": 1000 / 240},  # 4:00/km plan
+        {"stepType": "cooldown", "endCondition": "distance", "endConditionValue": 1000},
+    ])
+    laps = {"lapDTOs": [
+        {"distance": 1000, "duration": 360, "intensityType": "WARMUP"},    # 6:00/km
+        {"distance": 4000, "duration": 960, "intensityType": "INTERVAL"},  # 4:00/km
+        {"distance": 1000, "duration": 360, "intensityType": "COOLDOWN"},  # 6:00/km
+    ]}
+    activity = FakeActivity(distance_m=6000.0, splits_json=json.dumps(laps))
+    result = adh.compute_adherence(activity, steps)
+
+    assert result.actual_distance_m == pytest.approx(6000.0)  # incl. warmup/cooldown
+    assert result.actual_pace_display == "4:00/km"            # work intervals only
+    assert result.pace_delta_sec_per_km == pytest.approx(0.0, abs=1.0)
+    assert result.adherence_score >= 95.0
+
+
+def test_actual_pace_fallback_when_no_work_laps():
+    """With only warmup/cooldown laps, pace falls back to all running laps."""
+    steps = make_steps([
+        {"stepType": "interval", "endCondition": "distance", "endConditionValue": 5000,
+         "targetType": "pace", "targetValueOne": 1000 / 270},  # 4:30/km plan
+    ])
+    laps = {"lapDTOs": [
+        {"distance": 2500, "duration": 675, "intensityType": "WARMUP"},   # 4:30/km
+        {"distance": 2500, "duration": 675, "intensityType": "COOLDOWN"}, # 4:30/km
+    ]}
+    activity = FakeActivity(distance_m=5000.0, splits_json=json.dumps(laps))
+    result = adh.compute_adherence(activity, steps)
+
+    assert result.actual_pace_display == "4:30/km"
 
 
 # ---------------------------------------------------------------------------
