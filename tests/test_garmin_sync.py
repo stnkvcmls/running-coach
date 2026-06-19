@@ -394,6 +394,7 @@ def _profile_client(weight_grams=70500, birth="1990-04-15"):
     fake_client.get_user_profile.return_value = {
         "userData": {"birthDate": birth, "weight": weight_grams}
     }
+    fake_client.get_stats.return_value = {}
     return fake_client
 
 
@@ -421,6 +422,7 @@ def test_fetch_garmin_profile_fields_tolerates_missing_data():
     fake_client.get_full_name.return_value = None
     fake_client.get_user_profile.return_value = {}
     fake_client.get_body_composition.return_value = {}
+    fake_client.get_stats.return_value = {}
     assert garmin_sync._fetch_garmin_profile_fields(fake_client) == {}
 
 
