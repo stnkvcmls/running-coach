@@ -1,9 +1,11 @@
 import json
 import logging
+import time
 from datetime import datetime, date, timedelta, timezone
 
 import anthropic
 import google.generativeai as genai
+from google.api_core import exceptions as _google_exc
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -27,6 +29,19 @@ from app.models import (
 from app.utils import calculate_age
 
 logger = logging.getLogger(__name__)
+
+
+class AITransientError(Exception):
+    """Retryable AI error: rate limit, timeout, or server 5xx."""
+
+
+class AIFatalError(Exception):
+    """Non-retryable AI error: bad credentials, invalid model, or bad request."""
+
+
+_MAX_RETRIES = 3
+_BACKOFF_BASE = 2  # seconds; delays are 1s, 2s before the 3rd attempt
+
 
 SYSTEM_PROMPT = """You are an experienced, data-driven running coach. You analyze training data from Garmin Connect and provide actionable insights.
 
@@ -524,12 +539,27 @@ def _call_claude(context: str, trigger_type: str, model: str) -> tuple[str, str,
     """Call Claude API and return (content, summary, category)."""
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
     user_prompt = f"Analyze this {trigger_type} data and provide coaching insights:\n\n{context}"
-    response = client.messages.create(
-        model=model,
-        max_tokens=1024,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_prompt}],
-    )
+    try:
+        response = client.messages.create(
+            model=model,
+            max_tokens=1024,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_prompt}],
+        )
+    except (
+        anthropic.RateLimitError,
+        anthropic.APITimeoutError,
+        anthropic.APIConnectionError,
+        anthropic.InternalServerError,
+    ) as exc:
+        raise AITransientError(str(exc)) from exc
+    except (
+        anthropic.AuthenticationError,
+        anthropic.PermissionDeniedError,
+        anthropic.BadRequestError,
+        anthropic.NotFoundError,
+    ) as exc:
+        raise AIFatalError(str(exc)) from exc
     content = response.content[0].text
     summary, category = _extract_summary_and_category(content, trigger_type)
     return content, summary, category
@@ -540,7 +570,21 @@ def _call_gemini(context: str, trigger_type: str, model: str) -> tuple[str, str,
     genai.configure(api_key=settings.gemini_api_key)
     gemini_model = genai.GenerativeModel(model_name=model, system_instruction=SYSTEM_PROMPT)
     user_prompt = f"Analyze this {trigger_type} data and provide coaching insights:\n\n{context}"
-    response = gemini_model.generate_content(user_prompt)
+    try:
+        response = gemini_model.generate_content(user_prompt)
+    except (
+        _google_exc.ResourceExhausted,
+        _google_exc.ServiceUnavailable,
+        _google_exc.DeadlineExceeded,
+    ) as exc:
+        raise AITransientError(str(exc)) from exc
+    except (
+        _google_exc.PermissionDenied,
+        _google_exc.Unauthenticated,
+        _google_exc.InvalidArgument,
+        _google_exc.NotFound,
+    ) as exc:
+        raise AIFatalError(str(exc)) from exc
     content = response.text
     summary, category = _extract_summary_and_category(content, trigger_type)
     return content, summary, category
@@ -556,15 +600,51 @@ def _get_ai_config(db: Session) -> tuple[str, str]:
 
 
 def _call_ai(db: Session, context: str, trigger_type: str) -> tuple[str, str, str]:
-    """Dispatch to the configured AI provider and return (content, summary, category)."""
+    """Dispatch to the configured AI provider with exponential backoff on transient errors."""
     provider, model = _get_ai_config(db)
-    if provider == "gemini":
-        return _call_gemini(context, trigger_type, model)
-    return _call_claude(context, trigger_type, model)
+    call_fn = _call_gemini if provider == "gemini" else _call_claude
+
+    last_exc: Exception = RuntimeError("no attempts made")
+    for attempt in range(_MAX_RETRIES):
+        try:
+            return call_fn(context, trigger_type, model)
+        except AIFatalError:
+            raise  # configuration errors are not retryable
+        except AITransientError as exc:
+            last_exc = exc
+            if attempt < _MAX_RETRIES - 1:
+                wait = _BACKOFF_BASE ** attempt
+                logger.warning(
+                    "Transient AI error (attempt %d/%d), retrying in %ds: %s",
+                    attempt + 1, _MAX_RETRIES, wait, exc,
+                )
+                time.sleep(wait)
+    raise last_exc
 
 
 def _save_error_insight(activity_id: int, exc: Exception) -> None:
     """Persist a failure insight so the UI can show an error and allow retry."""
+    if isinstance(exc, AITransientError):
+        content = (
+            "**Analysis temporarily unavailable**\n\n"
+            "The AI service returned a rate-limit or server error after multiple retries. "
+            "This is usually short-lived — use **Re-analyze** to try again in a moment."
+        )
+        summary = "AI service temporarily unavailable — use Re-analyze to retry"
+    elif isinstance(exc, AIFatalError):
+        content = (
+            "**Analysis configuration error**\n\n"
+            "The AI request was rejected due to a credential or model error. "
+            "Check your API key and model selection in **Settings**, then use **Re-analyze**."
+        )
+        summary = "AI configuration error — check Settings and use Re-analyze"
+    else:
+        content = (
+            "**Analysis failed unexpectedly**\n\n"
+            "An unexpected error occurred. Use **Re-analyze** to retry, "
+            "or check Settings if the problem persists."
+        )
+        summary = "Analysis failed — use Re-analyze to retry"
     try:
         with db_session() as db:
             db.query(Insight).filter(
@@ -575,8 +655,8 @@ def _save_error_insight(activity_id: int, exc: Exception) -> None:
                 created_at=datetime.now(timezone.utc),
                 trigger_type="activity",
                 trigger_id=activity_id,
-                content=f"Analysis failed: {exc}\n\nCheck your AI backend configuration and use **Re-analyze** to retry.",
-                summary="Analysis failed — use Re-analyze to retry",
+                content=content,
+                summary=summary,
                 category="recommendation",
             ))
             db.commit()
@@ -1042,23 +1122,70 @@ def generate_training_plan(reference_date: date | None = None) -> TrainingPlan |
                 f"Athlete context:\n{context}"
             )
 
-            if provider == "gemini":
-                genai.configure(api_key=settings.gemini_api_key)
-                gemini_model = genai.GenerativeModel(
-                    model_name=model,
-                    system_instruction=_PLAN_SYSTEM_PROMPT,
-                )
-                response = gemini_model.generate_content(plan_prompt)
-                raw = response.text
+            last_exc: Exception = RuntimeError("no attempts made")
+            raw = None
+            for attempt in range(_MAX_RETRIES):
+                try:
+                    if provider == "gemini":
+                        genai.configure(api_key=settings.gemini_api_key)
+                        gemini_model = genai.GenerativeModel(
+                            model_name=model,
+                            system_instruction=_PLAN_SYSTEM_PROMPT,
+                        )
+                        try:
+                            response = gemini_model.generate_content(plan_prompt)
+                        except (
+                            _google_exc.ResourceExhausted,
+                            _google_exc.ServiceUnavailable,
+                            _google_exc.DeadlineExceeded,
+                        ) as exc:
+                            raise AITransientError(str(exc)) from exc
+                        except (
+                            _google_exc.PermissionDenied,
+                            _google_exc.Unauthenticated,
+                            _google_exc.InvalidArgument,
+                            _google_exc.NotFound,
+                        ) as exc:
+                            raise AIFatalError(str(exc)) from exc
+                        raw = response.text
+                    else:
+                        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+                        try:
+                            response = client.messages.create(
+                                model=model,
+                                max_tokens=4096,
+                                system=_PLAN_SYSTEM_PROMPT,
+                                messages=[{"role": "user", "content": plan_prompt}],
+                            )
+                        except (
+                            anthropic.RateLimitError,
+                            anthropic.APITimeoutError,
+                            anthropic.APIConnectionError,
+                            anthropic.InternalServerError,
+                        ) as exc:
+                            raise AITransientError(str(exc)) from exc
+                        except (
+                            anthropic.AuthenticationError,
+                            anthropic.PermissionDeniedError,
+                            anthropic.BadRequestError,
+                            anthropic.NotFoundError,
+                        ) as exc:
+                            raise AIFatalError(str(exc)) from exc
+                        raw = response.content[0].text
+                    break  # success
+                except AIFatalError:
+                    raise
+                except AITransientError as exc:
+                    last_exc = exc
+                    if attempt < _MAX_RETRIES - 1:
+                        wait = _BACKOFF_BASE ** attempt
+                        logger.warning(
+                            "Transient AI error during plan generation (attempt %d/%d), retrying in %ds: %s",
+                            attempt + 1, _MAX_RETRIES, wait, exc,
+                        )
+                        time.sleep(wait)
             else:
-                client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-                response = client.messages.create(
-                    model=model,
-                    max_tokens=4096,
-                    system=_PLAN_SYSTEM_PROMPT,
-                    messages=[{"role": "user", "content": plan_prompt}],
-                )
-                raw = response.content[0].text
+                raise last_exc
 
             plan_data = _parse_plan_json(raw)
             plan = _store_training_plan(db, plan_data, week_start, raw)
