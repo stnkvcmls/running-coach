@@ -20,6 +20,8 @@ from app.models import (
     Insight,
     MetricZone,
     SyncStatus,
+    TrainingPlan,
+    TrainingPlanDay,
     ZoneConfig,
 )
 from app.utils import calculate_age
@@ -828,6 +830,246 @@ def backfill_missing_insights():
                 logger.exception("Insight backfill failed for daily summary %s", summary.id)
 
         logger.info("Insight backfill complete")
+
+
+_PLAN_SYSTEM_PROMPT = """You are an expert running coach generating a periodized training plan.
+Output ONLY a valid JSON object with no markdown fences, no commentary — just raw JSON.
+
+Schema:
+{
+  "phase": "<base|build|peak|taper>",
+  "overview": "<2-3 sentence narrative about the plan's intent>",
+  "weeks": [
+    {
+      "week_number": 1,
+      "theme": "<short theme, e.g. 'Aerobic Base'>",
+      "notes": "<1-2 sentence coaching note for the week>",
+      "days": [
+        {
+          "date": "YYYY-MM-DD",
+          "day_of_week": "<Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday>",
+          "workout_type": "<easy|tempo|long|interval|rest|cross>",
+          "target_distance_km": <number or null>,
+          "target_pace_display": "<e.g. '5:15/km' or null>",
+          "description": "<brief workout description>",
+          "notes": "<optional coaching note or null>"
+        }
+      ]
+    }
+  ]
+}
+
+Rules:
+- Generate exactly 4 weeks, each with exactly 7 days in order starting from the given week_start.
+- workout_type must be one of: easy, tempo, long, interval, rest, cross.
+- target_distance_km and target_pace_display may be null for rest days.
+- Respect the athlete's weekly_availability (days/sessions per week).
+- Anchor pace targets to the athlete's threshold pace if available.
+- Distribute load progressively: build 2 weeks, recover 1 week, then race-specific or peak.
+- Account for any upcoming races as goal events (taper if race is within 3 weeks).
+- Respect injury history — avoid high-impact volume if relevant injuries are listed.
+"""
+
+
+def _build_plan_context(db: Session, reference_date: date) -> str:
+    """Build context string for plan generation (profile + load + recent history)."""
+    sections: list[str] = [f"Today's date: {reference_date}"]
+
+    profile = db.query(AthleteProfile).first()
+    if profile:
+        ctx = _format_athlete_profile_context(profile, reference_date)
+        if ctx:
+            sections.append(ctx)
+
+    try:
+        estimate = threshold_mod.estimate_thresholds(db)
+        est_ctx = threshold_mod.format_threshold_estimate_context(estimate, profile)
+        if est_ctx:
+            sections.append(est_ctx)
+    except Exception:
+        pass
+
+    load_point = training_load.current_load(db, as_of=reference_date)
+    load_ctx = training_load.format_training_load_context(load_point)
+    if load_ctx:
+        sections.append(load_ctx)
+
+    today_summary = db.query(DailySummary).filter(DailySummary.date == reference_date).first()
+    rhr_cutoff = reference_date - timedelta(days=7)
+    recent_rhr_rows = (
+        db.query(DailySummary.resting_hr)
+        .filter(
+            DailySummary.date >= rhr_cutoff,
+            DailySummary.date < reference_date,
+            DailySummary.resting_hr.isnot(None),
+        )
+        .all()
+    )
+    recent_rhr = [row[0] for row in recent_rhr_rows]
+    readiness = training_load.compute_readiness(today_summary, load_point, recent_rhr)
+    readiness_ctx = training_load.format_readiness_context(readiness)
+    if readiness_ctx:
+        sections.append(readiness_ctx)
+
+    # Weekly volume last 8 weeks
+    weeks = []
+    for w in range(8):
+        week_start = reference_date - timedelta(days=reference_date.weekday() + 7 * w)
+        week_end = week_start + timedelta(days=7)
+        result = (
+            db.query(func.count(Activity.id), func.sum(Activity.distance_m))
+            .filter(
+                Activity.started_at >= datetime.combine(week_start, datetime.min.time()),
+                Activity.started_at < datetime.combine(week_end, datetime.min.time()),
+            )
+            .first()
+        )
+        count, dist = result
+        if count and count > 0:
+            weeks.append(f"- Week of {week_start}: {count} runs, {(dist or 0) / 1000:.1f} km")
+    if weeks:
+        sections.append("## Recent Weekly Volume\n" + "\n".join(weeks))
+
+    # Upcoming races
+    upcoming = (
+        db.query(GarminCalendarEvent)
+        .filter(
+            GarminCalendarEvent.event_type == "race",
+            GarminCalendarEvent.date >= reference_date,
+        )
+        .order_by(GarminCalendarEvent.date.asc())
+        .all()
+    )
+    if upcoming:
+        race_lines = []
+        for r in upcoming:
+            days_until = (r.date - reference_date).days
+            priority = f" [Priority {r.priority}]" if r.priority else ""
+            race_lines.append(
+                f"- {r.title} ({r.distance_label or '?'}) on {r.date} "
+                f"({days_until} days away){priority}"
+            )
+        sections.append("## Upcoming Races\n" + "\n".join(race_lines))
+
+    return "\n\n".join(sections)
+
+
+def _next_monday(ref: date) -> date:
+    """Return the Monday on or after ``ref``."""
+    days_ahead = (7 - ref.weekday()) % 7
+    return ref + timedelta(days=days_ahead if days_ahead else 7)
+
+
+def _parse_plan_json(raw: str) -> dict:
+    """Extract and parse JSON from raw AI response (strip any markdown fences)."""
+    text = raw.strip()
+    # Strip optional ```json ... ``` fences
+    if text.startswith("```"):
+        lines = text.splitlines()
+        start = next((i for i, l in enumerate(lines) if l.strip() in ("```", "```json")), 0)
+        end = next((i for i in range(len(lines) - 1, start, -1) if lines[i].strip() == "```"), len(lines))
+        text = "\n".join(lines[start + 1:end])
+    return json.loads(text)
+
+
+def _store_training_plan(db: Session, plan_data: dict, week_start: date, raw_json: str) -> TrainingPlan:
+    """Persist the parsed plan dict as TrainingPlan + TrainingPlanDay rows."""
+    plan = TrainingPlan(
+        generated_at=datetime.now(timezone.utc),
+        week_start=week_start,
+        plan_weeks=len(plan_data.get("weeks", [])) or 4,
+        phase=plan_data.get("phase"),
+        overview=plan_data.get("overview"),
+        raw_json=raw_json,
+    )
+    db.add(plan)
+    db.flush()  # populate plan.id
+
+    for week in plan_data.get("weeks", []):
+        week_num = week.get("week_number", 1)
+        theme = week.get("theme")
+        for day_data in week.get("days", []):
+            try:
+                day_date = date.fromisoformat(day_data["date"])
+            except (KeyError, ValueError):
+                continue
+            dist_km = day_data.get("target_distance_km")
+            dist_m = dist_km * 1000 if dist_km is not None else None
+            pace_display = day_data.get("target_pace_display")
+            pace_num = _parse_pace_display(pace_display) if pace_display else None
+            db.add(TrainingPlanDay(
+                plan_id=plan.id,
+                day_date=day_date,
+                day_of_week=day_data.get("day_of_week", day_date.strftime("%A")),
+                week_number=week_num,
+                workout_type=day_data.get("workout_type", "easy"),
+                target_distance_m=dist_m,
+                target_pace_min_km=pace_num,
+                target_pace_display=pace_display,
+                description=day_data.get("description"),
+                notes=day_data.get("notes"),
+                week_theme=theme,
+            ))
+    db.commit()
+    return plan
+
+
+def _parse_pace_display(pace_str: str) -> float | None:
+    """Parse '5:15/km' or '5:15' to float min/km. Returns None on failure."""
+    try:
+        parts = pace_str.replace("/km", "").strip().split(":")
+        return int(parts[0]) + int(parts[1]) / 60.0
+    except Exception:
+        return None
+
+
+def generate_training_plan(reference_date: date | None = None) -> TrainingPlan | None:
+    """Generate and persist a 4-week AI training plan.
+
+    Can be called from the API (on demand) or from the scheduler (weekly).
+    Returns the new TrainingPlan or None on failure.
+    """
+    with db_session() as db:
+        ref = reference_date or date.today()
+        week_start = _next_monday(ref)
+
+        try:
+            context = _build_plan_context(db, ref)
+            provider, model = _get_ai_config(db)
+
+            plan_prompt = (
+                f"Generate a 4-week running training plan starting Monday {week_start}.\n\n"
+                f"Athlete context:\n{context}"
+            )
+
+            if provider == "gemini":
+                genai.configure(api_key=settings.gemini_api_key)
+                gemini_model = genai.GenerativeModel(
+                    model_name=model,
+                    system_instruction=_PLAN_SYSTEM_PROMPT,
+                )
+                response = gemini_model.generate_content(plan_prompt)
+                raw = response.text
+            else:
+                client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+                response = client.messages.create(
+                    model=model,
+                    max_tokens=4096,
+                    system=_PLAN_SYSTEM_PROMPT,
+                    messages=[{"role": "user", "content": plan_prompt}],
+                )
+                raw = response.content[0].text
+
+            plan_data = _parse_plan_json(raw)
+            plan = _store_training_plan(db, plan_data, week_start, raw)
+            logger.info(
+                "Training plan generated: %d weeks, phase=%s, week_start=%s",
+                plan.plan_weeks, plan.phase, plan.week_start,
+            )
+            return plan
+        except Exception:
+            logger.exception("Training plan generation failed")
+            return None
 
 
 def weekly_review():

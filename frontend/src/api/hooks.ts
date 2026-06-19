@@ -16,6 +16,7 @@ import type {
   AthleteProfile,
   AthleteProfileRequest,
   TrainingLoadResponse,
+  TrainingPlanResponse,
   ZoneConfigBulkUpdate,
   ZoneConfigsResponse,
   ThresholdEstimateResponse,
@@ -217,6 +218,23 @@ export function useUpdateZoneConfigs() {
       apiPut<ZoneConfigsResponse>('/zones', update),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['zone-configs'] })
+    },
+  })
+}
+
+export function useTrainingPlan() {
+  return useQuery({
+    queryKey: ['training-plan'],
+    queryFn: () => apiGet<TrainingPlanResponse | null>('/training-plan'),
+  })
+}
+
+export function useGenerateTrainingPlan() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => apiPost<TrainingPlanResponse>('/training-plan/generate', {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['training-plan'] })
     },
   })
 }

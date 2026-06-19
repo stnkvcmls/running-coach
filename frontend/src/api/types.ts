@@ -315,3 +315,36 @@ export interface ThresholdEstimateResponse {
 export interface ThresholdApplyRequest {
   fields?: string[] | null
 }
+
+export interface TrainingPlanDay {
+  id: number
+  plan_id: number
+  day_date: string
+  day_of_week: string
+  week_number: number
+  workout_type: string  // easy | tempo | long | interval | rest | cross
+  target_distance_m: number | null
+  target_pace_min_km: number | null
+  target_pace_display: string | null
+  description: string | null
+  notes: string | null
+  week_theme: string | null
+}
+
+export interface TrainingPlanWeek {
+  week_number: number
+  week_start: string
+  week_end: string
+  theme: string | null
+  days: TrainingPlanDay[]
+}
+
+export interface TrainingPlanResponse {
+  id: number
+  generated_at: string
+  week_start: string
+  plan_weeks: number
+  phase: string | null
+  overview: string | null
+  weeks: TrainingPlanWeek[]
+}

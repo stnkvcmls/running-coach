@@ -17,6 +17,8 @@ from app.models import (
     Insight,
     MetricZone,
     SyncStatus,
+    TrainingPlan,
+    TrainingPlanDay,
     ZoneConfig,
 )
 from app.schemas import (
@@ -37,6 +39,9 @@ from app.schemas import (
     SettingsResponse,
     TodayResponse,
     TrainingLoadResponse,
+    TrainingPlanDayResponse,
+    TrainingPlanResponse,
+    TrainingPlanWeek,
     TrainingReadiness,
     WeeklyMileage,
     WorkoutAdherence,
@@ -716,6 +721,76 @@ def api_apply_threshold_estimate(
     db.commit()
     db.refresh(profile)
     return _profile_response(profile)
+
+
+# --- Training Plan ---
+
+def _build_plan_response(plan: TrainingPlan, db: Session) -> TrainingPlanResponse:
+    """Assemble a TrainingPlanResponse with nested week/day structure."""
+    days = (
+        db.query(TrainingPlanDay)
+        .filter(TrainingPlanDay.plan_id == plan.id)
+        .order_by(TrainingPlanDay.day_date.asc())
+        .all()
+    )
+
+    # Group days by week_number
+    weeks_map: dict[int, list[TrainingPlanDay]] = {}
+    for d in days:
+        weeks_map.setdefault(d.week_number, []).append(d)
+
+    plan_weeks: list[TrainingPlanWeek] = []
+    for week_num in sorted(weeks_map):
+        week_days = weeks_map[week_num]
+        sorted_days = sorted(week_days, key=lambda d: d.day_date)
+        week_start_date = sorted_days[0].day_date
+        week_end_date = sorted_days[-1].day_date
+        theme = sorted_days[0].week_theme if sorted_days else None
+        plan_weeks.append(TrainingPlanWeek(
+            week_number=week_num,
+            week_start=week_start_date,
+            week_end=week_end_date,
+            theme=theme,
+            days=[TrainingPlanDayResponse.model_validate(d) for d in sorted_days],
+        ))
+
+    return TrainingPlanResponse(
+        id=plan.id,
+        generated_at=plan.generated_at,
+        week_start=plan.week_start,
+        plan_weeks=plan.plan_weeks,
+        phase=plan.phase,
+        overview=plan.overview,
+        weeks=plan_weeks,
+    )
+
+
+@api_router.get("/training-plan", response_model=TrainingPlanResponse | None)
+def api_get_training_plan(db: Session = Depends(get_db)):
+    """Return the most recently generated training plan, or null if none exists."""
+    plan = db.query(TrainingPlan).order_by(TrainingPlan.generated_at.desc()).first()
+    if not plan:
+        return None
+    return _build_plan_response(plan, db)
+
+
+@api_router.post("/training-plan/generate", response_model=TrainingPlanResponse | None)
+def api_generate_training_plan():
+    """Trigger AI plan generation and return the new plan synchronously.
+
+    Generation typically takes 5–15 seconds. The function opens its own DB
+    session internally, so we re-query via a fresh dependency after completion.
+    """
+    from app.ai_coach import generate_training_plan
+    from app.database import db_session as make_session
+    plan = generate_training_plan()
+    if plan is None:
+        raise HTTPException(status_code=500, detail="Plan generation failed — check AI config")
+    with make_session() as fresh_db:
+        db_plan = fresh_db.query(TrainingPlan).filter(TrainingPlan.id == plan.id).first()
+        if not db_plan:
+            raise HTTPException(status_code=500, detail="Plan not found after generation")
+        return _build_plan_response(db_plan, fresh_db)
 
 
 # --- Actions ---

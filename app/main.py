@@ -60,6 +60,13 @@ def _scheduled_weekly_review():
     weekly_review()
 
 
+def _scheduled_plan_generation():
+    """Scheduled job: regenerate the training plan each week."""
+    from app.ai_coach import generate_training_plan
+
+    generate_training_plan()
+
+
 def _run_backfill():
     """Run historical backfill in a background thread."""
     from app.garmin_sync import backfill_activities, backfill_daily_summaries, sync_athlete_profile
@@ -112,6 +119,15 @@ async def lifespan(app: FastAPI):
         CronTrigger(day_of_week="sun", hour=8, minute=0, timezone=tz),
         id="weekly_review",
         name="Weekly Review",
+        replace_existing=True,
+    )
+
+    # Regenerate training plan on Sundays at 9am (after weekly review)
+    scheduler.add_job(
+        _scheduled_plan_generation,
+        CronTrigger(day_of_week="sun", hour=9, minute=0, timezone=tz),
+        id="plan_generation",
+        name="Training Plan Generation",
         replace_existing=True,
     )
 
