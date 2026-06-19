@@ -337,6 +337,49 @@ def test_actual_fallback_no_splits_uses_totals():
     assert result.actual_pace_display == "4:30/km"
 
 
+def test_actual_pace_excludes_warmup_cooldown():
+    """Warmup/cooldown laps count toward distance but not the pace average.
+
+    The intervals are run on target (4:00/km) while the warmup/cooldown are
+    easy (6:00/km). Pace adherence should reflect the on-target intervals, not
+    a blended average dragged slower by the easy laps.
+    """
+    steps = make_steps([
+        {"stepType": "warmup", "endCondition": "distance", "endConditionValue": 1000},
+        {"stepType": "interval", "endCondition": "distance", "endConditionValue": 4000,
+         "targetType": "pace", "targetValueOne": 1000 / 240},  # 4:00/km plan
+        {"stepType": "cooldown", "endCondition": "distance", "endConditionValue": 1000},
+    ])
+    laps = {"lapDTOs": [
+        {"distance": 1000, "duration": 360, "intensityType": "WARMUP"},    # 6:00/km
+        {"distance": 4000, "duration": 960, "intensityType": "INTERVAL"},  # 4:00/km
+        {"distance": 1000, "duration": 360, "intensityType": "COOLDOWN"},  # 6:00/km
+    ]}
+    activity = FakeActivity(distance_m=6000.0, splits_json=json.dumps(laps))
+    result = adh.compute_adherence(activity, steps)
+
+    assert result.actual_distance_m == pytest.approx(6000.0)  # incl. warmup/cooldown
+    assert result.actual_pace_display == "4:00/km"            # work intervals only
+    assert result.pace_delta_sec_per_km == pytest.approx(0.0, abs=1.0)
+    assert result.adherence_score >= 95.0
+
+
+def test_actual_pace_fallback_when_no_work_laps():
+    """With only warmup/cooldown laps, pace falls back to all running laps."""
+    steps = make_steps([
+        {"stepType": "interval", "endCondition": "distance", "endConditionValue": 5000,
+         "targetType": "pace", "targetValueOne": 1000 / 270},  # 4:30/km plan
+    ])
+    laps = {"lapDTOs": [
+        {"distance": 2500, "duration": 675, "intensityType": "WARMUP"},   # 4:30/km
+        {"distance": 2500, "duration": 675, "intensityType": "COOLDOWN"}, # 4:30/km
+    ]}
+    activity = FakeActivity(distance_m=5000.0, splits_json=json.dumps(laps))
+    result = adh.compute_adherence(activity, steps)
+
+    assert result.actual_pace_display == "4:30/km"
+
+
 # ---------------------------------------------------------------------------
 # format_adherence_context
 # ---------------------------------------------------------------------------

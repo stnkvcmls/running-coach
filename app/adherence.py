@@ -217,6 +217,11 @@ def _parse_pace_display(pace_display: str) -> float | None:
 # Lap intensity types that represent rest/recovery (not running distance).
 _REST_INTENSITY_TYPES = {"REST", "RECOVERY"}
 
+# Lap intensity types that are run at an easy, untargeted pace. They count
+# toward running distance but are excluded from the pace comparison, which is
+# anchored on the workout's interval/tempo target pace.
+_EASY_INTENSITY_TYPES = {"WARMUP", "WARM_UP", "COOLDOWN", "COOL_DOWN"}
+
 
 def _step_distance_m(step: WorkoutStepResponse, pace_sec_per_km: float | None) -> float | None:
     """Distance contribution of a single step.
@@ -236,18 +241,30 @@ def _step_distance_m(step: WorkoutStepResponse, pace_sec_per_km: float | None) -
 def _actual_from_splits(
     activity: Activity,
 ) -> tuple[float | None, float | None, float | None]:
-    """Derive running/rest distance and running-only pace from Garmin laps.
+    """Derive running/rest distance and work-interval pace from Garmin laps.
 
     Reads ``activity.splits_json`` (``lapDTOs``) and classifies each lap by its
-    ``intensityType``: REST/RECOVERY laps count as rest, everything else as
-    running. Returns ``(running_dist_m, rest_dist_m, running_pace_sec_per_km)``.
+    ``intensityType``:
+
+    - REST/RECOVERY → rest distance (excluded from distance and pace).
+    - WARMUP/COOLDOWN → count toward running distance but NOT toward the pace
+      average (they're run easy with no pace target, so including them would
+      unfairly drag the average away from the interval/tempo target).
+    - everything else (ACTIVE/INTERVAL/untyped) → "work" laps that drive both
+      running distance and the pace average.
+
+    Returns ``(running_dist_m, rest_dist_m, work_pace_sec_per_km)``. The pace
+    falls back to all running laps when no work laps are distinguishable.
 
     Falls back to the activity totals (whole-activity distance and average
     pace, no rest split) when per-lap data is unavailable or unusable.
     """
-    running_dist = 0.0
+    running_dist = 0.0          # all non-rest distance (warmup + cooldown + work)
     rest_dist = 0.0
-    running_dur = 0.0
+    work_dist = 0.0             # work-interval distance only (for pace)
+    work_dur = 0.0
+    run_dist = 0.0              # all running distance/duration (pace fallback)
+    run_dur = 0.0
     saw_lap = False
 
     if activity.splits_json:
@@ -267,15 +284,19 @@ def _actual_from_splits(
                 intensity = str(lap.get("intensityType") or "").upper()
                 if intensity in _REST_INTENSITY_TYPES:
                     rest_dist += dist
-                else:
-                    running_dist += dist
-                    dur = (
-                        lap.get("duration")
-                        or lap.get("movingDuration")
-                        or lap.get("elapsedDuration")
-                    )
-                    if isinstance(dur, (int, float)) and dur > 0:
-                        running_dur += dur
+                    continue
+                running_dist += dist
+                dur = (
+                    lap.get("duration")
+                    or lap.get("movingDuration")
+                    or lap.get("elapsedDuration")
+                )
+                dur = dur if isinstance(dur, (int, float)) and dur > 0 else 0.0
+                run_dist += dist
+                run_dur += dur
+                if intensity not in _EASY_INTENSITY_TYPES:
+                    work_dist += dist
+                    work_dur += dur
 
     if not saw_lap:
         # Fallback: no per-lap data — use whole-activity totals, no rest split.
@@ -284,13 +305,19 @@ def _actual_from_splits(
         )
         return activity.distance_m, None, actual_pace_sec
 
-    running_pace_sec = (
-        running_dur / (running_dist / 1000.0) if running_dist > 0 and running_dur > 0 else None
-    )
+    # Pace from work intervals only; fall back to all running laps when no work
+    # laps are distinguishable (e.g. a steady run with only warmup/cooldown).
+    if work_dist > 0 and work_dur > 0:
+        pace_sec = work_dur / (work_dist / 1000.0)
+    elif run_dist > 0 and run_dur > 0:
+        pace_sec = run_dur / (run_dist / 1000.0)
+    else:
+        pace_sec = None
+
     return (
         running_dist or None,
         rest_dist or None,
-        running_pace_sec,
+        pace_sec,
     )
 
 
