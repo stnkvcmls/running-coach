@@ -26,7 +26,7 @@
 .zone-type-title {
   font-weight: 600;
   font-size: 0.9rem;
-  color: var(--text-primary);
+  color: var(--text);
 }
 
 .zone-type-threshold {
@@ -82,20 +82,20 @@
 }
 
 .zone-name-input {
-  background: var(--surface-2, #1e1e2e);
-  border: 1px solid var(--border, #2d2d44);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
   border-radius: 6px;
-  color: var(--text-primary);
+  color: var(--text);
   font-size: 0.82rem;
   padding: 4px 8px;
   width: 100%;
 }
 
 .zone-pct-input {
-  background: var(--surface-2, #1e1e2e);
-  border: 1px solid var(--border, #2d2d44);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
   border-radius: 6px;
-  color: var(--text-primary);
+  color: var(--text);
   font-size: 0.82rem;
   padding: 4px 6px;
   text-align: right;
