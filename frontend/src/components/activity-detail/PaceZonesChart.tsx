@@ -1,6 +1,8 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { useZoneConfigs } from '../../api/hooks'
 import type { ChartSeries } from '../../api/types'
+import { useTheme } from '../../App'
+import { getChartTooltipStyle, getChartTickColor } from '../../utils/theme'
 import './PaceZonesChart.css'
 
 interface Props {
@@ -15,6 +17,7 @@ function formatPace(minPerKm: number): string {
 
 export default function PaceZonesChart({ paceSeries }: Props) {
   const { data: zoneData, isLoading } = useZoneConfigs()
+  const { theme } = useTheme()
 
   if (isLoading || !zoneData) return null
 
@@ -81,19 +84,13 @@ export default function PaceZonesChart({ paceSeries }: Props) {
             <YAxis
               type="category"
               dataKey="zone"
-              tick={{ fontSize: 11, fill: '#888' }}
+              tick={{ fontSize: 11, fill: getChartTickColor(theme) }}
               axisLine={false}
               tickLine={false}
               width={90}
             />
             <Tooltip
-              contentStyle={{
-                background: '#1a1a2e',
-                border: '1px solid #2d2d44',
-                borderRadius: 8,
-                fontSize: 12,
-                color: '#e0e0e0',
-              }}
+              contentStyle={getChartTooltipStyle(theme)}
               formatter={(value: number, _name: string, props: any) => [
                 `${value}% (${props.payload.rangeLabel})`,
                 'Time',

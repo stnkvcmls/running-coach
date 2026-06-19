@@ -9,6 +9,8 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { useWellnessTrends } from '../../api/hooks'
+import { useTheme } from '../../App'
+import { getChartTickColor } from '../../utils/theme'
 import './WellnessTrendsView.css'
 
 type Range = 30 | 60 | 90
@@ -24,29 +26,6 @@ const RHR_COLOR = '#e17055'
 const STRESS_COLOR = '#fd79a8'
 const BATTERY_COLOR = '#00b894'
 
-function MetricTooltip({ active, payload, label, unit }: { active?: boolean; payload?: any[]; label?: string; unit: string }) {
-  if (!active || !payload?.length) return null
-  return (
-    <div style={{
-      background: '#1a1a2e',
-      border: '1px solid #2d2d44',
-      borderRadius: 8,
-      padding: '6px 10px',
-      fontSize: 12,
-      color: '#e0e0e0',
-    }}>
-      <div style={{ fontWeight: 600, marginBottom: 2 }}>{label}</div>
-      {payload.map((p: any) => (
-        p.value != null && (
-          <div key={p.dataKey} style={{ color: p.color }}>
-            {p.name}: {typeof p.value === 'number' ? p.value.toFixed(p.dataKey === 'sleep_hours' ? 1 : 0) : p.value}{unit}
-          </div>
-        )
-      ))}
-    </div>
-  )
-}
-
 function avg7(data: any[], key: string): number | null {
   const vals = data.slice(-7).map(d => d[key]).filter((v: any) => v != null) as number[]
   if (!vals.length) return null
@@ -56,6 +35,34 @@ function avg7(data: any[], key: string): number | null {
 export default function WellnessTrendsView() {
   const [days, setDays] = useState<Range>(30)
   const { data, isLoading } = useWellnessTrends(days)
+  const { theme } = useTheme()
+  const tickColor = getChartTickColor(theme)
+  const tooltipBg = theme === 'light' ? '#ffffff' : '#1a1a2e'
+  const tooltipBorder = theme === 'light' ? '#e0e4ec' : '#2d2d44'
+  const tooltipText = theme === 'light' ? '#1a1a2e' : '#e0e0e0'
+
+  function MetricTooltip({ active, payload, label, unit }: { active?: boolean; payload?: any[]; label?: string; unit: string }) {
+    if (!active || !payload?.length) return null
+    return (
+      <div style={{
+        background: tooltipBg,
+        border: `1px solid ${tooltipBorder}`,
+        borderRadius: 8,
+        padding: '6px 10px',
+        fontSize: 12,
+        color: tooltipText,
+      }}>
+        <div style={{ fontWeight: 600, marginBottom: 2 }}>{label}</div>
+        {payload.map((p: any) => (
+          p.value != null && (
+            <div key={p.dataKey} style={{ color: p.color }}>
+              {p.name}: {typeof p.value === 'number' ? p.value.toFixed(p.dataKey === 'sleep_hours' ? 1 : 0) : p.value}{unit}
+            </div>
+          )
+        ))}
+      </div>
+    )
+  }
 
   if (isLoading) {
     return <div className="trends-loading">Loading wellness data…</div>
@@ -84,14 +91,14 @@ export default function WellnessTrendsView() {
 
   const xAxisProps = {
     dataKey: 'label',
-    tick: { fontSize: 10, fill: '#888' } as any,
+    tick: { fontSize: 10, fill: tickColor } as any,
     axisLine: false,
     tickLine: false,
     minTickGap,
   }
 
   const yAxisProps = {
-    tick: { fontSize: 10, fill: '#888' } as any,
+    tick: { fontSize: 10, fill: tickColor } as any,
     axisLine: false,
     tickLine: false,
     width: 28,

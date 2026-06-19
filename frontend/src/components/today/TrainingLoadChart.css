@@ -19,7 +19,7 @@
 
 .tl-stat-label {
   font-size: 11px;
-  color: #888;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -32,7 +32,7 @@
 
 .tl-stat-sub {
   font-size: 10px;
-  color: #666;
+  color: var(--text-muted);
 }
 
 .tl-form-badge {
@@ -57,7 +57,7 @@
   gap: 12px;
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid #2d2d44;
+  border-top: 1px solid var(--border);
   justify-content: center;
 }
 
@@ -66,7 +66,7 @@
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #888;
+  color: var(--text-muted);
 }
 
 .tl-dot {

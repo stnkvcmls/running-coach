@@ -1,5 +1,5 @@
-import { Calendar } from 'lucide-react'
-import { useDateContext } from '../../App'
+import { Calendar, Sun, Moon } from 'lucide-react'
+import { useDateContext, useTheme } from '../../App'
 import { getWeekNumber, getTotalWeeksInYear } from '../../utils/date'
 import './TopBar.css'
 
@@ -10,6 +10,7 @@ interface Props {
 
 export default function TopBar({ calendarExpanded, onToggleCalendar }: Props) {
   const { selectedDate } = useDateContext()
+  const { theme, toggleTheme } = useTheme()
   const weekNum = getWeekNumber(selectedDate)
   const totalWeeks = getTotalWeeksInYear(selectedDate.getFullYear())
 
@@ -18,13 +19,22 @@ export default function TopBar({ calendarExpanded, onToggleCalendar }: Props) {
       <div className="top-bar-left">
         <span className="top-bar-week">Week {weekNum}/{totalWeeks}</span>
       </div>
-      <button
-        className={`top-bar-calendar-btn ${calendarExpanded ? 'active' : ''}`}
-        onClick={onToggleCalendar}
-        aria-label="Toggle calendar"
-      >
-        <Calendar size={20} />
-      </button>
+      <div className="top-bar-actions">
+        <button
+          className="top-bar-icon-btn"
+          onClick={toggleTheme}
+          aria-label="Toggle theme"
+        >
+          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
+        <button
+          className={`top-bar-icon-btn ${calendarExpanded ? 'active' : ''}`}
+          onClick={onToggleCalendar}
+          aria-label="Toggle calendar"
+        >
+          <Calendar size={20} />
+        </button>
+      </div>
     </header>
   )
 }

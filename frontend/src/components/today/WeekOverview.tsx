@@ -1,5 +1,7 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import type { WeeklyMileage } from '../../api/types'
+import { useTheme } from '../../App'
+import { getChartTickColor } from '../../utils/theme'
 import './WeekOverview.css'
 
 interface Props {
@@ -34,47 +36,51 @@ function getActivityTypes(data: WeeklyMileage[]): string[] {
   return orderedTypes.filter(t => types.has(t))
 }
 
-// Custom tooltip component
-function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) {
-  if (active && payload && payload.length) {
-    const total = payload.reduce((sum, entry) => sum + (entry.value || 0), 0)
-    return (
-      <div style={{
-        background: '#1a1a2e',
-        border: '1px solid #2d2d44',
-        borderRadius: 8,
-        padding: '8px 12px',
-        fontSize: 12,
-        color: '#e0e0e0',
-      }}>
-        <div style={{ fontWeight: 600, marginBottom: 4 }}>{label}</div>
-        {payload.map((entry, index) => {
-          // Extract activity type from dataKey (e.g., "by_type.run" -> "run")
-          const activityType = entry.dataKey?.split('.').pop() || entry.dataKey
-          return entry.value > 0 && (
-            <div key={index} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{
-                width: 8,
-                height: 8,
-                borderRadius: 2,
-                backgroundColor: entry.color,
-              }} />
-              <span>{ACTIVITY_LABELS[activityType] || activityType}: {entry.value} km</span>
-            </div>
-          )
-        })}
-        <div style={{ marginTop: 4, paddingTop: 4, borderTop: '1px solid #2d2d44', fontWeight: 600 }}>
-          Total: {total.toFixed(1)} km
-        </div>
-      </div>
-    )
-  }
-  return null
-}
-
 export default function WeekOverview({ data }: Props) {
   const maxKm = Math.max(...data.map(d => d.km), 1)
   const activityTypes = getActivityTypes(data)
+  const { theme } = useTheme()
+  const tickColor = getChartTickColor(theme)
+
+  const tooltipBg = theme === 'light' ? '#ffffff' : '#1a1a2e'
+  const tooltipBorder = theme === 'light' ? '#e0e4ec' : '#2d2d44'
+  const tooltipText = theme === 'light' ? '#1a1a2e' : '#e0e0e0'
+
+  function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) {
+    if (active && payload && payload.length) {
+      const total = payload.reduce((sum, entry) => sum + (entry.value || 0), 0)
+      return (
+        <div style={{
+          background: tooltipBg,
+          border: `1px solid ${tooltipBorder}`,
+          borderRadius: 8,
+          padding: '8px 12px',
+          fontSize: 12,
+          color: tooltipText,
+        }}>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>{label}</div>
+          {payload.map((entry, index) => {
+            const activityType = entry.dataKey?.split('.').pop() || entry.dataKey
+            return entry.value > 0 && (
+              <div key={index} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 2,
+                  backgroundColor: entry.color,
+                }} />
+                <span>{ACTIVITY_LABELS[activityType] || activityType}: {entry.value} km</span>
+              </div>
+            )
+          })}
+          <div style={{ marginTop: 4, paddingTop: 4, borderTop: `1px solid ${tooltipBorder}`, fontWeight: 600 }}>
+            Total: {total.toFixed(1)} km
+          </div>
+        </div>
+      )
+    }
+    return null
+  }
 
   return (
     <div className="card week-overview">
@@ -87,7 +93,7 @@ export default function WeekOverview({ data }: Props) {
           <BarChart data={data} barCategoryGap="20%">
             <XAxis
               dataKey="label"
-              tick={{ fontSize: 11, fill: '#888' }}
+              tick={{ fontSize: 11, fill: tickColor }}
               axisLine={false}
               tickLine={false}
             />

@@ -23,7 +23,13 @@
   color: var(--text);
 }
 
-.top-bar-calendar-btn {
+.top-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.top-bar-icon-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -34,8 +40,8 @@
   transition: background 0.15s, color 0.15s;
 }
 
-.top-bar-calendar-btn:hover,
-.top-bar-calendar-btn.active {
+.top-bar-icon-btn:hover,
+.top-bar-icon-btn.active {
   background: var(--bg-card);
   color: var(--accent-light);
 }
