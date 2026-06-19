@@ -102,7 +102,11 @@ export default function ActivityDetailView() {
         )}
 
         {/* Secondary stats */}
-        {secondaryStats.length > 0 && <StatGrid stats={secondaryStats} columns={3} />}
+        {secondaryStats.length > 0 && (
+          <section className="detail-section">
+            <StatGrid stats={secondaryStats} columns={3} />
+          </section>
+        )}
 
         {/* Running dynamics */}
         {dynamicsStats.length > 0 && (
