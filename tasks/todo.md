@@ -1,55 +1,50 @@
-# Pull Name, DOB, Weight from Garmin — Implementation Plan
+# P2-2 · Threshold / Critical Power auto-estimation
 
-## Goal
-Always source the athlete's Name, Date of birth, and Weight from Garmin (read-only),
-and disable those three fields in the Athlete Profile form.
+Derive threshold pace/HR and Critical Power from recent power+pace history
+(Stryd-style power-duration analysis), populate the profile, and feed P1-3 zones
++ the AI context.
 
-## Checklist
+## Approach
 
-### Backend
-- [ ] `app/garmin_sync.py`: import `AthleteProfile`
-- [ ] `app/garmin_sync.py`: add `_fetch_garmin_profile_fields()` (name via get_full_name,
-      DOB + weight via get_user_profile().userData, weight fallback via body composition)
-- [ ] `app/garmin_sync.py`: add `sync_athlete_profile()` upsert + sync status
-- [ ] `app/main.py`: call `sync_athlete_profile()` on backfill startup and in daily sync
-- [ ] `app/api.py`: strip Garmin-managed fields (name/dob/weight) from the POST so the
-      user can never override them
+- 2-parameter Critical Power model `P(t) = CP + W'/t`, fit by least squares over a
+  duration-bucketed power-duration frontier (max avg-power per duration bin) from
+  recent activities. Same model on the velocity-duration frontier yields Critical
+  Velocity → threshold pace.
+- Threshold HR (LTHR) from sustained hard efforts, with a `% of observed max HR`
+  fallback. Max HR from the highest observed activity max.
+- Each estimate carries a method, confidence, and sample size; insufficient data
+  yields a null value rather than a bad guess.
 
-### Frontend
-- [ ] `frontend/src/components/profile/ProfileForm.tsx`: disable Name, DOB, Weight inputs,
-      add "Synced from Garmin" hint
+## Tasks
 
-### Verify
-- [ ] Backend unit tests for the new extraction + sync
-- [ ] Run pytest, run frontend build/typecheck
+- [x] `app/threshold.py` — estimation core (CP/W', CV→pace, LTHR, max HR) + AI context formatter
+- [x] `app/schemas.py` — `ThresholdEstimateField`, `ThresholdEstimateResponse`, `ThresholdApplyRequest`
+- [x] `app/api.py` — `GET /threshold-estimate`, `POST /threshold-estimate/apply`
+- [x] `app/ai_coach.py` — surface auto-derived thresholds in `_build_context` when the profile lacks them
+- [x] `frontend/src/api/types.ts` + `hooks.ts` — types + query/mutation
+- [x] `frontend/src/components/settings/ThresholdEstimateSection.tsx` (+ CSS) wired into `SettingsView`
+- [x] `tests/test_threshold.py` — cover the math, edge cases, endpoints
+- [x] Run backend tests w/ coverage gate; build + type-check frontend
 
 ## Review
 
-All checklist items complete.
-
-### What was implemented
-**Backend**
-- `app/garmin_sync.py`: `sync_athlete_profile()` pulls name (`get_full_name`), date of
-  birth and weight from Garmin user settings (`get_user_profile().userData`), with a
-  body-composition fallback for weight. Upserts the singleton `AthleteProfile`,
-  always overwriting the three Garmin-managed fields; records `last_profile_sync`.
-- `app/main.py`: profile sync runs on startup backfill and in the daily scheduled sync.
-- `app/api.py`: `POST /athlete-profile` strips `name`/`date_of_birth`/`weight_kg` so the
-  client can never override Garmin-sourced values (authoritative server-side).
-
-**Frontend**
-- `ProfileForm.tsx`: Name, Date of birth and Weight inputs are `disabled`/`readOnly`
-  with a "Synced from Garmin" hint; remaining fields stay editable.
-
-### Verification
-- Backend: full suite passes (301 tests), coverage 88% (CI gate 80%). New tests cover
-  field extraction, weight fallback, missing-data tolerance, profile upsert/overwrite,
-  and the API ignoring Garmin-managed fields. Updated existing athlete-profile API tests
-  to reflect the new read-only behavior.
-- Frontend: `tsc --noEmit` clean; vitest 50 tests pass.
-
-### Local env note
-`garminconnect==0.2.25` pulls `withings_sync`, whose wheel won't build on this box's
-setuptools (CI on py3.11 is fine). Installed garminconnect with `--no-deps` and added a
-tiny local `withings_sync.fit` stub purely to run tests; `fit` is only used by
-`add_body_composition`, which this change never calls.
+- **No migration needed.** Estimates write to the existing `AthleteProfile.threshold_*`
+  / `max_hr` columns, so applying an estimate immediately drives the P1-3
+  threshold-anchored zones (which read those fields) with zero new schema.
+- **`app/threshold.py`** is self-contained: a 2-parameter hyperbolic fit
+  (`P(t) = CP + W'/t`) over a duration-bucketed *frontier* (best effort per bin) so
+  easy runs don't pull the estimate down; the same model on speed gives Critical
+  Velocity → threshold pace; LTHR comes from sustained hard efforts with a
+  %-of-max-HR fallback. Non-physical fits (negative asymptote / rising power with
+  duration) return `None` rather than a bad number.
+- **AI context** gains an "Estimated Thresholds" section listing only the fields the
+  athlete hasn't set manually (plus CP/W' when no FTP is configured) — additive,
+  never overriding manual entry; wrapped in try/except so a bad estimate can't break
+  insight generation.
+- **Frontend** adds a read-only estimate card (per-field confidence badges, current
+  vs estimated, one-click "Apply to profile") in Settings between Profile and Zones.
+- **Tests:** `tests/test_threshold.py` (26 cases) covers the math helpers, each
+  estimator, edge/empty/old-data cases, profile application, context formatting, and
+  both endpoints. `app/threshold.py` at 98% line coverage; suite total 89% (gate 80%).
+  Pre-existing `test_routes.py` failures are an unrelated Jinja-version issue in this
+  sandbox and touch none of the changed files.

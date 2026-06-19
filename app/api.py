@@ -41,11 +41,15 @@ from app.schemas import (
     WeeklyMileage,
     WorkoutAdherence,
     WorkoutStepResponse,
+    ThresholdApplyRequest,
+    ThresholdEstimateField,
+    ThresholdEstimateResponse,
     ZoneConfigBulkUpdate,
     ZoneConfigResponse,
     ZoneConfigsResponse,
 )
 from app import training_load
+from app import threshold as threshold_mod
 from app import adherence as adherence_mod
 from app.utils import safe_json_loads, parse_activity_charts, calculate_age
 
@@ -656,6 +660,60 @@ def api_update_zones(update: ZoneConfigBulkUpdate, db: Session = Depends(get_db)
             zone.max_pct = zu.max_pct
     db.commit()
     return _build_zones_response(db)
+
+
+# --- Threshold / Critical Power estimation ---
+
+def _field(est: "threshold_mod.FieldEstimate") -> ThresholdEstimateField:
+    return ThresholdEstimateField(
+        value=est.value,
+        method=est.method,
+        confidence=est.confidence,
+        sample_size=est.sample_size,
+    )
+
+
+def _build_threshold_response(
+    estimate: "threshold_mod.ThresholdEstimate", profile: AthleteProfile | None
+) -> ThresholdEstimateResponse:
+    return ThresholdEstimateResponse(
+        critical_power=_field(estimate.critical_power),
+        w_prime=estimate.w_prime,
+        threshold_pace_min_km=_field(estimate.threshold_pace_min_km),
+        threshold_hr=_field(estimate.threshold_hr),
+        max_hr=_field(estimate.max_hr),
+        lookback_days=estimate.lookback_days,
+        activities_analyzed=estimate.activities_analyzed,
+        current_threshold_power=profile.threshold_power if profile else None,
+        current_threshold_pace_min_km=profile.threshold_pace_min_km if profile else None,
+        current_threshold_hr=profile.threshold_hr if profile else None,
+        current_max_hr=profile.max_hr if profile else None,
+    )
+
+
+@api_router.get("/threshold-estimate", response_model=ThresholdEstimateResponse)
+def api_get_threshold_estimate(db: Session = Depends(get_db)):
+    estimate = threshold_mod.estimate_thresholds(db)
+    profile = db.query(AthleteProfile).first()
+    return _build_threshold_response(estimate, profile)
+
+
+@api_router.post("/threshold-estimate/apply", response_model=AthleteProfileResponse)
+def api_apply_threshold_estimate(
+    req: ThresholdApplyRequest, db: Session = Depends(get_db)
+):
+    estimate = threshold_mod.estimate_thresholds(db)
+    profile = db.query(AthleteProfile).first()
+    if profile is None:
+        profile = AthleteProfile()
+        db.add(profile)
+    fields = req.fields if req.fields else None
+    applied = threshold_mod.apply_estimate_to_profile(profile, estimate, fields)
+    if not applied:
+        raise HTTPException(status_code=400, detail="No estimated thresholds available to apply")
+    db.commit()
+    db.refresh(profile)
+    return _profile_response(profile)
 
 
 # --- Actions ---

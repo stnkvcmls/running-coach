@@ -1,0 +1,122 @@
+.te-desc {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin: -8px 0 12px;
+  line-height: 1.5;
+}
+
+.te-card {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.te-empty {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-style: italic;
+  margin: 0;
+}
+
+.te-table {
+  display: grid;
+  gap: 6px;
+}
+
+.te-head {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1fr 90px;
+  gap: 8px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0 2px;
+}
+
+.te-row {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1fr 90px;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 0.88rem;
+}
+
+.te-label {
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+}
+
+.te-extra {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.te-value {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.te-current {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.te-conf {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.te-conf--high {
+  background: rgba(46, 204, 113, 0.18);
+  color: #2ecc71;
+}
+
+.te-conf--medium {
+  background: rgba(243, 156, 18, 0.18);
+  color: #f39c12;
+}
+
+.te-conf--low {
+  background: rgba(231, 76, 60, 0.18);
+  color: #e74c3c;
+}
+
+.te-apply-btn {
+  align-self: flex-start;
+  background: var(--accent, #6c5ce7);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 18px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.te-apply-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.te-apply-btn:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.te-error {
+  font-size: 0.8rem;
+  color: #e74c3c;
+}
+
+.te-success {
+  font-size: 0.8rem;
+  color: var(--success, #2ecc71);
+}

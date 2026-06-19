@@ -288,3 +288,28 @@ export interface ZoneConfigsResponse {
   threshold_pace_min_km: number | null
   threshold_power: number | null
 }
+
+export interface ThresholdEstimateField {
+  value: number | null
+  method: string | null
+  confidence: string | null
+  sample_size: number
+}
+
+export interface ThresholdEstimateResponse {
+  critical_power: ThresholdEstimateField
+  w_prime: number | null
+  threshold_pace_min_km: ThresholdEstimateField
+  threshold_hr: ThresholdEstimateField
+  max_hr: ThresholdEstimateField
+  lookback_days: number
+  activities_analyzed: number
+  current_threshold_power: number | null
+  current_threshold_pace_min_km: number | null
+  current_threshold_hr: number | null
+  current_max_hr: number | null
+}
+
+export interface ThresholdApplyRequest {
+  fields?: string[] | null
+}

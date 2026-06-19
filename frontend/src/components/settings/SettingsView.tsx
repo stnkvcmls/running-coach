@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { useSettings, useTriggerSync, useAiConfig, useSetAiConfig } from '../../api/hooks'
 import AthleteProfileSection from './AthleteProfileSection'
+import ThresholdEstimateSection from './ThresholdEstimateSection'
 import ZoneConfigSection from './ZoneConfigSection'
 import './SettingsView.css'
 
@@ -74,6 +75,9 @@ export default function SettingsView() {
     <div className="settings-view">
       {/* Athlete profile */}
       <AthleteProfileSection />
+
+      {/* Auto-estimated thresholds */}
+      <ThresholdEstimateSection />
 
       {/* Training zones */}
       <ZoneConfigSection />
