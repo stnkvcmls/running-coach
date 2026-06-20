@@ -539,10 +539,22 @@ def test_align_intervals_autolap_split_and_standalone_rest():
     # Cooldown paired with the 1 km cooldown lap, not a rest lap.
     assert by_label["Cooldown"].actual_distance_m == pytest.approx(1000.0)
 
-    # Recoveries paired with the short jog-rest laps, and not pace-graded.
+    # Warmup/cooldown have no pace target of their own: actual pace is shown for
+    # reference but they are NOT graded against the interval pace (no delta, no
+    # invented planned pace).
+    assert warmup.actual_pace_display is not None
+    assert warmup.planned_pace_display is None
+    assert warmup.pace_delta_sec_per_km is None
+    assert by_label["Cooldown"].pace_delta_sec_per_km is None
+    assert by_label["Cooldown"].planned_pace_display is None
+
+    # Recoveries paired with the short jog-rest laps; not pace-graded and — being
+    # time-based with no target — carry no fabricated planned distance.
     rec1 = by_label["Recovery 1"]
     assert rec1.actual_distance_m == pytest.approx(125.0)
     assert rec1.actual_pace_display is None
+    assert rec1.planned_distance_m is None
+    assert rec1.distance_delta_m is None
 
 
 def test_align_intervals_none_for_trivial_workout():

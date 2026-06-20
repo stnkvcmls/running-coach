@@ -448,7 +448,6 @@ def _merge_lap_segments(laps: list[dict]) -> list[dict]:
 def _align_intervals(
     flat_steps: list[WorkoutStepResponse],
     laps: list[dict],
-    fallback_pace_sec: float | None,
 ) -> list[IntervalAdherence]:
     """Align executed laps to planned steps for per-rep deltas.
 
@@ -461,6 +460,12 @@ def _align_intervals(
     the workout was prescribed. Steps with no remaining lap in their channel are
     returned with ``matched=False``. Returns ``[]`` for trivial workouts (no
     interval structure) so the UI only shows the breakdown when it adds value.
+
+    Planned pace and distance are taken from each step's *own* target only.
+    Steps without a pace target of their own (warmup, cooldown, untargeted
+    rests) are never graded against the interval pace: their actual pace is
+    shown for reference but no planned pace, delta, or fabricated time→distance
+    target is invented for them.
     """
     has_structure = sum(1 for s in flat_steps if s.step_type in _NUMBERED_STEP_TYPES) >= 2
     if not has_structure or not laps:
@@ -482,15 +487,15 @@ def _align_intervals(
         else:
             label = base
 
-        step_pace = _parse_pace_display(step.target_display) if step.target_display else None
-        planned_pace = step_pace or fallback_pace_sec
-        planned_dist = _step_distance_m(step, planned_pace)
-        is_rest = step.activity_type == "rest"
-        planned_pace_display = (
-            step.target_display
+        # Only the step's own pace target drives grading — no interval fallback.
+        own_pace = (
+            _parse_pace_display(step.target_display)
             if step.target_type == "pace" and step.target_display
-            else _format_pace_sec(planned_pace) if not is_rest else None
+            else None
         )
+        planned_dist = _step_distance_m(step, own_pace)
+        is_rest = step.activity_type == "rest"
+        planned_pace_display = step.target_display if own_pace is not None else None
 
         channel = _step_channel(step)
         seg = None
@@ -513,11 +518,12 @@ def _align_intervals(
 
         actual_dist = seg["distance"]
         actual_pace_sec = seg["pace_sec"]
-        # Pace comparison only for running steps (rest pace isn't graded).
+        # Show actual pace for running steps (informational); only grade the
+        # delta when the step set its own pace target.
         actual_pace_display = None if is_rest else _format_pace_sec(actual_pace_sec)
         pace_delta = None
-        if not is_rest and actual_pace_sec is not None and planned_pace is not None:
-            pace_delta = round(actual_pace_sec - planned_pace, 1)
+        if own_pace is not None and not is_rest and actual_pace_sec is not None:
+            pace_delta = round(actual_pace_sec - own_pace, 1)
         distance_delta = (
             round(actual_dist - planned_dist, 1) if planned_dist is not None else None
         )
@@ -638,7 +644,7 @@ def compute_adherence(
         summary_parts.append(f"{int(round(actual_rest_distance_m))} m in rest")
 
     # --- Per-interval breakdown (lap ↔ step alignment) ---
-    intervals = _align_intervals(flat, _ordered_laps(activity), planned_pace_sec) or None
+    intervals = _align_intervals(flat, _ordered_laps(activity)) or None
 
     return WorkoutAdherence(
         planned_distance_m=planned_distance_m,
