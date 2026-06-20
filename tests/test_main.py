@@ -24,22 +24,43 @@ def test_scheduled_activity_sync_survives_calendar_error(monkeypatch):
     main._scheduled_activity_sync()
 
 
-def test_scheduled_daily_sync_triggers_ai(monkeypatch):
-    summary = MagicMock(id=1)
+def test_scheduled_daily_sync_syncs_window_and_analyzes_today(monkeypatch):
+    from datetime import date
+
     import app.garmin_sync as garmin_sync
     import app.ai_coach as ai_coach
-    monkeypatch.setattr(garmin_sync, "sync_daily_summary", MagicMock(return_value=summary))
+
+    monkeypatch.setattr(main.settings, "daily_sync_window_days", 3)
+    monkeypatch.setattr(garmin_sync, "sync_athlete_profile", MagicMock())
+
+    # Return a distinct summary per requested date so we can verify which one
+    # is handed to the AI (the newest — today).
+    summaries = {}
+
+    def fake_sync(target):
+        s = MagicMock(id=target.toordinal(), date=target)
+        summaries[target] = s
+        return s
+
+    sync = MagicMock(side_effect=fake_sync)
+    monkeypatch.setattr(garmin_sync, "sync_daily_summary", sync)
     analyze = MagicMock()
     monkeypatch.setattr(ai_coach, "analyze_daily_summary", analyze)
 
     main._scheduled_daily_sync()
 
-    analyze.assert_called_once_with(summary)
+    # Rolling window: today + the prior 2 days.
+    assert sync.call_count == 3
+    synced_dates = {c.args[0] for c in sync.call_args_list}
+    assert date.today() in synced_dates
+    # AI runs only on today's (newest) summary.
+    analyze.assert_called_once_with(summaries[date.today()])
 
 
 def test_scheduled_daily_sync_no_summary_skips_ai(monkeypatch):
     import app.garmin_sync as garmin_sync
     import app.ai_coach as ai_coach
+    monkeypatch.setattr(garmin_sync, "sync_athlete_profile", MagicMock())
     monkeypatch.setattr(garmin_sync, "sync_daily_summary", MagicMock(return_value=None))
     analyze = MagicMock()
     monkeypatch.setattr(ai_coach, "analyze_daily_summary", analyze)

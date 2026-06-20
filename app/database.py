@@ -91,6 +91,26 @@ def _migrate_db():
     except Exception:
         logger.debug("Migration skipped (table may not exist yet)")
 
+    new_daily_summary_columns = {
+        "hrv_avg": "FLOAT",
+        "hrv_weekly_avg": "FLOAT",
+        "hrv_status": "VARCHAR(20)",
+    }
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(text("PRAGMA table_info(daily_summaries)")).fetchall()
+            existing = {row[1] for row in rows}
+            added = []
+            for col, dtype in new_daily_summary_columns.items():
+                if col not in existing:
+                    conn.execute(text(f"ALTER TABLE daily_summaries ADD COLUMN {col} {dtype}"))
+                    added.append(col)
+            conn.commit()
+            if added:
+                logger.info("Migrated daily_summaries table: added %s", ", ".join(added))
+    except Exception:
+        logger.debug("Migration skipped (daily_summaries table may not exist yet)")
+
     new_profile_columns = {"threshold_power": "INTEGER"}
     try:
         with engine.connect() as conn:

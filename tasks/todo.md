@@ -1,3 +1,35 @@
+# P1-2 · HRV sync → readiness  +  overnight-data date-attribution fix
+
+## Plan
+- [x] Sync Garmin overnight HRV (`get_hrv_data`) into `DailySummary`
+      (`hrv_avg`, `hrv_weekly_avg`, `hrv_status`) + DB migration.
+- [x] Add an HRV readiness component (last-night HRV vs personal baseline, with a
+      status-enum fallback); rebalance weights to include HRV at 0.20.
+- [x] Surface HRV: Wellness-Trends chart card, Today readiness component bar, AI
+      daily-summary context line, `format_readiness_context`.
+- [x] Fix overnight date attribution: scheduled daily sync now covers a rolling
+      window (today + prior `daily_sync_window_days-1` days) so last night's
+      sleep/HRV — which Garmin dates to the wake-up day — lands on the correct date
+      the morning you sync, while earlier days' full-day totals finalize. Backfill
+      now starts at today (`days_ago=0`).
+- [x] Tests: garmin_sync HRV persistence, readiness HRV component (baseline ratio,
+      status fallback, composite fold-in), rolling-window daily sync + AI-on-today,
+      backfill-includes-today. Full suite 351 passing, coverage 83.4% (gate 80%).
+      Frontend `npm run build` (tsc) clean.
+
+## Review / findings — was sleep correctly dated?
+Garmin attributes overnight metrics (sleep, HRV, resting HR) to the **wake-up
+calendar date** (confirmed via Garmin Developer Portal `calendarDate` definition):
+sleep from the night of Jun 19→20 is dated **Jun 20**. The data the app stored was
+internally consistent (it reused Garmin's own date), but `sync_daily_summary()`
+defaulted to **yesterday** and the 7am job called it with no argument — so waking up
+on Jun 20 and syncing pulled Jun 19's row, and last night's sleep/HRV wasn't captured
+until the *next* morning. The sync **window** was a day behind. Fixed by the rolling
+window above: today's row now captures last night's overnight stats on the wake-up
+day, and prior days are re-synced so their daytime totals finalize.
+
+---
+
 # P2-2 precision upgrade — mean-maximal curves + proper CP/CV modeling
 
 Move threshold estimation off whole-activity averages and onto real

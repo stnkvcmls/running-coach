@@ -20,6 +20,9 @@ def _daily(
     resting_hr=None,
     stress_avg=None,
     body_battery_high=None,
+    hrv_avg=None,
+    hrv_weekly_avg=None,
+    hrv_status=None,
 ):
     """Build a DailySummary stub with only the fields needed for readiness."""
     return DailySummary(
@@ -29,6 +32,9 @@ def _daily(
         resting_hr=resting_hr,
         stress_avg=stress_avg,
         body_battery_high=body_battery_high,
+        hrv_avg=hrv_avg,
+        hrv_weekly_avg=hrv_weekly_avg,
+        hrv_status=hrv_status,
     )
 
 
@@ -178,6 +184,65 @@ def test_rhr_component_absent_when_combined_with_other_data():
     )
     assert result is not None
     assert result.rhr_component is None
+
+
+# ---------------------------------------------------------------------------
+# HRV component
+# ---------------------------------------------------------------------------
+
+def test_hrv_at_baseline_gives_75():
+    # hrv_avg == weekly baseline → ratio 1.0 → 75
+    result = training_load.compute_readiness(
+        _daily(hrv_avg=45, hrv_weekly_avg=45), None, []
+    )
+    assert result is not None
+    assert result.hrv_component == 75
+
+
+def test_hrv_above_baseline_scores_higher():
+    # 54 vs 45 → ratio 1.2 → 75 + 50 = 125, clamped to 100
+    result = training_load.compute_readiness(
+        _daily(hrv_avg=54, hrv_weekly_avg=45), None, []
+    )
+    assert result is not None
+    assert result.hrv_component == 100
+
+
+def test_hrv_below_baseline_scores_lower():
+    # 36 vs 45 → ratio 0.8 → 75 - 50 = 25
+    result = training_load.compute_readiness(
+        _daily(hrv_avg=36, hrv_weekly_avg=45), None, []
+    )
+    assert result is not None
+    assert result.hrv_component == 25
+
+
+def test_hrv_status_fallback_when_no_baseline():
+    result = training_load.compute_readiness(
+        _daily(hrv_avg=45, hrv_status="UNBALANCED"), None, []
+    )
+    assert result is not None
+    assert result.hrv_component == 50
+
+
+def test_hrv_component_none_without_hrv_avg():
+    result = training_load.compute_readiness(
+        _daily(hrv_status="BALANCED", sleep_score=80), None, []
+    )
+    assert result is not None
+    assert result.hrv_component is None
+
+
+def test_hrv_component_folds_into_composite():
+    # Strong HRV should lift the composite versus suppressed HRV, all else equal.
+    high = training_load.compute_readiness(
+        _daily(sleep_score=70, hrv_avg=54, hrv_weekly_avg=45), None, []
+    )
+    low = training_load.compute_readiness(
+        _daily(sleep_score=70, hrv_avg=36, hrv_weekly_avg=45), None, []
+    )
+    assert high is not None and low is not None
+    assert high.score > low.score
 
 
 # ---------------------------------------------------------------------------

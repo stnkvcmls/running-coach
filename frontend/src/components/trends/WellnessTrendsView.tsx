@@ -25,6 +25,7 @@ const SLEEP_COLOR = '#6c5ce7'
 const RHR_COLOR = '#e17055'
 const STRESS_COLOR = '#fd79a8'
 const BATTERY_COLOR = '#00b894'
+const HRV_COLOR = '#0984e3'
 
 function avg7(data: any[], key: string): number | null {
   const vals = data.slice(-7).map(d => d[key]).filter((v: any) => v != null) as number[]
@@ -79,6 +80,7 @@ export default function WellnessTrendsView() {
     stress: s.stress_avg ?? null,
     battery_high: s.body_battery_high ?? null,
     battery_low: s.body_battery_low ?? null,
+    hrv: s.hrv_avg ?? null,
   }))
 
   const avgSleepScore = avg7(chartData, 'sleep_score')
@@ -86,6 +88,9 @@ export default function WellnessTrendsView() {
   const avgRhr = avg7(chartData, 'resting_hr')
   const avgStress = avg7(chartData, 'stress')
   const avgBatteryHigh = avg7(chartData, 'battery_high')
+  const avgHrv = avg7(chartData, 'hrv')
+  const latestHrvStatus = [...data].reverse().find(s => s.hrv_status != null)?.hrv_status ?? null
+  const hasHrv = chartData.some(d => d.hrv != null)
 
   const minTickGap = days === 30 ? 14 : days === 60 ? 20 : 28
 
@@ -278,6 +283,49 @@ export default function WellnessTrendsView() {
           </ResponsiveContainer>
         </div>
       </div>
+
+      {/* HRV (overnight) */}
+      {hasHrv && (
+        <div className="card wellness-card">
+          <div className="wellness-card-header">
+            <div className="wellness-metric-title">HRV (overnight)</div>
+            {avgHrv != null && (
+              <div className="wellness-metric-value" style={{ color: HRV_COLOR }}>
+                {avgHrv.toFixed(0)}
+                <span className="wellness-metric-unit"> ms avg · 7-day</span>
+              </div>
+            )}
+            {latestHrvStatus != null && (
+              <div className="wellness-metric-sub">Status: {latestHrvStatus.toLowerCase()}</div>
+            )}
+          </div>
+          <div className="wellness-chart">
+            <ResponsiveContainer width="100%" height={120}>
+              <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="wt-hrvFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={HRV_COLOR} stopOpacity={0.35} />
+                    <stop offset="100%" stopColor={HRV_COLOR} stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <XAxis {...xAxisProps} />
+                <YAxis {...yAxisProps} domain={['dataMin - 5', 'dataMax + 5']} />
+                <Tooltip content={<MetricTooltip unit=" ms" />} />
+                <Area
+                  type="monotone"
+                  dataKey="hrv"
+                  stroke={HRV_COLOR}
+                  strokeWidth={2}
+                  fill="url(#wt-hrvFill)"
+                  dot={false}
+                  name="HRV"
+                  connectNulls
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

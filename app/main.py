@@ -4,6 +4,7 @@ import os
 import threading
 
 from contextlib import asynccontextmanager
+from datetime import date, timedelta
 
 from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_EXECUTED
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -62,7 +63,14 @@ def _scheduled_activity_sync():
 
 
 def _scheduled_daily_sync():
-    """Scheduled job: sync daily summary and trigger AI."""
+    """Scheduled job: sync a rolling window of daily summaries and trigger AI.
+
+    Garmin attributes overnight metrics (sleep, HRV, resting HR) to the wake-up
+    day, so we sync *today* to capture last night's data on the correct date, and
+    re-sync the prior days in the window so their full-day totals finalize. AI
+    analysis runs only on today's (newest) summary to avoid re-analyzing days that
+    were already covered on previous runs.
+    """
     from app.garmin_sync import sync_athlete_profile, sync_daily_summary
     from app.ai_coach import analyze_daily_summary
 
@@ -71,12 +79,20 @@ def _scheduled_daily_sync():
     except Exception:
         logger.exception("Athlete profile sync failed")
 
-    summary = sync_daily_summary()
-    if summary:
+    window = max(1, settings.daily_sync_window_days)
+    today = date.today()
+    today_summary = None
+    for offset in range(window):
+        target = today - timedelta(days=offset)
+        summary = sync_daily_summary(target)
+        if offset == 0:
+            today_summary = summary
+
+    if today_summary:
         try:
-            analyze_daily_summary(summary)
+            analyze_daily_summary(today_summary)
         except Exception:
-            logger.exception("AI analysis failed for daily summary %s", summary.id)
+            logger.exception("AI analysis failed for daily summary %s", today_summary.id)
 
 
 def _scheduled_weekly_review():
