@@ -31,12 +31,7 @@ def get_garmin_client() -> Garmin:
                 _garmin_client = None
 
         client = Garmin(settings.garmin_email, settings.garmin_password)
-        try:
-            client.login(settings.garmin_token_dir)
-        except Exception:
-            logger.info("Token login failed, doing fresh login")
-            client.login()
-            client.garth.dump(settings.garmin_token_dir)
+        client.login(settings.garmin_token_dir)
         _garmin_client = client
         logger.info("Garmin authenticated as %s", client.get_full_name())
         return client
@@ -350,6 +345,12 @@ def sync_daily_summary(target_date: date | None = None) -> DailySummary | None:
                 db.commit()
                 db.refresh(summary)
 
+            # Detach the fully-loaded object before writing sync status. That
+            # write commits, and with expire_on_commit the commit would expire
+            # summary's attributes -- leaving the returned, now session-less
+            # object unreadable (DetachedInstanceError on first attribute
+            # access). Expunging first preserves its loaded state for the caller.
+            db.expunge(summary)
             _set_sync_status(db, "last_daily_sync", datetime.now(timezone.utc).isoformat())
             logger.info("Daily summary synced for %s", date_str)
             return summary

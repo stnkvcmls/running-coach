@@ -8,15 +8,20 @@ RUN npm run build
 FROM python:3.12-slim
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
+# Cap glibc malloc arenas. The sync jobs run in APScheduler worker threads and
+# do large, bursty JSON/stream allocations; glibc otherwise spins up one arena
+# per thread (default 8 x ncores) and rarely returns that memory to the OS, so
+# RSS ratchets up on every sync and never comes back down. Capping arenas and
+# lowering the trim threshold keeps the resident set bounded.
+ENV MALLOC_ARENA_MAX=2 \
+    MALLOC_TRIM_THRESHOLD_=131072
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY app/ ./app/
+COPY static/ ./static/
 
-# Copy React build output
 COPY --from=frontend-build /frontend/dist /app/frontend/dist
 
 RUN mkdir -p /data

@@ -1,9 +1,11 @@
+import ctypes
 import logging
 import os
 import threading
 
 from contextlib import asynccontextmanager
 
+from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_EXECUTED
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
@@ -21,6 +23,30 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 scheduler = BackgroundScheduler()
+
+_libc = None
+
+
+def _trim_memory():
+    """Release freed heap pages back to the OS.
+
+    Sync jobs allocate large, bursty stream/JSON buffers; glibc keeps the
+    freed memory in its arenas rather than returning it, so RSS stays pinned
+    at its high-water mark. Calling malloc_trim once the work is done lets the
+    resident set fall back down after each peak. No-op on non-glibc platforms.
+    """
+    global _libc
+    try:
+        if _libc is None:
+            _libc = ctypes.CDLL("libc.so.6")
+        _libc.malloc_trim(0)
+    except (OSError, AttributeError):
+        pass
+
+
+def _trim_after_job(_event):
+    """APScheduler listener: trim memory after each job finishes."""
+    _trim_memory()
 
 
 def _scheduled_activity_sync():
@@ -84,6 +110,10 @@ def _run_backfill():
         weekly_review()
     except Exception:
         logger.exception("Initial weekly review failed")
+    finally:
+        # Backfill is the largest one-time allocation burst; hand the freed
+        # pages back to the OS so startup RSS settles instead of staying high.
+        _trim_memory()
 
 
 @asynccontextmanager
@@ -131,6 +161,7 @@ async def lifespan(app: FastAPI):
         replace_existing=True,
     )
 
+    scheduler.add_listener(_trim_after_job, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR)
     scheduler.start()
     logger.info(
         "Scheduler started (activities every %dm, daily at %d:00 %s)",

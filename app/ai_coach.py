@@ -4,8 +4,9 @@ import time
 from datetime import datetime, date, timedelta, timezone
 
 import anthropic
-import google.generativeai as genai
-from google.api_core import exceptions as _google_exc
+from google import genai
+from google.genai import errors as _genai_errors
+from google.genai import types as _genai_types
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -567,23 +568,19 @@ def _call_claude(context: str, trigger_type: str, model: str) -> tuple[str, str,
 
 def _call_gemini(context: str, trigger_type: str, model: str) -> tuple[str, str, str]:
     """Call Gemini API and return (content, summary, category)."""
-    genai.configure(api_key=settings.gemini_api_key)
-    gemini_model = genai.GenerativeModel(model_name=model, system_instruction=SYSTEM_PROMPT)
+    client = genai.Client(api_key=settings.gemini_api_key)
     user_prompt = f"Analyze this {trigger_type} data and provide coaching insights:\n\n{context}"
     try:
-        response = gemini_model.generate_content(user_prompt)
-    except (
-        _google_exc.ResourceExhausted,
-        _google_exc.ServiceUnavailable,
-        _google_exc.DeadlineExceeded,
-    ) as exc:
+        response = client.models.generate_content(
+            model=model,
+            contents=user_prompt,
+            config=_genai_types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
+        )
+    except _genai_errors.ServerError as exc:
         raise AITransientError(str(exc)) from exc
-    except (
-        _google_exc.PermissionDenied,
-        _google_exc.Unauthenticated,
-        _google_exc.InvalidArgument,
-        _google_exc.NotFound,
-    ) as exc:
+    except _genai_errors.ClientError as exc:
+        if getattr(exc, "code", None) == 429:
+            raise AITransientError(str(exc)) from exc
         raise AIFatalError(str(exc)) from exc
     content = response.text
     summary, category = _extract_summary_and_category(content, trigger_type)
@@ -1127,25 +1124,20 @@ def generate_training_plan(reference_date: date | None = None) -> TrainingPlan |
             for attempt in range(_MAX_RETRIES):
                 try:
                     if provider == "gemini":
-                        genai.configure(api_key=settings.gemini_api_key)
-                        gemini_model = genai.GenerativeModel(
-                            model_name=model,
-                            system_instruction=_PLAN_SYSTEM_PROMPT,
-                        )
+                        gemini_client = genai.Client(api_key=settings.gemini_api_key)
                         try:
-                            response = gemini_model.generate_content(plan_prompt)
-                        except (
-                            _google_exc.ResourceExhausted,
-                            _google_exc.ServiceUnavailable,
-                            _google_exc.DeadlineExceeded,
-                        ) as exc:
+                            response = gemini_client.models.generate_content(
+                                model=model,
+                                contents=plan_prompt,
+                                config=_genai_types.GenerateContentConfig(
+                                    system_instruction=_PLAN_SYSTEM_PROMPT,
+                                ),
+                            )
+                        except _genai_errors.ServerError as exc:
                             raise AITransientError(str(exc)) from exc
-                        except (
-                            _google_exc.PermissionDenied,
-                            _google_exc.Unauthenticated,
-                            _google_exc.InvalidArgument,
-                            _google_exc.NotFound,
-                        ) as exc:
+                        except _genai_errors.ClientError as exc:
+                            if getattr(exc, "code", None) == 429:
+                                raise AITransientError(str(exc)) from exc
                             raise AIFatalError(str(exc)) from exc
                         raw = response.text
                     else:

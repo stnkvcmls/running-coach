@@ -239,10 +239,11 @@ def test_call_claude_uses_anthropic(monkeypatch):
 
 
 def test_call_gemini_uses_genai(monkeypatch):
-    fake_model = MagicMock()
-    fake_model.generate_content.return_value = MagicMock(text="**Summary:** good\nrest")
-    monkeypatch.setattr(ai_coach.genai, "configure", lambda **k: None)
-    monkeypatch.setattr(ai_coach.genai, "GenerativeModel", lambda **k: fake_model)
+    fake_response = MagicMock()
+    fake_response.text = "**Summary:** good\nrest"
+    fake_client = MagicMock()
+    fake_client.models.generate_content.return_value = fake_response
+    monkeypatch.setattr(ai_coach.genai, "Client", lambda api_key: fake_client)
 
     content, summary, category = ai_coach._call_gemini("ctx", "daily_summary", "gemini-x")
     assert summary == "good"
