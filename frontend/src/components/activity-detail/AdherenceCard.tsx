@@ -1,8 +1,14 @@
-import { WorkoutAdherence } from '../../api/types'
+import { IntervalAdherence, WorkoutAdherence } from '../../api/types'
 import './AdherenceCard.css'
 
 interface Props {
   adherence: WorkoutAdherence
+}
+
+function formatDistance(meters: number | null): string {
+  if (meters === null) return '—'
+  if (meters >= 1000) return `${(meters / 1000).toFixed(2)} km`
+  return `${Math.round(meters)} m`
 }
 
 function scoreColor(score: number): string {
@@ -96,6 +102,44 @@ export default function AdherenceCard({ adherence }: Props) {
           </div>
         )}
       </div>
+
+      {adherence.intervals && adherence.intervals.length > 0 && (
+        <div className="adherence-intervals">
+          <div className="adherence-intervals-title">Per-interval breakdown</div>
+          <div className="adherence-interval-list">
+            {adherence.intervals.map((iv: IntervalAdherence) => (
+              <div key={iv.step_order} className="adherence-interval-row">
+                <span className="adherence-interval-label">{iv.label}</span>
+                {iv.matched ? (
+                  <div className="adherence-interval-values">
+                    <span className="adherence-interval-dist">
+                      {formatDistance(iv.actual_distance_m)}
+                      {iv.planned_distance_m !== null && (
+                        <span className="adherence-planned">
+                          {' / '}{formatDistance(iv.planned_distance_m)}
+                        </span>
+                      )}
+                    </span>
+                    {iv.actual_pace_display && (
+                      <span className="adherence-interval-pace">{iv.actual_pace_display}</span>
+                    )}
+                    {iv.pace_delta_sec_per_km !== null && (
+                      <span
+                        className={`adherence-delta ${iv.pace_delta_sec_per_km <= 0 ? 'adherence-delta-faster' : 'adherence-delta-slower'}`}
+                      >
+                        {iv.pace_delta_sec_per_km <= 0 ? '-' : '+'}
+                        {Math.abs(iv.pace_delta_sec_per_km).toFixed(0)}s
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <span className="adherence-interval-missed">missed</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="adherence-bar-container">
         <div

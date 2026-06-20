@@ -88,6 +88,61 @@
   color: #ef4444;
 }
 
+.adherence-intervals {
+  margin-top: 16px;
+  border-top: 1px solid var(--border-color, #e5e7eb);
+  padding-top: 12px;
+}
+
+.adherence-intervals-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.adherence-interval-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.adherence-interval-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.adherence-interval-label {
+  color: var(--text-secondary);
+  flex: 0 0 auto;
+}
+
+.adherence-interval-values {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.adherence-interval-dist {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.adherence-interval-pace {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.adherence-interval-missed {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 .adherence-bar-container {
   margin-top: 12px;
   height: 4px;

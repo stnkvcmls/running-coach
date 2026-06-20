@@ -34,6 +34,19 @@ export interface FeedbackRequest {
   text?: string
 }
 
+export interface IntervalAdherence {
+  step_order: number
+  label: string                            // "Warmup", "Interval 1", "Recovery 2", "Cooldown"
+  step_type: string                        // warmup, interval, rest, cooldown, …
+  planned_distance_m: number | null
+  actual_distance_m: number | null
+  planned_pace_display: string | null
+  actual_pace_display: string | null
+  pace_delta_sec_per_km: number | null     // positive = slower than plan
+  distance_delta_m: number | null          // actual - planned
+  matched: boolean                         // a lap aligned to this step
+}
+
 export interface WorkoutAdherence {
   planned_distance_m: number | null        // running periods only (rest excluded)
   planned_rest_distance_m: number | null
@@ -47,6 +60,7 @@ export interface WorkoutAdherence {
   actual_laps: number | null
   adherence_score: number              // 0–100
   summary: string
+  intervals: IntervalAdherence[] | null  // per-rep lap↔step alignment
 }
 
 export interface ActivityDetail extends ActivitySummary {

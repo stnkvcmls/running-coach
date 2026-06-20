@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 from app.models import Activity
-from app.schemas import WorkoutAdherence, WorkoutStepResponse
+from app.schemas import IntervalAdherence, WorkoutAdherence, WorkoutStepResponse
 
 
 # ---------------------------------------------------------------------------
@@ -201,6 +201,15 @@ def _parse_single_pace(pace_str: str) -> float | None:
     return None
 
 
+def _format_pace_sec(pace_sec_per_km: float | None) -> str | None:
+    """Format seconds-per-km into a 'm:ss/km' display string."""
+    if not pace_sec_per_km or pace_sec_per_km <= 0:
+        return None
+    mins = int(pace_sec_per_km // 60)
+    secs = int(pace_sec_per_km % 60)
+    return f"{mins}:{secs:02d}/km"
+
+
 def _parse_pace_display(pace_display: str) -> float | None:
     """Parse pace display like '4:30/km' or '4:25 - 4:35/km' into sec/km."""
     if not pace_display or "/km" not in pace_display:
@@ -321,6 +330,221 @@ def _actual_from_splits(
     )
 
 
+def _ordered_laps(activity: Activity) -> list[dict]:
+    """Parse ``splits_json`` lapDTOs into an ordered list of executed laps.
+
+    Each entry is ``{distance, duration, intensity, is_rest, pace_sec}``. Laps
+    with no positive distance are skipped. Returns ``[]`` when no usable lap data
+    exists (so the caller falls back to whole-activity aggregates only).
+    """
+    if not activity.splits_json:
+        return []
+    try:
+        data = json.loads(activity.splits_json)
+    except (json.JSONDecodeError, TypeError):
+        return []
+    laps = data.get("lapDTOs") if isinstance(data, dict) else None
+    if not isinstance(laps, list):
+        return []
+
+    result: list[dict] = []
+    for lap in laps:
+        if not isinstance(lap, dict):
+            continue
+        dist = lap.get("distance")
+        if not isinstance(dist, (int, float)) or dist <= 0:
+            continue
+        intensity = str(lap.get("intensityType") or "").upper()
+        dur = lap.get("duration") or lap.get("movingDuration") or lap.get("elapsedDuration")
+        dur = dur if isinstance(dur, (int, float)) and dur > 0 else None
+        pace_sec = dur / (dist / 1000.0) if dur else None
+        result.append(
+            {
+                "distance": float(dist),
+                "duration": dur,
+                "intensity": intensity,
+                "is_rest": intensity in _REST_INTENSITY_TYPES,
+                "pace_sec": pace_sec,
+            }
+        )
+    return result
+
+
+# Step types that carry a per-rep numbered label (e.g. "Interval 1").
+_NUMBERED_STEP_TYPES = {"interval", "rest"}
+
+_STEP_LABEL = {
+    "warmup": "Warmup",
+    "cooldown": "Cooldown",
+    "interval": "Interval",
+    "rest": "Recovery",
+    "repeat": "Interval",
+}
+
+
+def _step_channel(step: WorkoutStepResponse) -> str:
+    """Map a planned step to an alignment channel."""
+    if step.step_type == "warmup":
+        return "warmup"
+    if step.step_type == "cooldown":
+        return "cooldown"
+    if step.activity_type == "rest" or step.step_type == "rest":
+        return "rest"
+    return "work"
+
+
+def _lap_channel(intensity: str, is_rest: bool) -> str:
+    """Map an executed lap (by Garmin ``intensityType``) to an alignment channel."""
+    if "WARM" in intensity:
+        return "warmup"
+    if "COOL" in intensity:
+        return "cooldown"
+    if is_rest:
+        return "rest"
+    return "work"
+
+
+def _merge_lap_segments(laps: list[dict]) -> list[dict]:
+    """Collapse consecutive laps that belong to the same workout step.
+
+    Garmin auto-lap (e.g. a per-km split) breaks one workout step into several
+    laps that share the same ``intensityType`` (a 2 km warmup → two 1 km laps).
+    Merging consecutive laps with the same non-empty intensity restores one
+    segment per step. Distinct steps never merge because intervals and rests
+    alternate intensities. Untyped laps (no ``intensityType``) are never merged.
+    """
+    segments: list[dict] = []
+    for lap in laps:
+        prev = segments[-1] if segments else None
+        if (
+            prev is not None
+            and lap["intensity"]
+            and lap["intensity"] == prev["intensity"]
+        ):
+            prev["distance"] += lap["distance"]
+            if lap["duration"] is None or prev["duration"] is None:
+                prev["duration"] = None
+            else:
+                prev["duration"] += lap["duration"]
+        else:
+            segments.append(
+                {
+                    "distance": lap["distance"],
+                    "duration": lap["duration"],
+                    "intensity": lap["intensity"],
+                    "is_rest": lap["is_rest"],
+                    "channel": _lap_channel(lap["intensity"], lap["is_rest"]),
+                }
+            )
+    for seg in segments:
+        seg["pace_sec"] = (
+            seg["duration"] / (seg["distance"] / 1000.0)
+            if seg["duration"] and seg["distance"]
+            else None
+        )
+    return segments
+
+
+def _align_intervals(
+    flat_steps: list[WorkoutStepResponse],
+    laps: list[dict],
+) -> list[IntervalAdherence]:
+    """Align executed laps to planned steps for per-rep deltas.
+
+    Planned steps and executed laps do not line up by index in practice: Garmin
+    auto-lap splits long steps and the recorded lap count rarely equals the
+    planned step count. Instead, each side is bucketed into channels
+    (warmup / work-interval / rest / cooldown); laps are merged per step
+    (:func:`_merge_lap_segments`) and then paired in order *within* each channel.
+    Rows are emitted in planned order, so the table still reads top to bottom as
+    the workout was prescribed. Steps with no remaining lap in their channel are
+    returned with ``matched=False``. Returns ``[]`` for trivial workouts (no
+    interval structure) so the UI only shows the breakdown when it adds value.
+
+    Planned pace and distance are taken from each step's *own* target only.
+    Steps without a pace target of their own (warmup, cooldown, untargeted
+    rests) are never graded against the interval pace: their actual pace is
+    shown for reference but no planned pace, delta, or fabricated time→distance
+    target is invented for them.
+    """
+    has_structure = sum(1 for s in flat_steps if s.step_type in _NUMBERED_STEP_TYPES) >= 2
+    if not has_structure or not laps:
+        return []
+
+    # Per-channel FIFO queues of executed lap segments.
+    queues: dict[str, list[dict]] = {"warmup": [], "work": [], "rest": [], "cooldown": []}
+    for seg in _merge_lap_segments(laps):
+        queues[seg["channel"]].append(seg)
+    cursor: dict[str, int] = {ch: 0 for ch in queues}
+
+    counters: dict[str, int] = {}
+    rows: list[IntervalAdherence] = []
+    for i, step in enumerate(flat_steps):
+        base = _STEP_LABEL.get(step.step_type, step.step_type.title())
+        if step.step_type in _NUMBERED_STEP_TYPES:
+            counters[step.step_type] = counters.get(step.step_type, 0) + 1
+            label = f"{base} {counters[step.step_type]}"
+        else:
+            label = base
+
+        # Only the step's own pace target drives grading — no interval fallback.
+        own_pace = (
+            _parse_pace_display(step.target_display)
+            if step.target_type == "pace" and step.target_display
+            else None
+        )
+        planned_dist = _step_distance_m(step, own_pace)
+        is_rest = step.activity_type == "rest"
+        planned_pace_display = step.target_display if own_pace is not None else None
+
+        channel = _step_channel(step)
+        seg = None
+        if cursor[channel] < len(queues[channel]):
+            seg = queues[channel][cursor[channel]]
+            cursor[channel] += 1
+
+        if seg is None:
+            rows.append(
+                IntervalAdherence(
+                    step_order=i + 1,
+                    label=label,
+                    step_type=step.step_type,
+                    planned_distance_m=planned_dist,
+                    planned_pace_display=planned_pace_display,
+                    matched=False,
+                )
+            )
+            continue
+
+        actual_dist = seg["distance"]
+        actual_pace_sec = seg["pace_sec"]
+        # Show actual pace for running steps (informational); only grade the
+        # delta when the step set its own pace target.
+        actual_pace_display = None if is_rest else _format_pace_sec(actual_pace_sec)
+        pace_delta = None
+        if own_pace is not None and not is_rest and actual_pace_sec is not None:
+            pace_delta = round(actual_pace_sec - own_pace, 1)
+        distance_delta = (
+            round(actual_dist - planned_dist, 1) if planned_dist is not None else None
+        )
+
+        rows.append(
+            IntervalAdherence(
+                step_order=i + 1,
+                label=label,
+                step_type=step.step_type,
+                planned_distance_m=planned_dist,
+                actual_distance_m=actual_dist,
+                planned_pace_display=planned_pace_display,
+                actual_pace_display=actual_pace_display,
+                pace_delta_sec_per_km=pace_delta,
+                distance_delta_m=distance_delta,
+                matched=True,
+            )
+        )
+    return rows
+
+
 def compute_adherence(
     activity: Activity,
     workout_steps: list[WorkoutStepResponse],
@@ -380,11 +604,7 @@ def compute_adherence(
     # --- Actual running distance / rest distance / running-only pace ---
     actual_distance_m, actual_rest_distance_m, actual_pace_sec = _actual_from_splits(activity)
 
-    actual_pace_display: str | None = None
-    if actual_pace_sec:
-        p_min = int(actual_pace_sec // 60)
-        p_sec = int(actual_pace_sec % 60)
-        actual_pace_display = f"{p_min}:{p_sec:02d}/km"
+    actual_pace_display: str | None = _format_pace_sec(actual_pace_sec)
 
     # --- Distance adherence (running-only on both sides) ---
     distance_pct: float | None = None
@@ -423,6 +643,9 @@ def compute_adherence(
     if actual_rest_distance_m:
         summary_parts.append(f"{int(round(actual_rest_distance_m))} m in rest")
 
+    # --- Per-interval breakdown (lap ↔ step alignment) ---
+    intervals = _align_intervals(flat, _ordered_laps(activity)) or None
+
     return WorkoutAdherence(
         planned_distance_m=planned_distance_m,
         planned_rest_distance_m=planned_rest_distance_m,
@@ -436,6 +659,7 @@ def compute_adherence(
         actual_laps=actual_laps,
         adherence_score=round(adherence_score, 1),
         summary=", ".join(summary_parts),
+        intervals=intervals,
     )
 
 
@@ -466,4 +690,21 @@ def format_adherence_context(adherence: WorkoutAdherence) -> str:
             f"Intervals: {adherence.planned_intervals} planned / {adherence.actual_laps} laps executed"
         )
     lines.append(f"Adherence score: {adherence.adherence_score:.0f}/100")
+
+    if adherence.intervals:
+        lines.append("Per-interval execution:")
+        for iv in adherence.intervals:
+            if not iv.matched:
+                lines.append(f"- {iv.label}: missed (no matching lap)")
+                continue
+            parts: list[str] = []
+            if iv.actual_distance_m is not None:
+                parts.append(f"{iv.actual_distance_m / 1000:.2f} km")
+            if iv.actual_pace_display:
+                parts.append(f"@ {iv.actual_pace_display}")
+            if iv.pace_delta_sec_per_km is not None and iv.pace_delta_sec_per_km != 0:
+                sign = "+" if iv.pace_delta_sec_per_km > 0 else "-"
+                parts.append(f"({sign}{abs(iv.pace_delta_sec_per_km):.0f}s/km)")
+            lines.append(f"- {iv.label}: {' '.join(parts)}" if parts else f"- {iv.label}")
+
     return "\n".join(lines)
