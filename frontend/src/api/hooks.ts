@@ -17,11 +17,19 @@ import type {
   AthleteProfileRequest,
   TrainingLoadResponse,
   TrainingPlanResponse,
+  UserResponse,
   ZoneConfigBulkUpdate,
   ZoneConfigsResponse,
   ThresholdEstimateResponse,
   ThresholdApplyRequest,
 } from './types'
+
+export function useMe() {
+  return useQuery({
+    queryKey: ['me'],
+    queryFn: () => apiGet<UserResponse>('/me'),
+  })
+}
 
 export function useToday(date: string) {
   return useQuery({

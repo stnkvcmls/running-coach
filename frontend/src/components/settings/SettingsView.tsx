@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Download, RefreshCw } from 'lucide-react'
-import { useSettings, useTriggerSync, useAiConfig, useSetAiConfig } from '../../api/hooks'
+import { useSettings, useTriggerSync, useAiConfig, useSetAiConfig, useMe } from '../../api/hooks'
 import AthleteProfileSection from './AthleteProfileSection'
 import ThresholdEstimateSection from './ThresholdEstimateSection'
 import ZoneConfigSection from './ZoneConfigSection'
@@ -87,6 +87,19 @@ function DataExportSection() {
   )
 }
 
+function AccountSection() {
+  const { data } = useMe()
+  if (!data) return null
+  return (
+    <section className="settings-section">
+      <h2 className="section-title">Account</h2>
+      <div className="card">
+        <span className="settings-account-email">Signed in as {data.email}</span>
+      </div>
+    </section>
+  )
+}
+
 export default function SettingsView() {
   const { data, isLoading } = useSettings()
   const syncMutation = useTriggerSync()
@@ -96,6 +109,9 @@ export default function SettingsView() {
 
   return (
     <div className="settings-view">
+      {/* Signed-in account */}
+      <AccountSection />
+
       {/* Athlete profile */}
       <AthleteProfileSection />
 

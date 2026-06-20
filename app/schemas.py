@@ -50,6 +50,14 @@ class MetricZoneResponse(BaseModel):
         from_attributes = True
 
 
+class UserResponse(BaseModel):
+    email: str
+    full_name: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
 class FeedbackRequest(BaseModel):
     rating: Literal["good", "bad"]
     tags: list[str] | None = None
