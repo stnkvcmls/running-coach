@@ -345,9 +345,14 @@ def sync_daily_summary(target_date: date | None = None) -> DailySummary | None:
                 db.commit()
                 db.refresh(summary)
 
+            # Detach the fully-loaded object before writing sync status. That
+            # write commits, and with expire_on_commit the commit would expire
+            # summary's attributes -- leaving the returned, now session-less
+            # object unreadable (DetachedInstanceError on first attribute
+            # access). Expunging first preserves its loaded state for the caller.
+            db.expunge(summary)
             _set_sync_status(db, "last_daily_sync", datetime.now(timezone.utc).isoformat())
             logger.info("Daily summary synced for %s", date_str)
-            db.expunge(summary)
             return summary
 
         except Exception:
