@@ -354,3 +354,41 @@ def test_build_context_includes_estimate(db):
     _add(db, mean_max=_curve_json(power=_power_curve(250, 15000)), max_hr=185)
     ctx = ai_coach._build_context(db, "activity", "test run")
     assert "Estimated Thresholds" in ctx
+
+
+# --- Estimate cache ---
+
+def test_threshold_cache_hit_returns_same_result(db):
+    """Second call returns a cached result identical to the first."""
+    _add(db, mean_max=_curve_json(power=_power_curve(280, 14000)), max_hr=185)
+    est1 = threshold.estimate_thresholds(db)
+    est2 = threshold.estimate_thresholds(db)
+    assert est1.critical_power.value == est2.critical_power.value
+    assert est1.activities_analyzed == est2.activities_analyzed
+
+
+def test_threshold_cache_invalidated_on_new_activity(db):
+    """Adding a new activity in the lookback window causes a cache miss."""
+    est1 = threshold.estimate_thresholds(db)
+    assert est1.activities_analyzed == 0
+
+    _add(db, mean_max=_curve_json(power=_power_curve(280, 14000)), max_hr=185)
+    est2 = threshold.estimate_thresholds(db)
+    assert est2.activities_analyzed == 1
+
+
+def test_threshold_cache_roundtrip_preserves_fields(db):
+    """Serialization + deserialization preserves all FieldEstimate fields."""
+    curve = _curve_json(
+        power=_power_curve(280, 14000),
+        gap_speed=_gap_curve(4.2, 200),
+        hr={str(t): 160 for t in CP_DURATIONS},
+    )
+    _add(db, mean_max=curve, max_hr=185)
+
+    est = threshold.estimate_thresholds(db)
+    cached = threshold.estimate_thresholds(db)  # second call → cache hit
+
+    assert cached.critical_power.value == est.critical_power.value
+    assert cached.threshold_pace_min_km.method == est.threshold_pace_min_km.method
+    assert cached.lookback_days == est.lookback_days
