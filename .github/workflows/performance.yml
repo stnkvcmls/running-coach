@@ -1,0 +1,68 @@
+name: Performance
+
+on:
+  pull_request:
+  push:
+    branches: ['main', 'master']
+  workflow_dispatch:
+
+# Needed for the benchmark action to comment on the PR/commit and (on pushes to
+# the default branch) push the trend history to the gh-pages branch.
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  performance:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements.txt
+            requirements-perf.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-perf.txt
+
+      - name: Run benchmarks
+        env:
+          AUTH_ENABLED: 'false'
+        run: |
+          pytest perf/ \
+            --benchmark-json=output.json \
+            --benchmark-columns=min,median,mean,max,ops
+
+      - name: Write job summary
+        if: always()
+        run: python perf/summary.py output.json >> "$GITHUB_STEP_SUMMARY"
+
+      # Publishes results to GitHub: comments the comparison on the PR/commit,
+      # and on pushes to the default branch stores the trend history on the
+      # gh-pages branch (viewable as a chart). The alert threshold is a
+      # placeholder for now — tighten `alert-threshold` and flip
+      # `fail-on-alert` to true once the team agrees on a regression budget.
+      - name: Publish benchmark results
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: API Endpoint Benchmarks
+          tool: 'pytest'
+          output-file-path: output.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # Only persist history on pushes to the default branch; PR runs just
+          # compare + comment so they never write to gh-pages.
+          auto-push: ${{ github.event_name == 'push' }}
+          save-data-file: ${{ github.event_name == 'push' }}
+          comment-always: ${{ github.event_name == 'pull_request' }}
+          summary-always: true
+          alert-threshold: '200%'
+          fail-on-alert: false

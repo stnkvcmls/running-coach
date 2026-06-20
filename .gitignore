@@ -22,3 +22,12 @@ build/
 coverage.xml
 junit.xml
 htmlcov/
+
+# Performance test suite: the seed DB is committed (overrides *.db above),
+# but its WAL sidecars, token dir, and benchmark output are not.
+!perf/perf.db
+perf/*.db-wal
+perf/*.db-shm
+perf/.garmin_tokens/
+output.json
+.benchmarks/

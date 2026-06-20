@@ -72,3 +72,31 @@ effort *per duration*, extracted from within each run) instead of whole-run aver
 which is the input CP/CV models require. GAP removes terrain bias from threshold pace,
 recency weighting tracks current fitness, and confidence/notes flag when the available
 efforts don't yet constrain the fit (e.g. no short maximal effort).
+
+---
+
+# Performance test suite (every API endpoint, real seeded DB)
+
+Benchmark all 28 routes in `app/api.py` against a committed 3-year SQLite
+database, on every PR, with results published to GitHub.
+
+## Done
+- [x] `perf/seed_perf_db.py` → committed `perf/perf.db` (~4.5 MB): ~295 run
+      days/yr, ~3,600 km/yr, 1,095 daily summaries, profile/insights/
+      calendar/plan/sync rows. Deterministic; self-asserts the brief.
+- [x] `perf/conftest.py` — copies the DB to a temp path + binds `DB_PATH`
+      before app import (never mutates the artifact); stubs ai_coach/garmin_sync.
+- [x] `perf/test_perf_endpoints.py` — 30 `pytest-benchmark` cases (28 routes;
+      exports x2 for csv/json). Reads first, idempotent mutations last.
+- [x] `.github/workflows/performance.yml` — PR job: run benchmarks, write a
+      `$GITHUB_STEP_SUMMARY` table, publish via github-action-benchmark
+      (trend history on gh-pages + PR comment + placeholder alert threshold).
+- [x] `requirements-perf.txt`, `docs/performance-testing.md`, `.gitignore`
+      (commit `perf/perf.db`, ignore WAL sidecars/output.json).
+
+## Review
+- All 30 benchmarks pass locally; latencies are meaningful and differentiated
+  (export-activities-csv ~185 ms heaviest, threshold ~80 ms, today ~50 ms).
+- Default `pytest` collects only `tests/` (0 perf items) — main suite untouched.
+- Threshold deliberately not enforced yet (`fail-on-alert: false`); documented
+  how to tighten `alert-threshold` and flip it on later.

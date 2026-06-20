@@ -1,0 +1,5 @@
+# Performance test suite dependencies.
+# Installed on top of requirements.txt (which provides the app + httpx for TestClient).
+-r requirements.txt
+pytest==8.3.4
+pytest-benchmark==5.1.0
