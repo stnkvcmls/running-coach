@@ -31,12 +31,7 @@ def get_garmin_client() -> Garmin:
                 _garmin_client = None
 
         client = Garmin(settings.garmin_email, settings.garmin_password)
-        try:
-            client.login(settings.garmin_token_dir)
-        except Exception:
-            logger.info("Token login failed, doing fresh login")
-            client.login()
-            client.garth.dump(settings.garmin_token_dir)
+        client.login(settings.garmin_token_dir)
         _garmin_client = client
         logger.info("Garmin authenticated as %s", client.get_full_name())
         return client
