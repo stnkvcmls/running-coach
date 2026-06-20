@@ -382,23 +382,95 @@ _STEP_LABEL = {
 }
 
 
+def _step_channel(step: WorkoutStepResponse) -> str:
+    """Map a planned step to an alignment channel."""
+    if step.step_type == "warmup":
+        return "warmup"
+    if step.step_type == "cooldown":
+        return "cooldown"
+    if step.activity_type == "rest" or step.step_type == "rest":
+        return "rest"
+    return "work"
+
+
+def _lap_channel(intensity: str, is_rest: bool) -> str:
+    """Map an executed lap (by Garmin ``intensityType``) to an alignment channel."""
+    if "WARM" in intensity:
+        return "warmup"
+    if "COOL" in intensity:
+        return "cooldown"
+    if is_rest:
+        return "rest"
+    return "work"
+
+
+def _merge_lap_segments(laps: list[dict]) -> list[dict]:
+    """Collapse consecutive laps that belong to the same workout step.
+
+    Garmin auto-lap (e.g. a per-km split) breaks one workout step into several
+    laps that share the same ``intensityType`` (a 2 km warmup → two 1 km laps).
+    Merging consecutive laps with the same non-empty intensity restores one
+    segment per step. Distinct steps never merge because intervals and rests
+    alternate intensities. Untyped laps (no ``intensityType``) are never merged.
+    """
+    segments: list[dict] = []
+    for lap in laps:
+        prev = segments[-1] if segments else None
+        if (
+            prev is not None
+            and lap["intensity"]
+            and lap["intensity"] == prev["intensity"]
+        ):
+            prev["distance"] += lap["distance"]
+            if lap["duration"] is None or prev["duration"] is None:
+                prev["duration"] = None
+            else:
+                prev["duration"] += lap["duration"]
+        else:
+            segments.append(
+                {
+                    "distance": lap["distance"],
+                    "duration": lap["duration"],
+                    "intensity": lap["intensity"],
+                    "is_rest": lap["is_rest"],
+                    "channel": _lap_channel(lap["intensity"], lap["is_rest"]),
+                }
+            )
+    for seg in segments:
+        seg["pace_sec"] = (
+            seg["duration"] / (seg["distance"] / 1000.0)
+            if seg["duration"] and seg["distance"]
+            else None
+        )
+    return segments
+
+
 def _align_intervals(
     flat_steps: list[WorkoutStepResponse],
     laps: list[dict],
     fallback_pace_sec: float | None,
 ) -> list[IntervalAdherence]:
-    """Align executed laps to planned steps positionally for per-rep deltas.
+    """Align executed laps to planned steps for per-rep deltas.
 
-    A Garmin-executed structured workout emits one lap per workout step, so the
-    flattened-step sequence and the lap sequence line up by index. Each planned
-    step is paired with the lap at the same position; steps with no aligned lap
-    are returned with ``matched=False`` and null actuals. Returns ``[]`` for
-    trivial workouts (a single step / no interval structure) so the UI only
-    shows the breakdown when it adds value.
+    Planned steps and executed laps do not line up by index in practice: Garmin
+    auto-lap splits long steps and the recorded lap count rarely equals the
+    planned step count. Instead, each side is bucketed into channels
+    (warmup / work-interval / rest / cooldown); laps are merged per step
+    (:func:`_merge_lap_segments`) and then paired in order *within* each channel.
+    Rows are emitted in planned order, so the table still reads top to bottom as
+    the workout was prescribed. Steps with no remaining lap in their channel are
+    returned with ``matched=False``. Returns ``[]`` for trivial workouts (no
+    interval structure) so the UI only shows the breakdown when it adds value.
     """
     has_structure = sum(1 for s in flat_steps if s.step_type in _NUMBERED_STEP_TYPES) >= 2
     if not has_structure or not laps:
         return []
+
+    # Per-channel FIFO queues of executed lap segments.
+    queues: dict[str, list[dict]] = {"warmup": [], "work": [], "rest": [], "cooldown": []}
+    for seg in _merge_lap_segments(laps):
+        queues[seg["channel"]].append(seg)
+    cursor: dict[str, int] = {ch: 0 for ch in queues}
 
     counters: dict[str, int] = {}
     rows: list[IntervalAdherence] = []
@@ -413,14 +485,20 @@ def _align_intervals(
         step_pace = _parse_pace_display(step.target_display) if step.target_display else None
         planned_pace = step_pace or fallback_pace_sec
         planned_dist = _step_distance_m(step, planned_pace)
+        is_rest = step.activity_type == "rest"
         planned_pace_display = (
             step.target_display
             if step.target_type == "pace" and step.target_display
-            else _format_pace_sec(planned_pace) if step.activity_type != "rest" else None
+            else _format_pace_sec(planned_pace) if not is_rest else None
         )
 
-        lap = laps[i] if i < len(laps) else None
-        if lap is None:
+        channel = _step_channel(step)
+        seg = None
+        if cursor[channel] < len(queues[channel]):
+            seg = queues[channel][cursor[channel]]
+            cursor[channel] += 1
+
+        if seg is None:
             rows.append(
                 IntervalAdherence(
                     step_order=i + 1,
@@ -433,10 +511,9 @@ def _align_intervals(
             )
             continue
 
-        actual_dist = lap["distance"]
-        actual_pace_sec = lap["pace_sec"]
+        actual_dist = seg["distance"]
+        actual_pace_sec = seg["pace_sec"]
         # Pace comparison only for running steps (rest pace isn't graded).
-        is_rest = step.activity_type == "rest"
         actual_pace_display = None if is_rest else _format_pace_sec(actual_pace_sec)
         pace_delta = None
         if not is_rest and actual_pace_sec is not None and planned_pace is not None:

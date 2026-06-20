@@ -486,6 +486,65 @@ def test_align_intervals_count_mismatch_marks_unmatched():
     assert result.intervals[-1].actual_distance_m is None
 
 
+def test_align_intervals_autolap_split_and_standalone_rest():
+    """Real-world case: per-km auto-lap splits the warmup, plus a standalone rest.
+
+    Planned: 2km warmup, standalone 90s rest, 5×(1km @ 4:55, 90s rest), 1km
+    cooldown. Garmin auto-laps every 1 km, so the 2 km warmup is recorded as two
+    1 km laps — the lap count no longer matches the step count. Channel alignment
+    must still pair the warmup step with the full 2 km, intervals with the 1 km
+    work laps, and rests with the short jog-rest laps (not shift everything).
+    """
+    steps = make_steps([
+        {"stepType": "warmup", "endCondition": "distance", "endConditionValue": 2000,
+         "description": "2km warm up"},
+        {"stepType": "rest", "endCondition": "time", "endConditionValue": 90},
+        {"stepType": "repeat", "repeatCount": 5, "workoutSteps": [
+            {"stepType": "interval", "endCondition": "distance", "endConditionValue": 1000,
+             "targetType": "pace", "targetValueOne": 1000 / 295},  # 4:55/km
+            {"stepType": "rest", "endCondition": "time", "endConditionValue": 90},
+        ]},
+        {"stepType": "cooldown", "endCondition": "distance", "endConditionValue": 1000},
+    ])
+    # Executed laps: warmup auto-split into two 1km WARMUP laps, then the
+    # standalone rest, then 5×(1km interval @ ~4:50, ~125m jog-rest), cooldown.
+    lap_dtos = [
+        {"distance": 1000, "duration": 373, "intensityType": "WARMUP"},   # 6:13/km
+        {"distance": 1000, "duration": 373, "intensityType": "WARMUP"},
+        {"distance": 125, "duration": 90, "intensityType": "REST"},        # standalone rest
+    ]
+    for _ in range(5):
+        lap_dtos.append({"distance": 1000, "duration": 290, "intensityType": "INTERVAL"})  # 4:50
+        lap_dtos.append({"distance": 129, "duration": 90, "intensityType": "REST"})
+    lap_dtos.append({"distance": 1000, "duration": 290, "intensityType": "COOLDOWN"})
+
+    activity = FakeActivity(distance_m=8645.0, splits_json=json.dumps({"lapDTOs": lap_dtos}))
+    result = adh.compute_adherence(activity, steps)
+
+    assert result.intervals is not None
+    by_label = {iv.label: iv for iv in result.intervals}
+
+    # Warmup paired with the FULL 2 km (both auto-lap segments merged), not 1 km.
+    warmup = by_label["Warmup"]
+    assert warmup.actual_distance_m == pytest.approx(2000.0)
+    assert warmup.planned_distance_m == pytest.approx(2000.0)
+
+    # Every interval paired with a 1 km work lap on target (~5s/km faster), NOT
+    # with a short rest lap (which was the alignment bug).
+    for n in range(1, 6):
+        iv = by_label[f"Interval {n}"]
+        assert iv.actual_distance_m == pytest.approx(1000.0)
+        assert iv.pace_delta_sec_per_km == pytest.approx(-5.0, abs=1.0)
+
+    # Cooldown paired with the 1 km cooldown lap, not a rest lap.
+    assert by_label["Cooldown"].actual_distance_m == pytest.approx(1000.0)
+
+    # Recoveries paired with the short jog-rest laps, and not pace-graded.
+    rec1 = by_label["Recovery 1"]
+    assert rec1.actual_distance_m == pytest.approx(125.0)
+    assert rec1.actual_pace_display is None
+
+
 def test_align_intervals_none_for_trivial_workout():
     """A single-step workout has no interval structure → intervals None."""
     steps = make_steps([
