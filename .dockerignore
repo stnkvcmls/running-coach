@@ -12,14 +12,7 @@ __pycache__
 .coverage
 htmlcov
 coverage.xml
-frontend/src
 frontend/node_modules
-frontend/tsconfig.json
-frontend/tsconfig.tsbuildinfo
-frontend/vite.config.ts
-frontend/package.json
-frontend/package-lock.json
-frontend/index.html
 docs
 tasks
 tests
