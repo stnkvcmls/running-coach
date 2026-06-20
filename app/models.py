@@ -20,6 +20,15 @@ def _utcnow():
     return datetime.now(timezone.utc)
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    full_name = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=_utcnow)
+
+
 class Activity(Base):
     __tablename__ = "activities"
 

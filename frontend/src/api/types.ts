@@ -1,3 +1,8 @@
+export interface UserResponse {
+  email: string
+  full_name: string | null
+}
+
 export interface ActivitySummary {
   id: number
   garmin_id: number | null

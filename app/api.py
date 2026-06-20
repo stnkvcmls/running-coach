@@ -11,6 +11,7 @@ from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.auth import get_current_user
 from app.database import get_db
 from app.models import (
     Activity,
@@ -22,6 +23,7 @@ from app.models import (
     SyncStatus,
     TrainingPlan,
     TrainingPlanDay,
+    User,
     ZoneConfig,
 )
 from app.schemas import (
@@ -46,6 +48,7 @@ from app.schemas import (
     TrainingPlanResponse,
     TrainingPlanWeek,
     TrainingReadiness,
+    UserResponse,
     WeeklyMileage,
     WorkoutAdherence,
     WorkoutStepResponse,
@@ -63,7 +66,16 @@ from app.utils import safe_json_loads, parse_activity_charts, calculate_age
 
 logger = logging.getLogger(__name__)
 
-api_router = APIRouter(prefix="/api/v1", tags=["api"])
+api_router = APIRouter(
+    prefix="/api/v1",
+    tags=["api"],
+    dependencies=[Depends(get_current_user)],
+)
+
+@api_router.get("/me", response_model=UserResponse)
+def api_me(current_user: User = Depends(get_current_user)):
+    return current_user
+
 
 AVAILABLE_MODELS: dict[str, list[str]] = {
     "claude": ["claude-opus-4-8", "claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
