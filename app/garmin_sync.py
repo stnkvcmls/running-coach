@@ -347,6 +347,7 @@ def sync_daily_summary(target_date: date | None = None) -> DailySummary | None:
 
             _set_sync_status(db, "last_daily_sync", datetime.now(timezone.utc).isoformat())
             logger.info("Daily summary synced for %s", date_str)
+            db.expunge(summary)
             return summary
 
         except Exception:
