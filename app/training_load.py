@@ -10,15 +10,21 @@ HR-based hrTSS, then a duration-only floor) so non-power runs still contribute.
 - **TSB** (Training Stress Balance, "Form") — CTL − ATL.
 """
 
+import json
+import logging
 import math
 from collections import defaultdict
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models import Activity, AthleteProfile, DailySummary
+from app.models import Activity, AthleteProfile, DailySummary, SyncStatus
 from app.schemas import TrainingLoadPoint, TrainingReadiness
+
+logger = logging.getLogger(__name__)
+
+_SERIES_CACHE_KEY = "training_load_series"
 
 CTL_DAYS = 42
 ATL_DAYS = 7
@@ -73,6 +79,51 @@ def estimate_tss(activity: Activity, profile: AthleteProfile | None) -> tuple[fl
     return _intensity_to_tss(duration_hr, _DEFAULT_IF), "duration"
 
 
+def _series_fingerprint(db: Session) -> str:
+    """Cheap cache key: activity count + newest sync timestamp + profile update time."""
+    count = db.query(func.count(Activity.id)).scalar() or 0
+    max_sync = db.query(func.max(Activity.synced_at)).scalar()
+    profile = db.query(AthleteProfile).first()
+    return "|".join([
+        str(count),
+        max_sync.isoformat() if max_sync else "",
+        profile.updated_at.isoformat() if (profile and profile.updated_at) else "",
+    ])
+
+
+def _load_cached_series(db: Session) -> list[TrainingLoadPoint] | None:
+    """Return the cached full series when the fingerprint matches, else None."""
+    row = db.query(SyncStatus).filter(SyncStatus.key == _SERIES_CACHE_KEY).first()
+    if not row or not row.value:
+        return None
+    try:
+        data = json.loads(row.value)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if data.get("fp") != _series_fingerprint(db):
+        return None
+    try:
+        return [TrainingLoadPoint(**p) for p in data["series"]]
+    except Exception:
+        return None
+
+
+def _save_cached_series(db: Session, series: list[TrainingLoadPoint]) -> None:
+    """Persist the full series alongside the current fingerprint."""
+    payload = json.dumps({
+        "fp": _series_fingerprint(db),
+        "series": [p.model_dump(mode="json") for p in series],
+    })
+    row = db.query(SyncStatus).filter(SyncStatus.key == _SERIES_CACHE_KEY).first()
+    if row:
+        row.value = payload
+        row.updated_at = datetime.now(timezone.utc)
+    else:
+        db.add(SyncStatus(key=_SERIES_CACHE_KEY, value=payload,
+                          updated_at=datetime.now(timezone.utc)))
+    db.commit()
+
+
 def _daily_tss(db: Session, end_date: date, profile: AthleteProfile | None) -> dict[date, float]:
     """Sum estimated TSS per calendar day up to and including ``end_date``."""
     end_dt = datetime.combine(end_date + timedelta(days=1), datetime.min.time())
@@ -91,7 +142,17 @@ def _daily_tss(db: Session, end_date: date, profile: AthleteProfile | None) -> d
 
 
 def _compute_full_series(db: Session, end_date: date) -> list[TrainingLoadPoint]:
-    """Build the daily CTL/ATL/TSB series from the first activity to ``end_date``."""
+    """Build the daily CTL/ATL/TSB series from the first activity to ``end_date``.
+
+    Results are memoized in ``SyncStatus`` when ``end_date`` is today; the cache
+    is invalidated whenever the activity set or athlete profile changes.
+    """
+    today = date.today()
+    if end_date == today:
+        cached = _load_cached_series(db)
+        if cached is not None:
+            return cached
+
     first_started = db.query(func.min(Activity.started_at)).scalar()
     if first_started is None:
         return []
@@ -120,6 +181,13 @@ def _compute_full_series(db: Session, end_date: date) -> list[TrainingLoadPoint]
             )
         )
         day += timedelta(days=1)
+
+    if end_date == today and series:
+        try:
+            _save_cached_series(db, series)
+        except Exception:
+            logger.debug("Training load series cache write failed", exc_info=True)
+
     return series
 
 

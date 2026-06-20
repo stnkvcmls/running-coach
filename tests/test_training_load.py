@@ -137,3 +137,53 @@ def test_today_endpoint_includes_training_load(client, db):
     resp = client.get("/api/v1/today?date=2026-06-10")
     assert resp.status_code == 200
     assert resp.json()["training_load"] is not None
+
+
+# --- Series cache ---
+
+def test_series_cache_hit_returns_same_result(db):
+    """Second call returns a cached series that matches the first."""
+    base = datetime.now().replace(hour=7, minute=0, second=0, microsecond=0)
+    for i in range(5):
+        _add_activity(db, base - timedelta(days=i + 1), tss=60.0)
+
+    series1 = training_load.compute_load_series(db, days=30)
+    series2 = training_load.compute_load_series(db, days=30)
+    assert series1 == series2
+
+
+def test_series_cache_invalidated_on_new_activity(db):
+    """Adding a new activity invalidates the cache and produces updated results."""
+    from datetime import date
+
+    base = datetime.now().replace(hour=7, minute=0, second=0, microsecond=0)
+    _add_activity(db, base - timedelta(days=3), tss=50.0)
+
+    point_before = training_load.current_load(db)
+    assert point_before is not None
+
+    # Add an activity with a very high TSS; the series should now differ.
+    _add_activity(db, base - timedelta(days=2), tss=200.0)
+    point_after = training_load.current_load(db)
+    assert point_after is not None
+    assert point_after.atl != point_before.atl
+
+
+def test_series_cache_bypassed_for_historical_date(db):
+    """Historical end_date queries bypass the today-only cache."""
+    from datetime import date
+
+    base = datetime.now().replace(hour=7, minute=0, second=0, microsecond=0)
+    for i in range(3):
+        _add_activity(db, base - timedelta(days=i + 5), tss=70.0)
+
+    today = date.today()
+    # Populate cache for today.
+    series_today = training_load.compute_load_series(db, days=90)
+    # Historical query should still work correctly.
+    historical_date = today - timedelta(days=2)
+    series_hist = training_load.compute_load_series(db, end_date=historical_date, days=30)
+    assert series_hist is not None
+    assert len(series_hist) > 0
+    # Historical series ends at the requested date.
+    assert series_hist[-1].date == historical_date
