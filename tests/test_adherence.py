@@ -381,6 +381,162 @@ def test_actual_pace_fallback_when_no_work_laps():
 
 
 # ---------------------------------------------------------------------------
+# Per-interval adherence (lap ↔ step alignment)
+# ---------------------------------------------------------------------------
+
+def test_ordered_laps_parses_in_order():
+    laps = {"lapDTOs": [
+        {"distance": 1000, "duration": 360, "intensityType": "WARMUP"},
+        {"distance": 400, "duration": 90, "intensityType": "INTERVAL"},
+        {"distance": 0, "duration": 0, "intensityType": "REST"},          # skipped (no distance)
+        {"distance": 200, "duration": 90, "intensityType": "RECOVERY"},
+    ]}
+    activity = FakeActivity(splits_json=json.dumps(laps))
+    result = adh._ordered_laps(activity)
+
+    assert len(result) == 3
+    assert result[0]["intensity"] == "WARMUP"
+    assert result[0]["is_rest"] is False
+    assert result[1]["pace_sec"] == pytest.approx(225.0)  # 90s / 0.4km
+    assert result[2]["is_rest"] is True
+
+
+def test_ordered_laps_empty_without_splits():
+    assert adh._ordered_laps(FakeActivity()) == []
+    assert adh._ordered_laps(FakeActivity(splits_json="not json")) == []
+
+
+def test_align_intervals_per_rep_deltas():
+    """warmup + 4×(interval+rest) + cooldown → 10 laps, per-rep deltas."""
+    steps = make_steps([
+        {"stepType": "warmup", "endCondition": "distance", "endConditionValue": 1000},
+        {"stepType": "repeat", "repeatCount": 4, "workoutSteps": [
+            {"stepType": "interval", "endCondition": "distance", "endConditionValue": 1000,
+             "targetType": "pace", "targetValueOne": 1000 / 240},  # 4:00/km plan
+            {"stepType": "rest", "endCondition": "time", "endConditionValue": 90},
+        ]},
+        {"stepType": "cooldown", "endCondition": "distance", "endConditionValue": 1000},
+    ])
+    # Rep 1 on target (4:00), rep 2 slower (4:10), reps 3-4 on target.
+    lap_dtos = (
+        [{"distance": 1000, "duration": 360, "intensityType": "WARMUP"}]
+        + [
+            {"distance": 1000, "duration": 240, "intensityType": "INTERVAL"},
+            {"distance": 80, "duration": 90, "intensityType": "REST"},
+            {"distance": 1000, "duration": 250, "intensityType": "INTERVAL"},  # 4:10
+            {"distance": 80, "duration": 90, "intensityType": "REST"},
+            {"distance": 1000, "duration": 240, "intensityType": "INTERVAL"},
+            {"distance": 80, "duration": 90, "intensityType": "REST"},
+            {"distance": 1000, "duration": 240, "intensityType": "INTERVAL"},
+            {"distance": 80, "duration": 90, "intensityType": "REST"},
+        ]
+        + [{"distance": 1000, "duration": 360, "intensityType": "COOLDOWN"}]
+    )
+    activity = FakeActivity(distance_m=4640.0, splits_json=json.dumps({"lapDTOs": lap_dtos}))
+    result = adh.compute_adherence(activity, steps)
+
+    assert result.intervals is not None
+    assert len(result.intervals) == 10
+
+    labels = [iv.label for iv in result.intervals]
+    assert labels[0] == "Warmup"
+    assert labels[1] == "Interval 1"
+    assert labels[2] == "Recovery 1"
+    assert labels[7] == "Interval 4"
+    assert labels[9] == "Cooldown"
+
+    # Rep 1 on target.
+    interval1 = result.intervals[1]
+    assert interval1.actual_pace_display == "4:00/km"
+    assert interval1.pace_delta_sec_per_km == pytest.approx(0.0, abs=1.0)
+    assert interval1.matched is True
+
+    # Rep 2 ran 10s/km slower.
+    interval2 = result.intervals[3]
+    assert interval2.pace_delta_sec_per_km == pytest.approx(10.0, abs=1.0)
+
+    # Rest steps carry no pace grade.
+    recovery1 = result.intervals[2]
+    assert recovery1.step_type == "rest"
+    assert recovery1.actual_pace_display is None
+
+
+def test_align_intervals_count_mismatch_marks_unmatched():
+    """Fewer laps than steps → trailing step is unmatched, no crash."""
+    steps = make_steps([
+        {"stepType": "repeat", "repeatCount": 3, "workoutSteps": [
+            {"stepType": "interval", "endCondition": "distance", "endConditionValue": 400,
+             "targetType": "pace", "targetValueOne": 1000 / 240},
+            {"stepType": "rest", "endCondition": "time", "endConditionValue": 60},
+        ]},
+    ])
+    # Only 5 laps for 6 steps (athlete stopped early).
+    lap_dtos = [
+        {"distance": 400, "duration": 96, "intensityType": "INTERVAL"},
+        {"distance": 50, "duration": 60, "intensityType": "REST"},
+        {"distance": 400, "duration": 96, "intensityType": "INTERVAL"},
+        {"distance": 50, "duration": 60, "intensityType": "REST"},
+        {"distance": 400, "duration": 96, "intensityType": "INTERVAL"},
+    ]
+    activity = FakeActivity(distance_m=1300.0, splits_json=json.dumps({"lapDTOs": lap_dtos}))
+    result = adh.compute_adherence(activity, steps)
+
+    assert len(result.intervals) == 6
+    assert result.intervals[-1].matched is False
+    assert result.intervals[-1].actual_distance_m is None
+
+
+def test_align_intervals_none_for_trivial_workout():
+    """A single-step workout has no interval structure → intervals None."""
+    steps = make_steps([
+        {"stepType": "interval", "endCondition": "distance", "endConditionValue": 5000},
+    ])
+    laps = {"lapDTOs": [{"distance": 5000, "duration": 1350, "intensityType": "ACTIVE"}]}
+    activity = FakeActivity(distance_m=5000.0, splits_json=json.dumps(laps))
+    result = adh.compute_adherence(activity, steps)
+
+    assert result.intervals is None
+
+
+def test_align_intervals_none_without_lap_data():
+    """Interval workout but no lapDTOs → no per-rep breakdown."""
+    steps = make_steps([
+        {"stepType": "repeat", "repeatCount": 3, "workoutSteps": [
+            {"stepType": "interval", "endCondition": "distance", "endConditionValue": 1000,
+             "targetType": "pace", "targetValueOne": 1000 / 240},
+            {"stepType": "rest", "endCondition": "time", "endConditionValue": 90},
+        ]},
+    ])
+    activity = FakeActivity(distance_m=3000.0)
+    result = adh.compute_adherence(activity, steps)
+
+    assert result.intervals is None
+
+
+def test_format_adherence_context_includes_intervals():
+    steps = make_steps([
+        {"stepType": "repeat", "repeatCount": 2, "workoutSteps": [
+            {"stepType": "interval", "endCondition": "distance", "endConditionValue": 1000,
+             "targetType": "pace", "targetValueOne": 1000 / 240},
+            {"stepType": "rest", "endCondition": "time", "endConditionValue": 90},
+        ]},
+    ])
+    lap_dtos = [
+        {"distance": 1000, "duration": 240, "intensityType": "INTERVAL"},
+        {"distance": 80, "duration": 90, "intensityType": "REST"},
+        {"distance": 1000, "duration": 250, "intensityType": "INTERVAL"},
+        {"distance": 80, "duration": 90, "intensityType": "REST"},
+    ]
+    activity = FakeActivity(distance_m=2160.0, splits_json=json.dumps({"lapDTOs": lap_dtos}))
+    result = adh.compute_adherence(activity, steps)
+    ctx = adh.format_adherence_context(result)
+
+    assert "Per-interval execution:" in ctx
+    assert "Interval 1:" in ctx
+    assert "Interval 2:" in ctx
+
+
+# ---------------------------------------------------------------------------
 # format_adherence_context
 # ---------------------------------------------------------------------------
 

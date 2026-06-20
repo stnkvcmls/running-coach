@@ -64,6 +64,19 @@ class FeedbackRequest(BaseModel):
     text: str | None = None
 
 
+class IntervalAdherence(BaseModel):
+    step_order: int
+    label: str                                   # "Warmup", "Interval 1", "Recovery 2", "Cooldown"
+    step_type: str                               # warmup, interval, rest, cooldown, …
+    planned_distance_m: float | None = None
+    actual_distance_m: float | None = None
+    planned_pace_display: str | None = None
+    actual_pace_display: str | None = None
+    pace_delta_sec_per_km: float | None = None   # positive = slower than plan
+    distance_delta_m: float | None = None        # actual - planned
+    matched: bool = True                          # a lap aligned to this step
+
+
 class WorkoutAdherence(BaseModel):
     planned_distance_m: float | None = None    # running periods only (rest excluded)
     planned_rest_distance_m: float | None = None
@@ -77,6 +90,7 @@ class WorkoutAdherence(BaseModel):
     actual_laps: int | None = None
     adherence_score: float                     # 0–100 composite
     summary: str                               # human-readable verdict
+    intervals: list[IntervalAdherence] | None = None  # per-rep lap↔step alignment
 
 
 class ActivityDetail(BaseModel):
