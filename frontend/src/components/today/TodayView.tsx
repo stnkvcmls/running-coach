@@ -1,5 +1,5 @@
 import { useDateContext } from '../../App'
-import { useToday } from '../../api/hooks'
+import { useToday, useRealignmentStatus, useRealignPlan } from '../../api/hooks'
 import { formatDateKey, format, isToday as checkIsToday } from '../../utils/date'
 import { formatDuration } from '../../utils/formatting'
 import WorkoutCard from './WorkoutCard'
@@ -8,6 +8,7 @@ import WeekOverview from './WeekOverview'
 import TrainingLoadChart from './TrainingLoadChart'
 import ReadinessCard from './ReadinessCard'
 import InsightsList from './InsightsList'
+import { AlertTriangle, RefreshCw } from 'lucide-react'
 import './TodayView.css'
 
 function formatPriority(priority: string | null): string | null {
@@ -17,6 +18,44 @@ function formatPriority(priority: string | null): string | null {
   return null
 }
 
+function TodayRealignmentBanner() {
+  const { data: status } = useRealignmentStatus()
+  const { mutate: realign, isPending } = useRealignPlan()
+
+  if (!status?.should_prompt) return null
+
+  return (
+    <section className="today-section">
+      <div className="today-realignment-banner">
+        <AlertTriangle size={16} className="today-realignment-icon" />
+        <div className="today-realignment-body">
+          <span className="today-realignment-msg">
+            {status.missed_count} planned session{status.missed_count !== 1 ? 's' : ''} missed.
+            Regenerate to adapt your plan?
+          </span>
+          <div className="today-realignment-actions">
+            <button
+              className="btn-primary today-realignment-btn"
+              onClick={() => realign('regenerate')}
+              disabled={isPending}
+            >
+              {isPending ? <RefreshCw size={13} className="spin" /> : null}
+              Regenerate
+            </button>
+            <button
+              className="today-realignment-dismiss"
+              onClick={() => realign('dismiss')}
+              disabled={isPending}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export default function TodayView() {
   const { selectedDate } = useDateContext()
   const dateKey = formatDateKey(selectedDate)
@@ -24,12 +63,12 @@ export default function TodayView() {
 
   if (isLoading) return <div className="spinner" />
 
-  const dateLabel = checkIsToday(selectedDate)
-    ? 'Today'
-    : format(selectedDate, 'EEEE, d MMM')
+  const isViewingToday = checkIsToday(selectedDate)
+  const dateLabel = isViewingToday ? 'Today' : format(selectedDate, 'EEEE, d MMM')
 
   return (
     <div className="today-view">
+      {isViewingToday && <TodayRealignmentBanner />}
       {/* Today's workouts */}
       <section className="today-section">
         <h2 className="section-title">{dateLabel}'s workouts</h2>

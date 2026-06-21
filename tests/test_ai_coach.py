@@ -592,3 +592,120 @@ def test_build_plan_context_includes_adherence(db):
 def test_build_plan_context_no_adherence_when_no_plan(db):
     context = ai_coach._build_plan_context(db, date(2026, 6, 21))
     assert "## Current Plan Adherence" not in context
+
+
+# --- detect_plan_realignment ---
+
+def _seed_plan_with_days(db, plan_start, days_config):
+    """Seed a TrainingPlan with specified day configs [{date, workout_type, dist_m}]."""
+    plan = TrainingPlan(
+        generated_at=datetime(2026, 6, 1, 0, 0, tzinfo=timezone.utc),
+        week_start=plan_start,
+        plan_weeks=4,
+    )
+    db.add(plan)
+    db.flush()
+    for cfg in days_config:
+        db.add(TrainingPlanDay(
+            plan_id=plan.id,
+            day_date=cfg["date"],
+            day_of_week=cfg["date"].strftime("%A"),
+            week_number=1,
+            workout_type=cfg.get("workout_type", "easy"),
+            target_distance_m=cfg.get("dist_m"),
+        ))
+    db.commit()
+    return plan
+
+
+def test_detect_realignment_no_plan(db):
+    ref = date(2026, 6, 21)
+    result = ai_coach.detect_plan_realignment(db, ref)
+    assert result["should_prompt"] is False
+    assert result["missed_count"] == 0
+    assert result["missed_sessions"] == []
+
+
+def test_detect_realignment_below_threshold(db):
+    ref = date(2026, 6, 21)
+    _seed_plan_with_days(db, date(2026, 6, 16), [
+        {"date": date(2026, 6, 17), "workout_type": "easy", "dist_m": 8000},
+    ])
+    result = ai_coach.detect_plan_realignment(db, ref)
+    # 1 missed < threshold of 2
+    assert result["should_prompt"] is False
+    assert result["missed_count"] == 1
+    assert result["total_scheduled"] == 1
+
+
+def test_detect_realignment_at_threshold(db):
+    ref = date(2026, 6, 21)
+    _seed_plan_with_days(db, date(2026, 6, 16), [
+        {"date": date(2026, 6, 17), "workout_type": "easy"},
+        {"date": date(2026, 6, 18), "workout_type": "tempo"},
+    ])
+    result = ai_coach.detect_plan_realignment(db, ref)
+    assert result["should_prompt"] is True
+    assert result["missed_count"] == 2
+    assert result["total_scheduled"] == 2
+    assert len(result["missed_sessions"]) == 2
+
+
+def test_detect_realignment_rest_days_excluded(db):
+    ref = date(2026, 6, 21)
+    _seed_plan_with_days(db, date(2026, 6, 16), [
+        {"date": date(2026, 6, 17), "workout_type": "rest"},
+        {"date": date(2026, 6, 18), "workout_type": "rest"},
+        {"date": date(2026, 6, 19), "workout_type": "rest"},
+    ])
+    result = ai_coach.detect_plan_realignment(db, ref)
+    # Only rest days → no scheduled workout sessions
+    assert result["should_prompt"] is False
+    assert result["missed_count"] == 0
+    assert result["total_scheduled"] == 0
+
+
+def test_detect_realignment_completed_sessions_reduce_count(db):
+    ref = date(2026, 6, 21)
+    _seed_plan_with_days(db, date(2026, 6, 16), [
+        {"date": date(2026, 6, 17), "workout_type": "easy", "dist_m": 8000},
+        {"date": date(2026, 6, 18), "workout_type": "tempo", "dist_m": 10000},
+        {"date": date(2026, 6, 19), "workout_type": "interval", "dist_m": 12000},
+    ])
+    # Complete only the first session
+    db.add(Activity(
+        garmin_id=501, name="Easy Run", activity_type="running",
+        started_at=datetime(2026, 6, 17, 8, 0), distance_m=8200,
+    ))
+    db.commit()
+    result = ai_coach.detect_plan_realignment(db, ref)
+    assert result["total_scheduled"] == 3
+    assert result["missed_count"] == 2
+    assert result["should_prompt"] is True
+
+
+def test_detect_realignment_dismissed_suppresses_prompt(db):
+    ref = date(2026, 6, 21)
+    _seed_plan_with_days(db, date(2026, 6, 16), [
+        {"date": date(2026, 6, 17), "workout_type": "easy"},
+        {"date": date(2026, 6, 18), "workout_type": "tempo"},
+    ])
+    # Simulate dismiss: set snooze date to future
+    db.add(SyncStatus(key="plan_realignment_dismissed_until", value="2026-06-28"))
+    db.commit()
+    result = ai_coach.detect_plan_realignment(db, ref)
+    assert result["should_prompt"] is False
+    assert result["missed_count"] == 2  # still detected, just suppressed
+
+
+def test_detect_realignment_expired_dismiss_prompts(db):
+    ref = date(2026, 6, 21)
+    _seed_plan_with_days(db, date(2026, 6, 16), [
+        {"date": date(2026, 6, 17), "workout_type": "easy"},
+        {"date": date(2026, 6, 18), "workout_type": "tempo"},
+    ])
+    # Dismiss expired in the past
+    db.add(SyncStatus(key="plan_realignment_dismissed_until", value="2026-06-14"))
+    db.commit()
+    result = ai_coach.detect_plan_realignment(db, ref)
+    assert result["should_prompt"] is True

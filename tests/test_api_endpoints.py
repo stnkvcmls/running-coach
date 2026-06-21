@@ -10,6 +10,8 @@ from app.models import (
     GarminCalendarEvent,
     Insight,
     SyncStatus,
+    TrainingPlan,
+    TrainingPlanDay,
 )
 
 
@@ -294,3 +296,144 @@ def test_trigger_sync_accepted(client, no_threads, sync_type):
 
 def test_trigger_sync_unknown(client, no_threads):
     assert client.post("/api/v1/sync/bogus").status_code == 400
+
+
+# --- /training-plan/realignment-status ---
+
+def _seed_plan_and_days(db, days_config):
+    """Helper: seed a TrainingPlan + past days; returns plan."""
+    from datetime import timezone
+    plan = TrainingPlan(
+        generated_at=datetime(2026, 6, 1, 0, 0, tzinfo=timezone.utc),
+        week_start=date(2026, 6, 16),
+        plan_weeks=4,
+    )
+    db.add(plan)
+    db.flush()
+    for cfg in days_config:
+        db.add(TrainingPlanDay(
+            plan_id=plan.id,
+            day_date=cfg["date"],
+            day_of_week=cfg["date"].strftime("%A"),
+            week_number=1,
+            workout_type=cfg.get("workout_type", "easy"),
+            target_distance_m=cfg.get("dist_m"),
+        ))
+    db.commit()
+    return plan
+
+
+def test_realignment_status_no_plan(client):
+    resp = client.get("/api/v1/training-plan/realignment-status")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["should_prompt"] is False
+    assert body["missed_count"] == 0
+    assert body["missed_sessions"] == []
+
+
+def test_realignment_status_below_threshold(client, db):
+    _seed_plan_and_days(db, [
+        {"date": date(2026, 6, 17), "workout_type": "easy"},
+    ])
+    resp = client.get("/api/v1/training-plan/realignment-status")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["should_prompt"] is False
+    assert body["missed_count"] == 1
+
+
+def test_realignment_status_at_threshold(client, db):
+    _seed_plan_and_days(db, [
+        {"date": date(2026, 6, 17), "workout_type": "easy", "dist_m": 8000},
+        {"date": date(2026, 6, 18), "workout_type": "tempo", "dist_m": 10000},
+    ])
+    resp = client.get("/api/v1/training-plan/realignment-status")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["should_prompt"] is True
+    assert body["missed_count"] == 2
+    assert len(body["missed_sessions"]) == 2
+    assert body["missed_sessions"][0]["workout_type"] == "easy"
+    assert body["missed_sessions"][0]["target_distance_km"] == pytest.approx(8.0)
+
+
+def test_realignment_status_dismissed(client, db):
+    _seed_plan_and_days(db, [
+        {"date": date(2026, 6, 17), "workout_type": "easy"},
+        {"date": date(2026, 6, 18), "workout_type": "tempo"},
+    ])
+    db.add(SyncStatus(key="plan_realignment_dismissed_until", value="2099-01-01"))
+    db.commit()
+    resp = client.get("/api/v1/training-plan/realignment-status")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["should_prompt"] is False
+    assert body["missed_count"] == 2  # detected but suppressed
+
+
+# --- /training-plan/realign ---
+
+def test_realign_dismiss(client, db):
+    resp = client.post("/api/v1/training-plan/realign", json={"action": "dismiss"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "dismissed"
+    assert "until" in body
+    row = db.query(SyncStatus).filter(
+        SyncStatus.key == "plan_realignment_dismissed_until"
+    ).first()
+    assert row is not None
+    assert row.value == body["until"]
+
+
+def test_realign_dismiss_idempotent(client, db):
+    # Two dismissals: second should overwrite first.
+    client.post("/api/v1/training-plan/realign", json={"action": "dismiss"})
+    db.expire_all()
+    first = db.query(SyncStatus).filter(
+        SyncStatus.key == "plan_realignment_dismissed_until"
+    ).first().value
+    client.post("/api/v1/training-plan/realign", json={"action": "dismiss"})
+    db.expire_all()
+    second = db.query(SyncStatus).filter(
+        SyncStatus.key == "plan_realignment_dismissed_until"
+    ).first().value
+    assert second == first  # same date since both calls happen on the same day
+
+
+def test_realign_regenerate(client, db, monkeypatch, patch_db_session):
+    import app.database as _app_db
+    plan = _seed_plan_and_days(db, [])
+    # Stub the AI generation to return the existing plan's id
+    class _FakePlan:
+        id = plan.id
+    monkeypatch.setattr("app.ai_coach.generate_training_plan", lambda *a, **kw: _FakePlan())
+    # Redirect db_session (used by the endpoint's make_session) to the test DB
+    patch_db_session(_app_db)
+    resp = client.post("/api/v1/training-plan/realign", json={"action": "regenerate"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "id" in body
+
+
+def test_realign_regenerate_clears_dismiss(client, db, monkeypatch, patch_db_session):
+    import app.database as _app_db
+    plan = _seed_plan_and_days(db, [])
+    db.add(SyncStatus(key="plan_realignment_dismissed_until", value="2099-01-01"))
+    db.commit()
+    class _FakePlan:
+        id = plan.id
+    monkeypatch.setattr("app.ai_coach.generate_training_plan", lambda *a, **kw: _FakePlan())
+    patch_db_session(_app_db)
+    client.post("/api/v1/training-plan/realign", json={"action": "regenerate"})
+    db.expire_all()
+    row = db.query(SyncStatus).filter(
+        SyncStatus.key == "plan_realignment_dismissed_until"
+    ).first()
+    assert row is None
+
+
+def test_realign_invalid_action(client):
+    resp = client.post("/api/v1/training-plan/realign", json={"action": "bogus"})
+    assert resp.status_code == 422
