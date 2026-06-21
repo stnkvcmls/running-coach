@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiPost, apiPut } from './client'
+import { apiGet, apiPost, apiPut, apiDelete } from './client'
 import type {
   TodayResponse,
   ActivitySummary,
@@ -9,6 +9,9 @@ import type {
   CalendarDay,
   CalendarEvent,
   FeedbackRequest,
+  GarminConnectResult,
+  GarminConnectionStatus,
+  GarminCredentialsRequest,
   InsightResponse,
   IntensityTrendsResponse,
   PerformanceCurveResponse,
@@ -172,6 +175,45 @@ export function useSetAiConfig() {
       apiPost<AiConfigResponse>('/ai-config', config),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['ai-config'] })
+    },
+  })
+}
+
+export function useGarminStatus() {
+  return useQuery({
+    queryKey: ['garmin-status'],
+    queryFn: () => apiGet<GarminConnectionStatus>('/garmin-credentials/status'),
+  })
+}
+
+export function useConnectGarmin() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (creds: GarminCredentialsRequest) =>
+      apiPost<GarminConnectResult>('/garmin-credentials', creds),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['garmin-status'] })
+    },
+  })
+}
+
+export function useSubmitGarminMfa() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (code: string) =>
+      apiPost<GarminConnectResult>('/garmin-credentials/mfa', { code }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['garmin-status'] })
+    },
+  })
+}
+
+export function useDisconnectGarmin() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => apiDelete<GarminConnectionStatus>('/garmin-credentials'),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['garmin-status'] })
     },
   })
 }

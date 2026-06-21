@@ -17,6 +17,13 @@ services:
       - ACTIVITY_POLL_MINUTES=${ACTIVITY_POLL_MINUTES:-5}
       - DAILY_SYNC_HOUR=${DAILY_SYNC_HOUR:-7}
       - AI_MODEL=${AI_MODEL:-claude-sonnet-4-6}
+      # Auth / multi-user (Phase 1+). ENCRYPTION_KEY is required to store
+      # per-user Garmin credentials (Phase 2); keep it stable and backed up.
+      - AUTH_ENABLED=${AUTH_ENABLED:-false}
+      - CF_ACCESS_TEAM_DOMAIN=${CF_ACCESS_TEAM_DOMAIN:-}
+      - CF_ACCESS_AUD=${CF_ACCESS_AUD:-}
+      - DEV_USER_EMAIL=${DEV_USER_EMAIL:-}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/')"]

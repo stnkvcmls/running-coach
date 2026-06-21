@@ -34,6 +34,21 @@ export interface FeedbackRequest {
   text?: string
 }
 
+export interface GarminCredentialsRequest {
+  email: string
+  password: string
+}
+
+export interface GarminConnectResult {
+  status: 'connected' | 'mfa_required'
+}
+
+export interface GarminConnectionStatus {
+  connected: boolean
+  garmin_email: string | null
+  mfa_pending: boolean
+}
+
 export interface IntervalAdherence {
   step_order: number
   label: string                            // "Warmup", "Interval 1", "Recovery 2", "Cooldown"

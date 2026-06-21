@@ -1,5 +1,7 @@
 import json
 import logging
+import os
+import shutil
 import threading
 import time
 from datetime import datetime, date, timedelta, timezone
@@ -7,34 +9,251 @@ from datetime import datetime, date, timedelta, timezone
 from garminconnect import Garmin
 from sqlalchemy.orm import Session
 
-from app import streams
+from app import crypto, streams
 from app.config import settings
 from app.database import db_session
-from app.models import Activity, AthleteProfile, DailySummary, GarminCalendarEvent, SyncStatus
+from app.models import Activity, AthleteProfile, DailySummary, GarminCalendarEvent, SyncStatus, User
 
 logger = logging.getLogger(__name__)
 
-_garmin_client: Garmin | None = None
+# Authenticated Garmin clients keyed by user id (id 0 = legacy env-only client
+# used before a User row exists). Replaces the former single global client.
+_garmin_clients: dict[int, Garmin] = {}
 _garmin_lock = threading.Lock()
 
+# Pending interactive MFA logins keyed by user id: (Garmin, email, password,
+# started_at). garminconnect 0.3.2 keeps MFA state on the client instance, so
+# the same object must survive between the connect and code-submission requests.
+_mfa_sessions: dict[int, tuple] = {}
+_mfa_lock = threading.Lock()
+_MFA_TTL = 300  # seconds — a connect code must be entered within 5 minutes
 
-def get_garmin_client() -> Garmin:
-    """Get or create an authenticated Garmin client."""
-    global _garmin_client
+
+def _bootstrap_identity_email() -> str:
+    """Identity (login) email of the bootstrap user #1, mirroring auth.py."""
+    return settings.dev_user_email or settings.garmin_email or "dev@localhost"
+
+
+def _user_token_dir(user_id: int) -> str:
+    """Per-user OAuth token directory under the configured token root."""
+    return os.path.join(settings.garmin_token_dir, str(user_id))
+
+
+def _user_credentials(user: User) -> tuple[str, str]:
+    """Return (email, password) for a user, falling back to env for bootstrap.
+
+    A user with no stored encrypted password (e.g. the pre-encryption homelab
+    deployment) falls back to the env GARMIN_PASSWORD so existing setups keep
+    working without an encryption key.
+    """
+    email = user.garmin_email or settings.garmin_email
+    if user.garmin_password_encrypted:
+        password = crypto.decrypt(user.garmin_password_encrypted)
+    else:
+        password = settings.garmin_password
+    return email, password
+
+
+def _build_client(user_id: int, email: str, password: str, token_dir: str) -> Garmin:
+    """Authenticate a Garmin client, loading dumped tokens from token_dir."""
+    os.makedirs(token_dir, exist_ok=True)
+    client = Garmin(email, password)
+    client.login(token_dir)
+    logger.info("Garmin authenticated as %s (user %s)", client.get_full_name(), user_id)
+    return client
+
+
+def _get_client_for(user_id: int, email: str, password: str, token_dir: str) -> Garmin:
+    """Return a cached live client for user_id, rebuilding if the session died."""
     with _garmin_lock:
-        if _garmin_client is not None:
+        client = _garmin_clients.get(user_id)
+        if client is not None:
             try:
-                _garmin_client.get_full_name()
-                return _garmin_client
+                client.get_full_name()
+                return client
             except Exception:
-                logger.info("Garmin session expired, re-authenticating")
-                _garmin_client = None
+                logger.info("Garmin session expired for user %s, re-authenticating", user_id)
+                _garmin_clients.pop(user_id, None)
 
-        client = Garmin(settings.garmin_email, settings.garmin_password)
-        client.login(settings.garmin_token_dir)
-        _garmin_client = client
-        logger.info("Garmin authenticated as %s", client.get_full_name())
+        client = _build_client(user_id, email, password, token_dir)
+        _garmin_clients[user_id] = client
         return client
+
+
+def _find_bootstrap_user(db: Session) -> User | None:
+    """Locate user #1 — the account seeded from env GARMIN_EMAIL/PASSWORD."""
+    return db.query(User).filter(User.email == _bootstrap_identity_email()).first()
+
+
+def _get_bootstrap_client() -> Garmin:
+    """Client for the global sync jobs (Phase 3 makes these per-user)."""
+    creds = None
+    with db_session() as db:
+        user = _find_bootstrap_user(db)
+        if user is not None:
+            email, password = _user_credentials(user)
+            creds = (user.id, email, password, _user_token_dir(user.id))
+    if creds is not None:
+        return _get_client_for(*creds)
+    # No User row yet (pre-seed / no creds): use env creds + the flat token dir.
+    return _get_client_for(0, settings.garmin_email, settings.garmin_password, settings.garmin_token_dir)
+
+
+def get_garmin_client(user: User | None = None) -> Garmin:
+    """Get or create an authenticated Garmin client.
+
+    With an explicit ``user``, builds from that user's decrypted credentials and
+    per-user token dir. With no user (the existing global sync jobs), resolves
+    the bootstrap user #1 so those keep working unchanged in Phase 2.
+    """
+    if user is not None:
+        email, password = _user_credentials(user)
+        return _get_client_for(user.id, email, password, _user_token_dir(user.id))
+    return _get_bootstrap_client()
+
+
+# --- Connect flow (interactive, MFA-aware) ---------------------------------
+
+def _purge_expired_mfa_sessions() -> None:
+    now = time.time()
+    with _mfa_lock:
+        stale = [uid for uid, (_g, _e, _p, started) in _mfa_sessions.items() if now - started > _MFA_TTL]
+        for uid in stale:
+            _mfa_sessions.pop(uid, None)
+
+
+def _store_credentials(db: Session, user: User, email: str, password: str) -> None:
+    """Persist Garmin email + encrypted password on the user row."""
+    user.garmin_email = email
+    user.garmin_password_encrypted = crypto.encrypt(password)
+    db.commit()
+
+
+def connect_garmin_start(db: Session, user: User, email: str, password: str) -> str:
+    """Begin a Garmin connect. Returns "connected" or "mfa_required".
+
+    On a clean (MFA-off) login, tokens are dumped and credentials stored. When
+    the account requires MFA, the in-progress client is stashed and the caller
+    must follow up with :func:`connect_garmin_mfa`.
+    """
+    _purge_expired_mfa_sessions()
+    garmin = Garmin(email, password, return_on_mfa=True)
+    # No tokenstore → forces the credential login path.
+    result, _ = garmin.login()
+
+    if result == "needs_mfa":
+        with _mfa_lock:
+            _mfa_sessions[user.id] = (garmin, email, password, time.time())
+        return "mfa_required"
+
+    _finalize_connect(db, user, garmin, email, password)
+    return "connected"
+
+
+def connect_garmin_mfa(db: Session, user: User, code: str) -> str:
+    """Complete an MFA connect with the user's one-time code. Returns "connected"."""
+    with _mfa_lock:
+        entry = _mfa_sessions.pop(user.id, None)
+    if entry is None:
+        raise ValueError("No pending Garmin MFA login; restart the connect flow.")
+    garmin, email, password, started = entry
+    if time.time() - started > _MFA_TTL:
+        raise ValueError("MFA session expired; restart the connect flow.")
+
+    garmin.resume_login(None, code)  # client_state is held on the client instance
+    _finalize_connect(db, user, garmin, email, password)
+    return "connected"
+
+
+def _finalize_connect(db: Session, user: User, garmin: Garmin, email: str, password: str) -> None:
+    """Dump fresh tokens to the per-user dir and persist credentials."""
+    token_dir = _user_token_dir(user.id)
+    os.makedirs(token_dir, exist_ok=True)
+    # garminconnect 0.3.2 exposes the token store via ``.client``; older
+    # garth-backed releases used ``.garth``. Support whichever is present.
+    token_client = getattr(garmin, "client", None) or getattr(garmin, "garth", None)
+    token_client.dump(token_dir)
+    _store_credentials(db, user, email, password)
+    # Drop any stale cached client so the next call rebuilds from new tokens.
+    with _garmin_lock:
+        _garmin_clients.pop(user.id, None)
+    logger.info("Garmin connected for user %s (%s)", user.id, email)
+
+
+def disconnect_garmin(db: Session, user: User) -> None:
+    """Clear a user's Garmin credentials, cached client, and token dir."""
+    user.garmin_email = None
+    user.garmin_password_encrypted = None
+    db.commit()
+    with _mfa_lock:
+        _mfa_sessions.pop(user.id, None)
+    with _garmin_lock:
+        _garmin_clients.pop(user.id, None)
+    shutil.rmtree(_user_token_dir(user.id), ignore_errors=True)
+    logger.info("Garmin disconnected for user %s", user.id)
+
+
+def garmin_connection_status(user: User) -> dict:
+    """Report a user's Garmin connection state for the Settings UI."""
+    with _mfa_lock:
+        mfa_pending = user.id in _mfa_sessions
+    return {
+        "connected": bool(user.garmin_email),
+        "garmin_email": user.garmin_email,
+        "mfa_pending": mfa_pending,
+    }
+
+
+# --- Bootstrap (env account → user #1) + token-dir migration ---------------
+
+def _migrate_flat_token_dir(user_id: int) -> None:
+    """Move legacy flat-dir OAuth token files into the per-user token dir."""
+    base = settings.garmin_token_dir
+    user_dir = _user_token_dir(user_id)
+    if os.path.isdir(user_dir) and os.listdir(user_dir):
+        return  # already migrated
+    if not os.path.isdir(base):
+        return
+    token_files = [f for f in os.listdir(base) if os.path.isfile(os.path.join(base, f))]
+    if not token_files:
+        return
+    os.makedirs(user_dir, exist_ok=True)
+    for fname in token_files:
+        shutil.move(os.path.join(base, fname), os.path.join(user_dir, fname))
+    logger.info("Migrated %d Garmin token file(s) into %s", len(token_files), user_dir)
+
+
+def seed_bootstrap_user() -> None:
+    """Seed user #1 from env GARMIN_EMAIL/PASSWORD and migrate the token dir.
+
+    Idempotent: only attaches credentials the first time and only migrates the
+    flat token dir once. The env password is encrypted at rest when an
+    encryption key is configured; otherwise it stays in env (backward compatible).
+    """
+    if not settings.garmin_email:
+        return  # nothing to bootstrap
+
+    with db_session() as db:
+        user = db.query(User).filter(User.email == _bootstrap_identity_email()).first()
+        if user is None:
+            user = User(email=_bootstrap_identity_email())
+            db.add(user)
+            db.flush()
+        if not user.garmin_email:
+            user.garmin_email = settings.garmin_email
+        if (
+            not user.garmin_password_encrypted
+            and settings.garmin_password
+            and crypto.is_configured()
+        ):
+            try:
+                user.garmin_password_encrypted = crypto.encrypt(settings.garmin_password)
+            except Exception:
+                logger.exception("Failed to encrypt bootstrap Garmin password")
+        db.commit()
+        user_id = user.id
+
+    _migrate_flat_token_dir(user_id)
 
 
 def _get_sync_status(db: Session, key: str) -> str | None:

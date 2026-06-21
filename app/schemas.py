@@ -64,6 +64,26 @@ class FeedbackRequest(BaseModel):
     text: str | None = None
 
 
+class GarminCredentialsRequest(BaseModel):
+    email: str
+    password: str
+
+
+class GarminMfaRequest(BaseModel):
+    code: str
+
+
+class GarminConnectResult(BaseModel):
+    # "connected" once tokens are stored, "mfa_required" when a code is needed.
+    status: Literal["connected", "mfa_required"]
+
+
+class GarminConnectionStatus(BaseModel):
+    connected: bool
+    garmin_email: str | None = None
+    mfa_pending: bool = False
+
+
 class IntervalAdherence(BaseModel):
     step_order: int
     label: str                                   # "Warmup", "Interval 1", "Recovery 2", "Cooldown"
