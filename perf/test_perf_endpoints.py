@@ -105,6 +105,10 @@ def test_get_training_plan(benchmark, client):
     _ok(benchmark(lambda: client.get("/api/v1/training-plan")))
 
 
+def test_get_realignment_status(benchmark, client):
+    _ok(benchmark(lambda: client.get("/api/v1/training-plan/realignment-status")))
+
+
 def test_export_activities_csv(benchmark, client):
     _ok(benchmark(lambda: client.get("/api/v1/export/activities", params={"format": "csv"})))
 
@@ -150,6 +154,12 @@ def test_apply_threshold_estimate(benchmark, client):
 def test_generate_training_plan(benchmark, client):
     # AI generation is stubbed; this measures persistence + serialization.
     _ok(benchmark(lambda: client.post("/api/v1/training-plan/generate")))
+
+
+def test_trigger_realignment_dismiss(benchmark, client):
+    # Dismiss is idempotent; measures the SyncStatus upsert path.
+    _ok(benchmark(lambda: client.post(
+        "/api/v1/training-plan/realign", json={"action": "dismiss"})))
 
 
 def test_trigger_analysis(benchmark, client, ids):

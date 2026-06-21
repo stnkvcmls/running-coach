@@ -1195,6 +1195,75 @@ def _parse_pace_display(pace_str: str) -> float | None:
         return None
 
 
+_REALIGNMENT_MISSED_THRESHOLD = 2  # Show banner when this many sessions are missed
+
+
+def detect_plan_realignment(db: Session, reference_date: date) -> dict:
+    """Return realignment state for the current plan.
+
+    Looks at all past non-rest TrainingPlanDay rows that lack a matching
+    Activity. When the missed count reaches _REALIGNMENT_MISSED_THRESHOLD and
+    the user has not dismissed the banner (via SyncStatus), sets should_prompt
+    to True.
+    """
+    plan = (
+        db.query(TrainingPlan)
+        .order_by(TrainingPlan.generated_at.desc())
+        .first()
+    )
+    empty = {"should_prompt": False, "missed_count": 0, "total_scheduled": 0, "missed_sessions": []}
+    if not plan:
+        return empty
+
+    dismiss_row = db.query(SyncStatus).filter(
+        SyncStatus.key == "plan_realignment_dismissed_until"
+    ).first()
+    dismissed = False
+    if dismiss_row and dismiss_row.value:
+        try:
+            dismissed = date.fromisoformat(dismiss_row.value) > reference_date
+        except ValueError:
+            pass
+
+    past_days = (
+        db.query(TrainingPlanDay)
+        .filter(
+            TrainingPlanDay.plan_id == plan.id,
+            TrainingPlanDay.day_date < reference_date,
+            TrainingPlanDay.workout_type != "rest",
+        )
+        .order_by(TrainingPlanDay.day_date.asc())
+        .all()
+    )
+
+    missed_sessions: list[dict] = []
+    for plan_day in past_days:
+        day_start = datetime.combine(plan_day.day_date, datetime.min.time())
+        day_end = day_start + timedelta(days=1)
+        activity = (
+            db.query(Activity)
+            .filter(
+                Activity.started_at >= day_start,
+                Activity.started_at < day_end,
+            )
+            .first()
+        )
+        if not activity:
+            missed_sessions.append({
+                "date": plan_day.day_date,
+                "workout_type": plan_day.workout_type,
+                "target_distance_km": plan_day.target_distance_m / 1000 if plan_day.target_distance_m else None,
+            })
+
+    missed_count = len(missed_sessions)
+    return {
+        "should_prompt": missed_count >= _REALIGNMENT_MISSED_THRESHOLD and not dismissed,
+        "missed_count": missed_count,
+        "total_scheduled": len(past_days),
+        "missed_sessions": missed_sessions,
+    }
+
+
 def generate_training_plan(reference_date: date | None = None) -> TrainingPlan | None:
     """Generate and persist a 4-week AI training plan.
 

@@ -11,6 +11,7 @@ import type {
   FeedbackRequest,
   InsightResponse,
   PerformanceCurveResponse,
+  PlanRealignmentStatus,
   SettingsResponse,
   AiConfigResponse,
   AiConfigRequest,
@@ -252,5 +253,24 @@ export function usePerformanceCurve(days = 90) {
   return useQuery({
     queryKey: ['performance-curve', days],
     queryFn: () => apiGet<PerformanceCurveResponse>(`/performance-curve?days=${days}`),
+  })
+}
+
+export function useRealignmentStatus() {
+  return useQuery({
+    queryKey: ['realignment-status'],
+    queryFn: () => apiGet<PlanRealignmentStatus>('/training-plan/realignment-status'),
+  })
+}
+
+export function useRealignPlan() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (action: 'regenerate' | 'dismiss') =>
+      apiPost<unknown>('/training-plan/realign', { action }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['training-plan'] })
+      qc.invalidateQueries({ queryKey: ['realignment-status'] })
+    },
   })
 }

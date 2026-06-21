@@ -475,3 +475,20 @@ class TrainingPlanResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class MissedPlanSession(BaseModel):
+    date: date
+    workout_type: str
+    target_distance_km: float | None = None
+
+
+class PlanRealignmentStatus(BaseModel):
+    should_prompt: bool
+    missed_count: int
+    total_scheduled: int
+    missed_sessions: list[MissedPlanSession] = []
+
+
+class PlanRealignmentRequest(BaseModel):
+    action: Literal["regenerate", "dismiss"]

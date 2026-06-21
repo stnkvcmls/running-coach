@@ -314,3 +314,65 @@
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+/* Realignment banner */
+.realignment-banner {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  background: color-mix(in srgb, var(--color-tempo) 12%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--color-tempo) 40%, transparent);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+
+.realignment-icon {
+  flex-shrink: 0;
+  color: var(--color-tempo);
+  margin-top: 1px;
+}
+
+.realignment-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.realignment-msg {
+  font-size: 0.86rem;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.realignment-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.realignment-btn {
+  font-size: 0.8rem;
+  padding: 6px 14px;
+}
+
+.realignment-dismiss {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s;
+}
+
+.realignment-dismiss:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.realignment-dismiss:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

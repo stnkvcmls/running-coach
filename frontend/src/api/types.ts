@@ -378,6 +378,19 @@ export interface TrainingPlanResponse {
   weeks: TrainingPlanWeek[]
 }
 
+export interface MissedPlanSession {
+  date: string
+  workout_type: string
+  target_distance_km: number | null
+}
+
+export interface PlanRealignmentStatus {
+  should_prompt: boolean
+  missed_count: number
+  total_scheduled: number
+  missed_sessions: MissedPlanSession[]
+}
+
 export interface PerformanceCurvePoint {
   duration_sec: number
   actual_value: number

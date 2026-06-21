@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { ClipboardList, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react'
-import { useTrainingPlan, useGenerateTrainingPlan } from '../../api/hooks'
+import { ClipboardList, RefreshCw, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react'
+import { useTrainingPlan, useGenerateTrainingPlan, useRealignmentStatus, useRealignPlan } from '../../api/hooks'
 import type { TrainingPlanDay, TrainingPlanWeek } from '../../api/types'
 import './PlanView.css'
 
@@ -68,6 +68,42 @@ function DayCard({ day }: { day: TrainingPlanDay }) {
   )
 }
 
+function RealignmentBanner() {
+  const { data: status } = useRealignmentStatus()
+  const { mutate: realign, isPending } = useRealignPlan()
+
+  if (!status?.should_prompt) return null
+
+  return (
+    <div className="realignment-banner">
+      <AlertTriangle size={16} className="realignment-icon" />
+      <div className="realignment-body">
+        <span className="realignment-msg">
+          {status.missed_count} planned session{status.missed_count !== 1 ? 's' : ''} missed.
+          Regenerate to adapt your plan?
+        </span>
+        <div className="realignment-actions">
+          <button
+            className="btn-primary realignment-btn"
+            onClick={() => realign('regenerate')}
+            disabled={isPending}
+          >
+            {isPending ? <RefreshCw size={13} className="spin" /> : null}
+            Regenerate Plan
+          </button>
+          <button
+            className="realignment-dismiss"
+            onClick={() => realign('dismiss')}
+            disabled={isPending}
+          >
+            Dismiss
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function WeekView({ week }: { week: TrainingPlanWeek }) {
   return (
     <div className="plan-week">
@@ -122,6 +158,8 @@ export default function PlanView() {
 
   return (
     <div className="plan-view">
+      <RealignmentBanner />
+
       <div className="plan-header">
         <div className="plan-meta">
           {plan.phase && (

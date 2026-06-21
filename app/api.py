@@ -47,6 +47,9 @@ from app.schemas import (
     SettingsResponse,
     TodayResponse,
     TrainingLoadResponse,
+    MissedPlanSession,
+    PlanRealignmentRequest,
+    PlanRealignmentStatus,
     TrainingPlanDayResponse,
     TrainingPlanResponse,
     TrainingPlanWeek,
@@ -852,6 +855,61 @@ def api_generate_training_plan():
     plan = generate_training_plan()
     if plan is None:
         raise HTTPException(status_code=500, detail="Plan generation failed — check AI config")
+    with make_session() as fresh_db:
+        db_plan = fresh_db.query(TrainingPlan).filter(TrainingPlan.id == plan.id).first()
+        if not db_plan:
+            raise HTTPException(status_code=500, detail="Plan not found after generation")
+        return _build_plan_response(db_plan, fresh_db)
+
+
+@api_router.get("/training-plan/realignment-status", response_model=PlanRealignmentStatus)
+def api_get_realignment_status(db: Session = Depends(get_db)):
+    """Return whether the current plan has enough missed sessions to warrant realignment."""
+    from app.ai_coach import detect_plan_realignment
+    result = detect_plan_realignment(db, date.today())
+    return PlanRealignmentStatus(
+        should_prompt=result["should_prompt"],
+        missed_count=result["missed_count"],
+        total_scheduled=result["total_scheduled"],
+        missed_sessions=[
+            MissedPlanSession(
+                date=s["date"],
+                workout_type=s["workout_type"],
+                target_distance_km=s["target_distance_km"],
+            )
+            for s in result["missed_sessions"]
+        ],
+    )
+
+
+@api_router.post("/training-plan/realign")
+def api_realign_plan(body: PlanRealignmentRequest, db: Session = Depends(get_db)):
+    """Handle plan realignment: regenerate the plan or dismiss the banner for 7 days."""
+    if body.action == "dismiss":
+        dismiss_until = (date.today() + timedelta(days=7)).isoformat()
+        row = db.query(SyncStatus).filter(
+            SyncStatus.key == "plan_realignment_dismissed_until"
+        ).first()
+        if row:
+            row.value = dismiss_until
+        else:
+            db.add(SyncStatus(key="plan_realignment_dismissed_until", value=dismiss_until))
+        db.commit()
+        return {"status": "dismissed", "until": dismiss_until}
+
+    # action == "regenerate"
+    from app.ai_coach import generate_training_plan
+    from app.database import db_session as make_session
+    plan = generate_training_plan()
+    if plan is None:
+        raise HTTPException(status_code=500, detail="Plan generation failed — check AI config")
+    # Clear dismiss snooze after generating a new plan
+    row = db.query(SyncStatus).filter(
+        SyncStatus.key == "plan_realignment_dismissed_until"
+    ).first()
+    if row:
+        db.delete(row)
+        db.commit()
     with make_session() as fresh_db:
         db_plan = fresh_db.query(TrainingPlan).filter(TrainingPlan.id == plan.id).first()
         if not db_plan:
