@@ -38,6 +38,10 @@ from app.schemas import (
     DailySummaryDetail,
     DailySummaryResponse,
     FeedbackRequest,
+    GarminConnectResult,
+    GarminConnectionStatus,
+    GarminCredentialsRequest,
+    GarminMfaRequest,
     InsightResponse,
     IntensityTrendsResponse,
     IntensityWeek,
@@ -607,6 +611,65 @@ def api_set_ai_config(config: AiConfigRequest, db: Session = Depends(get_db)):
         available_providers=list(AVAILABLE_MODELS.keys()),
         available_models=AVAILABLE_MODELS,
     )
+
+
+# --- Garmin Credentials (per-user data source) ---
+
+@api_router.get("/garmin-credentials/status", response_model=GarminConnectionStatus)
+def api_garmin_status(current_user: User = Depends(get_current_user)):
+    from app import garmin_sync
+    return GarminConnectionStatus(**garmin_sync.garmin_connection_status(current_user))
+
+
+@api_router.post("/garmin-credentials", response_model=GarminConnectResult)
+def api_connect_garmin(
+    creds: GarminCredentialsRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from app import crypto, garmin_sync
+    if not crypto.is_configured():
+        raise HTTPException(
+            status_code=400,
+            detail="Server is missing ENCRYPTION_KEY; set it before connecting Garmin.",
+        )
+    try:
+        status = garmin_sync.connect_garmin_start(
+            db, current_user, creds.email, creds.password
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.info("Garmin connect failed for user %s: %s", current_user.id, exc)
+        raise HTTPException(status_code=400, detail=f"Garmin login failed: {exc}")
+    return GarminConnectResult(status=status)
+
+
+@api_router.post("/garmin-credentials/mfa", response_model=GarminConnectResult)
+def api_connect_garmin_mfa(
+    body: GarminMfaRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from app import garmin_sync
+    try:
+        status = garmin_sync.connect_garmin_mfa(db, current_user, body.code)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.info("Garmin MFA failed for user %s: %s", current_user.id, exc)
+        raise HTTPException(status_code=400, detail=f"Garmin MFA failed: {exc}")
+    return GarminConnectResult(status=status)
+
+
+@api_router.delete("/garmin-credentials", response_model=GarminConnectionStatus)
+def api_disconnect_garmin(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from app import garmin_sync
+    garmin_sync.disconnect_garmin(db, current_user)
+    return GarminConnectionStatus(**garmin_sync.garmin_connection_status(current_user))
 
 
 # --- Athlete Profile ---

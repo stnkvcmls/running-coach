@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from app import garmin_sync
-from app.models import Activity, AthleteProfile, DailySummary, GarminCalendarEvent, SyncStatus
+from app.models import Activity, AthleteProfile, DailySummary, GarminCalendarEvent, SyncStatus, User
 
 
 # --- _parse_garmin_ts ---
@@ -253,15 +253,17 @@ def test_store_activity_no_id_returns_none(db):
 
 # --- sync_calendar orchestration (client + db mocked) ---
 
-def test_get_garmin_client_fresh_login(monkeypatch):
-    # Reset the cached client so a fresh login path runs.
-    monkeypatch.setattr(garmin_sync, "_garmin_client", None)
+def test_get_garmin_client_fresh_login(monkeypatch, tmp_path):
+    # Empty the per-user client cache so a fresh login path runs.
+    garmin_sync._garmin_clients.clear()
+    monkeypatch.setattr(garmin_sync.settings, "garmin_token_dir", str(tmp_path))
 
     fake_client = MagicMock()
     fake_client.get_full_name.return_value = "Sam Runner"
     monkeypatch.setattr(garmin_sync, "Garmin", lambda *a, **k: fake_client)
 
-    client = garmin_sync.get_garmin_client()
+    user = User(id=7, email="sam@example.com", garmin_email="sam@garmin.com")
+    client = garmin_sync.get_garmin_client(user)
     assert client is fake_client
     fake_client.login.assert_called()
 
@@ -269,10 +271,12 @@ def test_get_garmin_client_fresh_login(monkeypatch):
 def test_get_garmin_client_reuses_live_session(monkeypatch):
     live = MagicMock()
     live.get_full_name.return_value = "Sam"
-    monkeypatch.setattr(garmin_sync, "_garmin_client", live)
+    garmin_sync._garmin_clients.clear()
+    garmin_sync._garmin_clients[7] = live
     # Should return the cached client without constructing a new one.
     monkeypatch.setattr(garmin_sync, "Garmin", lambda *a, **k: pytest.fail("should not re-create"))
-    assert garmin_sync.get_garmin_client() is live
+    user = User(id=7, email="sam@example.com", garmin_email="sam@garmin.com")
+    assert garmin_sync.get_garmin_client(user) is live
 
 
 def test_fetch_activity_details_tolerates_failures():

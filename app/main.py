@@ -137,6 +137,13 @@ async def lifespan(app: FastAPI):
     # Startup
     init_db()
     os.makedirs(settings.garmin_token_dir, exist_ok=True)
+    # Seed user #1 from env GARMIN_EMAIL/PASSWORD and migrate the flat token dir
+    # into the per-user layout ({garmin_token_dir}/{user_id}/). Idempotent.
+    from app.garmin_sync import seed_bootstrap_user
+    try:
+        seed_bootstrap_user()
+    except Exception:
+        logger.exception("Bootstrap user seeding failed")
     logger.info("Database initialized")
 
     tz = pytz.timezone(settings.timezone)

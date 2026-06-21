@@ -28,6 +28,12 @@ class User(Base):
     full_name = Column(Text, nullable=True)
     created_at = Column(DateTime, default=_utcnow)
 
+    # Per-user Garmin data-source credentials (Phase 2). The password is stored
+    # as Fernet ciphertext (see app/crypto.py); OAuth tokens live on disk under
+    # ``{garmin_token_dir}/{user_id}/``.
+    garmin_email = Column(String(255), nullable=True)
+    garmin_password_encrypted = Column(Text, nullable=True)
+
 
 class Activity(Base):
     __tablename__ = "activities"

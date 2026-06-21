@@ -141,3 +141,54 @@
   text-decoration: none;
   text-align: center;
 }
+
+.garmin-connect {
+  padding: 16px;
+}
+
+.garmin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.garmin-form input {
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 0.88rem;
+}
+
+.garmin-hint {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.garmin-connected {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.garmin-status-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.garmin-disconnect {
+  color: #e74c3c;
+}
+
+.garmin-error {
+  display: block;
+  margin-top: 10px;
+  font-size: 0.78rem;
+  color: #e74c3c;
+}
