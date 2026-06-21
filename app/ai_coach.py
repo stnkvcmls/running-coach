@@ -950,7 +950,92 @@ Rules:
 - Distribute load progressively: build 2 weeks, recover 1 week, then race-specific or peak.
 - Account for any upcoming races as goal events (taper if race is within 3 weeks).
 - Respect injury history — avoid high-impact volume if relevant injuries are listed.
+- When a "Current Plan Adherence" section is present, use it to shape the new plan:
+  * Adherence ≥80%: the athlete is consistent — progress load as designed.
+  * Adherence 60–79%: moderate disruption — keep similar volume but reduce the count of the
+    session type missed most often (e.g. one fewer interval day).
+  * Adherence <60%: significant disruption — scale total weekly volume down ~10–15% and
+    prioritize key quality sessions (one tempo/interval + long run) over quantity.
+  * If the same workout type is repeatedly missed, reduce or replace it with a more accessible
+    type (e.g. swap interval → tempo, or tempo → easy with strides).
+  * After multiple consecutive missed sessions, treat the first week of the new plan as a
+    rebuild week (easy/moderate volume) before resuming normal load.
 """
+
+
+def _build_plan_adherence_context(db: Session, reference_date: date) -> str | None:
+    """Build adherence summary for the most recent training plan.
+
+    For each non-rest day in the current plan that has already passed, checks
+    whether an activity was completed and notes distance adherence. Returns None
+    when there is no active plan or no past scheduled sessions yet.
+    """
+    plan = (
+        db.query(TrainingPlan)
+        .order_by(TrainingPlan.generated_at.desc())
+        .first()
+    )
+    if not plan:
+        return None
+
+    past_days = (
+        db.query(TrainingPlanDay)
+        .filter(
+            TrainingPlanDay.plan_id == plan.id,
+            TrainingPlanDay.day_date < reference_date,
+            TrainingPlanDay.workout_type != "rest",
+        )
+        .order_by(TrainingPlanDay.day_date.asc())
+        .all()
+    )
+    if not past_days:
+        return None
+
+    completed = 0
+    missed = 0
+    rows: list[str] = []
+
+    for plan_day in past_days:
+        day_start = datetime.combine(plan_day.day_date, datetime.min.time())
+        day_end = day_start + timedelta(days=1)
+        activity = (
+            db.query(Activity)
+            .filter(
+                Activity.started_at >= day_start,
+                Activity.started_at < day_end,
+            )
+            .first()
+        )
+        if activity:
+            completed += 1
+            dist_note = ""
+            if plan_day.target_distance_m and activity.distance_m:
+                pct = (activity.distance_m / plan_day.target_distance_m) * 100
+                dist_note = (
+                    f" ({pct:.0f}% of planned {plan_day.target_distance_m / 1000:.1f} km)"
+                )
+            rows.append(
+                f"- {plan_day.day_date} [{plan_day.workout_type}] COMPLETED{dist_note}"
+            )
+        else:
+            missed += 1
+            target_note = ""
+            if plan_day.target_distance_m:
+                target_note = f" (planned {plan_day.target_distance_m / 1000:.1f} km)"
+            rows.append(
+                f"- {plan_day.day_date} [{plan_day.workout_type}] MISSED{target_note}"
+            )
+
+    total = completed + missed
+    if total == 0:
+        return None
+
+    rate = (completed / total) * 100
+    lines = [
+        f"## Current Plan Adherence ({total} scheduled sessions)",
+        f"Completed: {completed}/{total} ({rate:.0f}%)",
+    ] + rows
+    return "\n".join(lines)
 
 
 def _build_plan_context(db: Session, reference_date: date) -> str:
@@ -1011,6 +1096,11 @@ def _build_plan_context(db: Session, reference_date: date) -> str:
             weeks.append(f"- Week of {week_start}: {count} runs, {(dist or 0) / 1000:.1f} km")
     if weeks:
         sections.append("## Recent Weekly Volume\n" + "\n".join(weeks))
+
+    # Adherence to the current plan
+    adherence_ctx = _build_plan_adherence_context(db, reference_date)
+    if adherence_ctx:
+        sections.append(adherence_ctx)
 
     # Upcoming races
     upcoming = (
