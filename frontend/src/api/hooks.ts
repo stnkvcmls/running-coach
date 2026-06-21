@@ -10,6 +10,7 @@ import type {
   CalendarEvent,
   FeedbackRequest,
   InsightResponse,
+  PerformanceCurveResponse,
   SettingsResponse,
   AiConfigResponse,
   AiConfigRequest,
@@ -244,5 +245,12 @@ export function useGenerateTrainingPlan() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['training-plan'] })
     },
+  })
+}
+
+export function usePerformanceCurve(days = 90) {
+  return useQuery({
+    queryKey: ['performance-curve', days],
+    queryFn: () => apiGet<PerformanceCurveResponse>(`/performance-curve?days=${days}`),
   })
 }

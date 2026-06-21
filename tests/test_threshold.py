@@ -392,3 +392,94 @@ def test_threshold_cache_roundtrip_preserves_fields(db):
     assert cached.critical_power.value == est.critical_power.value
     assert cached.threshold_pace_min_km.method == est.threshold_pace_min_km.method
     assert cached.lookback_days == est.lookback_days
+
+
+# --- Performance curve + race predictions ---
+
+def test_predict_race_times_basic():
+    cv = 3.5    # m/s (≈4:45/km threshold)
+    d_prime = 200.0
+    preds = threshold._predict_race_times(cv, d_prime)
+    labels = [p.distance_label for p in preds]
+    assert "5K" in labels
+    assert "10K" in labels
+    assert "Half Marathon" in labels
+    assert "Marathon" in labels
+
+
+def test_predict_race_times_formula():
+    cv = 4.0    # m/s
+    d_prime = 100.0
+    pred_5k = next(p for p in threshold._predict_race_times(cv, d_prime) if p.distance_label == "5K")
+    expected_sec = (5000.0 - d_prime) / cv
+    assert abs(pred_5k.predicted_time_sec - expected_sec) < 1
+    expected_pace = (expected_sec / 5000.0) * 1000.0 / 60.0
+    assert abs(pred_5k.predicted_pace_min_km - expected_pace) < 0.01
+
+
+def test_predict_race_times_skips_when_d_prime_exceeds_distance():
+    # D' = 6000 m > 5000 m → 5K prediction should be skipped (6000 > 5000)
+    preds = threshold._predict_race_times(cv=3.5, d_prime=6000.0)
+    labels = [p.distance_label for p in preds]
+    assert "5K" not in labels
+    assert "10K" in labels         # 6000 < 10000, so 10K is valid
+    assert "Half Marathon" in labels
+
+
+def test_get_performance_curve_data_empty_db(db):
+    data = threshold.get_performance_curve_data(db)
+    assert data.power_points == []
+    assert data.pace_points == []
+    assert data.critical_power is None
+    assert data.critical_velocity is None
+    assert data.race_predictions == []
+    assert data.activities_analyzed == 0
+
+
+def test_get_performance_curve_data_with_pace(db):
+    cv = 3.5
+    _add(db, mean_max=_curve_json(gap_speed=_gap_curve(cv, 200)))
+    data = threshold.get_performance_curve_data(db)
+    assert len(data.pace_points) > 0
+    assert data.critical_velocity is not None
+    assert abs(data.critical_velocity - cv) < 0.1
+    assert data.d_prime is not None
+    assert len(data.race_predictions) > 0
+
+
+def test_get_performance_curve_data_with_power(db):
+    _add(db, mean_max=_curve_json(power=_power_curve(250, 15000)))
+    data = threshold.get_performance_curve_data(db)
+    assert len(data.power_points) > 0
+    assert data.critical_power is not None
+    assert abs(data.critical_power - 250) < 3
+    assert data.w_prime is not None
+
+
+def test_performance_curve_includes_model_values(db):
+    cv = 3.5
+    _add(db, mean_max=_curve_json(gap_speed=_gap_curve(cv, 200)))
+    data = threshold.get_performance_curve_data(db)
+    points_with_model = [p for p in data.pace_points if p.model_value is not None]
+    assert len(points_with_model) > 0
+
+
+def test_performance_curve_endpoint(client, session_factory):
+    db = session_factory()
+    started = datetime.utcnow() - timedelta(days=3)
+    db.add(Activity(
+        garmin_id=99, activity_type="running", name="Run", started_at=started,
+        duration_sec=2400,
+        mean_max_json=_curve_json(gap_speed=_gap_curve(3.5, 200)),
+    ))
+    db.commit()
+    db.close()
+
+    resp = client.get("/api/v1/performance-curve?days=90")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "pace_points" in body
+    assert "race_predictions" in body
+    assert body["activities_analyzed"] == 1
+    assert body["critical_velocity"] is not None
+    assert len(body["race_predictions"]) > 0

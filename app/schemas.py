@@ -413,6 +413,31 @@ class ThresholdApplyRequest(BaseModel):
     fields: list[str] | None = None
 
 
+class PerformanceCurvePoint(BaseModel):
+    duration_sec: int
+    actual_value: float        # frontier best (power W or speed m/s)
+    model_value: float | None  # model fit at this duration
+
+
+class RacePrediction(BaseModel):
+    distance_label: str          # "5K", "10K", "Half Marathon", "Marathon"
+    distance_m: float
+    predicted_time_sec: float    # from CV model
+    predicted_pace_min_km: float
+
+
+class PerformanceCurveResponse(BaseModel):
+    power_points: list[PerformanceCurvePoint] = []
+    pace_points: list[PerformanceCurvePoint] = []
+    critical_power: float | None = None   # W
+    w_prime: float | None = None          # J
+    critical_velocity: float | None = None  # m/s
+    d_prime: float | None = None            # m
+    race_predictions: list[RacePrediction] = []
+    lookback_days: int
+    activities_analyzed: int
+
+
 class TrainingPlanDayResponse(BaseModel):
     id: int
     plan_id: int

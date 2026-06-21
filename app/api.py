@@ -40,7 +40,10 @@ from app.schemas import (
     FeedbackRequest,
     InsightResponse,
     MetricZoneResponse,
+    PerformanceCurvePoint,
+    PerformanceCurveResponse,
     RaceInfo,
+    RacePrediction,
     SettingsResponse,
     TodayResponse,
     TrainingLoadResponse,
@@ -740,6 +743,50 @@ def api_apply_threshold_estimate(
     db.commit()
     db.refresh(profile)
     return _profile_response(profile)
+
+
+# --- Performance Curve ---
+
+@api_router.get("/performance-curve", response_model=PerformanceCurveResponse)
+def api_get_performance_curve(
+    days: int = Query(90, ge=30, le=365),
+    db: Session = Depends(get_db),
+):
+    """Power-duration and pace-duration curves with CP/CV model fit and race predictions."""
+    data = threshold_mod.get_performance_curve_data(db, lookback_days=days)
+    return PerformanceCurveResponse(
+        power_points=[
+            PerformanceCurvePoint(
+                duration_sec=p.duration_sec,
+                actual_value=p.actual_value,
+                model_value=p.model_value,
+            )
+            for p in data.power_points
+        ],
+        pace_points=[
+            PerformanceCurvePoint(
+                duration_sec=p.duration_sec,
+                actual_value=p.actual_value,
+                model_value=p.model_value,
+            )
+            for p in data.pace_points
+        ],
+        critical_power=data.critical_power,
+        w_prime=data.w_prime,
+        critical_velocity=data.critical_velocity,
+        d_prime=data.d_prime,
+        race_predictions=[
+            RacePrediction(
+                distance_label=r.distance_label,
+                distance_m=r.distance_m,
+                predicted_time_sec=r.predicted_time_sec,
+                predicted_pace_min_km=r.predicted_pace_min_km,
+            )
+            for r in data.race_predictions
+        ],
+        lookback_days=data.lookback_days,
+        activities_analyzed=data.activities_analyzed,
+    )
 
 
 # --- Training Plan ---

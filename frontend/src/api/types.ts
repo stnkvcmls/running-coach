@@ -377,3 +377,28 @@ export interface TrainingPlanResponse {
   overview: string | null
   weeks: TrainingPlanWeek[]
 }
+
+export interface PerformanceCurvePoint {
+  duration_sec: number
+  actual_value: number
+  model_value: number | null
+}
+
+export interface RacePrediction {
+  distance_label: string
+  distance_m: number
+  predicted_time_sec: number
+  predicted_pace_min_km: number
+}
+
+export interface PerformanceCurveResponse {
+  power_points: PerformanceCurvePoint[]
+  pace_points: PerformanceCurvePoint[]
+  critical_power: number | null
+  w_prime: number | null
+  critical_velocity: number | null
+  d_prime: number | null
+  race_predictions: RacePrediction[]
+  lookback_days: number
+  activities_analyzed: number
+}
