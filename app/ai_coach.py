@@ -13,6 +13,7 @@ from sqlalchemy import func
 from app import training_load
 from app import threshold as threshold_mod
 from app import adherence as adherence_mod
+from app import intensity as intensity_mod
 from app.config import settings
 from app.database import db_session
 from app.models import (
@@ -439,6 +440,17 @@ def _build_context(db: Session, trigger_type: str, trigger_data: str, reference_
             )
     if weeks:
         sections.append("## Weekly Volume (last 8 weeks)\n" + "\n".join(weeks))
+
+    # Intensity distribution (HR zones, last 4 weeks)
+    try:
+        intensity_weeks = intensity_mod.aggregate_weekly_intensity(
+            db, days=56, zone_type="hr", as_of=reference_date
+        )
+        intensity_context = intensity_mod.format_intensity_context(intensity_weeks, zone_type="hr")
+        if intensity_context:
+            sections.append(intensity_context)
+    except Exception:
+        logger.debug("Intensity context skipped", exc_info=True)
 
     # Recent daily summaries (last 7 days)
     recent_days = (

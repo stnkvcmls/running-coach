@@ -39,6 +39,8 @@ from app.schemas import (
     DailySummaryResponse,
     FeedbackRequest,
     InsightResponse,
+    IntensityTrendsResponse,
+    IntensityWeek,
     MetricZoneResponse,
     PerformanceCurvePoint,
     PerformanceCurveResponse,
@@ -68,6 +70,7 @@ from app.schemas import (
 from app import training_load
 from app import threshold as threshold_mod
 from app import adherence as adherence_mod
+from app import intensity as intensity_mod
 from app.utils import safe_json_loads, parse_activity_charts, calculate_age
 
 logger = logging.getLogger(__name__)
@@ -270,6 +273,21 @@ def api_wellness_trends(
         .all()
     )
     return [DailySummaryResponse.model_validate(s) for s in summaries]
+
+
+# --- Intensity Trends ---
+
+@api_router.get("/intensity-trends", response_model=IntensityTrendsResponse)
+def api_intensity_trends(
+    days: int = Query(90, ge=7, le=365),
+    zone_type: str = Query("hr"),
+    db: Session = Depends(get_db),
+):
+    if zone_type not in ("hr", "power"):
+        zone_type = "hr"
+    weeks_data = intensity_mod.aggregate_weekly_intensity(db, days=days, zone_type=zone_type)
+    weeks = [IntensityWeek(**w) for w in weeks_data]
+    return IntensityTrendsResponse(weeks=weeks, zone_type=zone_type, days=days)
 
 
 # --- Activities ---

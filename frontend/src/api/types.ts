@@ -415,3 +415,18 @@ export interface PerformanceCurveResponse {
   lookback_days: number
   activities_analyzed: number
 }
+
+export interface IntensityWeek {
+  week_start: string
+  zone_seconds: Record<string, number>  // zone_number (as string) → seconds
+  total_seconds: number
+  easy_pct: number | null   // zones 1–2
+  moderate_pct: number | null  // zone 3
+  hard_pct: number | null   // zones 4–5
+}
+
+export interface IntensityTrendsResponse {
+  weeks: IntensityWeek[]
+  zone_type: string
+  days: number
+}

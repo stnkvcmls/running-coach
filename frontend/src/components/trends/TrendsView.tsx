@@ -1,8 +1,15 @@
 import { useState } from 'react'
 import WellnessTrendsView from './WellnessTrendsView'
 import PerformanceCurveView from './PerformanceCurveView'
+import IntensityTrendsView from './IntensityTrendsView'
 
-type Tab = 'wellness' | 'performance'
+type Tab = 'wellness' | 'intensity' | 'performance'
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'wellness', label: 'Wellness' },
+  { id: 'intensity', label: 'Intensity' },
+  { id: 'performance', label: 'Performance' },
+]
 
 export default function TrendsView() {
   const [tab, setTab] = useState<Tab>('wellness')
@@ -16,44 +23,31 @@ export default function TrendsView() {
         padding: '0 16px',
         background: 'var(--surface)',
       }}>
-        <button
-          onClick={() => setTab('wellness')}
-          style={{
-            flex: 1,
-            padding: '10px 0',
-            border: 'none',
-            background: 'transparent',
-            color: tab === 'wellness' ? 'var(--accent)' : 'var(--text-muted)',
-            fontWeight: tab === 'wellness' ? 700 : 400,
-            fontSize: '0.82rem',
-            cursor: 'pointer',
-            borderBottom: tab === 'wellness' ? '2px solid var(--accent)' : '2px solid transparent',
-            fontFamily: 'inherit',
-            transition: 'color 0.15s',
-          }}
-        >
-          Wellness
-        </button>
-        <button
-          onClick={() => setTab('performance')}
-          style={{
-            flex: 1,
-            padding: '10px 0',
-            border: 'none',
-            background: 'transparent',
-            color: tab === 'performance' ? 'var(--accent)' : 'var(--text-muted)',
-            fontWeight: tab === 'performance' ? 700 : 400,
-            fontSize: '0.82rem',
-            cursor: 'pointer',
-            borderBottom: tab === 'performance' ? '2px solid var(--accent)' : '2px solid transparent',
-            fontFamily: 'inherit',
-            transition: 'color 0.15s',
-          }}
-        >
-          Performance
-        </button>
+        {TABS.map(t => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            style={{
+              flex: 1,
+              padding: '10px 0',
+              border: 'none',
+              background: 'transparent',
+              color: tab === t.id ? 'var(--accent)' : 'var(--text-muted)',
+              fontWeight: tab === t.id ? 700 : 400,
+              fontSize: '0.82rem',
+              cursor: 'pointer',
+              borderBottom: tab === t.id ? '2px solid var(--accent)' : '2px solid transparent',
+              fontFamily: 'inherit',
+              transition: 'color 0.15s',
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
-      {tab === 'wellness' ? <WellnessTrendsView /> : <PerformanceCurveView />}
+      {tab === 'wellness' && <WellnessTrendsView />}
+      {tab === 'intensity' && <IntensityTrendsView />}
+      {tab === 'performance' && <PerformanceCurveView />}
     </div>
   )
 }
