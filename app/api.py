@@ -528,10 +528,14 @@ def api_insights(
 
 # --- Settings ---
 
+_INTERNAL_SYNC_KEYS = {"threshold_estimate", "training_load_series"}
+
 @api_router.get("/settings", response_model=SettingsResponse)
 def api_settings(db: Session = Depends(get_db)):
     sync_statuses = {}
     for s in db.query(SyncStatus).all():
+        if s.key in _INTERNAL_SYNC_KEYS:
+            continue
         sync_statuses[s.key] = {"value": s.value, "updated_at": str(s.updated_at) if s.updated_at else None}
 
     counts = {
