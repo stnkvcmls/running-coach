@@ -10,6 +10,7 @@ import type {
   CalendarEvent,
   FeedbackRequest,
   InsightResponse,
+  IntensityTrendsResponse,
   PerformanceCurveResponse,
   PlanRealignmentStatus,
   SettingsResponse,
@@ -260,6 +261,13 @@ export function useRealignmentStatus() {
   return useQuery({
     queryKey: ['realignment-status'],
     queryFn: () => apiGet<PlanRealignmentStatus>('/training-plan/realignment-status'),
+  })
+}
+
+export function useIntensityTrends(days = 90, zoneType = 'hr') {
+  return useQuery({
+    queryKey: ['intensity-trends', days, zoneType],
+    queryFn: () => apiGet<IntensityTrendsResponse>(`/intensity-trends?days=${days}&zone_type=${zoneType}`),
   })
 }
 

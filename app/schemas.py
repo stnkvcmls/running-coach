@@ -492,3 +492,18 @@ class PlanRealignmentStatus(BaseModel):
 
 class PlanRealignmentRequest(BaseModel):
     action: Literal["regenerate", "dismiss"]
+
+
+class IntensityWeek(BaseModel):
+    week_start: date
+    zone_seconds: dict[str, float]
+    total_seconds: float
+    easy_pct: float | None = None
+    moderate_pct: float | None = None
+    hard_pct: float | None = None
+
+
+class IntensityTrendsResponse(BaseModel):
+    weeks: list[IntensityWeek] = []
+    zone_type: str
+    days: int
