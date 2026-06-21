@@ -256,6 +256,10 @@ class TrainingLoadPoint(BaseModel):
     ctl: float  # Chronic Training Load — "Fitness" (42-day EWMA)
     atl: float  # Acute Training Load — "Fatigue" (7-day EWMA)
     tsb: float  # Training Stress Balance — "Form" (CTL − ATL)
+    acwr: float | None = None          # Acute:Chronic Workload Ratio (ATL/CTL)
+    ramp_rate_7d: float | None = None  # CTL change over last 7 days
+    ramp_rate_28d: float | None = None # CTL change over last 28 days
+    injury_risk: str | None = None     # "low" | "moderate" | "high"
 
 
 class TrainingReadiness(BaseModel):

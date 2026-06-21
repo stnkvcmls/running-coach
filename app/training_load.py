@@ -141,8 +141,21 @@ def _daily_tss(db: Session, end_date: date, profile: AthleteProfile | None) -> d
     return totals
 
 
+def _injury_risk(acwr: float | None, ramp_7d: float | None) -> str:
+    """Classify injury risk from ACWR and short-term ramp rate."""
+    if acwr is not None and acwr > 1.5:
+        return "high"
+    if ramp_7d is not None and ramp_7d > 10:
+        return "high"
+    if acwr is not None and acwr > 1.3:
+        return "moderate"
+    if ramp_7d is not None and ramp_7d > 7:
+        return "moderate"
+    return "low"
+
+
 def _compute_full_series(db: Session, end_date: date) -> list[TrainingLoadPoint]:
-    """Build the daily CTL/ATL/TSB series from the first activity to ``end_date``.
+    """Build the daily CTL/ATL/TSB/ACWR series from the first activity to ``end_date``.
 
     Results are memoized in ``SyncStatus`` when ``end_date`` is today; the cache
     is invalidated whenever the activity set or athlete profile changes.
@@ -171,6 +184,19 @@ def _compute_full_series(db: Session, end_date: date) -> list[TrainingLoadPoint]
         tss = daily.get(day, 0.0)
         ctl += (tss - ctl) * _CTL_ALPHA
         atl += (tss - atl) * _ATL_ALPHA
+
+        # ACWR: only meaningful when CTL is established (> 1 to avoid divide-by-zero).
+        acwr: float | None = round(atl / ctl, 3) if ctl > 1.0 else None
+
+        # Ramp rates: CTL change over the last 7 and 28 days.
+        idx = len(series)
+        ramp_7d: float | None = None
+        ramp_28d: float | None = None
+        if idx >= 7:
+            ramp_7d = round(ctl - series[idx - 7].ctl, 1)
+        if idx >= 28:
+            ramp_28d = round(ctl - series[idx - 28].ctl, 1)
+
         series.append(
             TrainingLoadPoint(
                 date=day,
@@ -178,6 +204,10 @@ def _compute_full_series(db: Session, end_date: date) -> list[TrainingLoadPoint]
                 ctl=round(ctl, 1),
                 atl=round(atl, 1),
                 tsb=round(ctl - atl, 1),
+                acwr=acwr,
+                ramp_rate_7d=ramp_7d,
+                ramp_rate_28d=ramp_28d,
+                injury_risk=_injury_risk(acwr, ramp_7d),
             )
         )
         day += timedelta(days=1)
@@ -351,16 +381,37 @@ def compute_readiness(
     )
 
 
+def _interpret_acwr(acwr: float) -> str:
+    if acwr > 1.5:
+        return "high injury risk — significant overreaching"
+    if acwr > 1.3:
+        return "moderate risk — monitor fatigue closely"
+    if acwr >= 0.8:
+        return "sweet spot — optimal training zone"
+    return "low / detraining risk"
+
+
 def format_training_load_context(point: TrainingLoadPoint | None) -> str:
     """Render the current training load as a markdown ``## Training Load`` section."""
     if point is None:
         return ""
-    return (
-        "## Training Load\n"
-        f"- Fitness (CTL, 42d): {point.ctl:.0f}\n"
-        f"- Fatigue (ATL, 7d): {point.atl:.0f}\n"
-        f"- Form (TSB = CTL − ATL): {point.tsb:+.0f} ({_interpret_tsb(point.tsb)})"
-    )
+    lines = [
+        "## Training Load",
+        f"- Fitness (CTL, 42d): {point.ctl:.0f}",
+        f"- Fatigue (ATL, 7d): {point.atl:.0f}",
+        f"- Form (TSB = CTL − ATL): {point.tsb:+.0f} ({_interpret_tsb(point.tsb)})",
+    ]
+    if point.acwr is not None:
+        lines.append(
+            f"- ACWR (ATL/CTL): {point.acwr:.2f} — {_interpret_acwr(point.acwr)}"
+        )
+    if point.ramp_rate_7d is not None:
+        lines.append(f"- Ramp rate (7d CTL change): {point.ramp_rate_7d:+.1f}")
+    if point.ramp_rate_28d is not None:
+        lines.append(f"- Ramp rate (28d CTL change): {point.ramp_rate_28d:+.1f}")
+    if point.injury_risk:
+        lines.append(f"- Injury risk: {point.injury_risk}")
+    return "\n".join(lines)
 
 
 def format_readiness_context(readiness: TrainingReadiness | None) -> str:

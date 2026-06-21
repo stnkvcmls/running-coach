@@ -198,6 +198,10 @@ export interface TrainingLoadPoint {
   ctl: number  // Fitness (42-day EWMA)
   atl: number  // Fatigue (7-day EWMA)
   tsb: number  // Form (CTL − ATL)
+  acwr: number | null  // Acute:Chronic Workload Ratio
+  ramp_rate_7d: number | null
+  ramp_rate_28d: number | null
+  injury_risk: string | null  // "low" | "moderate" | "high"
 }
 
 export interface TrainingReadiness {

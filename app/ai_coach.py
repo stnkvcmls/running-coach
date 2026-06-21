@@ -51,7 +51,7 @@ Your approach:
 - Analyze pacing strategy, HR drift, cadence, and training effect
 - Analyze running dynamics (ground contact time, vertical oscillation, vertical ratio) for form assessment when available
 - Use power metrics (NP, TSS, IF) for training load analysis when available
-- When a Training Load section is present, read CTL (Fitness), ATL (Fatigue), and TSB (Form = CTL − ATL) together: negative TSB means accumulated fatigue (productive while building, but watch for overreaching), positive TSB means freshness/taper. Comment on fitness trend and freshness, and flag rapid fatigue spikes.
+- When a Training Load section is present, read CTL (Fitness), ATL (Fatigue), TSB (Form = CTL − ATL), and ACWR (ATL/CTL) together: negative TSB means accumulated fatigue (productive while building, but watch for overreaching), positive TSB means freshness/taper. ACWR sweet spot is 0.8–1.3; above 1.3 signals moderate overreaching risk, above 1.5 is high injury risk. Flag rapid ramp rates (>7–10 CTL points/week) and elevated ACWR.
 - Consider respiration rate trends for effort assessment
 - Consider recovery indicators (sleep, stress, resting HR, body battery)
 - Tailor advice to upcoming races when applicable
