@@ -170,6 +170,8 @@ class GarminCalendarEvent(Base):
     workout_description = Column(Text, nullable=True)
     raw_json = Column(Text)
     synced_at = Column(DateTime, default=_utcnow)
+    projected_race_time_sec = Column(Integer, nullable=True)  # Garmin projected finish
+    predicted_race_time_sec = Column(Integer, nullable=True)  # Garmin predicted finish
 
 
 class MetricZone(Base):

@@ -898,9 +898,19 @@ def sync_calendar() -> int:
             evt["priority"] = "A"
             logger.info("Race %r: set priority=A from isPrimaryEvent", evt["title"])
 
-        # Log race predictions if available
+        # Store Garmin's projected/predicted finish times
         projected = customization.get("projectedRaceTimeDurationSeconds")
         predicted = customization.get("predictedRaceTimeDurationSeconds")
+        if projected:
+            try:
+                evt["projected_race_time_sec"] = int(projected)
+            except (TypeError, ValueError):
+                pass
+        if predicted:
+            try:
+                evt["predicted_race_time_sec"] = int(predicted)
+            except (TypeError, ValueError):
+                pass
         if projected or predicted:
             logger.info("Race %r: projected=%s predicted=%s", evt["title"], projected, predicted)
 

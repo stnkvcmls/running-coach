@@ -35,7 +35,7 @@ import dataclasses
 import json
 import logging
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func
@@ -620,6 +620,175 @@ def estimate_thresholds(
         logger.debug("Threshold estimate cache write failed", exc_info=True)
 
     return estimate
+
+
+# ---------------------------------------------------------------------------
+# Performance curve (power-duration + pace-duration + race predictions)
+# ---------------------------------------------------------------------------
+
+RACE_DISTANCES = [
+    ("5K", 5000.0),
+    ("10K", 10000.0),
+    ("Half Marathon", 21097.5),
+    ("Marathon", 42195.0),
+]
+
+
+@dataclass
+class CurvePoint:
+    duration_sec: int
+    actual_value: float        # measured frontier value
+    model_value: float | None  # model fit at this duration
+
+
+@dataclass
+class RacePrediction:
+    distance_label: str
+    distance_m: float
+    predicted_time_sec: float
+    predicted_pace_min_km: float
+
+
+@dataclass
+class PerformanceCurveData:
+    power_points: list[CurvePoint] = field(default_factory=list)
+    pace_points: list[CurvePoint] = field(default_factory=list)
+    critical_power: float | None = None
+    w_prime: float | None = None
+    critical_velocity: float | None = None   # m/s
+    d_prime: float | None = None             # m
+    race_predictions: list[RacePrediction] = field(default_factory=list)
+    lookback_days: int = DEFAULT_LOOKBACK_DAYS
+    activities_analyzed: int = 0
+
+
+def _predict_race_times(cv: float, d_prime: float) -> list[RacePrediction]:
+    """Predict finish times for standard distances using the CV model: t = (D - D') / CV."""
+    predictions: list[RacePrediction] = []
+    for label, dist_m in RACE_DISTANCES:
+        if d_prime >= dist_m:
+            continue
+        t_sec = (dist_m - d_prime) / cv
+        if t_sec <= 0:
+            continue
+        pace_min_km = (t_sec / dist_m) * 1000.0 / 60.0
+        predictions.append(RacePrediction(
+            distance_label=label,
+            distance_m=dist_m,
+            predicted_time_sec=round(t_sec, 0),
+            predicted_pace_min_km=round(pace_min_km, 2),
+        ))
+    return predictions
+
+
+def get_performance_curve_data(
+    db: Session, lookback_days: int = DEFAULT_LOOKBACK_DAYS
+) -> PerformanceCurveData:
+    """Aggregate mean-max frontiers + CP/CV model fit for the performance curve UI.
+
+    Reuses the same activity queries and fitting logic as ``estimate_thresholds``
+    but returns the raw frontier points (for charting) alongside the model params
+    and race time predictions.
+    """
+    now = datetime.utcnow()
+    cutoff = now - timedelta(days=lookback_days)
+
+    activities = (
+        db.query(Activity)
+        .filter(Activity.started_at.isnot(None), Activity.started_at >= cutoff)
+        .all()
+    )
+    runs = [a for a in activities if _is_run(a.activity_type)]
+
+    def _age(a: Activity) -> float:
+        return (now - a.started_at).total_seconds() / 86400.0 if a.started_at else 9999.0
+
+    def _curves(include_treadmill: bool) -> list[tuple[float, dict]]:
+        out: list[tuple[float, dict]] = []
+        for a in runs:
+            if not a.mean_max_json:
+                continue
+            try:
+                curve = json.loads(a.mean_max_json)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if not include_treadmill and curve.get("is_treadmill"):
+                continue
+            out.append((_age(a), curve))
+        return out
+
+    power_raw = _curves(include_treadmill=True)
+    pace_raw = _curves(include_treadmill=False)
+
+    power_frontier = _build_frontier(power_raw, "power")
+    pace_frontier = _build_frontier(pace_raw, "gap_speed")
+
+    # Fit power model
+    cp: float | None = None
+    w_prime_out: float | None = None
+
+    power_fit = _fit_two_param(power_frontier)
+    if power_fit is not None:
+        cp_val, wp_val, _ = power_fit
+        refined = _fit_three_param(power_frontier, cp_val, wp_val)
+        if refined:
+            cp, w_prime_out, _ = refined
+        else:
+            cp, w_prime_out = cp_val, wp_val
+        w_prime_out = max(_W_PRIME_MIN, min(_W_PRIME_MAX, w_prime_out))
+
+    def _power_model(t: float) -> float | None:
+        if cp is None or w_prime_out is None:
+            return None
+        return cp + w_prime_out / t
+
+    # Fit pace / velocity model
+    cv: float | None = None
+    d_prime_out: float | None = None
+
+    pace_fit = _fit_two_param(pace_frontier)
+    if pace_fit is not None:
+        cv_val, dp_val, _ = pace_fit
+        cv = cv_val
+        d_prime_out = max(_D_PRIME_MIN, min(_D_PRIME_MAX, dp_val))
+
+    def _pace_model(t: float) -> float | None:
+        if cv is None or d_prime_out is None:
+            return None
+        return cv + d_prime_out / t
+
+    power_points = [
+        CurvePoint(
+            duration_sec=p.duration,
+            actual_value=round(p.value, 1),
+            model_value=round(m, 1) if (m := _power_model(p.duration)) is not None else None,
+        )
+        for p in power_frontier
+    ]
+    pace_points = [
+        CurvePoint(
+            duration_sec=p.duration,
+            actual_value=round(p.value, 4),
+            model_value=round(m, 4) if (m := _pace_model(p.duration)) is not None else None,
+        )
+        for p in pace_frontier
+    ]
+
+    race_predictions: list[RacePrediction] = []
+    if cv is not None and d_prime_out is not None:
+        race_predictions = _predict_race_times(cv, d_prime_out)
+
+    return PerformanceCurveData(
+        power_points=power_points,
+        pace_points=pace_points,
+        critical_power=round(cp, 0) if cp is not None else None,
+        w_prime=round(w_prime_out, 0) if w_prime_out is not None else None,
+        critical_velocity=round(cv, 4) if cv is not None else None,
+        d_prime=round(d_prime_out, 1) if d_prime_out is not None else None,
+        race_predictions=race_predictions,
+        lookback_days=lookback_days,
+        activities_analyzed=len(runs),
+    )
 
 
 def apply_estimate_to_profile(
