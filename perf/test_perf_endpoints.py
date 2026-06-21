@@ -97,6 +97,10 @@ def test_threshold_estimate(benchmark, client):
     _ok(benchmark(lambda: client.get("/api/v1/threshold-estimate")))
 
 
+def test_performance_curve(benchmark, client):
+    _ok(benchmark(lambda: client.get("/api/v1/performance-curve", params={"days": 90})))
+
+
 def test_get_training_plan(benchmark, client):
     _ok(benchmark(lambda: client.get("/api/v1/training-plan")))
 
