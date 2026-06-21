@@ -1,8 +1,9 @@
 import logging
 import os
 from contextlib import contextmanager
+from pathlib import Path
 
-from sqlalchemy import create_engine, event, text
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from app.config import settings
@@ -49,83 +50,15 @@ def db_session():
         db.close()
 
 
-def _migrate_db():
-    """Add new columns to existing tables if they don't exist."""
-    logger = logging.getLogger(__name__)
-    new_activity_columns = {
-        "avg_ground_contact_time": "FLOAT",
-        "avg_vertical_oscillation": "FLOAT",
-        "avg_vertical_ratio": "FLOAT",
-        "normalized_power": "FLOAT",
-        "training_stress_score": "FLOAT",
-        "intensity_factor": "FLOAT",
-        "avg_respiration_rate": "FLOAT",
-        "max_respiration_rate": "FLOAT",
-        "avg_speed": "FLOAT",
-        "max_speed": "FLOAT",
-        "min_hr": "INTEGER",
-        "max_elevation": "FLOAT",
-        "min_elevation": "FLOAT",
-        "max_cadence": "FLOAT",
-        "run_time_sec": "FLOAT",
-        "walk_time_sec": "FLOAT",
-        "typed_splits_json": "TEXT",
-        "power_zones_json": "TEXT",
-        "mean_max_json": "TEXT",
-        "feedback_rating": "VARCHAR(10)",
-        "feedback_tags": "TEXT",
-        "feedback_text": "TEXT",
-    }
-    try:
-        with engine.connect() as conn:
-            rows = conn.execute(text("PRAGMA table_info(activities)")).fetchall()
-            existing = {row[1] for row in rows}
-            added = []
-            for col, dtype in new_activity_columns.items():
-                if col not in existing:
-                    conn.execute(text(f"ALTER TABLE activities ADD COLUMN {col} {dtype}"))
-                    added.append(col)
-            conn.commit()
-            if added:
-                logger.info("Migrated activities table: added %s", ", ".join(added))
-    except Exception:
-        logger.debug("Migration skipped (table may not exist yet)")
+def _alembic_config():
+    from alembic.config import Config as AlembicConfig
 
-    new_daily_summary_columns = {
-        "hrv_avg": "FLOAT",
-        "hrv_weekly_avg": "FLOAT",
-        "hrv_status": "VARCHAR(20)",
-    }
-    try:
-        with engine.connect() as conn:
-            rows = conn.execute(text("PRAGMA table_info(daily_summaries)")).fetchall()
-            existing = {row[1] for row in rows}
-            added = []
-            for col, dtype in new_daily_summary_columns.items():
-                if col not in existing:
-                    conn.execute(text(f"ALTER TABLE daily_summaries ADD COLUMN {col} {dtype}"))
-                    added.append(col)
-            conn.commit()
-            if added:
-                logger.info("Migrated daily_summaries table: added %s", ", ".join(added))
-    except Exception:
-        logger.debug("Migration skipped (daily_summaries table may not exist yet)")
-
-    new_profile_columns = {"threshold_power": "INTEGER"}
-    try:
-        with engine.connect() as conn:
-            rows = conn.execute(text("PRAGMA table_info(athlete_profiles)")).fetchall()
-            existing = {row[1] for row in rows}
-            added = []
-            for col, dtype in new_profile_columns.items():
-                if col not in existing:
-                    conn.execute(text(f"ALTER TABLE athlete_profiles ADD COLUMN {col} {dtype}"))
-                    added.append(col)
-            conn.commit()
-            if added:
-                logger.info("Migrated athlete_profiles table: added %s", ", ".join(added))
-    except Exception:
-        logger.debug("Migration skipped (athlete_profiles table may not exist yet)")
+    cfg = AlembicConfig()
+    cfg.set_main_option(
+        "script_location", str(Path(__file__).parent.parent / "alembic")
+    )
+    cfg.set_main_option("sqlalchemy.url", f"sqlite:///{settings.db_path}")
+    return cfg
 
 
 def _seed_metric_zones():
@@ -221,9 +154,21 @@ def _seed_zone_configs():
 
 
 def init_db():
+    from alembic import command
+    from alembic.runtime.migration import MigrationContext
+
     from app import models  # noqa: F401
 
-    Base.metadata.create_all(bind=engine)
-    _migrate_db()
+    alembic_cfg = _alembic_config()
+
+    # Baseline detection: if app tables exist but Alembic has never run, stamp
+    # the DB as already at head so we don't try to recreate existing tables.
+    with engine.connect() as conn:
+        ctx = MigrationContext.configure(conn)
+        if ctx.get_current_revision() is None:
+            if "activities" in inspect(engine).get_table_names():
+                command.stamp(alembic_cfg, "head")
+
+    command.upgrade(alembic_cfg, "head")
     _seed_metric_zones()
     _seed_zone_configs()
