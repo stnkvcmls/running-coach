@@ -231,6 +231,34 @@ def _readiness_label(score: int) -> str:
     return "Low"
 
 
+# Fallback scores when no personal HRV baseline is available, keyed on Garmin's
+# overnight HRV status enum.
+_HRV_STATUS_SCORES = {
+    "BALANCED": 85,
+    "UNBALANCED": 50,
+    "LOW": 30,
+    "POOR": 20,
+}
+
+
+def _hrv_component(daily: DailySummary | None) -> int | None:
+    """Score overnight HRV 0–100 against the athlete's personal baseline.
+
+    Prefers last-night average vs the 7-day baseline (continuous), falling back
+    to Garmin's HRV status enum when no baseline is available.
+    """
+    if daily is None or daily.hrv_avg is None:
+        return None
+    baseline = daily.hrv_weekly_avg
+    if baseline:
+        # ratio 1.0 (at baseline) → 75 ("good"); +20% → 125→cap 100; −20% → 25
+        ratio = daily.hrv_avg / baseline
+        return int(min(100, max(0, 75 + (ratio - 1.0) * 250)))
+    if daily.hrv_status:
+        return _HRV_STATUS_SCORES.get(daily.hrv_status.upper())
+    return None
+
+
 def compute_readiness(
     daily: DailySummary | None,
     load_point: TrainingLoadPoint | None,
@@ -243,12 +271,19 @@ def compute_readiness(
     - recovery_component: average of inverted stress and body_battery_high
     - fatigue_component: 100 − ATL (capped 0–100); higher = less fatigued
     - rhr_component: resting HR today vs 7-day average; lower today = better
+    - hrv_component: overnight HRV vs personal baseline; higher = better recovered
 
     Any missing component is excluded from the weighted average so a partial
     data day still yields a meaningful score.
     """
     # Weights — must sum to 1.0
-    WEIGHTS = {"sleep": 0.30, "recovery": 0.35, "fatigue": 0.25, "rhr": 0.10}
+    WEIGHTS = {
+        "sleep": 0.25,
+        "recovery": 0.25,
+        "fatigue": 0.20,
+        "rhr": 0.10,
+        "hrv": 0.20,
+    }
 
     # Sleep component
     sleep_scores: list[int] = []
@@ -284,6 +319,9 @@ def compute_readiness(
         # delta −5 → 100 pts, delta 0 → 75 pts, delta +10 → 0 pts
         rhr_component = int(min(100, max(0, 75 - delta * 7.5)))
 
+    # HRV component — last-night HRV vs personal baseline (Garmin's status factor)
+    hrv_component = _hrv_component(daily)
+
     # Weighted composite
     weighted_sum = 0.0
     total_weight = 0.0
@@ -292,6 +330,7 @@ def compute_readiness(
         (recovery_component, WEIGHTS["recovery"]),
         (fatigue_component, WEIGHTS["fatigue"]),
         (rhr_component, WEIGHTS["rhr"]),
+        (hrv_component, WEIGHTS["hrv"]),
     ):
         if comp_val is not None:
             weighted_sum += comp_val * weight
@@ -308,6 +347,7 @@ def compute_readiness(
         recovery_component=recovery_component,
         fatigue_component=fatigue_component,
         rhr_component=rhr_component,
+        hrv_component=hrv_component,
     )
 
 
@@ -336,4 +376,6 @@ def format_readiness_context(readiness: TrainingReadiness | None) -> str:
         lines.append(f"- Freshness (fatigue): {readiness.fatigue_component}/100")
     if readiness.rhr_component is not None:
         lines.append(f"- Resting HR trend: {readiness.rhr_component}/100")
+    if readiness.hrv_component is not None:
+        lines.append(f"- HRV (vs baseline): {readiness.hrv_component}/100")
     return "## Training Readiness\n" + "\n".join(lines)

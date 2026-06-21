@@ -356,6 +356,9 @@ def test_sync_daily_summary_creates_row(db, patch_db_session, monkeypatch):
     }
     fake_client.get_heart_rates.return_value = {}
     fake_client.get_all_day_stress.return_value = {}
+    fake_client.get_hrv_data.return_value = {
+        "hrvSummary": {"lastNightAvg": 46, "weeklyAvg": 42, "status": "BALANCED"}
+    }
     monkeypatch.setattr(garmin_sync, "get_garmin_client", lambda: fake_client)
 
     summary = garmin_sync.sync_daily_summary(date(2026, 6, 10))
@@ -371,6 +374,9 @@ def test_sync_daily_summary_creates_row(db, patch_db_session, monkeypatch):
     assert stored.sleep_seconds == 27000
     assert stored.sleep_score == 82
     assert stored.stress_avg == 28
+    assert stored.hrv_avg == 46
+    assert stored.hrv_weekly_avg == 42
+    assert stored.hrv_status == "BALANCED"
 
 
 def test_sync_daily_summary_updates_existing(db, patch_db_session, monkeypatch):
@@ -384,6 +390,7 @@ def test_sync_daily_summary_updates_existing(db, patch_db_session, monkeypatch):
     fake_client.get_sleep_data.return_value = {}
     fake_client.get_heart_rates.return_value = {}
     fake_client.get_all_day_stress.return_value = {}
+    fake_client.get_hrv_data.return_value = {}
     monkeypatch.setattr(garmin_sync, "get_garmin_client", lambda: fake_client)
 
     garmin_sync.sync_daily_summary(date(2026, 6, 10))
@@ -496,6 +503,18 @@ def test_backfill_daily_summaries_completes(db, patch_db_session, monkeypatch):
 
     garmin_sync.backfill_daily_summaries()
     assert garmin_sync._get_sync_status(db, "backfill_daily") == "complete"
+
+
+def test_backfill_daily_summaries_includes_today(db, patch_db_session, monkeypatch):
+    # Garmin dates last night's sleep to the wake-up day, so backfill must start
+    # at today (days_ago=0) to capture it on a fresh start.
+    patch_db_session(garmin_sync)
+    monkeypatch.setattr(garmin_sync.time, "sleep", lambda *a, **k: None)
+    targets = []
+    monkeypatch.setattr(garmin_sync, "sync_daily_summary", lambda target: targets.append(target))
+
+    garmin_sync.backfill_daily_summaries()
+    assert date.today() in targets
 
 
 def test_backfill_daily_summaries_skips_when_complete(db, patch_db_session, monkeypatch):

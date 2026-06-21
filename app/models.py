@@ -120,6 +120,10 @@ class DailySummary(Base):
     body_battery_low = Column(Integer)
     intensity_minutes = Column(Integer)
     floors_climbed = Column(Integer)
+    # Overnight HRV (heart-rate variability), attributed to the wake-up day
+    hrv_avg = Column(Float)              # last-night average HRV (ms)
+    hrv_weekly_avg = Column(Float)       # personal 7-day baseline (ms)
+    hrv_status = Column(String(20))      # BALANCED / UNBALANCED / LOW / POOR
     raw_json = Column(Text)
     synced_at = Column(DateTime, default=_utcnow)
     ai_analyzed = Column(Boolean, default=False)

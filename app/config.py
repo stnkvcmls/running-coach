@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     garmin_token_dir: str = "/data/garmin_tokens"
     activity_poll_minutes: int = 5
     daily_sync_hour: int = 7
+    # Each daily run syncs today plus the prior (window-1) days, so last night's
+    # overnight stats land on the wake-up day while earlier days' full-day totals
+    # finalize the morning after.
+    daily_sync_window_days: int = 3
     ai_model: str = "claude-sonnet-4-6"
 
     # Auth / multi-user

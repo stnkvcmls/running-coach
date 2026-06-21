@@ -280,6 +280,11 @@ def _format_daily_context(summary: DailySummary) -> str:
         parts.append(f"Avg Stress: {summary.stress_avg}")
     if summary.body_battery_high is not None:
         parts.append(f"Body Battery: {summary.body_battery_low}-{summary.body_battery_high}")
+    if summary.hrv_avg is not None:
+        hrv = f"HRV (overnight): {summary.hrv_avg:.0f} ms"
+        if summary.hrv_status:
+            hrv += f" ({summary.hrv_status.title()})"
+        parts.append(hrv)
     if summary.total_calories:
         parts.append(f"Calories: {summary.total_calories:,}")
     if summary.intensity_minutes:

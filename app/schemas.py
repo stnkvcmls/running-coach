@@ -183,6 +183,9 @@ class DailySummaryResponse(BaseModel):
     body_battery_low: int | None = None
     intensity_minutes: int | None = None
     floors_climbed: float | None = None
+    hrv_avg: float | None = None
+    hrv_weekly_avg: float | None = None
+    hrv_status: str | None = None
 
     class Config:
         from_attributes = True
@@ -262,6 +265,7 @@ class TrainingReadiness(BaseModel):
     recovery_component: int | None = None   # 0-100, from stress + body battery
     fatigue_component: int | None = None    # 0-100, ATL-based (higher = less fatigued)
     rhr_component: int | None = None        # 0-100, resting HR trend vs 7d avg
+    hrv_component: int | None = None        # 0-100, overnight HRV vs personal baseline
 
 
 class TrainingLoadResponse(BaseModel):

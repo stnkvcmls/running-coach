@@ -265,6 +265,16 @@ def _make_activity(d: date, workout: str, garmin_id: int, with_detail: bool) -> 
 
 
 def _make_daily(d: date, trained: bool) -> DailySummary:
+    # Overnight HRV: a stable personal baseline with night-to-night variation,
+    # plus a status derived from how far last night sat from that baseline.
+    hrv_baseline = _rint(42, 58)
+    hrv_last = _rint(hrv_baseline - 10, hrv_baseline + 10)
+    if abs(hrv_last - hrv_baseline) <= 6:
+        hrv_status = "BALANCED"
+    elif hrv_last > hrv_baseline:
+        hrv_status = "UNBALANCED"
+    else:
+        hrv_status = "LOW"
     return DailySummary(
         date=d,
         steps=_rint(9000, 22000) if trained else _rint(5000, 12000),
@@ -279,6 +289,9 @@ def _make_daily(d: date, trained: bool) -> DailySummary:
         body_battery_low=_rint(5, 35),
         intensity_minutes=_rint(30, 120) if trained else _rint(0, 30),
         floors_climbed=_rint(3, 25),
+        hrv_avg=float(hrv_last),
+        hrv_weekly_avg=float(hrv_baseline),
+        hrv_status=hrv_status,
         raw_json=json.dumps({"source": "perf-seed"}),
         ai_analyzed=random.random() < 0.3,
     )

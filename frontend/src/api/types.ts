@@ -131,6 +131,9 @@ export interface DailySummaryResponse {
   body_battery_low: number | null
   intensity_minutes: number | null
   floors_climbed: number | null
+  hrv_avg: number | null
+  hrv_weekly_avg: number | null
+  hrv_status: string | null
 }
 
 export interface DailySummaryDetail {
@@ -204,6 +207,7 @@ export interface TrainingReadiness {
   recovery_component: number | null
   fatigue_component: number | null
   rhr_component: number | null
+  hrv_component: number | null
 }
 
 export interface TrainingLoadResponse {

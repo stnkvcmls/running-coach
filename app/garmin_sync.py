@@ -265,7 +265,16 @@ def sync_activities() -> list[Activity]:
     return new_activities
 
 
-def _daily_summary_fields(stats: dict, stress_avg, sleep_seconds, sleep_score, raw: dict) -> dict:
+def _daily_summary_fields(
+    stats: dict,
+    stress_avg,
+    sleep_seconds,
+    sleep_score,
+    raw: dict,
+    hrv_avg=None,
+    hrv_weekly_avg=None,
+    hrv_status=None,
+) -> dict:
     """Build field dict for DailySummary create/update."""
     return {
         "steps": stats.get("totalSteps"),
@@ -283,6 +292,9 @@ def _daily_summary_fields(stats: dict, stress_avg, sleep_seconds, sleep_score, r
             + (stats.get("vigorousIntensityMinutes") or 0)
         ),
         "floors_climbed": stats.get("floorsAscended"),
+        "hrv_avg": hrv_avg,
+        "hrv_weekly_avg": hrv_weekly_avg,
+        "hrv_status": hrv_status,
         "raw_json": json.dumps(raw, default=str),
         "synced_at": datetime.now(timezone.utc),
         "ai_analyzed": False,
@@ -318,6 +330,10 @@ def sync_daily_summary(target_date: date | None = None) -> DailySummary | None:
                 raw["stress"] = client.get_all_day_stress(date_str)
             except Exception:
                 pass
+            try:
+                raw["hrv"] = client.get_hrv_data(date_str)
+            except Exception:
+                pass
 
             sleep_seconds = None
             sleep_score = None
@@ -330,7 +346,26 @@ def sync_daily_summary(target_date: date | None = None) -> DailySummary | None:
             if stats.get("averageStressLevel"):
                 stress_avg = stats["averageStressLevel"]
 
-            fields = _daily_summary_fields(stats, stress_avg, sleep_seconds, sleep_score, raw)
+            # Overnight HRV is attributed by Garmin to the wake-up day (same date).
+            hrv_avg = None
+            hrv_weekly_avg = None
+            hrv_status = None
+            if raw.get("hrv"):
+                hrv_summary = (raw["hrv"] or {}).get("hrvSummary", {}) or {}
+                hrv_avg = hrv_summary.get("lastNightAvg")
+                hrv_weekly_avg = hrv_summary.get("weeklyAvg")
+                hrv_status = hrv_summary.get("status")
+
+            fields = _daily_summary_fields(
+                stats,
+                stress_avg,
+                sleep_seconds,
+                sleep_score,
+                raw,
+                hrv_avg=hrv_avg,
+                hrv_weekly_avg=hrv_weekly_avg,
+                hrv_status=hrv_status,
+            )
 
             existing = db.query(DailySummary).filter(DailySummary.date == target_date).first()
             if existing:
@@ -520,12 +555,14 @@ def backfill_daily_summaries():
                 logger.info("Daily summary backfill already complete")
                 return
 
-            start_days_ago = 1
+            # Start at 0 (today) so a fresh start also captures last night's
+            # sleep/HRV, which Garmin attributes to today's wake-up date.
+            start_days_ago = 0
             if status and status != "complete":
                 try:
                     start_days_ago = int(status)
                 except ValueError:
-                    start_days_ago = 1
+                    start_days_ago = 0
 
             today = date.today()
             for days_ago in range(start_days_ago, 366):

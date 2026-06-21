@@ -52,6 +52,7 @@ export default function ReadinessCard({ readiness }: Props) {
         <ComponentBar label="Recovery" value={readiness.recovery_component} />
         <ComponentBar label="Freshness" value={readiness.fatigue_component} />
         <ComponentBar label="Resting HR" value={readiness.rhr_component} />
+        <ComponentBar label="HRV" value={readiness.hrv_component} />
       </div>
     </div>
   )
