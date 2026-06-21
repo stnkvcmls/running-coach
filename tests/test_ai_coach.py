@@ -13,6 +13,8 @@ from app.models import (
     Insight,
     MetricZone,
     SyncStatus,
+    TrainingPlan,
+    TrainingPlanDay,
 )
 
 
@@ -440,3 +442,153 @@ def test_weekly_review_no_activities_skips(db, patch_db_session, monkeypatch):
     ai_coach.weekly_review()
     called.assert_not_called()
     assert db.query(Insight).count() == 0
+
+
+# --- _build_plan_adherence_context (P0-3) ---
+
+def _seed_plan(db, week_start: date) -> TrainingPlan:
+    plan = TrainingPlan(
+        generated_at=datetime(2026, 6, 9, 9, 0, tzinfo=timezone.utc),
+        week_start=week_start,
+        plan_weeks=1,
+        phase="build",
+        overview="Test plan",
+    )
+    db.add(plan)
+    db.flush()
+    return plan
+
+
+def test_plan_adherence_no_plan_returns_none(db):
+    result = ai_coach._build_plan_adherence_context(db, date(2026, 6, 21))
+    assert result is None
+
+
+def test_plan_adherence_no_past_days_returns_none(db):
+    # Plan starts today — no past days yet.
+    plan = _seed_plan(db, date(2026, 6, 21))
+    db.add(TrainingPlanDay(
+        plan_id=plan.id, day_date=date(2026, 6, 21), day_of_week="Sunday",
+        week_number=1, workout_type="long", target_distance_m=20000,
+    ))
+    db.commit()
+    result = ai_coach._build_plan_adherence_context(db, date(2026, 6, 21))
+    assert result is None
+
+
+def test_plan_adherence_rest_days_excluded(db):
+    plan = _seed_plan(db, date(2026, 6, 16))
+    db.add(TrainingPlanDay(
+        plan_id=plan.id, day_date=date(2026, 6, 16), day_of_week="Monday",
+        week_number=1, workout_type="rest",
+    ))
+    db.commit()
+    result = ai_coach._build_plan_adherence_context(db, date(2026, 6, 21))
+    assert result is None
+
+
+def test_plan_adherence_completed_session(db):
+    ref = date(2026, 6, 21)
+    plan = _seed_plan(db, date(2026, 6, 16))
+    db.add(TrainingPlanDay(
+        plan_id=plan.id, day_date=date(2026, 6, 16), day_of_week="Monday",
+        week_number=1, workout_type="easy", target_distance_m=9000,
+    ))
+    # Matching activity on the planned date.
+    db.add(Activity(
+        garmin_id=10, name="Easy Run", activity_type="running",
+        started_at=datetime(2026, 6, 16, 7, 0), distance_m=9500,
+    ))
+    db.commit()
+
+    result = ai_coach._build_plan_adherence_context(db, ref)
+
+    assert result is not None
+    assert "Completed: 1/1" in result
+    assert "100%" in result
+    assert "COMPLETED" in result
+    assert "2026-06-16" in result
+    assert "[easy]" in result
+    # Distance note included because target_distance_m is set.
+    assert "planned 9.0 km" in result
+
+
+def test_plan_adherence_missed_session(db):
+    ref = date(2026, 6, 21)
+    plan = _seed_plan(db, date(2026, 6, 16))
+    db.add(TrainingPlanDay(
+        plan_id=plan.id, day_date=date(2026, 6, 17), day_of_week="Tuesday",
+        week_number=1, workout_type="interval", target_distance_m=10000,
+    ))
+    db.commit()
+
+    result = ai_coach._build_plan_adherence_context(db, ref)
+
+    assert result is not None
+    assert "Completed: 0/1" in result
+    assert "0%" in result
+    assert "MISSED" in result
+    assert "2026-06-17" in result
+    assert "[interval]" in result
+
+
+def test_plan_adherence_mixed_sessions(db):
+    ref = date(2026, 6, 21)
+    plan = _seed_plan(db, date(2026, 6, 16))
+    # Day 1: completed with activity
+    db.add(TrainingPlanDay(
+        plan_id=plan.id, day_date=date(2026, 6, 16), day_of_week="Monday",
+        week_number=1, workout_type="easy", target_distance_m=9000,
+    ))
+    db.add(Activity(
+        garmin_id=11, name="Easy Run", activity_type="running",
+        started_at=datetime(2026, 6, 16, 8, 0), distance_m=9000,
+    ))
+    # Day 2: missed
+    db.add(TrainingPlanDay(
+        plan_id=plan.id, day_date=date(2026, 6, 17), day_of_week="Tuesday",
+        week_number=1, workout_type="tempo", target_distance_m=12000,
+    ))
+    # Day 3: completed, no target distance
+    db.add(TrainingPlanDay(
+        plan_id=plan.id, day_date=date(2026, 6, 18), day_of_week="Wednesday",
+        week_number=1, workout_type="easy",
+    ))
+    db.add(Activity(
+        garmin_id=12, name="Easy Run 2", activity_type="running",
+        started_at=datetime(2026, 6, 18, 7, 0), distance_m=8000,
+    ))
+    db.commit()
+
+    result = ai_coach._build_plan_adherence_context(db, ref)
+
+    assert result is not None
+    assert "Completed: 2/3" in result
+    assert "67%" in result
+    assert "COMPLETED" in result
+    assert "MISSED" in result
+
+
+def test_build_plan_context_includes_adherence(db):
+    ref = date(2026, 6, 21)
+    plan = _seed_plan(db, date(2026, 6, 16))
+    db.add(TrainingPlanDay(
+        plan_id=plan.id, day_date=date(2026, 6, 17), day_of_week="Tuesday",
+        week_number=1, workout_type="tempo", target_distance_m=11000,
+    ))
+    db.add(Activity(
+        garmin_id=20, name="Tempo Run", activity_type="running",
+        started_at=datetime(2026, 6, 17, 7, 0), distance_m=11000,
+    ))
+    db.commit()
+
+    context = ai_coach._build_plan_context(db, ref)
+
+    assert "## Current Plan Adherence" in context
+    assert "COMPLETED" in context
+    assert "Completed: 1/1" in context
+
+
+def test_build_plan_context_no_adherence_when_no_plan(db):
+    context = ai_coach._build_plan_context(db, date(2026, 6, 21))
+    assert "## Current Plan Adherence" not in context
