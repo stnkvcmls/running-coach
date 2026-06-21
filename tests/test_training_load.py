@@ -99,6 +99,76 @@ def test_rest_day_lowers_fatigue_toward_fitness(db):
     assert rested.tsb > loaded.tsb
 
 
+# --- ACWR + ramp rate ---
+
+def test_acwr_none_when_ctl_too_low(db):
+    """ACWR should be None when CTL hasn't built up enough to be meaningful."""
+    _add_activity(db, datetime(2026, 6, 1, 7, 0), tss=50.0)
+    point = training_load.current_load(db, as_of=date(2026, 6, 1))
+    assert point is not None
+    # CTL after one day from zero is tiny — ACWR should be None or computed only when CTL > 1.
+    if point.ctl <= 1.0:
+        assert point.acwr is None
+    else:
+        assert point.acwr is not None
+
+
+def test_acwr_computed_after_buildup(db):
+    """ACWR should be ATL/CTL once CTL is established."""
+    base = datetime(2026, 5, 1, 7, 0)
+    for i in range(30):
+        _add_activity(db, base + timedelta(days=i), tss=80.0)
+    point = training_load.current_load(db, as_of=base.date() + timedelta(days=29))
+    assert point is not None
+    assert point.ctl > 1.0
+    assert point.acwr is not None
+    # With steady training, ACWR ≈ 1.0 (ATL ≈ CTL in steady state).
+    assert 0.5 < point.acwr < 2.0
+
+
+def test_ramp_rate_7d_after_7_days(db):
+    """ramp_rate_7d reflects CTL change over the prior 7 days."""
+    base = datetime(2026, 5, 1, 7, 0)
+    for i in range(14):
+        _add_activity(db, base + timedelta(days=i), tss=80.0)
+    series = training_load.compute_load_series(db, end_date=base.date() + timedelta(days=13), days=14)
+    # Last point must have ramp_rate_7d; first 7 points won't.
+    last = series[-1]
+    assert last.ramp_rate_7d is not None
+    # CTL should be building — ramp positive.
+    assert last.ramp_rate_7d > 0
+
+
+def test_ramp_rate_7d_none_for_early_points(db):
+    """ramp_rate_7d must be None until 7 days of history exist."""
+    base = datetime(2026, 5, 1, 7, 0)
+    for i in range(5):
+        _add_activity(db, base + timedelta(days=i), tss=80.0)
+    series = training_load.compute_load_series(db, end_date=base.date() + timedelta(days=4), days=5)
+    for p in series:
+        assert p.ramp_rate_7d is None
+
+
+def test_injury_risk_high_on_very_high_acwr():
+    assert training_load._injury_risk(acwr=1.6, ramp_7d=None) == "high"
+
+
+def test_injury_risk_moderate_on_elevated_acwr():
+    assert training_load._injury_risk(acwr=1.4, ramp_7d=None) == "moderate"
+
+
+def test_injury_risk_low_in_sweet_spot():
+    assert training_load._injury_risk(acwr=1.0, ramp_7d=5.0) == "low"
+
+
+def test_injury_risk_high_on_steep_ramp():
+    assert training_load._injury_risk(acwr=None, ramp_7d=12.0) == "high"
+
+
+def test_injury_risk_moderate_on_steep_ramp():
+    assert training_load._injury_risk(acwr=None, ramp_7d=8.0) == "moderate"
+
+
 # --- AI context ---
 
 def test_format_training_load_context_handles_none():
@@ -111,6 +181,36 @@ def test_build_context_includes_training_load(db):
     assert "## Training Load" in context
     assert "Fitness (CTL" in context
     assert "Form (TSB" in context
+
+
+def test_format_training_load_context_includes_acwr_when_present():
+    from app.schemas import TrainingLoadPoint
+    point = TrainingLoadPoint(
+        date=date(2026, 6, 10),
+        tss=80.0, ctl=40.0, atl=50.0, tsb=-10.0,
+        acwr=1.25, ramp_rate_7d=3.5, ramp_rate_28d=10.0,
+        injury_risk="low",
+    )
+    ctx = training_load.format_training_load_context(point)
+    assert "ACWR" in ctx
+    assert "1.25" in ctx
+    assert "sweet spot" in ctx
+    assert "Ramp rate (7d" in ctx
+    assert "Ramp rate (28d" in ctx
+    assert "Injury risk: low" in ctx
+
+
+def test_training_load_endpoint_includes_acwr_fields(client, db):
+    base = datetime(2026, 5, 1, 7, 0)
+    for i in range(35):
+        _add_activity(db, base + timedelta(days=i), tss=70.0)
+    resp = client.get("/api/v1/training-load?days=30")
+    assert resp.status_code == 200
+    body = resp.json()
+    current = body["current"]
+    assert "acwr" in current
+    assert "ramp_rate_7d" in current
+    assert "injury_risk" in current
 
 
 def test_build_context_omits_training_load_without_activities(db):

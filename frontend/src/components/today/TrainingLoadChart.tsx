@@ -7,6 +7,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   ReferenceLine,
+  ReferenceArea,
 } from 'recharts'
 import { useTrainingLoad } from '../../api/hooks'
 import type { TrainingLoadPoint } from '../../api/types'
@@ -21,6 +22,7 @@ interface Props {
 const CTL_COLOR = '#6c5ce7' // Fitness — purple
 const ATL_COLOR = '#e17055' // Fatigue — orange
 const TSB_COLOR = '#00b894' // Form — green
+const ACWR_COLOR = '#fdcb6e' // ACWR — amber
 
 function formTone(tsb: number): string {
   if (tsb > 5) return 'fresh'
@@ -34,6 +36,18 @@ function formLabel(tsb: number): string {
   if (tsb >= -10) return 'Neutral'
   if (tsb >= -30) return 'Building'
   return 'High fatigue'
+}
+
+function riskTone(risk: string | null): string {
+  if (risk === 'high') return 'high'
+  if (risk === 'moderate') return 'moderate'
+  return 'low'
+}
+
+function riskLabel(risk: string | null): string {
+  if (risk === 'high') return 'High risk'
+  if (risk === 'moderate') return 'Moderate risk'
+  return 'Low risk'
 }
 
 export default function TrainingLoadChart({ current }: Props) {
@@ -62,6 +76,9 @@ export default function TrainingLoadChart({ current }: Props) {
         <div style={{ color: CTL_COLOR }}>Fitness: {byKey.ctl?.toFixed(0)}</div>
         <div style={{ color: ATL_COLOR }}>Fatigue: {byKey.atl?.toFixed(0)}</div>
         <div style={{ color: TSB_COLOR }}>Form: {byKey.tsb >= 0 ? '+' : ''}{byKey.tsb?.toFixed(0)}</div>
+        {byKey.acwr != null && (
+          <div style={{ color: ACWR_COLOR }}>ACWR: {byKey.acwr?.toFixed(2)}</div>
+        )}
       </div>
     )
   }
@@ -72,7 +89,10 @@ export default function TrainingLoadChart({ current }: Props) {
     ctl: p.ctl,
     atl: p.atl,
     tsb: p.tsb,
+    acwr: p.acwr,
   }))
+
+  const hasAcwr = current.acwr != null
 
   return (
     <div className="card training-load">
@@ -94,6 +114,15 @@ export default function TrainingLoadChart({ current }: Props) {
           </span>
           <span className={`tl-form-badge tl-form-${formTone(current.tsb)}`}>{formLabel(current.tsb)}</span>
         </div>
+        {hasAcwr && (
+          <div className="tl-stat">
+            <span className="tl-stat-label">ACWR</span>
+            <span className="tl-stat-value" style={{ color: ACWR_COLOR }}>{current.acwr!.toFixed(2)}</span>
+            <span className={`tl-form-badge tl-risk-${riskTone(current.injury_risk)}`}>
+              {riskLabel(current.injury_risk)}
+            </span>
+          </div>
+        )}
       </div>
 
       {chartData.length > 1 && (
@@ -115,8 +144,18 @@ export default function TrainingLoadChart({ current }: Props) {
               />
               <YAxis yAxisId="load" tick={{ fontSize: 10, fill: tickColor }} axisLine={false} tickLine={false} width={28} />
               <YAxis yAxisId="form" orientation="right" hide />
+              {hasAcwr && (
+                <YAxis yAxisId="acwr" orientation="right" domain={[0, 2.5]} hide />
+              )}
               <Tooltip content={<CustomTooltip />} />
               <ReferenceLine yAxisId="form" y={0} stroke={refLineColor} strokeDasharray="3 3" />
+              {hasAcwr && (
+                <>
+                  <ReferenceArea yAxisId="acwr" y1={0.8} y2={1.3} fill="rgba(0, 184, 148, 0.07)" />
+                  <ReferenceLine yAxisId="acwr" y={0.8} stroke={ACWR_COLOR} strokeDasharray="3 3" strokeOpacity={0.45} />
+                  <ReferenceLine yAxisId="acwr" y={1.3} stroke={ATL_COLOR} strokeDasharray="3 3" strokeOpacity={0.45} />
+                </>
+              )}
               <Area
                 yAxisId="load"
                 type="monotone"
@@ -146,6 +185,18 @@ export default function TrainingLoadChart({ current }: Props) {
                 dot={false}
                 name="Form"
               />
+              {hasAcwr && (
+                <Line
+                  yAxisId="acwr"
+                  type="monotone"
+                  dataKey="acwr"
+                  stroke={ACWR_COLOR}
+                  strokeWidth={1.5}
+                  strokeDasharray="2 2"
+                  dot={false}
+                  name="ACWR"
+                />
+              )}
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -155,6 +206,9 @@ export default function TrainingLoadChart({ current }: Props) {
         <div className="tl-legend-item"><span className="tl-dot" style={{ background: CTL_COLOR }} />Fitness (CTL)</div>
         <div className="tl-legend-item"><span className="tl-dot" style={{ background: ATL_COLOR }} />Fatigue (ATL)</div>
         <div className="tl-legend-item"><span className="tl-dot" style={{ background: TSB_COLOR }} />Form (TSB)</div>
+        {hasAcwr && (
+          <div className="tl-legend-item"><span className="tl-dot" style={{ background: ACWR_COLOR }} />ACWR</div>
+        )}
       </div>
     </div>
   )
