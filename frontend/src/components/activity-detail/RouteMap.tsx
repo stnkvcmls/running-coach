@@ -153,6 +153,17 @@ export default function RouteMap({ route, activityColor }: Props) {
       return rampColor(t)
     }
 
+    const drawMarker = (x: number, y: number, fill: string, r = 5) => {
+      ctx.beginPath()
+      ctx.arc(x, y, r, 0, Math.PI * 2)
+      ctx.fillStyle = fill
+      ctx.fill()
+      ctx.lineWidth = 2
+      ctx.strokeStyle = '#fff'
+      ctx.stroke()
+      ctx.lineWidth = LINE_WIDTH
+    }
+
     const drawUpTo = (count: number) => {
       ctx.clearRect(0, 0, width, height)
       const n = Math.min(count, segCount)
@@ -171,6 +182,16 @@ export default function RouteMap({ route, activityColor }: Props) {
           ctx.lineTo(projected[i + 1].x, projected[i + 1].y)
           ctx.stroke()
         }
+      }
+
+      // Markers: start (always), then either the moving current position
+      // (while tracing) or the finish marker (once the path is complete).
+      const last = projected[segCount]
+      drawMarker(projected[0].x, projected[0].y, '#2ecc71') // start (green)
+      if (n >= segCount) {
+        drawMarker(last.x, last.y, '#e74c3c') // finish (red)
+      } else {
+        drawMarker(projected[n].x, projected[n].y, activityColor, 4.5) // current position
       }
     }
 
