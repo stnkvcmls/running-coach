@@ -17,10 +17,18 @@ interface Props {
   activityColor: string
 }
 
-const TRACE_MS = 3500       // time to draw the full path
+const TRACE_MS = 7000       // time to draw the full path
 const LOOP_DELAY_MS = 1200  // pause before the animation repeats
 const PADDING = 16
 const LINE_WIDTH = 2.5
+
+// Ease the trace: slow at the start, accelerate through the middle, then ease
+// back down toward the finish (smootherstep — flatter ends than smoothstep, so
+// the start in particular reads as noticeably slower).
+function easeTrace(t: number): number {
+  const x = Math.max(0, Math.min(1, t))
+  return x * x * x * (x * (x * 6 - 15) + 10)
+}
 
 // Map a normalised value [0,1] to a blue -> red ramp.
 function rampColor(t: number): string {
@@ -164,6 +172,30 @@ export default function RouteMap({ route, activityColor }: Props) {
       ctx.lineWidth = LINE_WIDTH
     }
 
+    // Finish: a round checkered-flag disc with a dark edge ring.
+    const drawFinishMarker = (x: number, y: number, r = 6) => {
+      ctx.save()
+      ctx.beginPath()
+      ctx.arc(x, y, r, 0, Math.PI * 2)
+      ctx.clip()
+      const cells = 4
+      const cell = (r * 2) / cells
+      for (let gy = 0; gy < cells; gy++) {
+        for (let gx = 0; gx < cells; gx++) {
+          ctx.fillStyle = (gx + gy) % 2 === 0 ? '#fff' : '#111'
+          ctx.fillRect(x - r + gx * cell, y - r + gy * cell, cell + 0.5, cell + 0.5)
+        }
+      }
+      ctx.restore()
+      // Edge ring.
+      ctx.beginPath()
+      ctx.arc(x, y, r, 0, Math.PI * 2)
+      ctx.lineWidth = 2
+      ctx.strokeStyle = '#111'
+      ctx.stroke()
+      ctx.lineWidth = LINE_WIDTH
+    }
+
     const drawUpTo = (count: number) => {
       ctx.clearRect(0, 0, width, height)
       const n = Math.min(count, segCount)
@@ -189,7 +221,7 @@ export default function RouteMap({ route, activityColor }: Props) {
       const last = projected[segCount]
       drawMarker(projected[0].x, projected[0].y, '#2ecc71') // start (green)
       if (n >= segCount) {
-        drawMarker(last.x, last.y, '#e74c3c') // finish (red)
+        drawFinishMarker(last.x, last.y) // finish (checkered flag)
       } else {
         drawMarker(projected[n].x, projected[n].y, activityColor, 4.5) // current position
       }
@@ -208,7 +240,7 @@ export default function RouteMap({ route, activityColor }: Props) {
     const frame = (ts: number) => {
       if (start === null) start = ts
       const progress = Math.min(1, (ts - start) / TRACE_MS)
-      drawUpTo(Math.ceil(progress * segCount))
+      drawUpTo(Math.ceil(easeTrace(progress) * segCount))
       if (progress < 1) {
         raf = requestAnimationFrame(frame)
       } else {
