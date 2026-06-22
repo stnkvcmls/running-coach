@@ -75,7 +75,7 @@ from app import training_load
 from app import threshold as threshold_mod
 from app import adherence as adherence_mod
 from app import intensity as intensity_mod
-from app.utils import safe_json_loads, parse_activity_charts, calculate_age
+from app.utils import safe_json_loads, parse_activity_charts, parse_activity_route, calculate_age
 
 logger = logging.getLogger(__name__)
 
@@ -322,6 +322,32 @@ def api_activity_detail(activity_id: int, db: Session = Depends(get_db)):
     weather = safe_json_loads(activity.weather_json)
     power_zones = safe_json_loads(activity.power_zones_json)
     laps = safe_json_loads(activity.laps_json)
+    route = parse_activity_route(laps)
+
+    # On-demand GPS backfill: activities synced before route support lack the
+    # polyline. If this is an outdoor activity (summary advertises a polyline)
+    # but we have no route yet, re-fetch the details with the polyline once and
+    # cache it back into laps_json so future opens are instant. Guarded so
+    # indoor activities and transient Garmin failures don't refetch every open.
+    if route is None and activity.garmin_id:
+        summary = safe_json_loads(activity.raw_json) or {}
+        if summary.get("hasPolyline"):
+            try:
+                from app.garmin_sync import get_garmin_client
+
+                client = get_garmin_client()
+                fresh = client.get_activity_details(
+                    activity.garmin_id, maxchart=10000, maxpoly=10000
+                )
+                refreshed_route = parse_activity_route(fresh)
+                if refreshed_route is not None:
+                    activity.laps_json = json.dumps(fresh)
+                    db.commit()
+                    laps = fresh
+                    route = refreshed_route
+            except Exception as e:
+                logger.debug("On-demand route fetch failed for %s: %s", activity.garmin_id, e)
+
     chart_data = parse_activity_charts(laps)
 
     insight = (
@@ -362,6 +388,7 @@ def api_activity_detail(activity_id: int, db: Session = Depends(get_db)):
     result.weather = weather
     result.power_zones = power_zones
     result.chart_data = chart_data
+    result.route = route
     result.metric_zones = metric_zones
     result.insight = InsightResponse.model_validate(insight) if insight else None
     result.scheduled_workout = scheduled_workout

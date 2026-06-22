@@ -107,6 +107,7 @@ export interface ActivityDetail extends ActivitySummary {
   weather: any
   power_zones: any
   chart_data: Record<string, ChartSeries> | null
+  route: ActivityRoute | null
   metric_zones: Record<string, MetricZone[]> | null
   feedback_rating: string | null
   feedback_tags: string[] | null
@@ -120,6 +121,14 @@ export interface ChartSeries {
   label: string
   unit: string
   data: (number | null)[]
+}
+
+export interface ActivityRoute {
+  points: ([number, number] | null)[]   // [lat, lng] per sample, null where missing
+  hr: (number | null)[] | null
+  pace: (number | null)[] | null         // min/km
+  power: (number | null)[] | null        // watts
+  elevation: (number | null)[] | null    // metres
 }
 
 export interface MetricZone {

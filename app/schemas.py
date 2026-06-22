@@ -157,6 +157,9 @@ class ActivityDetail(BaseModel):
     power_zones: Any | None = None
     chart_data: dict | None = None
 
+    # GPS route + aligned metric streams for the route silhouette (None if no GPS)
+    route: dict | None = None
+
     # Metric zone boundaries
     metric_zones: dict[str, list[MetricZoneResponse]] | None = None
 

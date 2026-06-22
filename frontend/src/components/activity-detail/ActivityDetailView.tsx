@@ -5,6 +5,7 @@ import { getActivityColor, colorMap } from '../../utils/colors'
 import { formatDistance, formatDuration, formatPace } from '../../utils/formatting'
 import { format, parseISO } from '../../utils/date'
 import StatGrid from './StatGrid'
+import RouteMap from './RouteMap'
 import ChartTabs from './ChartTabs'
 import HrZonesChart from './HrZonesChart'
 import PaceZonesChart from './PaceZonesChart'
@@ -83,6 +84,9 @@ export default function ActivityDetailView() {
       <div className="detail-body">
         {/* Primary stats */}
         <StatGrid stats={primaryStats} columns={3} large />
+
+        {/* Route silhouette (animated; only when GPS data is present) */}
+        <RouteMap route={activity.route} activityColor={color} />
 
         {/* Workout Description */}
         {activity.scheduled_workout?.workout_steps && activity.scheduled_workout.workout_steps.length > 0 && (

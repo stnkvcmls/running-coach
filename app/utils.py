@@ -85,3 +85,89 @@ def parse_activity_charts(laps_data) -> dict:
         ]
 
     return charts
+
+
+def parse_activity_route(laps_data, points: int = 300) -> dict | None:
+    """Extract the GPS route + aligned metric streams from activity details.
+
+    Reads ``directLatitude``/``directLongitude`` from the same
+    ``activityDetailMetrics`` matrix that feeds ``parse_activity_charts``, so
+    the route points come pre-aligned with the heart-rate / pace / power /
+    elevation streams. Returns ``None`` when no GPS columns are present
+    (indoor / treadmill activities). The series are downsampled to roughly
+    ``points`` samples for a smooth-but-light silhouette.
+
+    Shape::
+
+        {"points": [[lat, lng], ...],
+         "hr": [...], "pace": [...], "power": [...], "elevation": [...]}
+
+    Each metric list is aligned 1:1 with ``points``; entries are ``null``
+    where the value is missing.
+    """
+    if not laps_data or not isinstance(laps_data, dict):
+        return None
+
+    descriptors = laps_data.get("metricDescriptors", [])
+    metrics = laps_data.get("activityDetailMetrics", [])
+    if not descriptors or not metrics:
+        return None
+
+    col_map = {}
+    for d in descriptors:
+        key = d.get("key", "")
+        idx = d.get("metricsIndex")
+        if idx is not None:
+            col_map[key] = idx
+
+    lat_idx = col_map.get("directLatitude")
+    lng_idx = col_map.get("directLongitude")
+    if lat_idx is None or lng_idx is None:
+        return None
+
+    step = max(1, len(metrics) // points)
+    sampled = metrics[::step]
+
+    def _col(key: str):
+        idx = col_map.get(key)
+        if idx is None:
+            return None
+        out = []
+        for m in sampled:
+            arr = m.get("metrics", [])
+            out.append(arr[idx] if idx < len(arr) and arr[idx] is not None else None)
+        return out if any(v is not None for v in out) else None
+
+    route_points: list[list[float] | None] = []
+    for m in sampled:
+        arr = m.get("metrics", [])
+        lat = arr[lat_idx] if lat_idx < len(arr) else None
+        lng = arr[lng_idx] if lng_idx < len(arr) else None
+        if isinstance(lat, (int, float)) and isinstance(lng, (int, float)):
+            route_points.append([lat, lng])
+        else:
+            route_points.append(None)
+
+    if not any(p is not None for p in route_points):
+        return None
+
+    hr = _col("directHeartRate")
+    power = _col("directPower")
+    elevation = _col("directElevation")
+
+    # Convert speed (m/s) -> pace (min/km), matching parse_activity_charts.
+    speed = _col("directSpeed")
+    pace = None
+    if speed is not None:
+        pace = [
+            round(1000 / (60 * v), 2) if v and v > 0 else None
+            for v in speed
+        ]
+
+    return {
+        "points": route_points,
+        "hr": hr,
+        "pace": pace,
+        "power": power,
+        "elevation": elevation,
+    }

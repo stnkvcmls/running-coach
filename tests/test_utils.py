@@ -1,6 +1,11 @@
 from datetime import date
 
-from app.utils import calculate_age, safe_json_loads, parse_activity_charts
+from app.utils import (
+    calculate_age,
+    safe_json_loads,
+    parse_activity_charts,
+    parse_activity_route,
+)
 
 
 # --- calculate_age ---
@@ -120,3 +125,71 @@ def test_parse_charts_unknown_metric_ignored():
         descriptors=[{"key": "directSomethingElse", "metricsIndex": 0}],
     )
     assert parse_activity_charts(data) == {}
+
+
+# --- parse_activity_route ---
+
+def test_parse_route_empty_or_invalid():
+    assert parse_activity_route(None) is None
+    assert parse_activity_route("string") is None
+    assert parse_activity_route({}) is None
+    assert parse_activity_route({"metricDescriptors": []}) is None
+
+
+def test_parse_route_no_gps_columns_returns_none():
+    # Indoor activity: streams present but no lat/lng -> no route.
+    data = _laps(
+        metric_rows=[[120], [130]],
+        descriptors=[{"key": "directHeartRate", "metricsIndex": 0}],
+    )
+    assert parse_activity_route(data) is None
+
+
+def test_parse_route_points_and_aligned_streams():
+    # Columns: lat, lng, HR, speed (m/s), power, elevation.
+    data = _laps(
+        metric_rows=[
+            [40.0, -3.0, 120, 2.5, 200, 650],
+            [40.1, -3.1, 140, 3.0, 250, 655],
+        ],
+        descriptors=[
+            {"key": "directLatitude", "metricsIndex": 0},
+            {"key": "directLongitude", "metricsIndex": 1},
+            {"key": "directHeartRate", "metricsIndex": 2},
+            {"key": "directSpeed", "metricsIndex": 3},
+            {"key": "directPower", "metricsIndex": 4},
+            {"key": "directElevation", "metricsIndex": 5},
+        ],
+    )
+    route = parse_activity_route(data)
+    assert route is not None
+    assert route["points"] == [[40.0, -3.0], [40.1, -3.1]]
+    assert route["hr"] == [120, 140]
+    assert route["power"] == [200, 250]
+    assert route["elevation"] == [650, 655]
+    # speed -> pace (min/km), matching parse_activity_charts conversion.
+    assert route["pace"] == [
+        round(1000 / (60 * 2.5), 2),
+        round(1000 / (60 * 3.0), 2),
+    ]
+
+
+def test_parse_route_skips_invalid_points_and_missing_metrics():
+    data = _laps(
+        metric_rows=[
+            [40.0, -3.0],
+            [None, -3.1],   # missing lat -> point is None
+        ],
+        descriptors=[
+            {"key": "directLatitude", "metricsIndex": 0},
+            {"key": "directLongitude", "metricsIndex": 1},
+        ],
+    )
+    route = parse_activity_route(data)
+    assert route is not None
+    assert route["points"] == [[40.0, -3.0], None]
+    # No metric streams present -> all None.
+    assert route["hr"] is None
+    assert route["pace"] is None
+    assert route["power"] is None
+    assert route["elevation"] is None
