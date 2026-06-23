@@ -47,6 +47,7 @@ export interface GarminConnectionStatus {
   connected: boolean
   garmin_email: string | null
   mfa_pending: boolean
+  needs_reauth: boolean
 }
 
 export interface IntervalAdherence {

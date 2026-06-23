@@ -258,7 +258,7 @@ def test_call_gemini_uses_genai(monkeypatch):
 def stub_ai(monkeypatch):
     monkeypatch.setattr(
         ai_coach, "_call_ai",
-        lambda db, ctx, trigger: ("**Summary:** mocked\nDetailed analysis", "mocked", "workout_analysis"),
+        lambda db, ctx, trigger, user_id=1: ("**Summary:** mocked\nDetailed analysis", "mocked", "workout_analysis"),
     )
 
 
@@ -305,7 +305,7 @@ def test_analyze_activity_force_missing_activity_noop(db, patch_db_session, stub
 def test_analyze_activity_with_feedback_appends_feedback(db, patch_db_session, monkeypatch):
     captured = {}
 
-    def fake_call(db_, ctx, trigger):
+    def fake_call(db_, ctx, trigger, user_id=1):
         captured["ctx"] = ctx
         return ("**Summary:** fb\nbody", "fb", "workout_analysis")
 
@@ -417,7 +417,7 @@ def test_weekly_review_generates_insight(db, patch_db_session, monkeypatch):
     patch_db_session(ai_coach)
     monkeypatch.setattr(
         ai_coach, "_call_ai",
-        lambda d, c, t: ("**Summary:** week done\nbody", "week done", "training_plan"),
+        lambda d, c, t, user_id=1: ("**Summary:** week done\nbody", "week done", "training_plan"),
     )
     # An activity within the last 7 days of today() so weekly_review picks it up.
     from datetime import timedelta

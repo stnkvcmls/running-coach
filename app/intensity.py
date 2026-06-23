@@ -17,7 +17,7 @@ from datetime import date, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
-from app.models import Activity, ZoneConfig
+from app.models import DEFAULT_USER_ID, Activity, ZoneConfig
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +117,7 @@ def aggregate_weekly_intensity(
     days: int = 90,
     zone_type: str = "hr",
     as_of: date | None = None,
+    user_id: int = DEFAULT_USER_ID,
 ) -> list[dict]:
     """Aggregate per-activity zone data into weekly buckets.
 
@@ -134,6 +135,7 @@ def aggregate_weekly_intensity(
     rows = (
         db.query(Activity.started_at, json_col)
         .filter(
+            Activity.user_id == user_id,
             Activity.started_at >= cutoff,
             Activity.started_at < ref_dt,
             json_col.isnot(None),

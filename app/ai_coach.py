@@ -17,6 +17,7 @@ from app import intensity as intensity_mod
 from app.config import settings
 from app.database import db_session
 from app.models import (
+    DEFAULT_USER_ID,
     Activity,
     AthleteProfile,
     DailySummary,
@@ -336,12 +337,19 @@ def _format_athlete_profile_context(profile: AthleteProfile, reference_date: dat
     return "## Athlete Profile\n" + "\n".join(lines)
 
 
-def _build_context(db: Session, trigger_type: str, trigger_data: str, reference_date: date | None = None) -> str:
+def _build_context(
+    db: Session,
+    trigger_type: str,
+    trigger_data: str,
+    reference_date: date | None = None,
+    user_id: int = DEFAULT_USER_ID,
+) -> str:
     """Build full context for AI analysis.
 
     Args:
         reference_date: The date to use as "today" for temporal context.
                         Defaults to date.today() if not provided.
+        user_id: Scope all data to this user.
     """
     if reference_date is None:
         reference_date = date.today()
@@ -350,7 +358,7 @@ def _build_context(db: Session, trigger_type: str, trigger_data: str, reference_
     sections = [f"## Current Data\n{trigger_data}"]
 
     # Athlete profile (baseline personalization — lands right after Current Data)
-    profile = db.query(AthleteProfile).first()
+    profile = db.query(AthleteProfile).filter(AthleteProfile.user_id == user_id).first()
     if profile:
         profile_context = _format_athlete_profile_context(profile, reference_date)
         if profile_context:
@@ -359,7 +367,7 @@ def _build_context(db: Session, trigger_type: str, trigger_data: str, reference_
     # Auto-derived thresholds — surface only the ones the athlete hasn't set so the
     # AI still has a reference for Critical Power / threshold pace / LTHR.
     try:
-        estimate = threshold_mod.estimate_thresholds(db)
+        estimate = threshold_mod.estimate_thresholds(db, user_id=user_id)
         estimate_context = threshold_mod.format_threshold_estimate_context(estimate, profile)
         if estimate_context:
             sections.insert(min(2, len(sections)), estimate_context)
@@ -367,17 +375,22 @@ def _build_context(db: Session, trigger_type: str, trigger_data: str, reference_
         logger.debug("Threshold estimate skipped", exc_info=True)
 
     # Training load (Fitness/Fatigue/Form) as of the reference date
-    load_point = training_load.current_load(db, as_of=reference_date)
+    load_point = training_load.current_load(db, as_of=reference_date, user_id=user_id)
     load_context = training_load.format_training_load_context(load_point)
     if load_context:
         sections.insert(2 if len(sections) > 1 else 1, load_context)
 
     # Training readiness (composite of sleep, stress, body battery, acute load)
-    today_summary = db.query(DailySummary).filter(DailySummary.date == reference_date).first()
+    today_summary = (
+        db.query(DailySummary)
+        .filter(DailySummary.user_id == user_id, DailySummary.date == reference_date)
+        .first()
+    )
     rhr_cutoff = reference_date - timedelta(days=7)
     recent_rhr_rows = (
         db.query(DailySummary.resting_hr)
         .filter(
+            DailySummary.user_id == user_id,
             DailySummary.date >= rhr_cutoff,
             DailySummary.date < reference_date,
             DailySummary.resting_hr.isnot(None),
@@ -395,7 +408,7 @@ def _build_context(db: Session, trigger_type: str, trigger_data: str, reference_
     cutoff = ref_datetime - timedelta(days=14)
     recent_activities = (
         db.query(Activity)
-        .filter(Activity.started_at >= cutoff)
+        .filter(Activity.user_id == user_id, Activity.started_at >= cutoff)
         .order_by(Activity.started_at.desc())
         .limit(15)
         .all()
@@ -427,6 +440,7 @@ def _build_context(db: Session, trigger_type: str, trigger_data: str, reference_
                 func.sum(Activity.duration_sec),
             )
             .filter(
+                Activity.user_id == user_id,
                 Activity.started_at >= datetime.combine(week_start, datetime.min.time()),
                 Activity.started_at < datetime.combine(week_end, datetime.min.time()),
             )
@@ -444,7 +458,7 @@ def _build_context(db: Session, trigger_type: str, trigger_data: str, reference_
     # Intensity distribution (HR zones, last 4 weeks)
     try:
         intensity_weeks = intensity_mod.aggregate_weekly_intensity(
-            db, days=56, zone_type="hr", as_of=reference_date
+            db, days=56, zone_type="hr", as_of=reference_date, user_id=user_id
         )
         intensity_context = intensity_mod.format_intensity_context(intensity_weeks, zone_type="hr")
         if intensity_context:
@@ -455,6 +469,7 @@ def _build_context(db: Session, trigger_type: str, trigger_data: str, reference_
     # Recent daily summaries (last 7 days)
     recent_days = (
         db.query(DailySummary)
+        .filter(DailySummary.user_id == user_id)
         .order_by(DailySummary.date.desc())
         .limit(7)
         .all()
@@ -477,6 +492,7 @@ def _build_context(db: Session, trigger_type: str, trigger_data: str, reference_
     upcoming_races = (
         db.query(GarminCalendarEvent)
         .filter(
+            GarminCalendarEvent.user_id == user_id,
             GarminCalendarEvent.event_type == "race",
             GarminCalendarEvent.date >= reference_date,
         )
@@ -504,6 +520,7 @@ def _build_context(db: Session, trigger_type: str, trigger_data: str, reference_
     next_training = (
         db.query(GarminCalendarEvent)
         .filter(
+            GarminCalendarEvent.user_id == user_id,
             GarminCalendarEvent.event_type == "workout",
             GarminCalendarEvent.date >= date.today(),
         )
@@ -522,6 +539,7 @@ def _build_context(db: Session, trigger_type: str, trigger_data: str, reference_
     # Recent insights (last 3) to avoid repetition
     recent_insights = (
         db.query(Insight)
+        .filter(Insight.user_id == user_id)
         .order_by(Insight.created_at.desc())
         .limit(3)
         .all()
@@ -604,18 +622,28 @@ def _call_gemini(context: str, trigger_type: str, model: str) -> tuple[str, str,
     return content, summary, category
 
 
-def _get_ai_config(db: Session) -> tuple[str, str]:
+def _get_ai_config(db: Session, user_id: int = DEFAULT_USER_ID) -> tuple[str, str]:
     """Return (provider, model) from DB, falling back to env defaults."""
-    provider_row = db.query(SyncStatus).filter(SyncStatus.key == "ai_provider").first()
-    model_row = db.query(SyncStatus).filter(SyncStatus.key == "ai_model").first()
+    provider_row = (
+        db.query(SyncStatus)
+        .filter(SyncStatus.user_id == user_id, SyncStatus.key == "ai_provider")
+        .first()
+    )
+    model_row = (
+        db.query(SyncStatus)
+        .filter(SyncStatus.user_id == user_id, SyncStatus.key == "ai_model")
+        .first()
+    )
     provider = provider_row.value if provider_row else "claude"
     model = model_row.value if model_row else settings.ai_model
     return provider, model
 
 
-def _call_ai(db: Session, context: str, trigger_type: str) -> tuple[str, str, str]:
+def _call_ai(
+    db: Session, context: str, trigger_type: str, user_id: int = DEFAULT_USER_ID
+) -> tuple[str, str, str]:
     """Dispatch to the configured AI provider with exponential backoff on transient errors."""
-    provider, model = _get_ai_config(db)
+    provider, model = _get_ai_config(db, user_id)
     call_fn = _call_gemini if provider == "gemini" else _call_claude
 
     last_exc: Exception = RuntimeError("no attempts made")
@@ -636,7 +664,19 @@ def _call_ai(db: Session, context: str, trigger_type: str) -> tuple[str, str, st
     raise last_exc
 
 
-def _save_error_insight(activity_id: int, exc: Exception) -> None:
+def _activity_user_id(activity_id: int) -> int:
+    """Best-effort lookup of an activity's owner (for error-path insight writes)."""
+    try:
+        with db_session() as db:
+            row = db.query(Activity.user_id).filter(Activity.id == activity_id).first()
+            return (row[0] if row and row[0] else DEFAULT_USER_ID)
+    except Exception:
+        return DEFAULT_USER_ID
+
+
+def _save_error_insight(
+    activity_id: int, exc: Exception, user_id: int = DEFAULT_USER_ID
+) -> None:
     """Persist a failure insight so the UI can show an error and allow retry."""
     if isinstance(exc, AITransientError):
         content = (
@@ -662,10 +702,12 @@ def _save_error_insight(activity_id: int, exc: Exception) -> None:
     try:
         with db_session() as db:
             db.query(Insight).filter(
+                Insight.user_id == user_id,
                 Insight.trigger_type == "activity",
                 Insight.trigger_id == activity_id,
             ).delete()
             db.add(Insight(
+                user_id=user_id,
                 created_at=datetime.now(timezone.utc),
                 trigger_type="activity",
                 trigger_id=activity_id,
@@ -686,10 +728,15 @@ def _load_zones(db: Session) -> dict[str, list[MetricZone]]:
     return zones_by_metric
 
 
-def _load_zone_configs(db: Session) -> dict:
+def _load_zone_configs(db: Session, user_id: int = DEFAULT_USER_ID) -> dict:
     """Load custom threshold-anchored zone configs and profile thresholds."""
-    profile = db.query(AthleteProfile).first()
-    all_zones = db.query(ZoneConfig).order_by(ZoneConfig.zone_type, ZoneConfig.zone_number).all()
+    profile = db.query(AthleteProfile).filter(AthleteProfile.user_id == user_id).first()
+    all_zones = (
+        db.query(ZoneConfig)
+        .filter(ZoneConfig.user_id == user_id)
+        .order_by(ZoneConfig.zone_type, ZoneConfig.zone_number)
+        .all()
+    )
     return {
         "hr": [z for z in all_zones if z.zone_type == "hr"],
         "pace": [z for z in all_zones if z.zone_type == "pace"],
@@ -700,11 +747,12 @@ def _load_zone_configs(db: Session) -> dict:
 
 def analyze_activity(activity: Activity):
     """Generate AI insight for a new activity."""
+    user_id = activity.user_id or DEFAULT_USER_ID
     with db_session() as db:
         try:
             activity_date = activity.started_at.date() if isinstance(activity.started_at, datetime) else activity.started_at
             zones_by_metric = _load_zones(db)
-            zc = _load_zone_configs(db)
+            zc = _load_zone_configs(db, user_id)
             activity_context = _format_activity_context(
                 activity, zones_by_metric,
                 hr_zone_configs=zc["hr"], pace_zone_configs=zc["pace"],
@@ -715,6 +763,7 @@ def analyze_activity(activity: Activity):
             workout_event = (
                 db.query(GarminCalendarEvent)
                 .filter(
+                    GarminCalendarEvent.user_id == user_id,
                     GarminCalendarEvent.date == activity_date,
                     GarminCalendarEvent.event_type == "workout",
                 )
@@ -726,10 +775,13 @@ def analyze_activity(activity: Activity):
                 if adherence_result:
                     activity_context += "\n\n" + adherence_mod.format_adherence_context(adherence_result)
 
-            full_context = _build_context(db, "activity", activity_context, reference_date=activity_date)
-            content, summary, category = _call_ai(db, full_context, "activity")
+            full_context = _build_context(
+                db, "activity", activity_context, reference_date=activity_date, user_id=user_id
+            )
+            content, summary, category = _call_ai(db, full_context, "activity", user_id)
 
             insight = Insight(
+                user_id=user_id,
                 created_at=datetime.now(timezone.utc),
                 trigger_type="activity",
                 trigger_id=activity.id,
@@ -751,13 +803,17 @@ def analyze_activity(activity: Activity):
 
 def analyze_daily_summary(daily: DailySummary):
     """Generate AI insight for a daily summary."""
+    user_id = daily.user_id or DEFAULT_USER_ID
     with db_session() as db:
         try:
             daily_context = _format_daily_context(daily)
-            full_context = _build_context(db, "daily_summary", daily_context, reference_date=daily.date)
-            content, summary, category = _call_ai(db, full_context, "daily_summary")
+            full_context = _build_context(
+                db, "daily_summary", daily_context, reference_date=daily.date, user_id=user_id
+            )
+            content, summary, category = _call_ai(db, full_context, "daily_summary", user_id)
 
             insight = Insight(
+                user_id=user_id,
                 created_at=datetime.now(timezone.utc),
                 trigger_type="daily_summary",
                 trigger_id=daily.id,
@@ -785,25 +841,30 @@ def analyze_activity_force(activity_id: int):
             if not activity:
                 logger.warning("Activity %s not found for re-analysis", activity_id)
                 return
+            user_id = activity.user_id or DEFAULT_USER_ID
 
             # Delete existing insight for this activity
             db.query(Insight).filter(
+                Insight.user_id == user_id,
                 Insight.trigger_type == "activity",
                 Insight.trigger_id == activity.id,
             ).delete()
 
             activity_date = activity.started_at.date() if isinstance(activity.started_at, datetime) else activity.started_at
             zones_by_metric = _load_zones(db)
-            zc = _load_zone_configs(db)
+            zc = _load_zone_configs(db, user_id)
             activity_context = _format_activity_context(
                 activity, zones_by_metric,
                 hr_zone_configs=zc["hr"], pace_zone_configs=zc["pace"],
                 threshold_hr=zc["threshold_hr"], threshold_pace=zc["threshold_pace"],
             )
-            full_context = _build_context(db, "activity", activity_context, reference_date=activity_date)
-            content, summary, category = _call_ai(db, full_context, "activity")
+            full_context = _build_context(
+                db, "activity", activity_context, reference_date=activity_date, user_id=user_id
+            )
+            content, summary, category = _call_ai(db, full_context, "activity", user_id)
 
             insight = Insight(
+                user_id=user_id,
                 created_at=datetime.now(timezone.utc),
                 trigger_type="activity",
                 trigger_id=activity.id,
@@ -817,7 +878,7 @@ def analyze_activity_force(activity_id: int):
             logger.info("AI re-analysis complete for activity %s: %s", activity.id, summary[:80])
         except Exception as exc:
             logger.exception("AI re-analysis failed for activity %s", activity_id)
-            _save_error_insight(activity_id, exc)
+            _save_error_insight(activity_id, exc, _activity_user_id(activity_id))
 
 
 def analyze_activity_with_feedback(activity_id: int):
@@ -828,15 +889,17 @@ def analyze_activity_with_feedback(activity_id: int):
             if not activity:
                 logger.warning("Activity %s not found for feedback analysis", activity_id)
                 return
+            user_id = activity.user_id or DEFAULT_USER_ID
 
             # Delete existing insight for this activity
             db.query(Insight).filter(
+                Insight.user_id == user_id,
                 Insight.trigger_type == "activity",
                 Insight.trigger_id == activity.id,
             ).delete()
 
             zones_by_metric = _load_zones(db)
-            zc = _load_zone_configs(db)
+            zc = _load_zone_configs(db, user_id)
             activity_context = _format_activity_context(
                 activity, zones_by_metric,
                 hr_zone_configs=zc["hr"], pace_zone_configs=zc["pace"],
@@ -863,10 +926,13 @@ def analyze_activity_with_feedback(activity_id: int):
                 activity_context += "\n\n## User Feedback\n" + "\n".join(feedback_parts)
 
             activity_date = activity.started_at.date() if isinstance(activity.started_at, datetime) else activity.started_at
-            full_context = _build_context(db, "activity", activity_context, reference_date=activity_date)
-            content, summary, category = _call_ai(db, full_context, "activity")
+            full_context = _build_context(
+                db, "activity", activity_context, reference_date=activity_date, user_id=user_id
+            )
+            content, summary, category = _call_ai(db, full_context, "activity", user_id)
 
             insight = Insight(
+                user_id=user_id,
                 created_at=datetime.now(timezone.utc),
                 trigger_type="activity",
                 trigger_id=activity.id,
@@ -880,10 +946,10 @@ def analyze_activity_with_feedback(activity_id: int):
             logger.info("AI feedback analysis complete for activity %s: %s", activity.id, summary[:80])
         except Exception as exc:
             logger.exception("AI feedback analysis failed for activity %s", activity_id)
-            _save_error_insight(activity_id, exc)
+            _save_error_insight(activity_id, exc, _activity_user_id(activity_id))
 
 
-def backfill_missing_insights():
+def backfill_missing_insights(user_id: int = DEFAULT_USER_ID):
     """Analyze past 7 days of activities and daily summaries that lack insights."""
     with db_session() as db:
         cutoff = datetime.now(timezone.utc) - timedelta(days=7)
@@ -892,6 +958,7 @@ def backfill_missing_insights():
         activities = (
             db.query(Activity)
             .filter(
+                Activity.user_id == user_id,
                 Activity.started_at >= cutoff,
                 Activity.ai_analyzed == False,
             )
@@ -910,6 +977,7 @@ def backfill_missing_insights():
         summaries = (
             db.query(DailySummary)
             .filter(
+                DailySummary.user_id == user_id,
                 DailySummary.date >= cutoff_date,
                 DailySummary.ai_analyzed == False,
             )
@@ -975,7 +1043,9 @@ Rules:
 """
 
 
-def _build_plan_adherence_context(db: Session, reference_date: date) -> str | None:
+def _build_plan_adherence_context(
+    db: Session, reference_date: date, user_id: int = DEFAULT_USER_ID
+) -> str | None:
     """Build adherence summary for the most recent training plan.
 
     For each non-rest day in the current plan that has already passed, checks
@@ -984,6 +1054,7 @@ def _build_plan_adherence_context(db: Session, reference_date: date) -> str | No
     """
     plan = (
         db.query(TrainingPlan)
+        .filter(TrainingPlan.user_id == user_id)
         .order_by(TrainingPlan.generated_at.desc())
         .first()
     )
@@ -1013,6 +1084,7 @@ def _build_plan_adherence_context(db: Session, reference_date: date) -> str | No
         activity = (
             db.query(Activity)
             .filter(
+                Activity.user_id == user_id,
                 Activity.started_at >= day_start,
                 Activity.started_at < day_end,
             )
@@ -1050,34 +1122,41 @@ def _build_plan_adherence_context(db: Session, reference_date: date) -> str | No
     return "\n".join(lines)
 
 
-def _build_plan_context(db: Session, reference_date: date) -> str:
+def _build_plan_context(
+    db: Session, reference_date: date, user_id: int = DEFAULT_USER_ID
+) -> str:
     """Build context string for plan generation (profile + load + recent history)."""
     sections: list[str] = [f"Today's date: {reference_date}"]
 
-    profile = db.query(AthleteProfile).first()
+    profile = db.query(AthleteProfile).filter(AthleteProfile.user_id == user_id).first()
     if profile:
         ctx = _format_athlete_profile_context(profile, reference_date)
         if ctx:
             sections.append(ctx)
 
     try:
-        estimate = threshold_mod.estimate_thresholds(db)
+        estimate = threshold_mod.estimate_thresholds(db, user_id=user_id)
         est_ctx = threshold_mod.format_threshold_estimate_context(estimate, profile)
         if est_ctx:
             sections.append(est_ctx)
     except Exception:
         pass
 
-    load_point = training_load.current_load(db, as_of=reference_date)
+    load_point = training_load.current_load(db, as_of=reference_date, user_id=user_id)
     load_ctx = training_load.format_training_load_context(load_point)
     if load_ctx:
         sections.append(load_ctx)
 
-    today_summary = db.query(DailySummary).filter(DailySummary.date == reference_date).first()
+    today_summary = (
+        db.query(DailySummary)
+        .filter(DailySummary.user_id == user_id, DailySummary.date == reference_date)
+        .first()
+    )
     rhr_cutoff = reference_date - timedelta(days=7)
     recent_rhr_rows = (
         db.query(DailySummary.resting_hr)
         .filter(
+            DailySummary.user_id == user_id,
             DailySummary.date >= rhr_cutoff,
             DailySummary.date < reference_date,
             DailySummary.resting_hr.isnot(None),
@@ -1098,6 +1177,7 @@ def _build_plan_context(db: Session, reference_date: date) -> str:
         result = (
             db.query(func.count(Activity.id), func.sum(Activity.distance_m))
             .filter(
+                Activity.user_id == user_id,
                 Activity.started_at >= datetime.combine(week_start, datetime.min.time()),
                 Activity.started_at < datetime.combine(week_end, datetime.min.time()),
             )
@@ -1110,7 +1190,7 @@ def _build_plan_context(db: Session, reference_date: date) -> str:
         sections.append("## Recent Weekly Volume\n" + "\n".join(weeks))
 
     # Adherence to the current plan
-    adherence_ctx = _build_plan_adherence_context(db, reference_date)
+    adherence_ctx = _build_plan_adherence_context(db, reference_date, user_id)
     if adherence_ctx:
         sections.append(adherence_ctx)
 
@@ -1118,6 +1198,7 @@ def _build_plan_context(db: Session, reference_date: date) -> str:
     upcoming = (
         db.query(GarminCalendarEvent)
         .filter(
+            GarminCalendarEvent.user_id == user_id,
             GarminCalendarEvent.event_type == "race",
             GarminCalendarEvent.date >= reference_date,
         )
@@ -1156,9 +1237,12 @@ def _parse_plan_json(raw: str) -> dict:
     return json.loads(text)
 
 
-def _store_training_plan(db: Session, plan_data: dict, week_start: date, raw_json: str) -> TrainingPlan:
+def _store_training_plan(
+    db: Session, plan_data: dict, week_start: date, raw_json: str, user_id: int = DEFAULT_USER_ID
+) -> TrainingPlan:
     """Persist the parsed plan dict as TrainingPlan + TrainingPlanDay rows."""
     plan = TrainingPlan(
+        user_id=user_id,
         generated_at=datetime.now(timezone.utc),
         week_start=week_start,
         plan_weeks=len(plan_data.get("weeks", [])) or 4,
@@ -1182,6 +1266,7 @@ def _store_training_plan(db: Session, plan_data: dict, week_start: date, raw_jso
             pace_display = day_data.get("target_pace_display")
             pace_num = _parse_pace_display(pace_display) if pace_display else None
             db.add(TrainingPlanDay(
+                user_id=user_id,
                 plan_id=plan.id,
                 day_date=day_date,
                 day_of_week=day_data.get("day_of_week", day_date.strftime("%A")),
@@ -1210,7 +1295,9 @@ def _parse_pace_display(pace_str: str) -> float | None:
 _REALIGNMENT_MISSED_THRESHOLD = 2  # Show banner when this many sessions are missed
 
 
-def detect_plan_realignment(db: Session, reference_date: date) -> dict:
+def detect_plan_realignment(
+    db: Session, reference_date: date, user_id: int = DEFAULT_USER_ID
+) -> dict:
     """Return realignment state for the current plan.
 
     Looks at all past non-rest TrainingPlanDay rows that lack a matching
@@ -1220,6 +1307,7 @@ def detect_plan_realignment(db: Session, reference_date: date) -> dict:
     """
     plan = (
         db.query(TrainingPlan)
+        .filter(TrainingPlan.user_id == user_id)
         .order_by(TrainingPlan.generated_at.desc())
         .first()
     )
@@ -1228,7 +1316,8 @@ def detect_plan_realignment(db: Session, reference_date: date) -> dict:
         return empty
 
     dismiss_row = db.query(SyncStatus).filter(
-        SyncStatus.key == "plan_realignment_dismissed_until"
+        SyncStatus.user_id == user_id,
+        SyncStatus.key == "plan_realignment_dismissed_until",
     ).first()
     dismissed = False
     if dismiss_row and dismiss_row.value:
@@ -1255,6 +1344,7 @@ def detect_plan_realignment(db: Session, reference_date: date) -> dict:
         activity = (
             db.query(Activity)
             .filter(
+                Activity.user_id == user_id,
                 Activity.started_at >= day_start,
                 Activity.started_at < day_end,
             )
@@ -1276,7 +1366,9 @@ def detect_plan_realignment(db: Session, reference_date: date) -> dict:
     }
 
 
-def generate_training_plan(reference_date: date | None = None) -> TrainingPlan | None:
+def generate_training_plan(
+    reference_date: date | None = None, user_id: int = DEFAULT_USER_ID
+) -> TrainingPlan | None:
     """Generate and persist a 4-week AI training plan.
 
     Can be called from the API (on demand) or from the scheduler (weekly).
@@ -1287,8 +1379,8 @@ def generate_training_plan(reference_date: date | None = None) -> TrainingPlan |
         week_start = _next_monday(ref)
 
         try:
-            context = _build_plan_context(db, ref)
-            provider, model = _get_ai_config(db)
+            context = _build_plan_context(db, ref, user_id)
+            provider, model = _get_ai_config(db, user_id)
 
             plan_prompt = (
                 f"Generate a 4-week running training plan starting Monday {week_start}.\n\n"
@@ -1356,7 +1448,7 @@ def generate_training_plan(reference_date: date | None = None) -> TrainingPlan |
                 raise last_exc
 
             plan_data = _parse_plan_json(raw)
-            plan = _store_training_plan(db, plan_data, week_start, raw)
+            plan = _store_training_plan(db, plan_data, week_start, raw, user_id)
             logger.info(
                 "Training plan generated: %d weeks, phase=%s, week_start=%s",
                 plan.plan_weeks, plan.phase, plan.week_start,
@@ -1367,14 +1459,17 @@ def generate_training_plan(reference_date: date | None = None) -> TrainingPlan |
             return None
 
 
-def weekly_review():
+def weekly_review(user_id: int = DEFAULT_USER_ID):
     """Generate a weekly training summary and recommendations."""
     with db_session() as db:
         try:
             week_start = date.today() - timedelta(days=7)
             week_activities = (
                 db.query(Activity)
-                .filter(Activity.started_at >= datetime.combine(week_start, datetime.min.time()))
+                .filter(
+                    Activity.user_id == user_id,
+                    Activity.started_at >= datetime.combine(week_start, datetime.min.time()),
+                )
                 .order_by(Activity.started_at.asc())
                 .all()
             )
@@ -1384,7 +1479,7 @@ def weekly_review():
                 return
 
             zones_by_metric = _load_zones(db)
-            zc = _load_zone_configs(db)
+            zc = _load_zone_configs(db, user_id)
             activity_summaries = "\n\n".join(
                 _format_activity_context(
                     a, zones_by_metric,
@@ -1394,10 +1489,11 @@ def weekly_review():
                 for a in week_activities
             )
             trigger_data = f"## Weekly Review ({week_start} to {date.today()})\n\n{activity_summaries}"
-            full_context = _build_context(db, "weekly_review", trigger_data)
-            content, summary, category = _call_ai(db, full_context, "weekly_review")
+            full_context = _build_context(db, "weekly_review", trigger_data, user_id=user_id)
+            content, summary, category = _call_ai(db, full_context, "weekly_review", user_id)
 
             insight = Insight(
+                user_id=user_id,
                 created_at=datetime.now(timezone.utc),
                 trigger_type="weekly_review",
                 trigger_id=None,
