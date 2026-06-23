@@ -9,7 +9,8 @@ const WORKOUT_COLORS: Record<string, string> = {
   tempo: 'var(--color-tempo)',
   long: 'var(--color-long)',
   interval: 'var(--color-interval)',
-  cross: 'var(--color-default)',
+  cross: 'var(--color-cross)',
+  strength: 'var(--color-strength)',
   rest: 'var(--text-muted)',
 }
 
@@ -19,6 +20,7 @@ const WORKOUT_LABELS: Record<string, string> = {
   long: 'Long',
   interval: 'Intervals',
   cross: 'Cross',
+  strength: 'Strength',
   rest: 'Rest',
 }
 

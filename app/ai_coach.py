@@ -1010,7 +1010,7 @@ Schema:
         {
           "date": "YYYY-MM-DD",
           "day_of_week": "<Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday>",
-          "workout_type": "<easy|tempo|long|interval|rest|cross>",
+          "workout_type": "<easy|tempo|long|interval|rest|cross|strength>",
           "target_distance_km": <number or null>,
           "target_pace_display": "<e.g. '5:15/km' or null>",
           "description": "<brief workout description>",
@@ -1023,13 +1023,26 @@ Schema:
 
 Rules:
 - Generate exactly 4 weeks, each with exactly 7 days in order starting from the given week_start.
-- workout_type must be one of: easy, tempo, long, interval, rest, cross.
-- target_distance_km and target_pace_display may be null for rest days.
+- workout_type must be one of: easy, tempo, long, interval, rest, cross, strength.
+- target_distance_km and target_pace_display may be null for rest, cross, and strength days.
 - Respect the athlete's weekly_availability (days/sessions per week).
 - Anchor pace targets to the athlete's threshold pace if available.
 - Distribute load progressively: build 2 weeks, recover 1 week, then race-specific or peak.
 - Account for any upcoming races as goal events (taper if race is within 3 weeks).
 - Respect injury history — avoid high-impact volume if relevant injuries are listed.
+- Strength & cross-training:
+  * Include 1–2 `strength` sessions per week during base and build phases; 0–1 during taper
+    (maintenance only, reduced load).
+  * For `strength` days set target_distance_km and target_pace_display to null. Write a
+    description with 4–6 specific exercises, sets, and reps targeting running durability, e.g.:
+    "3×10 single-leg squats, 3×15 glute bridges, 3×12 calf raises, 2×45s side planks,
+    3×10 Romanian deadlifts". Tailor exercises to the athlete's injury history when relevant
+    (e.g. hip-stability work for IT-band issues, calf/Achilles work for lower-leg history).
+  * Schedule `strength` on easy or rest-adjacent days. Do not pair strength with tempo,
+    interval, or long-run days.
+  * For `cross` days describe the activity (cycling, swimming, elliptical, yoga/pilates) and
+    approximate duration, e.g. "45 min easy cycling or 30 min yoga". Set target_distance_km
+    and target_pace_display to null.
 - When a "Current Plan Adherence" section is present, use it to shape the new plan:
   * Adherence ≥80%: the athlete is consistent — progress load as designed.
   * Adherence 60–79%: moderate disruption — keep similar volume but reduce the count of the
