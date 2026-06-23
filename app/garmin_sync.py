@@ -12,7 +12,15 @@ from sqlalchemy.orm import Session
 from app import crypto, streams
 from app.config import settings
 from app.database import db_session
-from app.models import Activity, AthleteProfile, DailySummary, GarminCalendarEvent, SyncStatus, User
+from app.models import (
+    DEFAULT_USER_ID,
+    Activity,
+    AthleteProfile,
+    DailySummary,
+    GarminCalendarEvent,
+    SyncStatus,
+    User,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +91,18 @@ def _get_client_for(user_id: int, email: str, password: str, token_dir: str) -> 
 def _find_bootstrap_user(db: Session) -> User | None:
     """Locate user #1 — the account seeded from env GARMIN_EMAIL/PASSWORD."""
     return db.query(User).filter(User.email == _bootstrap_identity_email()).first()
+
+
+def _scope_uid(db: Session, user: User | None) -> int:
+    """Resolve the ``user_id`` to scope sync reads/writes to.
+
+    With an explicit user, that user's id. Otherwise the bootstrap user #1, or
+    ``DEFAULT_USER_ID`` when no User row exists yet (pre-seed / tests).
+    """
+    if user is not None:
+        return user.id
+    bootstrap = _find_bootstrap_user(db)
+    return bootstrap.id if bootstrap else DEFAULT_USER_ID
 
 
 def _get_bootstrap_client() -> Garmin:
@@ -174,6 +194,9 @@ def _finalize_connect(db: Session, user: User, garmin: Garmin, email: str, passw
     token_client = getattr(garmin, "client", None) or getattr(garmin, "garth", None)
     token_client.dump(token_dir)
     _store_credentials(db, user, email, password)
+    # A successful interactive (re)connect clears any pending re-auth flag.
+    user.garmin_needs_reauth = False
+    db.commit()
     # Drop any stale cached client so the next call rebuilds from new tokens.
     with _garmin_lock:
         _garmin_clients.pop(user.id, None)
@@ -184,6 +207,7 @@ def disconnect_garmin(db: Session, user: User) -> None:
     """Clear a user's Garmin credentials, cached client, and token dir."""
     user.garmin_email = None
     user.garmin_password_encrypted = None
+    user.garmin_needs_reauth = False
     db.commit()
     with _mfa_lock:
         _mfa_sessions.pop(user.id, None)
@@ -201,7 +225,21 @@ def garmin_connection_status(user: User) -> dict:
         "connected": bool(user.garmin_email),
         "garmin_email": user.garmin_email,
         "mfa_pending": mfa_pending,
+        "needs_reauth": bool(user.garmin_needs_reauth),
     }
+
+
+def mark_garmin_needs_reauth(user_id: int, value: bool = True) -> None:
+    """Flag/unflag a user's Garmin connection as needing an interactive reconnect.
+
+    Called by background syncs when a user's tokens are gone/expired and Garmin
+    wants an MFA code a cron can't supply.
+    """
+    with db_session() as db:
+        user = db.query(User).filter(User.id == user_id).first()
+        if user is not None and bool(user.garmin_needs_reauth) != value:
+            user.garmin_needs_reauth = value
+            db.commit()
 
 
 # --- Bootstrap (env account → user #1) + token-dir migration ---------------
@@ -256,18 +294,28 @@ def seed_bootstrap_user() -> None:
     _migrate_flat_token_dir(user_id)
 
 
-def _get_sync_status(db: Session, key: str) -> str | None:
-    row = db.query(SyncStatus).filter(SyncStatus.key == key).first()
+def _get_sync_status(db: Session, key: str, user_id: int = DEFAULT_USER_ID) -> str | None:
+    row = (
+        db.query(SyncStatus)
+        .filter(SyncStatus.user_id == user_id, SyncStatus.key == key)
+        .first()
+    )
     return row.value if row else None
 
 
-def _set_sync_status(db: Session, key: str, value: str):
-    row = db.query(SyncStatus).filter(SyncStatus.key == key).first()
+def _set_sync_status(db: Session, key: str, value: str, user_id: int = DEFAULT_USER_ID):
+    row = (
+        db.query(SyncStatus)
+        .filter(SyncStatus.user_id == user_id, SyncStatus.key == key)
+        .first()
+    )
     if row:
         row.value = value
         row.updated_at = datetime.now(timezone.utc)
     else:
-        row = SyncStatus(key=key, value=value, updated_at=datetime.now(timezone.utc))
+        row = SyncStatus(
+            user_id=user_id, key=key, value=value, updated_at=datetime.now(timezone.utc)
+        )
         db.add(row)
     db.commit()
 
@@ -374,13 +422,24 @@ def _fetch_activity_details(client: Garmin, activity_id) -> dict:
     return details
 
 
-def _store_activity(db: Session, summary: dict, details: dict, skip_ai: bool = False) -> Activity | None:
+def _store_activity(
+    db: Session,
+    summary: dict,
+    details: dict,
+    skip_ai: bool = False,
+    user_id: int = DEFAULT_USER_ID,
+    client: Garmin | None = None,
+) -> Activity | None:
     """Store an activity in the database. Returns the Activity if newly created."""
     garmin_id = summary.get("activityId")
     if not garmin_id:
         return None
 
-    existing = db.query(Activity).filter(Activity.garmin_id == garmin_id).first()
+    existing = (
+        db.query(Activity)
+        .filter(Activity.user_id == user_id, Activity.garmin_id == garmin_id)
+        .first()
+    )
     if existing:
         return None
 
@@ -415,8 +474,8 @@ def _store_activity(db: Session, summary: dict, details: dict, skip_ai: bool = F
     # we don't use.
     laps = None
     try:
-        client = get_garmin_client()
-        laps = client.get_activity_details(garmin_id, maxchart=10000, maxpoly=0)
+        detail_client = client or get_garmin_client()
+        laps = detail_client.get_activity_details(garmin_id, maxchart=10000, maxpoly=0)
     except Exception as e:
         logger.debug("No detailed data for %s: %s", garmin_id, e)
 
@@ -432,6 +491,7 @@ def _store_activity(db: Session, summary: dict, details: dict, skip_ai: bool = F
 
     activity = Activity(
         **fields,
+        user_id=user_id,
         run_time_sec=run_time_sec,
         walk_time_sec=walk_time_sec,
         laps_json=json.dumps(laps) if laps else None,
@@ -452,13 +512,14 @@ def _store_activity(db: Session, summary: dict, details: dict, skip_ai: bool = F
     return activity
 
 
-def sync_activities() -> list[Activity]:
+def sync_activities(user: User | None = None) -> list[Activity]:
     """Poll for recent activities. Returns list of newly added activities."""
     logger.info("Syncing recent activities...")
-    client = get_garmin_client()
+    client = get_garmin_client(user)
     new_activities = []
 
     with db_session() as db:
+        uid = _scope_uid(db, user)
         try:
             activities = client.get_activities(0, 20)
             for summary in activities:
@@ -466,17 +527,25 @@ def sync_activities() -> list[Activity]:
                 if not garmin_id:
                     continue
 
-                existing = db.query(Activity).filter(Activity.garmin_id == garmin_id).first()
+                existing = (
+                    db.query(Activity)
+                    .filter(Activity.user_id == uid, Activity.garmin_id == garmin_id)
+                    .first()
+                )
                 if existing:
                     continue
 
                 time.sleep(0.3)
                 details = _fetch_activity_details(client, garmin_id)
-                activity = _store_activity(db, summary, details, skip_ai=False)
+                activity = _store_activity(
+                    db, summary, details, skip_ai=False, user_id=uid, client=client
+                )
                 if activity:
                     new_activities.append(activity)
 
-            _set_sync_status(db, "last_activity_sync", datetime.now(timezone.utc).isoformat())
+            _set_sync_status(
+                db, "last_activity_sync", datetime.now(timezone.utc).isoformat(), user_id=uid
+            )
             logger.info("Activity sync complete. %d new activities.", len(new_activities))
         except Exception:
             logger.exception("Activity sync failed")
@@ -520,16 +589,19 @@ def _daily_summary_fields(
     }
 
 
-def sync_daily_summary(target_date: date | None = None) -> DailySummary | None:
+def sync_daily_summary(
+    target_date: date | None = None, user: User | None = None
+) -> DailySummary | None:
     """Sync daily summary for a given date (defaults to yesterday)."""
     if target_date is None:
         target_date = date.today() - timedelta(days=1)
 
     date_str = target_date.strftime("%Y-%m-%d")
     logger.info("Syncing daily summary for %s", date_str)
-    client = get_garmin_client()
+    client = get_garmin_client(user)
 
     with db_session() as db:
+        uid = _scope_uid(db, user)
         try:
             stats = client.get_stats(date_str)
             user_summary = client.get_user_summary(date_str)
@@ -586,7 +658,11 @@ def sync_daily_summary(target_date: date | None = None) -> DailySummary | None:
                 hrv_status=hrv_status,
             )
 
-            existing = db.query(DailySummary).filter(DailySummary.date == target_date).first()
+            existing = (
+                db.query(DailySummary)
+                .filter(DailySummary.user_id == uid, DailySummary.date == target_date)
+                .first()
+            )
             if existing:
                 for key, value in fields.items():
                     setattr(existing, key, value)
@@ -594,7 +670,7 @@ def sync_daily_summary(target_date: date | None = None) -> DailySummary | None:
                 db.refresh(existing)
                 summary = existing
             else:
-                summary = DailySummary(date=target_date, **fields)
+                summary = DailySummary(user_id=uid, date=target_date, **fields)
                 db.add(summary)
                 db.commit()
                 db.refresh(summary)
@@ -605,7 +681,9 @@ def sync_daily_summary(target_date: date | None = None) -> DailySummary | None:
             # object unreadable (DetachedInstanceError on first attribute
             # access). Expunging first preserves its loaded state for the caller.
             db.expunge(summary)
-            _set_sync_status(db, "last_daily_sync", datetime.now(timezone.utc).isoformat())
+            _set_sync_status(
+                db, "last_daily_sync", datetime.now(timezone.utc).isoformat(), user_id=uid
+            )
             logger.info("Daily summary synced for %s", date_str)
             return summary
 
@@ -676,25 +754,26 @@ def _fetch_garmin_profile_fields(client: Garmin) -> dict:
     return fields
 
 
-def sync_athlete_profile() -> AthleteProfile | None:
+def sync_athlete_profile(user: User | None = None) -> AthleteProfile | None:
     """Sync name, date of birth, weight, and resting HR from Garmin into the athlete profile.
 
     These fields are Garmin-managed (read-only in the UI), so the local
     values are always overwritten to stay in sync with Garmin.
     """
     logger.info("Syncing athlete profile from Garmin...")
-    client = get_garmin_client()
+    client = get_garmin_client(user)
 
     with db_session() as db:
+        uid = _scope_uid(db, user)
         try:
             fields = _fetch_garmin_profile_fields(client)
             if not fields:
                 logger.info("No Garmin profile fields available to sync")
                 return None
 
-            profile = db.query(AthleteProfile).first()
+            profile = db.query(AthleteProfile).filter(AthleteProfile.user_id == uid).first()
             if profile is None:
-                profile = AthleteProfile(**fields)
+                profile = AthleteProfile(user_id=uid, **fields)
                 db.add(profile)
             else:
                 for key, value in fields.items():
@@ -702,7 +781,9 @@ def sync_athlete_profile() -> AthleteProfile | None:
 
             db.commit()
             db.refresh(profile)
-            _set_sync_status(db, "last_profile_sync", datetime.now(timezone.utc).isoformat())
+            _set_sync_status(
+                db, "last_profile_sync", datetime.now(timezone.utc).isoformat(), user_id=uid
+            )
             logger.info("Athlete profile synced from Garmin: %s", ", ".join(fields))
             return profile
         except Exception:
@@ -713,8 +794,9 @@ def sync_athlete_profile() -> AthleteProfile | None:
 def backfill_activities():
     """Backfill all historical activities on first start."""
     with db_session() as db:
+        uid = _scope_uid(db, None)
         try:
-            status = _get_sync_status(db, "backfill_activities")
+            status = _get_sync_status(db, "backfill_activities", user_id=uid)
             if status == "complete":
                 logger.info("Activity backfill already complete")
                 return
@@ -741,24 +823,30 @@ def backfill_activities():
                     if not garmin_id:
                         continue
 
-                    existing = db.query(Activity).filter(Activity.garmin_id == garmin_id).first()
+                    existing = (
+                        db.query(Activity)
+                        .filter(Activity.user_id == uid, Activity.garmin_id == garmin_id)
+                        .first()
+                    )
                     if existing:
                         continue
 
                     time.sleep(0.5)
                     try:
                         details = _fetch_activity_details(client, garmin_id)
-                        _store_activity(db, summary, details, skip_ai=True)
+                        _store_activity(
+                            db, summary, details, skip_ai=True, user_id=uid, client=client
+                        )
                     except Exception:
                         logger.exception("Failed to backfill activity %s", garmin_id)
 
                 page += 1
-                _set_sync_status(db, "backfill_activities", str(page))
+                _set_sync_status(db, "backfill_activities", str(page), user_id=uid)
 
                 if len(activities) < page_size:
                     break
 
-            _set_sync_status(db, "backfill_activities", "complete")
+            _set_sync_status(db, "backfill_activities", "complete", user_id=uid)
             logger.info("Activity backfill complete")
 
         except Exception:
@@ -768,8 +856,9 @@ def backfill_activities():
 def backfill_daily_summaries():
     """Backfill last 365 days of daily summaries on first start."""
     with db_session() as db:
+        uid = _scope_uid(db, None)
         try:
-            status = _get_sync_status(db, "backfill_daily")
+            status = _get_sync_status(db, "backfill_daily", user_id=uid)
             if status == "complete":
                 logger.info("Daily summary backfill already complete")
                 return
@@ -787,7 +876,11 @@ def backfill_daily_summaries():
             for days_ago in range(start_days_ago, 366):
                 target = today - timedelta(days=days_ago)
 
-                existing = db.query(DailySummary).filter(DailySummary.date == target).first()
+                existing = (
+                    db.query(DailySummary)
+                    .filter(DailySummary.user_id == uid, DailySummary.date == target)
+                    .first()
+                )
                 if existing:
                     continue
 
@@ -802,10 +895,10 @@ def backfill_daily_summaries():
                     logger.debug("No daily summary for %s", target)
 
                 if days_ago % 30 == 0:
-                    _set_sync_status(db, "backfill_daily", str(days_ago))
+                    _set_sync_status(db, "backfill_daily", str(days_ago), user_id=uid)
                     logger.info("Daily backfill progress: %d/365 days", days_ago)
 
-            _set_sync_status(db, "backfill_daily", "complete")
+            _set_sync_status(db, "backfill_daily", "complete", user_id=uid)
             logger.info("Daily summary backfill complete")
 
         except Exception:
@@ -1045,10 +1138,10 @@ def _extract_goal_time_from_details(detail: dict) -> int | None:
     return None
 
 
-def sync_calendar() -> int:
+def sync_calendar(user: User | None = None) -> int:
     """Sync Garmin calendar events (races + workouts). Returns count of upserted events."""
     logger.info("Syncing Garmin calendar...")
-    client = get_garmin_client()
+    client = get_garmin_client(user)
     today = date.today()
 
     # Fetch current month + next 2 months
@@ -1138,13 +1231,15 @@ def sync_calendar() -> int:
         evt["raw_json"] = json.dumps(raw, default=str)
 
     with db_session() as db:
+        uid = _scope_uid(db, user)
         try:
             seen_garmin_ids = set()
             for evt in all_events:
                 seen_garmin_ids.add(evt["garmin_id"])
                 # Upsert
                 existing = db.query(GarminCalendarEvent).filter(
-                    GarminCalendarEvent.garmin_id == evt["garmin_id"]
+                    GarminCalendarEvent.user_id == uid,
+                    GarminCalendarEvent.garmin_id == evt["garmin_id"],
                 ).first()
                 if existing:
                     for key, value in evt.items():
@@ -1152,10 +1247,11 @@ def sync_calendar() -> int:
                             setattr(existing, key, value)
                     existing.synced_at = datetime.now(timezone.utc)
                 else:
-                    db.add(GarminCalendarEvent(**evt, synced_at=datetime.now(timezone.utc)))
+                    db.add(GarminCalendarEvent(user_id=uid, **evt, synced_at=datetime.now(timezone.utc)))
 
             # Remove stale future events no longer in API response
             stale_query = db.query(GarminCalendarEvent).filter(
+                GarminCalendarEvent.user_id == uid,
                 GarminCalendarEvent.date >= today,
             )
             if seen_garmin_ids:
@@ -1167,7 +1263,9 @@ def sync_calendar() -> int:
                 logger.info("Removed %d stale calendar events", stale_count)
 
             db.commit()
-            _set_sync_status(db, "last_calendar_sync", datetime.now(timezone.utc).isoformat())
+            _set_sync_status(
+                db, "last_calendar_sync", datetime.now(timezone.utc).isoformat(), user_id=uid
+            )
             logger.info("Calendar sync complete. %d events.", len(seen_garmin_ids))
         except Exception:
             logger.exception("Calendar sync failed")

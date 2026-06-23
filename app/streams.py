@@ -292,19 +292,23 @@ def compute_curves_from_details(
     return result
 
 
-def backfill_missing_curves(db: Session, limit: int = 500) -> int:
+def backfill_missing_curves(db: Session, limit: int = 500, user_id: int | None = None) -> int:
     """Compute ``mean_max_json`` for synced activities that lack it.
 
     Self-heals databases populated before curve computation existed. Bounded by
     ``limit`` per call so it spreads cost across invocations; returns the number
-    of activities updated.
+    of activities updated. When ``user_id`` is given, only that user's activities
+    are processed.
     """
     from app.models import Activity
 
+    query = db.query(Activity).filter(
+        Activity.mean_max_json.is_(None), Activity.laps_json.isnot(None)
+    )
+    if user_id is not None:
+        query = query.filter(Activity.user_id == user_id)
     rows = (
-        db.query(Activity)
-        .filter(Activity.mean_max_json.is_(None), Activity.laps_json.isnot(None))
-        .order_by(Activity.started_at.desc())
+        query.order_by(Activity.started_at.desc())
         .limit(limit)
         .all()
     )

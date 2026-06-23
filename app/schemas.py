@@ -82,6 +82,7 @@ class GarminConnectionStatus(BaseModel):
     connected: bool
     garmin_email: str | None = None
     mfa_pending: bool = False
+    needs_reauth: bool = False
 
 
 class IntervalAdherence(BaseModel):

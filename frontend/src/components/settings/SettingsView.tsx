@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Download, RefreshCw, Watch } from 'lucide-react'
+import { AlertTriangle, Download, RefreshCw, Watch } from 'lucide-react'
 import {
   useSettings,
   useTriggerSync,
@@ -120,6 +120,7 @@ function GarminConnectionSection() {
   const [password, setPassword] = useState('')
   const [mfaCode, setMfaCode] = useState('')
   const [needsMfa, setNeedsMfa] = useState(false)
+  const [reconnecting, setReconnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const handleConnect = async (e: React.FormEvent) => {
@@ -132,6 +133,7 @@ function GarminConnectionSection() {
       } else {
         setEmail('')
         setPassword('')
+        setReconnecting(false)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Connection failed')
@@ -147,6 +149,7 @@ function GarminConnectionSection() {
       setMfaCode('')
       setEmail('')
       setPassword('')
+      setReconnecting(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'MFA verification failed')
     }
@@ -166,11 +169,22 @@ function GarminConnectionSection() {
     <section className="settings-section">
       <h2 className="section-title">Garmin Connection</h2>
       <div className="card garmin-connect">
-        {status?.connected ? (
+        {status?.connected && !reconnecting ? (
           <div className="garmin-connected">
             <span className="garmin-status-line">
               <Watch size={16} /> Connected as {status.garmin_email}
             </span>
+            {status.needs_reauth && (
+              <div className="garmin-reauth">
+                <span className="garmin-reauth-line">
+                  <AlertTriangle size={16} /> Your Garmin session expired. Background
+                  syncs are paused until you reconnect with a one-time code.
+                </span>
+                <button className="sync-btn" onClick={() => { setError(null); setReconnecting(true) }}>
+                  Reconnect
+                </button>
+              </div>
+            )}
             <button
               className="sync-btn garmin-disconnect"
               onClick={handleDisconnect}
