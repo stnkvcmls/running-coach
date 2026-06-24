@@ -1,0 +1,157 @@
+.sheet-save-btn {
+  margin-top: 24px;
+  width: 100%;
+  padding: 14px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.sheet-save-btn:hover {
+  opacity: 0.88;
+}
+
+.sheet-section {
+  margin-bottom: 20px;
+}
+
+.sheet-section-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.sheet-stepper {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+}
+
+.sheet-stepper-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+
+.sheet-stepper-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+}
+
+.sheet-stepper-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.sheet-stepper-val {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text);
+  min-width: 32px;
+  text-align: center;
+}
+
+.sheet-time-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sheet-time-card {
+  background: var(--bg-input);
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.sheet-time-card--filled {
+  border-style: solid;
+  border-color: var(--border);
+}
+
+.sheet-time-card:hover {
+  border-color: var(--accent-light);
+}
+
+.sheet-time-card-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.sheet-time-card-label {
+  flex: 1;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.sheet-time-card-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.sheet-time-card-add {
+  font-size: 1.3rem;
+  color: var(--text-muted);
+}
+
+.sheet-time-input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.sheet-time-input {
+  width: 48px;
+  padding: 8px 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.sheet-time-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}

@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { ClipboardList, RefreshCw, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { ClipboardList, RefreshCw, ChevronLeft, ChevronRight, AlertTriangle, Settings2 } from 'lucide-react'
 import { useTrainingPlan, useGenerateTrainingPlan, useRealignmentStatus, useRealignPlan } from '../../api/hooks'
 import type { TrainingPlanDay, TrainingPlanWeek } from '../../api/types'
 import './PlanView.css'
@@ -9,7 +10,8 @@ const WORKOUT_COLORS: Record<string, string> = {
   tempo: 'var(--color-tempo)',
   long: 'var(--color-long)',
   interval: 'var(--color-interval)',
-  cross: 'var(--color-default)',
+  cross: 'var(--color-cross)',
+  strength: 'var(--color-strength)',
   rest: 'var(--text-muted)',
 }
 
@@ -19,6 +21,7 @@ const WORKOUT_LABELS: Record<string, string> = {
   long: 'Long',
   interval: 'Intervals',
   cross: 'Cross',
+  strength: 'Strength',
   rest: 'Rest',
 }
 
@@ -105,11 +108,20 @@ function RealignmentBanner() {
 }
 
 function WeekView({ week }: { week: TrainingPlanWeek }) {
+  const t = today()
+  const workoutDays = week.days.filter(d => d.workout_type !== 'rest')
+  const completedDays = workoutDays.filter(d => d.day_date < t)
+  const totalDistM = week.days.reduce((s, d) => s + (d.target_distance_m ?? 0), 0)
+
   return (
     <div className="plan-week">
       <div className="plan-week-header">
         <div className="plan-week-label">Week {week.week_number}</div>
         {week.theme && <div className="plan-week-theme">{week.theme}</div>}
+      </div>
+      <div className="plan-week-stats">
+        <span>Workouts: {completedDays.length}/{workoutDays.length}</span>
+        {totalDistM > 0 && <span>Distance: {(totalDistM / 1000).toFixed(1)} km</span>}
       </div>
       <div className="plan-week-grid">
         {week.days.map(day => (
@@ -124,6 +136,7 @@ export default function PlanView() {
   const { data: plan, isLoading } = useTrainingPlan()
   const { mutate: generate, isPending: isGenerating } = useGenerateTrainingPlan()
   const [weekIndex, setWeekIndex] = useState(0)
+  const navigate = useNavigate()
 
   if (isLoading) return <div className="spinner" />
 
@@ -169,15 +182,25 @@ export default function PlanView() {
             Generated {new Date(plan.generated_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
           </span>
         </div>
-        <button
-          className="plan-regen-btn"
-          onClick={() => generate()}
-          disabled={isGenerating}
-          title="Regenerate plan"
-        >
-          <RefreshCw size={16} className={isGenerating ? 'spin' : ''} />
-          {isGenerating ? 'Generating…' : 'Regenerate'}
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            className="plan-regen-btn"
+            onClick={() => navigate('/plan/setup')}
+            title="Training preferences"
+          >
+            <Settings2 size={16} />
+            Preferences
+          </button>
+          <button
+            className="plan-regen-btn"
+            onClick={() => generate()}
+            disabled={isGenerating}
+            title="Regenerate plan"
+          >
+            <RefreshCw size={16} className={isGenerating ? 'spin' : ''} />
+            {isGenerating ? 'Generating…' : 'Regenerate'}
+          </button>
+        </div>
       </div>
 
       {plan.overview && (

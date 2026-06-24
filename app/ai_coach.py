@@ -296,6 +296,8 @@ def _format_daily_context(summary: DailySummary) -> str:
 
 def _format_athlete_profile_context(profile: AthleteProfile, reference_date: date | None = None) -> str:
     """Format the athlete profile as a markdown block, emitting only set fields."""
+    import json as _json
+
     ref = reference_date or date.today()
     lines = []
     if profile.name:
@@ -326,10 +328,62 @@ def _format_athlete_profile_context(profile: AthleteProfile, reference_date: dat
         lines.append(f"- Max HR: {profile.max_hr} bpm")
     if profile.resting_hr:
         lines.append(f"- Resting HR: {profile.resting_hr} bpm")
+    # Structured plan preferences
+    if getattr(profile, "running_ability", None):
+        lines.append(f"- Running Ability: {profile.running_ability}")
+    if getattr(profile, "training_volume", None):
+        _vol_hints = {
+            "gradual": "low volume, gentle progression",
+            "steady": "medium volume, sustainable progression",
+            "progressive": "high volume, aggressive progression",
+        }
+        hint = _vol_hints.get(profile.training_volume, "")
+        lines.append(f"- Training Volume: {profile.training_volume}" + (f" ({hint})" if hint else ""))
+    if getattr(profile, "difficulty", None):
+        _diff_hints = {
+            "comfortable": "1 hard session/week, no mandatory pace targets on long runs",
+            "balanced": "1-2 hard sessions/week, occasional long-run pace targets",
+            "challenging": "2 hard sessions/week, regular pace targets on quality days",
+        }
+        hint = _diff_hints.get(profile.difficulty, "")
+        lines.append(f"- Plan Difficulty: {profile.difficulty}" + (f" ({hint})" if hint else ""))
+    if getattr(profile, "elevation_profile", None):
+        _elev_hints = {
+            "flat": "no hill workouts",
+            "rolling": "some hill workouts",
+            "moderate": "regular hill workouts",
+            "hilly": "frequent hill workouts",
+        }
+        hint = _elev_hints.get(profile.elevation_profile, "")
+        lines.append(f"- Elevation Profile: {profile.elevation_profile}" + (f" ({hint})" if hint else ""))
+    if getattr(profile, "target_weekly_km", None):
+        lines.append(f"- Target Weekly Mileage: {profile.target_weekly_km:.1f} km")
+    if getattr(profile, "weekly_mileage_km", None):
+        lines.append(f"- Current Weekly Mileage: {profile.weekly_mileage_km:.1f} km")
+    if getattr(profile, "longest_run_km", None):
+        lines.append(f"- Current Longest Run: {profile.longest_run_km:.1f} km")
+    if getattr(profile, "runs_per_week", None):
+        lines.append(f"- Runs Per Week: {profile.runs_per_week}")
+    if getattr(profile, "available_days", None):
+        try:
+            days = _json.loads(profile.available_days)
+            lines.append(f"- Available Training Days: {', '.join(days)}")
+        except Exception:
+            lines.append(f"- Available Training Days: {profile.available_days}")
+    if getattr(profile, "long_run_day", None):
+        lines.append(f"- Long Run Day: {profile.long_run_day}")
+    if getattr(profile, "race_times_json", None):
+        try:
+            times = _json.loads(profile.race_times_json)
+            parts = [f"{dist}: {t}" for dist, t in times.items() if t]
+            if parts:
+                lines.append(f"- Current Race Times: {', '.join(parts)}")
+        except Exception:
+            pass
     if profile.weekly_availability:
-        lines.append(f"- Weekly Availability: {profile.weekly_availability}")
+        lines.append(f"- Weekly Availability (notes): {profile.weekly_availability}")
     if profile.training_preferences:
-        lines.append(f"- Training Preferences: {profile.training_preferences}")
+        lines.append(f"- Training Preferences (notes): {profile.training_preferences}")
     if profile.injury_history:
         lines.append(f"- Injury History: {profile.injury_history}")
     if not lines:
@@ -1010,7 +1064,7 @@ Schema:
         {
           "date": "YYYY-MM-DD",
           "day_of_week": "<Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday>",
-          "workout_type": "<easy|tempo|long|interval|rest|cross>",
+          "workout_type": "<easy|tempo|long|interval|rest|cross|strength>",
           "target_distance_km": <number or null>,
           "target_pace_display": "<e.g. '5:15/km' or null>",
           "description": "<brief workout description>",
@@ -1023,13 +1077,43 @@ Schema:
 
 Rules:
 - Generate exactly 4 weeks, each with exactly 7 days in order starting from the given week_start.
-- workout_type must be one of: easy, tempo, long, interval, rest, cross.
-- target_distance_km and target_pace_display may be null for rest days.
+- workout_type must be one of: easy, tempo, long, interval, rest, cross, strength.
+- target_distance_km and target_pace_display may be null for rest, cross, and strength days.
 - Respect the athlete's weekly_availability (days/sessions per week).
 - Anchor pace targets to the athlete's threshold pace if available.
 - Distribute load progressively: build 2 weeks, recover 1 week, then race-specific or peak.
 - Account for any upcoming races as goal events (taper if race is within 3 weeks).
 - Respect injury history — avoid high-impact volume if relevant injuries are listed.
+- Strength & cross-training:
+  * Include 1–2 `strength` sessions per week during base and build phases; 0–1 during taper
+    (maintenance only, reduced load).
+  * For `strength` days set target_distance_km and target_pace_display to null. Write a
+    description with 4–6 specific exercises, sets, and reps targeting running durability, e.g.:
+    "3×10 single-leg squats, 3×15 glute bridges, 3×12 calf raises, 2×45s side planks,
+    3×10 Romanian deadlifts". Tailor exercises to the athlete's injury history when relevant
+    (e.g. hip-stability work for IT-band issues, calf/Achilles work for lower-leg history).
+  * Schedule `strength` on easy or rest-adjacent days. Do not pair strength with tempo,
+    interval, or long-run days.
+  * For `cross` days describe the activity (cycling, swimming, elliptical, yoga/pilates) and
+    approximate duration, e.g. "45 min easy cycling or 30 min yoga". Set target_distance_km
+    and target_pace_display to null.
+- Plan Difficulty (if provided):
+  * comfortable → 1 hard session (tempo or interval) per week max; avoid mandatory pace targets
+    on long runs; keep easy days truly easy.
+  * balanced → 1-2 hard sessions per week; include pace targets on some long runs.
+  * challenging → 2 hard sessions per week; regular pace targets on quality and long-run days.
+- Training Volume (if provided):
+  * gradual → keep weekly km near or slightly above current_weekly_mileage; max long run ~32 km;
+    very gentle progression (≤5% per week).
+  * steady → moderate progression; max long run ~33 km.
+  * progressive → aggressive build; max long run ~34 km; 8-10% weekly progression allowed.
+- Elevation Profile (if provided):
+  * flat → no hill workouts; flat route descriptions only.
+  * rolling → 1 hill workout per week (e.g. hill strides or rolling route easy run).
+  * moderate → 1-2 hill sessions per week (hill repeats or hilly tempo).
+  * hilly → regular hill workouts; include hill repeats in quality sessions.
+- Available Training Days / Long Run Day (if provided): only schedule runs on the listed
+  available days; place the long run on the specified long_run_day.
 - When a "Current Plan Adherence" section is present, use it to shape the new plan:
   * Adherence ≥80%: the athlete is consistent — progress load as designed.
   * Adherence 60–79%: moderate disruption — keep similar volume but reduce the count of the

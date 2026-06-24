@@ -280,6 +280,18 @@ export interface AthleteProfile {
   injury_history: string | null
   weekly_availability: string | null
   training_preferences: string | null
+  // Structured plan preferences
+  training_volume: string | null
+  difficulty: string | null
+  running_ability: string | null
+  elevation_profile: string | null
+  weekly_mileage_km: number | null
+  longest_run_km: number | null
+  runs_per_week: number | null
+  available_days: string | null
+  long_run_day: string | null
+  race_times_json: string | null
+  target_weekly_km: number | null
   created_at: string | null
   updated_at: string | null
 }
@@ -298,6 +310,18 @@ export interface AthleteProfileRequest {
   injury_history?: string | null
   weekly_availability?: string | null
   training_preferences?: string | null
+  // Structured plan preferences
+  training_volume?: string | null
+  difficulty?: string | null
+  running_ability?: string | null
+  elevation_profile?: string | null
+  weekly_mileage_km?: number | null
+  longest_run_km?: number | null
+  runs_per_week?: number | null
+  available_days?: string | null
+  long_run_day?: string | null
+  race_times_json?: string | null
+  target_weekly_km?: number | null
 }
 
 export interface ZoneConfig {
