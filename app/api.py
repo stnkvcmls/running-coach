@@ -1186,6 +1186,7 @@ def api_push_workout_to_garmin(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     except RuntimeError as exc:
+        logger.error("Garmin push failed for day %s: %s", day_id, exc)
         raise HTTPException(status_code=502, detail=str(exc))
     except Exception as exc:
         logger.exception("Unexpected error pushing workout %s to Garmin", day_id)

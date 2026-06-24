@@ -1344,12 +1344,17 @@ def push_workout_to_garmin(
 
     client = get_garmin_client(user)
 
-    # 1. Create the workout on Garmin
+    # 1. Create the workout on Garmin using the library's upload_workout method
+    logger.debug("Pushing workout payload to Garmin: %s", workout_payload)
     try:
-        create_resp = _garth_post(client, "/workout-service/workout", workout_payload)
+        create_resp = client.upload_workout(workout_payload)
     except Exception as exc:
         raise RuntimeError(f"Failed to create workout on Garmin: {exc}") from exc
 
+    if not isinstance(create_resp, dict):
+        raise RuntimeError(
+            f"Garmin returned unexpected response type: {type(create_resp).__name__!r} — {create_resp!r}"
+        )
     garmin_workout_id = create_resp.get("workoutId")
     if not garmin_workout_id:
         raise RuntimeError(
@@ -1362,11 +1367,7 @@ def push_workout_to_garmin(
 
     # 2. Schedule the workout on the plan day's date
     try:
-        _garth_post(
-            client,
-            "/calendar-service/scheduleWorkout",
-            {"workoutId": garmin_workout_id, "date": scheduled_date},
-        )
+        client.schedule_workout(garmin_workout_id, scheduled_date)
     except Exception as exc:
         # Scheduling failure is non-fatal: the workout exists on Garmin even if
         # not yet pinned to the calendar date.
