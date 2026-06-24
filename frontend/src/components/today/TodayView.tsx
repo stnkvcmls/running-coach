@@ -8,6 +8,7 @@ import WeekOverview from './WeekOverview'
 import TrainingLoadChart from './TrainingLoadChart'
 import ReadinessCard from './ReadinessCard'
 import InsightsList from './InsightsList'
+import StatHelpButton from '../info/StatHelpButton'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 import './TodayView.css'
 
@@ -165,7 +166,10 @@ export default function TodayView() {
       {/* Training load (Fitness / Fatigue / Form) */}
       {data?.training_load && (
         <section className="today-section">
-          <h2 className="section-title">Training Load</h2>
+          <div className="section-title-row">
+            <h2 className="section-title">Training Load</h2>
+            <StatHelpButton topic="training-load" label="Training Load" />
+          </div>
           <TrainingLoadChart current={data.training_load} />
         </section>
       )}

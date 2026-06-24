@@ -141,6 +141,17 @@ button {
   margin-bottom: 12px;
 }
 
+.section-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.section-title-row .section-title {
+  margin-bottom: 0;
+}
+
 .empty-state {
   text-align: center;
   padding: 32px 16px;

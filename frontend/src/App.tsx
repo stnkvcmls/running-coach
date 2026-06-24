@@ -14,6 +14,7 @@ import OnboardingView from './components/onboarding/OnboardingView'
 import TrendsView from './components/trends/TrendsView'
 import PlanView from './components/plan/PlanView'
 import PlanSetupView from './components/plan-setup/PlanSetupView'
+import StatInfoView from './components/info/StatInfoView'
 import { useAthleteProfile } from './api/hooks'
 
 interface DateContextType {
@@ -69,7 +70,7 @@ export default function App() {
   }, [profileLoading, profile, location.pathname, navigate])
 
   const isOnboarding = location.pathname === '/onboarding'
-  const isDetailPage = isOnboarding || location.pathname === '/plan/setup' || location.pathname.startsWith('/activities/') || location.pathname.startsWith('/daily/') || location.pathname.startsWith('/workouts/')
+  const isDetailPage = isOnboarding || location.pathname === '/plan/setup' || location.pathname.startsWith('/activities/') || location.pathname.startsWith('/daily/') || location.pathname.startsWith('/workouts/') || location.pathname.startsWith('/info/')
   const showCalendar = !isDetailPage
 
   return (
@@ -105,6 +106,7 @@ export default function App() {
             <Route path="/plan" element={<PlanView />} />
             <Route path="/plan/setup" element={<PlanSetupView />} />
             <Route path="/settings" element={<SettingsView />} />
+            <Route path="/info/:topic" element={<StatInfoView />} />
             <Route path="/onboarding" element={<OnboardingView />} />
           </Routes>
         </main>
