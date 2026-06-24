@@ -8,17 +8,15 @@ interface Props {
   onClose: () => void
   initialWeekly: number | null
   initialLongest: number | null
-  initialTarget: number | null
-  onSave: (weekly: number, longest: number, target: number) => void
+  onSave: (weekly: number, longest: number) => void
 }
 
-export default function MileageSheet({ open, onClose, initialWeekly, initialLongest, initialTarget, onSave }: Props) {
+export default function MileageSheet({ open, onClose, initialWeekly, initialLongest, onSave }: Props) {
   const [weekly, setWeekly] = useState(initialWeekly ?? 30)
   const [longest, setLongest] = useState(initialLongest ?? 12)
-  const [target, setTarget] = useState(initialTarget ?? 40)
 
   function handleSave() {
-    onSave(weekly, longest, target)
+    onSave(weekly, longest)
     onClose()
   }
 
@@ -50,20 +48,6 @@ export default function MileageSheet({ open, onClose, initialWeekly, initialLong
             min={0}
             max={50}
             step={0.5}
-            unit="km"
-          />
-        </div>
-        <div>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: 16, lineHeight: 1.4 }}>
-            How many kilometres per week do you want your plan to target?
-          </p>
-          <RangeSlider
-            label="Total Weekly Mileage"
-            value={target}
-            onChange={setTarget}
-            min={0}
-            max={200}
-            step={1}
             unit="km"
           />
         </div>
