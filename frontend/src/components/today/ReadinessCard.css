@@ -9,6 +9,11 @@
   margin-bottom: 16px;
 }
 
+.readiness-help {
+  margin-left: auto;
+  align-self: flex-start;
+}
+
 .readiness-score-ring {
   display: flex;
   flex-direction: column;

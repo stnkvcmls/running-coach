@@ -1,4 +1,5 @@
 import type { TrainingReadiness } from '../../api/types'
+import StatHelpButton from '../info/StatHelpButton'
 import './ReadinessCard.css'
 
 interface Props {
@@ -44,6 +45,9 @@ export default function ReadinessCard({ readiness }: Props) {
         <div className="readiness-label-block">
           <span className="readiness-label" style={{ color }}>{readiness.label}</span>
           <span className="readiness-sub">Training Readiness</span>
+        </div>
+        <div className="readiness-help">
+          <StatHelpButton topic="training-readiness" label="Training Readiness" />
         </div>
       </div>
 

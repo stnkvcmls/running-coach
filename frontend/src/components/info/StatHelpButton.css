@@ -1,0 +1,19 @@
+.stat-help-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 50%;
+  line-height: 0;
+  transition: color 0.15s ease;
+}
+
+.stat-help-btn:hover,
+.stat-help-btn:focus-visible {
+  color: var(--accent);
+  outline: none;
+}
