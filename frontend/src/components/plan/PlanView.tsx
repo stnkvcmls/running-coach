@@ -108,11 +108,20 @@ function RealignmentBanner() {
 }
 
 function WeekView({ week }: { week: TrainingPlanWeek }) {
+  const t = today()
+  const workoutDays = week.days.filter(d => d.workout_type !== 'rest')
+  const completedDays = workoutDays.filter(d => d.day_date < t)
+  const totalDistM = week.days.reduce((s, d) => s + (d.target_distance_m ?? 0), 0)
+
   return (
     <div className="plan-week">
       <div className="plan-week-header">
         <div className="plan-week-label">Week {week.week_number}</div>
         {week.theme && <div className="plan-week-theme">{week.theme}</div>}
+      </div>
+      <div className="plan-week-stats">
+        <span>Workouts: {completedDays.length}/{workoutDays.length}</span>
+        {totalDistM > 0 && <span>Distance: {(totalDistM / 1000).toFixed(1)} km</span>}
       </div>
       <div className="plan-week-grid">
         {week.days.map(day => (
