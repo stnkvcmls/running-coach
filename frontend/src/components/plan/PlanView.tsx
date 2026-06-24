@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ClipboardList, RefreshCw, ChevronLeft, ChevronRight, AlertTriangle, Settings2 } from 'lucide-react'
-import { useTrainingPlan, useGenerateTrainingPlan, useRealignmentStatus, useRealignPlan } from '../../api/hooks'
+import { ClipboardList, RefreshCw, ChevronLeft, ChevronRight, AlertTriangle, Settings2, Watch, CheckCircle } from 'lucide-react'
+import { useTrainingPlan, useGenerateTrainingPlan, useRealignmentStatus, useRealignPlan, usePushWorkoutToGarmin } from '../../api/hooks'
 import type { TrainingPlanDay, TrainingPlanWeek } from '../../api/types'
 import './PlanView.css'
 
@@ -34,11 +34,57 @@ function formatDistance(m: number | null): string {
   return `${(m / 1000).toFixed(1)} km`
 }
 
+function SendToWatchButton({ dayId }: { dayId: number }) {
+  const { mutate: push, isPending, isSuccess, isError, error } = usePushWorkoutToGarmin()
+  const [dismissed, setDismissed] = useState(false)
+
+  if (isSuccess && !dismissed) {
+    return (
+      <button
+        className="plan-send-watch plan-send-watch--success"
+        onClick={() => setDismissed(true)}
+        title="Sent to Garmin — tap to dismiss"
+      >
+        <CheckCircle size={13} />
+        Sent to watch
+      </button>
+    )
+  }
+
+  if (isError && !dismissed) {
+    const msg = (error as any)?.message || 'Failed'
+    return (
+      <button
+        className="plan-send-watch plan-send-watch--error"
+        onClick={() => setDismissed(true)}
+        title={msg}
+      >
+        {msg.length > 40 ? msg.slice(0, 40) + '…' : msg}
+      </button>
+    )
+  }
+
+  if (dismissed || isSuccess) return null
+
+  return (
+    <button
+      className="plan-send-watch"
+      onClick={(e) => { e.stopPropagation(); push(dayId) }}
+      disabled={isPending}
+      title="Send structured workout to Garmin watch"
+    >
+      {isPending ? <RefreshCw size={12} className="spin" /> : <Watch size={12} />}
+      {isPending ? 'Sending…' : 'Send to watch'}
+    </button>
+  )
+}
+
 function DayCard({ day }: { day: TrainingPlanDay }) {
   const isToday = day.day_date === today()
   const isPast = day.day_date < today()
   const color = WORKOUT_COLORS[day.workout_type] ?? 'var(--color-default)'
   const label = WORKOUT_LABELS[day.workout_type] ?? day.workout_type
+  const pushable = day.workout_type !== 'rest' && day.workout_type !== 'cross'
 
   return (
     <div className={`plan-day-card ${isToday ? 'plan-day-today' : ''} ${isPast ? 'plan-day-past' : ''}`}>
@@ -66,6 +112,11 @@ function DayCard({ day }: { day: TrainingPlanDay }) {
       )}
       {day.notes && (
         <p className="plan-day-notes">{day.notes}</p>
+      )}
+      {pushable && (
+        <div className="plan-day-actions">
+          <SendToWatchButton dayId={day.id} />
+        </div>
       )}
     </div>
   )

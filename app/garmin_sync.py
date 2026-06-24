@@ -1272,3 +1272,115 @@ def sync_calendar(user: User | None = None) -> int:
             logger.exception("Calendar sync failed")
 
     return len(all_events)
+
+
+# ---------------------------------------------------------------------------
+# Structured-workout push
+# ---------------------------------------------------------------------------
+
+def _garth_post(client: Garmin, path: str, json_body: dict) -> dict:
+    """POST to the Garmin Connect API using the underlying garth session.
+
+    garminconnect's ``connectapi`` helper is GET-only; for write operations we
+    reach into the garth client that backs the Garmin instance.  Both
+    ``garth.request(method, host, path)`` (garth ≥ 0.4) and the legacy
+    ``garth.post(host, path)`` form are tried so the code stays compatible with
+    any garth minor release that ships with garminconnect 0.3.2.
+    """
+    garth_client = getattr(client, "garth", None) or getattr(client, "client", None)
+    if garth_client is None:
+        raise RuntimeError("Cannot access garth client from Garmin instance")
+
+    # garth ≥ 0.4: request(method, host, path, **kwargs)
+    if hasattr(garth_client, "request"):
+        resp = garth_client.request("POST", "connectapi", path, json=json_body)
+    else:
+        # Older form: post(host, path, **kwargs)
+        resp = garth_client.post("connectapi", path, json=json_body)
+
+    if hasattr(resp, "json"):
+        return resp.json()
+    return resp  # already decoded (dict/list)
+
+
+def push_workout_to_garmin(
+    user: User,
+    plan_day_id: int,
+) -> dict:
+    """Upload a TrainingPlanDay as a structured workout to Garmin and schedule it.
+
+    Returns a dict with keys: workout_name, garmin_workout_id, scheduled_date.
+    Raises ValueError when the day is not pushable (rest/cross) or not found.
+    Raises RuntimeError on Garmin API failures.
+    """
+    from app.adherence import parse_workout_steps  # noqa: F401 (imported for side-effect check)
+    from app.workout_translator import translate_plan_day
+    from app.models import AthleteProfile, TrainingPlanDay
+
+    with db_session() as db:
+        plan_day = (
+            db.query(TrainingPlanDay)
+            .filter(TrainingPlanDay.id == plan_day_id, TrainingPlanDay.user_id == user.id)
+            .first()
+        )
+        if plan_day is None:
+            raise ValueError(f"TrainingPlanDay {plan_day_id} not found")
+
+        profile = (
+            db.query(AthleteProfile)
+            .filter(AthleteProfile.user_id == user.id)
+            .first()
+        )
+
+        workout_payload = translate_plan_day(plan_day, profile)
+        if workout_payload is None:
+            raise ValueError(
+                f"Workout type '{plan_day.workout_type}' is not pushable to Garmin "
+                "(rest and cross-training days are skipped)"
+            )
+
+        scheduled_date = plan_day.day_date.isoformat()
+        workout_name = workout_payload["workoutName"]
+
+    client = get_garmin_client(user)
+
+    # 1. Create the workout on Garmin
+    try:
+        create_resp = _garth_post(client, "/workout-service/workout", workout_payload)
+    except Exception as exc:
+        raise RuntimeError(f"Failed to create workout on Garmin: {exc}") from exc
+
+    garmin_workout_id = create_resp.get("workoutId")
+    if not garmin_workout_id:
+        raise RuntimeError(
+            f"Garmin did not return a workoutId. Response: {create_resp!r}"
+        )
+    logger.info(
+        "Created Garmin workout %s ('%s') for user %s",
+        garmin_workout_id, workout_name, user.id,
+    )
+
+    # 2. Schedule the workout on the plan day's date
+    try:
+        _garth_post(
+            client,
+            "/calendar-service/scheduleWorkout",
+            {"workoutId": garmin_workout_id, "date": scheduled_date},
+        )
+    except Exception as exc:
+        # Scheduling failure is non-fatal: the workout exists on Garmin even if
+        # not yet pinned to the calendar date.
+        logger.warning(
+            "Workout %s created but scheduling failed for date %s: %s",
+            garmin_workout_id, scheduled_date, exc,
+        )
+
+    logger.info(
+        "Scheduled Garmin workout %s on %s for user %s",
+        garmin_workout_id, scheduled_date, user.id,
+    )
+    return {
+        "workout_name": workout_name,
+        "garmin_workout_id": garmin_workout_id,
+        "scheduled_date": scheduled_date,
+    }

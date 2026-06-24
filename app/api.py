@@ -70,6 +70,7 @@ from app.schemas import (
     ZoneConfigBulkUpdate,
     ZoneConfigResponse,
     ZoneConfigsResponse,
+    PushWorkoutResponse,
 )
 from app import training_load
 from app import threshold as threshold_mod
@@ -1160,6 +1161,36 @@ def api_realign_plan(
         if not db_plan:
             raise HTTPException(status_code=500, detail="Plan not found after generation")
         return _build_plan_response(db_plan, fresh_db)
+
+
+@api_router.post("/training-plan/days/{day_id}/push-to-garmin", response_model=PushWorkoutResponse)
+def api_push_workout_to_garmin(
+    day_id: int,
+    current_user: User = Depends(get_current_user),
+):
+    """Upload a plan day as a structured workout to the user's Garmin device.
+
+    Creates the workout on Garmin Connect and schedules it on the plan day's
+    date so it appears on the watch. Rest and cross-training days are rejected
+    with 422; Garmin API failures surface as 502.
+    """
+    from app import garmin_sync
+
+    if not current_user.garmin_email:
+        raise HTTPException(
+            status_code=422,
+            detail="Garmin account not connected. Connect in Settings first.",
+        )
+    try:
+        result = garmin_sync.push_workout_to_garmin(current_user, day_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Unexpected error pushing workout %s to Garmin", day_id)
+        raise HTTPException(status_code=502, detail=f"Garmin error: {exc}")
+    return result
 
 
 # --- Actions ---
