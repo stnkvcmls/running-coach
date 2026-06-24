@@ -75,6 +75,7 @@ from app import training_load
 from app import threshold as threshold_mod
 from app import adherence as adherence_mod
 from app import intensity as intensity_mod
+from app.config import AVAILABLE_MODELS
 from app.utils import safe_json_loads, parse_activity_charts, parse_activity_route, calculate_age
 
 logger = logging.getLogger(__name__)
@@ -88,20 +89,6 @@ api_router = APIRouter(
 @api_router.get("/me", response_model=UserResponse)
 def api_me(current_user: User = Depends(get_current_user)):
     return current_user
-
-
-AVAILABLE_MODELS: dict[str, list[str]] = {
-    "claude": ["claude-opus-4-8", "claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
-    "gemini": [
-        "gemini-2.5-flash",
-        "gemini-2.5-flash-lite",
-        "gemini-3-flash",
-        "gemini-3.1-flash-lite",
-        "gemma-2-2b-it",
-        "gemma-4-26b-it",
-        "gemma-4-31b-it",
-    ],
-}
 
 
 # --- Today ---
