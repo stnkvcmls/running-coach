@@ -243,12 +243,13 @@ def test_push_endpoint_success(client, db, patch_db_session):
     fake_schedule_resp = MagicMock()
     fake_schedule_resp.json.return_value = {}
 
-    def fake_request(method, host, path, **kwargs):
+    def fake_post(subdomain, path, **kwargs):
         if "schedule" not in path:
             return fake_create_resp
         return fake_schedule_resp
 
-    fake_garmin.garth.request.side_effect = fake_request
+    # _garth_post uses client.client.post("connectapi", path, json=...)
+    fake_garmin.client.post.side_effect = fake_post
 
     with patch("app.garmin_sync.get_garmin_client", return_value=fake_garmin):
         resp = client.post(f"{_API}/training-plan/days/{day.id}/push-to-garmin")

@@ -1281,22 +1281,22 @@ def sync_calendar(user: User | None = None) -> int:
 def _garth_post(client: Garmin, path: str, json_body: dict) -> dict:
     """POST to the Garmin Connect API using the underlying garth session.
 
-    garminconnect's ``connectapi`` helper is GET-only; for write operations we
-    reach into the garth client that backs the Garmin instance.  Both
-    ``garth.request(method, host, path)`` (garth ≥ 0.4) and the legacy
-    ``garth.post(host, path)`` form are tried so the code stays compatible with
-    any garth minor release that ships with garminconnect 0.3.2.
+    garminconnect stores its garth.Client as ``self.client``.  We use the
+    same ``client.post("connectapi", path, json=payload)`` pattern used by
+    all write methods in garminconnect (add_weigh_in, create_manual_activity…).
     """
-    garth_client = getattr(client, "garth", None) or getattr(client, "client", None)
+    # garminconnect 0.3.x stores the garth Client as self.client
+    garth_client = getattr(client, "client", None) or getattr(client, "garth", None)
     if garth_client is None:
         raise RuntimeError("Cannot access garth client from Garmin instance")
 
-    # garth ≥ 0.4: request(method, host, path, **kwargs)
-    if hasattr(garth_client, "request"):
-        resp = garth_client.request("POST", "connectapi", path, json=json_body)
-    else:
-        # Older form: post(host, path, **kwargs)
+    try:
         resp = garth_client.post("connectapi", path, json=json_body)
+    except Exception as exc:
+        # Capture response body when available (httpx.HTTPStatusError etc.)
+        body = getattr(getattr(exc, "response", None), "text", None)
+        detail = f"{exc}" + (f" — response: {body}" if body else "")
+        raise RuntimeError(f"Garmin API POST {path} failed: {detail}") from exc
 
     if hasattr(resp, "json"):
         return resp.json()
