@@ -14,7 +14,7 @@ from app import training_load
 from app import threshold as threshold_mod
 from app import adherence as adherence_mod
 from app import intensity as intensity_mod
-from app.config import settings
+from app.config import settings, AVAILABLE_MODELS
 from app.database import db_session
 from app.models import (
     DEFAULT_USER_ID,
@@ -689,7 +689,16 @@ def _get_ai_config(db: Session, user_id: int = DEFAULT_USER_ID) -> tuple[str, st
         .first()
     )
     provider = provider_row.value if provider_row else "claude"
-    model = model_row.value if model_row else settings.ai_model
+    if provider not in AVAILABLE_MODELS:
+        logger.warning("Stored AI provider %r is not in AVAILABLE_MODELS; falling back to 'claude'", provider)
+        provider = "claude"
+    stored_model = model_row.value if model_row else None
+    if stored_model and stored_model in AVAILABLE_MODELS.get(provider, []):
+        model = stored_model
+    else:
+        if stored_model:
+            logger.warning("Stored AI model %r is not allowed for provider %r; falling back to default", stored_model, provider)
+        model = settings.ai_model
     return provider, model
 
 
