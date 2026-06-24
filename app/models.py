@@ -20,6 +20,24 @@ def _utcnow():
     return datetime.now(timezone.utc)
 
 
+# The primary/bootstrap user. The app began life single-tenant; Phase 3 keys
+# every data row on a user, defaulting unscoped writes to this id and
+# backfilling all pre-existing rows to it. Production read/write paths (API,
+# scheduler) always pass an explicit user, so this default only ever applies to
+# the single-tenant bootstrap account and the test suite.
+DEFAULT_USER_ID = 1
+
+
+def _user_id_column():
+    """A per-user scoping column shared by every data table.
+
+    Following the codebase convention (e.g. ``TrainingPlanDay.plan_id``), this is
+    a plain indexed integer rather than a DB-level ``ForeignKey`` — SQLite can't
+    add FKs via ``ALTER TABLE`` and the app enforces the relationship in code.
+    """
+    return Column(Integer, nullable=False, default=DEFAULT_USER_ID, index=True)
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -34,12 +52,21 @@ class User(Base):
     garmin_email = Column(String(255), nullable=True)
     garmin_password_encrypted = Column(Text, nullable=True)
 
+    # Set when a background sync can't authenticate (tokens gone/expired and the
+    # account needs an interactive MFA code a cron can't supply). The Settings UI
+    # surfaces a "Reconnect" action; reconnecting clears the flag. (Phase 3)
+    garmin_needs_reauth = Column(Boolean, default=False, nullable=False)
+
 
 class Activity(Base):
     __tablename__ = "activities"
+    __table_args__ = (
+        UniqueConstraint("user_id", "garmin_id", name="uq_activities_user_garmin"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    garmin_id = Column(BigInteger, unique=True, nullable=False, index=True)
+    user_id = _user_id_column()
+    garmin_id = Column(BigInteger, nullable=False, index=True)
     activity_type = Column(Text)
     name = Column(Text)
     started_at = Column(DateTime, index=True)
@@ -111,9 +138,13 @@ class Activity(Base):
 
 class DailySummary(Base):
     __tablename__ = "daily_summaries"
+    __table_args__ = (
+        UniqueConstraint("user_id", "date", name="uq_daily_summaries_user_date"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    date = Column(Date, unique=True, nullable=False, index=True)
+    user_id = _user_id_column()
+    date = Column(Date, nullable=False, index=True)
     steps = Column(Integer)
     total_calories = Column(Integer)
     active_calories = Column(Integer)
@@ -139,6 +170,7 @@ class Insight(Base):
     __tablename__ = "insights"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = _user_id_column()
     created_at = Column(DateTime, default=_utcnow, index=True)
     trigger_type = Column(Text)  # activity, daily_summary, weekly_review
     trigger_id = Column(Integer, nullable=True)
@@ -151,6 +183,7 @@ class Race(Base):
     __tablename__ = "races"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = _user_id_column()
     name = Column(Text, nullable=False)
     date = Column(Date, nullable=False, index=True)
     distance_m = Column(Float)
@@ -162,9 +195,13 @@ class Race(Base):
 
 class GarminCalendarEvent(Base):
     __tablename__ = "garmin_calendar_events"
+    __table_args__ = (
+        UniqueConstraint("user_id", "garmin_id", name="uq_garmin_calendar_user_garmin"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    garmin_id = Column(String(100), unique=True, nullable=False, index=True)
+    user_id = _user_id_column()
+    garmin_id = Column(String(100), nullable=False, index=True)
     event_type = Column(String(50), nullable=False, index=True)  # "race", "workout"
     date = Column(Date, nullable=False, index=True)
     title = Column(Text)
@@ -194,9 +231,13 @@ class MetricZone(Base):
 
 class SyncStatus(Base):
     __tablename__ = "sync_status"
+    __table_args__ = (
+        UniqueConstraint("user_id", "key", name="uq_sync_status_user_key"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    key = Column(String(100), unique=True, nullable=False)
+    user_id = _user_id_column()
+    key = Column(String(100), nullable=False)
     value = Column(Text)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
@@ -204,13 +245,16 @@ class SyncStatus(Base):
 class AthleteProfile(Base):
     """Single-athlete profile feeding personalization and the AI context.
 
-    The app is single-user, so this table holds at most one row (accessed
-    via ``.first()``).
+    One row per user (Phase 3), looked up by ``user_id``.
     """
 
     __tablename__ = "athlete_profiles"
+    __table_args__ = (
+        UniqueConstraint("user_id", name="uq_athlete_profiles_user"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = _user_id_column()
     name = Column(Text, nullable=True)
     date_of_birth = Column(Date, nullable=True)
     weight_kg = Column(Float, nullable=True)
@@ -224,6 +268,18 @@ class AthleteProfile(Base):
     injury_history = Column(Text, nullable=True)
     weekly_availability = Column(Text, nullable=True)
     training_preferences = Column(Text, nullable=True)
+    # Structured plan preferences (set via onboarding / plan-setup UI)
+    training_volume = Column(Text, nullable=True)    # gradual | steady | progressive
+    difficulty = Column(Text, nullable=True)          # comfortable | balanced | challenging
+    running_ability = Column(Text, nullable=True)    # beginner | intermediate | advanced | elite
+    elevation_profile = Column(Text, nullable=True)  # flat | rolling | moderate | hilly
+    weekly_mileage_km = Column(Float, nullable=True)
+    longest_run_km = Column(Float, nullable=True)
+    runs_per_week = Column(Integer, nullable=True)
+    available_days = Column(Text, nullable=True)      # JSON array e.g. '["Mon","Wed","Sun"]'
+    long_run_day = Column(Text, nullable=True)        # e.g. "Sunday"
+    race_times_json = Column(Text, nullable=True)    # JSON obj e.g. '{"marathon":"4:06:10"}'
+    target_weekly_km = Column(Float, nullable=True)  # target km/week for the plan
     created_at = Column(DateTime, default=_utcnow)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
@@ -240,6 +296,7 @@ class ZoneConfig(Base):
     __tablename__ = "zone_configs"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = _user_id_column()
     zone_type = Column(String(20), nullable=False, index=True)  # "hr", "pace", "power"
     zone_number = Column(Integer, nullable=False)               # 1–5
     zone_name = Column(String(50), nullable=False)
@@ -247,7 +304,9 @@ class ZoneConfig(Base):
     min_pct = Column(Float, nullable=True)   # lower % of threshold (null = no lower bound)
     max_pct = Column(Float, nullable=True)   # upper % of threshold (null = no upper bound)
 
-    __table_args__ = (UniqueConstraint("zone_type", "zone_number", name="uq_zone_type_number"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "zone_type", "zone_number", name="uq_zone_type_number"),
+    )
 
 
 class TrainingPlan(Base):
@@ -260,6 +319,7 @@ class TrainingPlan(Base):
     __tablename__ = "training_plans"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = _user_id_column()
     generated_at = Column(DateTime, default=_utcnow, index=True)
     week_start = Column(Date, nullable=False)   # Monday of week 1
     plan_weeks = Column(Integer, default=4)
@@ -274,6 +334,7 @@ class TrainingPlanDay(Base):
     __tablename__ = "training_plan_days"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = _user_id_column()
     plan_id = Column(Integer, nullable=False, index=True)   # → TrainingPlan.id
     day_date = Column(Date, nullable=False, index=True)
     day_of_week = Column(Text, nullable=False)               # "Monday" … "Sunday"

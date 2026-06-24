@@ -1,0 +1,68 @@
+.rs-root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.rs-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.rs-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.rs-track-wrap {
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+}
+
+.rs-input {
+  width: 100%;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: linear-gradient(
+    to right,
+    var(--accent) var(--rs-pct, 50%),
+    var(--border) var(--rs-pct, 50%)
+  );
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+}
+
+.rs-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--bg-card);
+  border: 3px solid var(--accent);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+}
+
+.rs-input::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--bg-card);
+  border: 3px solid var(--accent);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+}

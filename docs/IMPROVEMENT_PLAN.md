@@ -187,9 +187,21 @@ the plan surface never prescribes supporting work.
 - **P3-3 · Adopt Alembic** — replace the hand-rolled column-add helper in
   `app/database.py` for safe schema evolution. **M.** Files: `app/database.py`, new
   `alembic/`.
-- **P3-4 · Deployment hardening (optional auth)** — the app is single-user with no
-  auth; add a simple access guard before any non-private exposure. **S–M.** Files:
-  `app/main.py`, `app/api.py`.
+- **P3-4 · Auth & multi-user** *(shipped — see `docs/multi_user_plan.md`)* — turns the
+  single-tenant app into a real multi-user one in three phases. **Identity:** a
+  Cloudflare Access JWT is verified against the team JWKS (`app/auth.py`); the `email`
+  claim keys an auto-provisioned `User`. A dev/CI bypass (`auth_enabled=false`) resolves
+  to a single `DEV_USER_EMAIL` user so local runs and tests need no Cloudflare.
+  **Per-user Garmin:** each user supplies their own credentials in Settings (password
+  Fernet-encrypted via `ENCRYPTION_KEY`, tokens under `{garmin_token_dir}/{user_id}/`,
+  MFA-aware connect flow); the env account becomes bootstrap user #1.
+  **Data isolation:** every data table carries a `user_id` (composite uniques like
+  `(user_id, date)`); all queries, compute paths, and the four cron jobs are scoped to
+  one user, with the scheduler iterating Garmin-connected users in isolation and flagging
+  `needs_reauth` when a cron can't answer an MFA prompt. **M–L.** Files: `app/auth.py`,
+  `app/crypto.py`, `app/models.py`, `app/garmin_sync.py`, `app/ai_coach.py`,
+  `app/training_load.py`, `app/threshold.py`, `app/intensity.py`, `app/api.py`,
+  `app/main.py`, `alembic/`.
 
 ---
 

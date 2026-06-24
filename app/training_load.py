@@ -19,7 +19,7 @@ from datetime import date, datetime, timedelta, timezone
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models import Activity, AthleteProfile, DailySummary, SyncStatus
+from app.models import DEFAULT_USER_ID, Activity, AthleteProfile, DailySummary, SyncStatus
 from app.schemas import TrainingLoadPoint, TrainingReadiness
 
 logger = logging.getLogger(__name__)
@@ -79,11 +79,11 @@ def estimate_tss(activity: Activity, profile: AthleteProfile | None) -> tuple[fl
     return _intensity_to_tss(duration_hr, _DEFAULT_IF), "duration"
 
 
-def _series_fingerprint(db: Session) -> str:
+def _series_fingerprint(db: Session, user_id: int) -> str:
     """Cheap cache key: activity count + newest sync timestamp + profile update time."""
-    count = db.query(func.count(Activity.id)).scalar() or 0
-    max_sync = db.query(func.max(Activity.synced_at)).scalar()
-    profile = db.query(AthleteProfile).first()
+    count = db.query(func.count(Activity.id)).filter(Activity.user_id == user_id).scalar() or 0
+    max_sync = db.query(func.max(Activity.synced_at)).filter(Activity.user_id == user_id).scalar()
+    profile = db.query(AthleteProfile).filter(AthleteProfile.user_id == user_id).first()
     return "|".join([
         str(count),
         max_sync.isoformat() if max_sync else "",
@@ -91,16 +91,20 @@ def _series_fingerprint(db: Session) -> str:
     ])
 
 
-def _load_cached_series(db: Session) -> list[TrainingLoadPoint] | None:
+def _load_cached_series(db: Session, user_id: int) -> list[TrainingLoadPoint] | None:
     """Return the cached full series when the fingerprint matches, else None."""
-    row = db.query(SyncStatus).filter(SyncStatus.key == _SERIES_CACHE_KEY).first()
+    row = (
+        db.query(SyncStatus)
+        .filter(SyncStatus.user_id == user_id, SyncStatus.key == _SERIES_CACHE_KEY)
+        .first()
+    )
     if not row or not row.value:
         return None
     try:
         data = json.loads(row.value)
     except (json.JSONDecodeError, TypeError):
         return None
-    if data.get("fp") != _series_fingerprint(db):
+    if data.get("fp") != _series_fingerprint(db, user_id):
         return None
     try:
         return [TrainingLoadPoint(**p) for p in data["series"]]
@@ -108,28 +112,38 @@ def _load_cached_series(db: Session) -> list[TrainingLoadPoint] | None:
         return None
 
 
-def _save_cached_series(db: Session, series: list[TrainingLoadPoint]) -> None:
+def _save_cached_series(db: Session, series: list[TrainingLoadPoint], user_id: int) -> None:
     """Persist the full series alongside the current fingerprint."""
     payload = json.dumps({
-        "fp": _series_fingerprint(db),
+        "fp": _series_fingerprint(db, user_id),
         "series": [p.model_dump(mode="json") for p in series],
     })
-    row = db.query(SyncStatus).filter(SyncStatus.key == _SERIES_CACHE_KEY).first()
+    row = (
+        db.query(SyncStatus)
+        .filter(SyncStatus.user_id == user_id, SyncStatus.key == _SERIES_CACHE_KEY)
+        .first()
+    )
     if row:
         row.value = payload
         row.updated_at = datetime.now(timezone.utc)
     else:
-        db.add(SyncStatus(key=_SERIES_CACHE_KEY, value=payload,
+        db.add(SyncStatus(user_id=user_id, key=_SERIES_CACHE_KEY, value=payload,
                           updated_at=datetime.now(timezone.utc)))
     db.commit()
 
 
-def _daily_tss(db: Session, end_date: date, profile: AthleteProfile | None) -> dict[date, float]:
+def _daily_tss(
+    db: Session, end_date: date, profile: AthleteProfile | None, user_id: int
+) -> dict[date, float]:
     """Sum estimated TSS per calendar day up to and including ``end_date``."""
     end_dt = datetime.combine(end_date + timedelta(days=1), datetime.min.time())
     activities = (
         db.query(Activity)
-        .filter(Activity.started_at.isnot(None), Activity.started_at < end_dt)
+        .filter(
+            Activity.user_id == user_id,
+            Activity.started_at.isnot(None),
+            Activity.started_at < end_dt,
+        )
         .all()
     )
     totals: dict[date, float] = defaultdict(float)
@@ -154,7 +168,9 @@ def _injury_risk(acwr: float | None, ramp_7d: float | None) -> str:
     return "low"
 
 
-def _compute_full_series(db: Session, end_date: date) -> list[TrainingLoadPoint]:
+def _compute_full_series(
+    db: Session, end_date: date, user_id: int = DEFAULT_USER_ID
+) -> list[TrainingLoadPoint]:
     """Build the daily CTL/ATL/TSB/ACWR series from the first activity to ``end_date``.
 
     Results are memoized in ``SyncStatus`` when ``end_date`` is today; the cache
@@ -162,19 +178,21 @@ def _compute_full_series(db: Session, end_date: date) -> list[TrainingLoadPoint]
     """
     today = date.today()
     if end_date == today:
-        cached = _load_cached_series(db)
+        cached = _load_cached_series(db, user_id)
         if cached is not None:
             return cached
 
-    first_started = db.query(func.min(Activity.started_at)).scalar()
+    first_started = (
+        db.query(func.min(Activity.started_at)).filter(Activity.user_id == user_id).scalar()
+    )
     if first_started is None:
         return []
     start_date = first_started.date() if isinstance(first_started, datetime) else first_started
     if start_date > end_date:
         return []
 
-    profile = db.query(AthleteProfile).first()
-    daily = _daily_tss(db, end_date, profile)
+    profile = db.query(AthleteProfile).filter(AthleteProfile.user_id == user_id).first()
+    daily = _daily_tss(db, end_date, profile, user_id)
 
     series: list[TrainingLoadPoint] = []
     ctl = 0.0
@@ -214,25 +232,29 @@ def _compute_full_series(db: Session, end_date: date) -> list[TrainingLoadPoint]
 
     if end_date == today and series:
         try:
-            _save_cached_series(db, series)
+            _save_cached_series(db, series, user_id)
         except Exception:
             logger.debug("Training load series cache write failed", exc_info=True)
 
     return series
 
 
-def compute_load_series(db: Session, end_date: date | None = None, days: int = 90) -> list[TrainingLoadPoint]:
+def compute_load_series(
+    db: Session, end_date: date | None = None, days: int = 90, user_id: int = DEFAULT_USER_ID
+) -> list[TrainingLoadPoint]:
     """Return the last ``days`` of the CTL/ATL/TSB series ending at ``end_date``."""
     end_date = end_date or date.today()
-    full = _compute_full_series(db, end_date)
+    full = _compute_full_series(db, end_date, user_id)
     if days and days > 0:
         return full[-days:]
     return full
 
 
-def current_load(db: Session, as_of: date | None = None) -> TrainingLoadPoint | None:
+def current_load(
+    db: Session, as_of: date | None = None, user_id: int = DEFAULT_USER_ID
+) -> TrainingLoadPoint | None:
     """Return the most recent CTL/ATL/TSB snapshot as of ``as_of``."""
-    full = _compute_full_series(db, as_of or date.today())
+    full = _compute_full_series(db, as_of or date.today(), user_id)
     return full[-1] if full else None
 
 

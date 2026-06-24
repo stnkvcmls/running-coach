@@ -42,7 +42,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app import streams
-from app.models import Activity, AthleteProfile, SyncStatus
+from app.models import DEFAULT_USER_ID, Activity, AthleteProfile, SyncStatus
 
 logger = logging.getLogger(__name__)
 
@@ -466,17 +466,20 @@ def _estimate_threshold_hr(
 # Result cache (SyncStatus-backed memoization)
 # ---------------------------------------------------------------------------
 
-def _threshold_fingerprint(db: Session, lookback_days: int, cutoff: datetime) -> str:
+def _threshold_fingerprint(db: Session, lookback_days: int, cutoff: datetime, user_id: int) -> str:
     """Cache key: run count + curves-available count + max synced_at in window."""
     run_count = db.query(func.count(Activity.id)).filter(
-        Activity.started_at >= cutoff
+        Activity.user_id == user_id,
+        Activity.started_at >= cutoff,
     ).scalar() or 0
     curve_count = db.query(func.count(Activity.id)).filter(
+        Activity.user_id == user_id,
         Activity.started_at >= cutoff,
         Activity.mean_max_json.isnot(None),
     ).scalar() or 0
     max_sync = db.query(func.max(Activity.synced_at)).filter(
-        Activity.started_at >= cutoff
+        Activity.user_id == user_id,
+        Activity.started_at >= cutoff,
     ).scalar()
     return "|".join([
         str(lookback_days),
@@ -500,17 +503,21 @@ def _deserialize_estimate(d: dict) -> ThresholdEstimate:
 
 
 def _load_cached_threshold(
-    db: Session, lookback_days: int, cutoff: datetime
+    db: Session, lookback_days: int, cutoff: datetime, user_id: int
 ) -> ThresholdEstimate | None:
     """Return the cached estimate when the fingerprint matches, else None."""
-    row = db.query(SyncStatus).filter(SyncStatus.key == _THRESHOLD_CACHE_KEY).first()
+    row = (
+        db.query(SyncStatus)
+        .filter(SyncStatus.user_id == user_id, SyncStatus.key == _THRESHOLD_CACHE_KEY)
+        .first()
+    )
     if not row or not row.value:
         return None
     try:
         data = json.loads(row.value)
     except (json.JSONDecodeError, TypeError):
         return None
-    if data.get("fp") != _threshold_fingerprint(db, lookback_days, cutoff):
+    if data.get("fp") != _threshold_fingerprint(db, lookback_days, cutoff, user_id):
         return None
     try:
         return _deserialize_estimate(data["estimate"])
@@ -519,19 +526,23 @@ def _load_cached_threshold(
 
 
 def _save_cached_threshold(
-    db: Session, estimate: ThresholdEstimate, lookback_days: int, cutoff: datetime
+    db: Session, estimate: ThresholdEstimate, lookback_days: int, cutoff: datetime, user_id: int
 ) -> None:
     """Persist the estimate alongside the current fingerprint."""
     payload = json.dumps({
-        "fp": _threshold_fingerprint(db, lookback_days, cutoff),
+        "fp": _threshold_fingerprint(db, lookback_days, cutoff, user_id),
         "estimate": dataclasses.asdict(estimate),
     })
-    row = db.query(SyncStatus).filter(SyncStatus.key == _THRESHOLD_CACHE_KEY).first()
+    row = (
+        db.query(SyncStatus)
+        .filter(SyncStatus.user_id == user_id, SyncStatus.key == _THRESHOLD_CACHE_KEY)
+        .first()
+    )
     if row:
         row.value = payload
         row.updated_at = datetime.now(timezone.utc)
     else:
-        db.add(SyncStatus(key=_THRESHOLD_CACHE_KEY, value=payload,
+        db.add(SyncStatus(user_id=user_id, key=_THRESHOLD_CACHE_KEY, value=payload,
                           updated_at=datetime.now(timezone.utc)))
     db.commit()
 
@@ -548,7 +559,7 @@ def _is_run(activity_type: str | None) -> bool:
 
 
 def estimate_thresholds(
-    db: Session, lookback_days: int = DEFAULT_LOOKBACK_DAYS
+    db: Session, lookback_days: int = DEFAULT_LOOKBACK_DAYS, user_id: int = DEFAULT_USER_ID
 ) -> ThresholdEstimate:
     """Compute threshold estimates from the last ``lookback_days`` of activities.
 
@@ -559,19 +570,23 @@ def estimate_thresholds(
     now = datetime.utcnow()
     cutoff = now - timedelta(days=lookback_days)
 
-    cached = _load_cached_threshold(db, lookback_days, cutoff)
+    cached = _load_cached_threshold(db, lookback_days, cutoff, user_id)
     if cached is not None:
         return cached
 
     # Self-heal: compute curves for any older activities that predate this feature.
     try:
-        streams.backfill_missing_curves(db)
+        streams.backfill_missing_curves(db, user_id=user_id)
     except Exception:
         pass
 
     activities = (
         db.query(Activity)
-        .filter(Activity.started_at.isnot(None), Activity.started_at >= cutoff)
+        .filter(
+            Activity.user_id == user_id,
+            Activity.started_at.isnot(None),
+            Activity.started_at >= cutoff,
+        )
         .all()
     )
     runs = [a for a in activities if _is_run(a.activity_type)]
@@ -615,7 +630,7 @@ def estimate_thresholds(
     )
 
     try:
-        _save_cached_threshold(db, estimate, lookback_days, cutoff)
+        _save_cached_threshold(db, estimate, lookback_days, cutoff, user_id)
     except Exception:
         logger.debug("Threshold estimate cache write failed", exc_info=True)
 
@@ -682,7 +697,7 @@ def _predict_race_times(cv: float, d_prime: float) -> list[RacePrediction]:
 
 
 def get_performance_curve_data(
-    db: Session, lookback_days: int = DEFAULT_LOOKBACK_DAYS
+    db: Session, lookback_days: int = DEFAULT_LOOKBACK_DAYS, user_id: int = DEFAULT_USER_ID
 ) -> PerformanceCurveData:
     """Aggregate mean-max frontiers + CP/CV model fit for the performance curve UI.
 
@@ -695,7 +710,11 @@ def get_performance_curve_data(
 
     activities = (
         db.query(Activity)
-        .filter(Activity.started_at.isnot(None), Activity.started_at >= cutoff)
+        .filter(
+            Activity.user_id == user_id,
+            Activity.started_at.isnot(None),
+            Activity.started_at >= cutoff,
+        )
         .all()
     )
     runs = [a for a in activities if _is_run(a.activity_type)]

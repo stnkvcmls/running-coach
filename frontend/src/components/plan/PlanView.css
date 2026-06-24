@@ -179,6 +179,14 @@
   color: var(--text-muted);
 }
 
+.plan-week-stats {
+  display: flex;
+  gap: 14px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
 .plan-week-grid {
   display: flex;
   flex-direction: column;

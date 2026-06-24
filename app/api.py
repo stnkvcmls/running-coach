@@ -110,7 +110,9 @@ AVAILABLE_MODELS: dict[str, list[str]] = {
 def api_today(
     date_str: str = Query(None, alias="date"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    uid = current_user.id
     selected = _parse_date(date_str) if date_str else date.today()
 
     # Activities for the selected date
@@ -118,13 +120,21 @@ def api_today(
     day_end = datetime.combine(selected + timedelta(days=1), datetime.min.time())
     activities = (
         db.query(Activity)
-        .filter(Activity.started_at >= day_start, Activity.started_at < day_end)
+        .filter(
+            Activity.user_id == uid,
+            Activity.started_at >= day_start,
+            Activity.started_at < day_end,
+        )
         .order_by(Activity.started_at.desc())
         .all()
     )
 
     # Daily summary
-    daily_summary = db.query(DailySummary).filter(DailySummary.date == selected).first()
+    daily_summary = (
+        db.query(DailySummary)
+        .filter(DailySummary.user_id == uid, DailySummary.date == selected)
+        .first()
+    )
 
     # Weekly mileage (last 8 weeks) - split by activity type
     week_start_base = date.today() - timedelta(days=date.today().weekday())
@@ -132,6 +142,7 @@ def api_today(
     all_activities = (
         db.query(Activity.started_at, Activity.distance_m, Activity.activity_type)
         .filter(
+            Activity.user_id == uid,
             Activity.started_at >= datetime.combine(eight_weeks_ago, datetime.min.time()),
             Activity.distance_m.isnot(None),
         )
@@ -180,13 +191,18 @@ def api_today(
 
     # Latest insights
     latest_insights = (
-        db.query(Insight).order_by(Insight.created_at.desc()).limit(5).all()
+        db.query(Insight)
+        .filter(Insight.user_id == uid)
+        .order_by(Insight.created_at.desc())
+        .limit(5)
+        .all()
     )
 
     # Next 2 upcoming races
     next_race_rows = (
         db.query(GarminCalendarEvent)
         .filter(
+            GarminCalendarEvent.user_id == uid,
             GarminCalendarEvent.event_type == "race",
             GarminCalendarEvent.date >= date.today(),
         )
@@ -211,6 +227,7 @@ def api_today(
     scheduled_events_rows = (
         db.query(GarminCalendarEvent)
         .filter(
+            GarminCalendarEvent.user_id == uid,
             GarminCalendarEvent.date == selected,
             GarminCalendarEvent.event_type == "workout",
         )
@@ -220,13 +237,14 @@ def api_today(
     scheduled_events = [_enrich_event_with_steps(e) for e in scheduled_events_rows]
 
     # Current training load snapshot (Fitness/Fatigue/Form) as of the selected date
-    current_load = training_load.current_load(db, as_of=selected)
+    current_load = training_load.current_load(db, as_of=selected, user_id=uid)
 
     # Resting HR from the 7 days before the selected date (for trend comparison)
     rhr_cutoff = selected - timedelta(days=7)
     recent_rhr_rows = (
         db.query(DailySummary.resting_hr)
         .filter(
+            DailySummary.user_id == uid,
             DailySummary.date >= rhr_cutoff,
             DailySummary.date < selected,
             DailySummary.resting_hr.isnot(None),
@@ -256,9 +274,12 @@ def api_training_load(
     days: int = Query(90, ge=7, le=365),
     date_str: str = Query(None, alias="date"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     end_date = _parse_date(date_str) if date_str else date.today()
-    points = training_load.compute_load_series(db, end_date=end_date, days=days)
+    points = training_load.compute_load_series(
+        db, end_date=end_date, days=days, user_id=current_user.id
+    )
     return TrainingLoadResponse(points=points, current=points[-1] if points else None)
 
 
@@ -268,11 +289,12 @@ def api_training_load(
 def api_wellness_trends(
     days: int = Query(90, ge=7, le=365),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     cutoff = date.today() - timedelta(days=days)
     summaries = (
         db.query(DailySummary)
-        .filter(DailySummary.date >= cutoff)
+        .filter(DailySummary.user_id == current_user.id, DailySummary.date >= cutoff)
         .order_by(DailySummary.date.asc())
         .all()
     )
@@ -286,10 +308,13 @@ def api_intensity_trends(
     days: int = Query(90, ge=7, le=365),
     zone_type: str = Query("hr"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     if zone_type not in ("hr", "power"):
         zone_type = "hr"
-    weeks_data = intensity_mod.aggregate_weekly_intensity(db, days=days, zone_type=zone_type)
+    weeks_data = intensity_mod.aggregate_weekly_intensity(
+        db, days=days, zone_type=zone_type, user_id=current_user.id
+    )
     weeks = [IntensityWeek(**w) for w in weeks_data]
     return IntensityTrendsResponse(weeks=weeks, zone_type=zone_type, days=days)
 
@@ -302,8 +327,13 @@ def api_activities(
     limit: int = Query(20, ge=1, le=100),
     type: str = Query(None),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    query = db.query(Activity).order_by(Activity.started_at.desc())
+    query = (
+        db.query(Activity)
+        .filter(Activity.user_id == current_user.id)
+        .order_by(Activity.started_at.desc())
+    )
     if type:
         query = query.filter(Activity.activity_type == type)
     offset = (page - 1) * limit
@@ -312,8 +342,16 @@ def api_activities(
 
 
 @api_router.get("/activities/{activity_id}", response_model=ActivityDetail)
-def api_activity_detail(activity_id: int, db: Session = Depends(get_db)):
-    activity = db.query(Activity).filter(Activity.id == activity_id).first()
+def api_activity_detail(
+    activity_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    activity = (
+        db.query(Activity)
+        .filter(Activity.id == activity_id, Activity.user_id == current_user.id)
+        .first()
+    )
     if not activity:
         raise HTTPException(status_code=404, detail="Activity not found")
 
@@ -352,7 +390,11 @@ def api_activity_detail(activity_id: int, db: Session = Depends(get_db)):
 
     insight = (
         db.query(Insight)
-        .filter(Insight.trigger_type == "activity", Insight.trigger_id == activity.id)
+        .filter(
+            Insight.user_id == current_user.id,
+            Insight.trigger_type == "activity",
+            Insight.trigger_id == activity.id,
+        )
         .first()
     )
 
@@ -371,6 +413,7 @@ def api_activity_detail(activity_id: int, db: Session = Depends(get_db)):
         workout_event = (
             db.query(GarminCalendarEvent)
             .filter(
+                GarminCalendarEvent.user_id == current_user.id,
                 GarminCalendarEvent.date == activity_date,
                 GarminCalendarEvent.event_type == "workout",
             )
@@ -404,10 +447,12 @@ def api_daily_summaries(
     page: int = Query(1, ge=1),
     limit: int = Query(30, ge=1, le=100),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     offset = (page - 1) * limit
     summaries = (
         db.query(DailySummary)
+        .filter(DailySummary.user_id == current_user.id)
         .order_by(DailySummary.date.desc())
         .offset(offset)
         .limit(limit)
@@ -417,20 +462,33 @@ def api_daily_summaries(
 
 
 @api_router.get("/daily-summaries/{summary_id}", response_model=DailySummaryDetail)
-def api_daily_detail(summary_id: int, db: Session = Depends(get_db)):
-    summary = db.query(DailySummary).filter(DailySummary.id == summary_id).first()
+def api_daily_detail(
+    summary_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    summary = (
+        db.query(DailySummary)
+        .filter(DailySummary.id == summary_id, DailySummary.user_id == current_user.id)
+        .first()
+    )
     if not summary:
         raise HTTPException(status_code=404, detail="Daily summary not found")
 
     insight = (
         db.query(Insight)
-        .filter(Insight.trigger_type == "daily_summary", Insight.trigger_id == summary.id)
+        .filter(
+            Insight.user_id == current_user.id,
+            Insight.trigger_type == "daily_summary",
+            Insight.trigger_id == summary.id,
+        )
         .first()
     )
 
     day_activities = (
         db.query(Activity)
         .filter(
+            Activity.user_id == current_user.id,
             Activity.started_at >= datetime.combine(summary.date, datetime.min.time()),
             Activity.started_at < datetime.combine(summary.date + timedelta(days=1), datetime.min.time()),
         )
@@ -451,6 +509,7 @@ def api_daily_detail(summary_id: int, db: Session = Depends(get_db)):
 def api_calendar_month(
     month: str = Query(None),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     if month:
         try:
@@ -468,6 +527,7 @@ def api_calendar_month(
     month_activities = (
         db.query(Activity)
         .filter(
+            Activity.user_id == current_user.id,
             Activity.started_at >= datetime.combine(view_date, datetime.min.time()),
             Activity.started_at < datetime.combine(next_month, datetime.min.time()),
         )
@@ -484,6 +544,7 @@ def api_calendar_month(
     month_events = (
         db.query(GarminCalendarEvent)
         .filter(
+            GarminCalendarEvent.user_id == current_user.id,
             GarminCalendarEvent.date >= view_date,
             GarminCalendarEvent.date < next_month,
         )
@@ -513,6 +574,7 @@ def api_calendar_month(
 def api_calendar_week(
     date_str: str = Query(None, alias="date"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     target = _parse_date(date_str) if date_str else date.today()
     # Monday of the week
@@ -522,6 +584,7 @@ def api_calendar_week(
     activities = (
         db.query(Activity)
         .filter(
+            Activity.user_id == current_user.id,
             Activity.started_at >= datetime.combine(week_start, datetime.min.time()),
             Activity.started_at < datetime.combine(week_end, datetime.min.time()),
         )
@@ -537,6 +600,7 @@ def api_calendar_week(
     events = (
         db.query(GarminCalendarEvent)
         .filter(
+            GarminCalendarEvent.user_id == current_user.id,
             GarminCalendarEvent.date >= week_start,
             GarminCalendarEvent.date < week_end,
         )
@@ -560,8 +624,16 @@ def api_calendar_week(
 # --- Calendar Event Detail ---
 
 @api_router.get("/calendar-events/{event_id}", response_model=CalendarEventResponse)
-def api_calendar_event_detail(event_id: int, db: Session = Depends(get_db)):
-    event = db.query(GarminCalendarEvent).filter(GarminCalendarEvent.id == event_id).first()
+def api_calendar_event_detail(
+    event_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    event = (
+        db.query(GarminCalendarEvent)
+        .filter(GarminCalendarEvent.id == event_id, GarminCalendarEvent.user_id == current_user.id)
+        .first()
+    )
     if not event:
         raise HTTPException(status_code=404, detail="Calendar event not found")
     return _enrich_event_with_steps(event)
@@ -574,8 +646,13 @@ def api_insights(
     category: str = Query(None),
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    query = db.query(Insight).order_by(Insight.created_at.desc())
+    query = (
+        db.query(Insight)
+        .filter(Insight.user_id == current_user.id)
+        .order_by(Insight.created_at.desc())
+    )
     if category:
         query = query.filter(Insight.category == category)
     return [InsightResponse.model_validate(i) for i in query.limit(limit).all()]
@@ -586,27 +663,42 @@ def api_insights(
 _INTERNAL_SYNC_KEYS = {"threshold_estimate", "training_load_series"}
 
 @api_router.get("/settings", response_model=SettingsResponse)
-def api_settings(db: Session = Depends(get_db)):
+def api_settings(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    uid = current_user.id
     sync_statuses = {}
-    for s in db.query(SyncStatus).all():
+    for s in db.query(SyncStatus).filter(SyncStatus.user_id == uid).all():
         if s.key in _INTERNAL_SYNC_KEYS:
             continue
         sync_statuses[s.key] = {"value": s.value, "updated_at": str(s.updated_at) if s.updated_at else None}
 
     counts = {
-        "activities": db.query(func.count(Activity.id)).scalar() or 0,
-        "daily_summaries": db.query(func.count(DailySummary.id)).scalar() or 0,
-        "insights": db.query(func.count(Insight.id)).scalar() or 0,
-        "calendar_events": db.query(func.count(GarminCalendarEvent.id)).scalar() or 0,
+        "activities": db.query(func.count(Activity.id)).filter(Activity.user_id == uid).scalar() or 0,
+        "daily_summaries": db.query(func.count(DailySummary.id)).filter(DailySummary.user_id == uid).scalar() or 0,
+        "insights": db.query(func.count(Insight.id)).filter(Insight.user_id == uid).scalar() or 0,
+        "calendar_events": db.query(func.count(GarminCalendarEvent.id)).filter(GarminCalendarEvent.user_id == uid).scalar() or 0,
     }
     return SettingsResponse(sync_statuses=sync_statuses, counts=counts)
 
 
 @api_router.get("/ai-config", response_model=AiConfigResponse)
-def api_get_ai_config(db: Session = Depends(get_db)):
+def api_get_ai_config(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     from app.config import settings as app_settings
-    provider_row = db.query(SyncStatus).filter(SyncStatus.key == "ai_provider").first()
-    model_row = db.query(SyncStatus).filter(SyncStatus.key == "ai_model").first()
+    provider_row = (
+        db.query(SyncStatus)
+        .filter(SyncStatus.user_id == current_user.id, SyncStatus.key == "ai_provider")
+        .first()
+    )
+    model_row = (
+        db.query(SyncStatus)
+        .filter(SyncStatus.user_id == current_user.id, SyncStatus.key == "ai_model")
+        .first()
+    )
     provider = provider_row.value if provider_row else "claude"
     model = model_row.value if model_row else app_settings.ai_model
     return AiConfigResponse(
@@ -618,18 +710,26 @@ def api_get_ai_config(db: Session = Depends(get_db)):
 
 
 @api_router.post("/ai-config", response_model=AiConfigResponse)
-def api_set_ai_config(config: AiConfigRequest, db: Session = Depends(get_db)):
+def api_set_ai_config(
+    config: AiConfigRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     if config.provider not in AVAILABLE_MODELS:
         raise HTTPException(status_code=400, detail=f"Unknown provider: {config.provider}")
     if config.model not in AVAILABLE_MODELS[config.provider]:
         raise HTTPException(status_code=400, detail=f"Model {config.model} not valid for {config.provider}")
 
     for key, value in [("ai_provider", config.provider), ("ai_model", config.model)]:
-        row = db.query(SyncStatus).filter(SyncStatus.key == key).first()
+        row = (
+            db.query(SyncStatus)
+            .filter(SyncStatus.user_id == current_user.id, SyncStatus.key == key)
+            .first()
+        )
         if row:
             row.value = value
         else:
-            db.add(SyncStatus(key=key, value=value))
+            db.add(SyncStatus(user_id=current_user.id, key=key, value=value))
     db.commit()
 
     return AiConfigResponse(
@@ -710,8 +810,11 @@ def _profile_response(profile: AthleteProfile) -> AthleteProfileResponse:
 
 
 @api_router.get("/athlete-profile", response_model=AthleteProfileResponse | None)
-def api_get_athlete_profile(db: Session = Depends(get_db)):
-    profile = db.query(AthleteProfile).first()
+def api_get_athlete_profile(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    profile = db.query(AthleteProfile).filter(AthleteProfile.user_id == current_user.id).first()
     return _profile_response(profile) if profile else None
 
 
@@ -721,15 +824,19 @@ GARMIN_MANAGED_PROFILE_FIELDS = {"name", "date_of_birth", "weight_kg"}
 
 
 @api_router.post("/athlete-profile", response_model=AthleteProfileResponse)
-def api_set_athlete_profile(profile_data: AthleteProfileRequest, db: Session = Depends(get_db)):
+def api_set_athlete_profile(
+    profile_data: AthleteProfileRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     updates = {
         key: value
         for key, value in profile_data.model_dump(exclude_unset=True).items()
         if key not in GARMIN_MANAGED_PROFILE_FIELDS
     }
-    profile = db.query(AthleteProfile).first()
+    profile = db.query(AthleteProfile).filter(AthleteProfile.user_id == current_user.id).first()
     if profile is None:
-        profile = AthleteProfile(**updates)
+        profile = AthleteProfile(user_id=current_user.id, **updates)
         db.add(profile)
     else:
         for key, value in updates.items():
@@ -755,13 +862,18 @@ def _compute_zone_bounds(zones: list, threshold: float | None) -> list[ZoneConfi
     return result
 
 
-def _build_zones_response(db: Session) -> ZoneConfigsResponse:
-    profile = db.query(AthleteProfile).first()
+def _build_zones_response(db: Session, user_id: int) -> ZoneConfigsResponse:
+    profile = db.query(AthleteProfile).filter(AthleteProfile.user_id == user_id).first()
     threshold_hr = profile.threshold_hr if profile else None
     threshold_pace = profile.threshold_pace_min_km if profile else None
     threshold_power = profile.threshold_power if profile else None
 
-    all_zones = db.query(ZoneConfig).order_by(ZoneConfig.zone_type, ZoneConfig.zone_number).all()
+    all_zones = (
+        db.query(ZoneConfig)
+        .filter(ZoneConfig.user_id == user_id)
+        .order_by(ZoneConfig.zone_type, ZoneConfig.zone_number)
+        .all()
+    )
 
     return ZoneConfigsResponse(
         hr=_compute_zone_bounds([z for z in all_zones if z.zone_type == "hr"], threshold_hr),
@@ -774,16 +886,27 @@ def _build_zones_response(db: Session) -> ZoneConfigsResponse:
 
 
 @api_router.get("/zones", response_model=ZoneConfigsResponse)
-def api_get_zones(db: Session = Depends(get_db)):
-    return _build_zones_response(db)
+def api_get_zones(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return _build_zones_response(db, current_user.id)
 
 
 @api_router.put("/zones", response_model=ZoneConfigsResponse)
-def api_update_zones(update: ZoneConfigBulkUpdate, db: Session = Depends(get_db)):
+def api_update_zones(
+    update: ZoneConfigBulkUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     for zu in update.zones:
         zone = (
             db.query(ZoneConfig)
-            .filter(ZoneConfig.zone_type == zu.zone_type, ZoneConfig.zone_number == zu.zone_number)
+            .filter(
+                ZoneConfig.user_id == current_user.id,
+                ZoneConfig.zone_type == zu.zone_type,
+                ZoneConfig.zone_number == zu.zone_number,
+            )
             .first()
         )
         if zone is None:
@@ -797,7 +920,7 @@ def api_update_zones(update: ZoneConfigBulkUpdate, db: Session = Depends(get_db)
         if "max_pct" in zu.model_fields_set:
             zone.max_pct = zu.max_pct
     db.commit()
-    return _build_zones_response(db)
+    return _build_zones_response(db, current_user.id)
 
 
 # --- Threshold / Critical Power estimation ---
@@ -832,20 +955,25 @@ def _build_threshold_response(
 
 
 @api_router.get("/threshold-estimate", response_model=ThresholdEstimateResponse)
-def api_get_threshold_estimate(db: Session = Depends(get_db)):
-    estimate = threshold_mod.estimate_thresholds(db)
-    profile = db.query(AthleteProfile).first()
+def api_get_threshold_estimate(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    estimate = threshold_mod.estimate_thresholds(db, user_id=current_user.id)
+    profile = db.query(AthleteProfile).filter(AthleteProfile.user_id == current_user.id).first()
     return _build_threshold_response(estimate, profile)
 
 
 @api_router.post("/threshold-estimate/apply", response_model=AthleteProfileResponse)
 def api_apply_threshold_estimate(
-    req: ThresholdApplyRequest, db: Session = Depends(get_db)
+    req: ThresholdApplyRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    estimate = threshold_mod.estimate_thresholds(db)
-    profile = db.query(AthleteProfile).first()
+    estimate = threshold_mod.estimate_thresholds(db, user_id=current_user.id)
+    profile = db.query(AthleteProfile).filter(AthleteProfile.user_id == current_user.id).first()
     if profile is None:
-        profile = AthleteProfile()
+        profile = AthleteProfile(user_id=current_user.id)
         db.add(profile)
     fields = req.fields if req.fields else None
     applied = threshold_mod.apply_estimate_to_profile(profile, estimate, fields)
@@ -862,9 +990,10 @@ def api_apply_threshold_estimate(
 def api_get_performance_curve(
     days: int = Query(90, ge=30, le=365),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Power-duration and pace-duration curves with CP/CV model fit and race predictions."""
-    data = threshold_mod.get_performance_curve_data(db, lookback_days=days)
+    data = threshold_mod.get_performance_curve_data(db, lookback_days=days, user_id=current_user.id)
     return PerformanceCurveResponse(
         power_points=[
             PerformanceCurvePoint(
@@ -906,7 +1035,7 @@ def _build_plan_response(plan: TrainingPlan, db: Session) -> TrainingPlanRespons
     """Assemble a TrainingPlanResponse with nested week/day structure."""
     days = (
         db.query(TrainingPlanDay)
-        .filter(TrainingPlanDay.plan_id == plan.id)
+        .filter(TrainingPlanDay.plan_id == plan.id, TrainingPlanDay.user_id == plan.user_id)
         .order_by(TrainingPlanDay.day_date.asc())
         .all()
     )
@@ -943,16 +1072,24 @@ def _build_plan_response(plan: TrainingPlan, db: Session) -> TrainingPlanRespons
 
 
 @api_router.get("/training-plan", response_model=TrainingPlanResponse | None)
-def api_get_training_plan(db: Session = Depends(get_db)):
+def api_get_training_plan(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Return the most recently generated training plan, or null if none exists."""
-    plan = db.query(TrainingPlan).order_by(TrainingPlan.generated_at.desc()).first()
+    plan = (
+        db.query(TrainingPlan)
+        .filter(TrainingPlan.user_id == current_user.id)
+        .order_by(TrainingPlan.generated_at.desc())
+        .first()
+    )
     if not plan:
         return None
     return _build_plan_response(plan, db)
 
 
 @api_router.post("/training-plan/generate", response_model=TrainingPlanResponse | None)
-def api_generate_training_plan():
+def api_generate_training_plan(current_user: User = Depends(get_current_user)):
     """Trigger AI plan generation and return the new plan synchronously.
 
     Generation typically takes 5–15 seconds. The function opens its own DB
@@ -960,7 +1097,7 @@ def api_generate_training_plan():
     """
     from app.ai_coach import generate_training_plan
     from app.database import db_session as make_session
-    plan = generate_training_plan()
+    plan = generate_training_plan(user_id=current_user.id)
     if plan is None:
         raise HTTPException(status_code=500, detail="Plan generation failed — check AI config")
     with make_session() as fresh_db:
@@ -971,10 +1108,13 @@ def api_generate_training_plan():
 
 
 @api_router.get("/training-plan/realignment-status", response_model=PlanRealignmentStatus)
-def api_get_realignment_status(db: Session = Depends(get_db)):
+def api_get_realignment_status(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Return whether the current plan has enough missed sessions to warrant realignment."""
     from app.ai_coach import detect_plan_realignment
-    result = detect_plan_realignment(db, date.today())
+    result = detect_plan_realignment(db, date.today(), user_id=current_user.id)
     return PlanRealignmentStatus(
         should_prompt=result["should_prompt"],
         missed_count=result["missed_count"],
@@ -991,29 +1131,39 @@ def api_get_realignment_status(db: Session = Depends(get_db)):
 
 
 @api_router.post("/training-plan/realign")
-def api_realign_plan(body: PlanRealignmentRequest, db: Session = Depends(get_db)):
+def api_realign_plan(
+    body: PlanRealignmentRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Handle plan realignment: regenerate the plan or dismiss the banner for 7 days."""
     if body.action == "dismiss":
         dismiss_until = (date.today() + timedelta(days=7)).isoformat()
         row = db.query(SyncStatus).filter(
-            SyncStatus.key == "plan_realignment_dismissed_until"
+            SyncStatus.user_id == current_user.id,
+            SyncStatus.key == "plan_realignment_dismissed_until",
         ).first()
         if row:
             row.value = dismiss_until
         else:
-            db.add(SyncStatus(key="plan_realignment_dismissed_until", value=dismiss_until))
+            db.add(SyncStatus(
+                user_id=current_user.id,
+                key="plan_realignment_dismissed_until",
+                value=dismiss_until,
+            ))
         db.commit()
         return {"status": "dismissed", "until": dismiss_until}
 
     # action == "regenerate"
     from app.ai_coach import generate_training_plan
     from app.database import db_session as make_session
-    plan = generate_training_plan()
+    plan = generate_training_plan(user_id=current_user.id)
     if plan is None:
         raise HTTPException(status_code=500, detail="Plan generation failed — check AI config")
     # Clear dismiss snooze after generating a new plan
     row = db.query(SyncStatus).filter(
-        SyncStatus.key == "plan_realignment_dismissed_until"
+        SyncStatus.user_id == current_user.id,
+        SyncStatus.key == "plan_realignment_dismissed_until",
     ).first()
     if row:
         db.delete(row)
@@ -1028,8 +1178,16 @@ def api_realign_plan(body: PlanRealignmentRequest, db: Session = Depends(get_db)
 # --- Actions ---
 
 @api_router.post("/activities/{activity_id}/analyze")
-def api_trigger_analysis(activity_id: int, db: Session = Depends(get_db)):
-    activity = db.query(Activity).filter(Activity.id == activity_id).first()
+def api_trigger_analysis(
+    activity_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    activity = (
+        db.query(Activity)
+        .filter(Activity.id == activity_id, Activity.user_id == current_user.id)
+        .first()
+    )
     if not activity:
         raise HTTPException(status_code=404, detail="Activity not found")
     from app.ai_coach import analyze_activity_force
@@ -1038,8 +1196,17 @@ def api_trigger_analysis(activity_id: int, db: Session = Depends(get_db)):
 
 
 @api_router.post("/activities/{activity_id}/feedback")
-def api_submit_feedback(activity_id: int, feedback: FeedbackRequest, db: Session = Depends(get_db)):
-    activity = db.query(Activity).filter(Activity.id == activity_id).first()
+def api_submit_feedback(
+    activity_id: int,
+    feedback: FeedbackRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    activity = (
+        db.query(Activity)
+        .filter(Activity.id == activity_id, Activity.user_id == current_user.id)
+        .first()
+    )
     if not activity:
         raise HTTPException(status_code=404, detail="Activity not found")
 
@@ -1050,6 +1217,7 @@ def api_submit_feedback(activity_id: int, feedback: FeedbackRequest, db: Session
 
     # Delete existing insight
     db.query(Insight).filter(
+        Insight.user_id == current_user.id,
         Insight.trigger_type == "activity",
         Insight.trigger_id == activity.id,
     ).delete()
@@ -1061,19 +1229,31 @@ def api_submit_feedback(activity_id: int, feedback: FeedbackRequest, db: Session
 
 
 @api_router.post("/sync/{sync_type}")
-def api_trigger_sync(sync_type: str):
+def api_trigger_sync(sync_type: str, current_user: User = Depends(get_current_user)):
+    # Manual syncs are scoped to the calling user only (the scheduler is what
+    # fans a sync out across all connected users).
+    from app.main import run_activity_sync_for_user, run_daily_sync_for_user
+
+    uid = current_user.id
     if sync_type == "activities":
-        from app.main import _scheduled_activity_sync
-        threading.Thread(target=_scheduled_activity_sync, daemon=True).start()
+        threading.Thread(target=run_activity_sync_for_user, args=(uid,), daemon=True).start()
     elif sync_type == "daily":
-        from app.main import _scheduled_daily_sync
-        threading.Thread(target=_scheduled_daily_sync, daemon=True).start()
+        threading.Thread(target=run_daily_sync_for_user, args=(uid,), daemon=True).start()
     elif sync_type == "calendar":
-        from app.garmin_sync import sync_calendar
-        threading.Thread(target=sync_calendar, daemon=True).start()
+        threading.Thread(target=_sync_calendar_for_user, args=(uid,), daemon=True).start()
     else:
         raise HTTPException(status_code=400, detail=f"Unknown sync type: {sync_type}")
     return {"status": "accepted"}
+
+
+def _sync_calendar_for_user(user_id: int) -> None:
+    """Resolve a user by id and sync their Garmin calendar (background thread)."""
+    from app.database import db_session as make_session
+    from app.garmin_sync import sync_calendar
+    with make_session() as db:
+        user = db.query(User).filter(User.id == user_id).first()
+        if user is not None:
+            sync_calendar(user)
 
 
 # --- Data Export ---
@@ -1082,8 +1262,14 @@ def api_trigger_sync(sync_type: str):
 def api_export_activities(
     format: str = Query("csv", pattern="^(csv|json)$"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    activities = db.query(Activity).order_by(Activity.started_at.desc()).all()
+    activities = (
+        db.query(Activity)
+        .filter(Activity.user_id == current_user.id)
+        .order_by(Activity.started_at.desc())
+        .all()
+    )
 
     if format == "json":
         data = [ActivitySummary.model_validate(a).model_dump() for a in activities]
@@ -1116,8 +1302,14 @@ def api_export_activities(
 def api_export_insights(
     format: str = Query("csv", pattern="^(csv|json)$"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    insights = db.query(Insight).order_by(Insight.created_at.desc()).all()
+    insights = (
+        db.query(Insight)
+        .filter(Insight.user_id == current_user.id)
+        .order_by(Insight.created_at.desc())
+        .all()
+    )
 
     if format == "json":
         data = [InsightResponse.model_validate(i).model_dump() for i in insights]

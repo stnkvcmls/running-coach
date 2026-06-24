@@ -213,7 +213,7 @@ def test_get_set_sync_status_roundtrip(db):
 def test_store_activity_creates_row(db, monkeypatch):
     fake_client = MagicMock()
     fake_client.get_activity_details.return_value = {"metricDescriptors": []}
-    monkeypatch.setattr(garmin_sync, "get_garmin_client", lambda: fake_client)
+    monkeypatch.setattr(garmin_sync, "get_garmin_client", lambda *a, **k: fake_client)
 
     summary = {
         "activityId": 555,
@@ -240,7 +240,7 @@ def test_store_activity_creates_row(db, monkeypatch):
 
 
 def test_store_activity_skips_duplicate(db, monkeypatch):
-    monkeypatch.setattr(garmin_sync, "get_garmin_client", lambda: MagicMock())
+    monkeypatch.setattr(garmin_sync, "get_garmin_client", lambda *a, **k: MagicMock())
     db.add(Activity(garmin_id=777, name="Existing", activity_type="running"))
     db.commit()
     result = garmin_sync._store_activity(db, {"activityId": 777}, {}, skip_ai=True)
@@ -322,7 +322,7 @@ def test_sync_activities_stores_new(db, patch_db_session, monkeypatch):
          "duration": 1800, "distance": 5000},
     ]
     fake_client.get_activity_details.return_value = {"metricDescriptors": []}
-    monkeypatch.setattr(garmin_sync, "get_garmin_client", lambda: fake_client)
+    monkeypatch.setattr(garmin_sync, "get_garmin_client", lambda *a, **k: fake_client)
     monkeypatch.setattr(garmin_sync, "_fetch_activity_details", lambda c, gid: {})
 
     new = garmin_sync.sync_activities()
@@ -340,7 +340,7 @@ def test_sync_activities_skips_existing(db, patch_db_session, monkeypatch):
 
     fake_client = MagicMock()
     fake_client.get_activities.return_value = [{"activityId": 2002}]
-    monkeypatch.setattr(garmin_sync, "get_garmin_client", lambda: fake_client)
+    monkeypatch.setattr(garmin_sync, "get_garmin_client", lambda *a, **k: fake_client)
 
     new = garmin_sync.sync_activities()
     assert new == []
@@ -363,7 +363,7 @@ def test_sync_daily_summary_creates_row(db, patch_db_session, monkeypatch):
     fake_client.get_hrv_data.return_value = {
         "hrvSummary": {"lastNightAvg": 46, "weeklyAvg": 42, "status": "BALANCED"}
     }
-    monkeypatch.setattr(garmin_sync, "get_garmin_client", lambda: fake_client)
+    monkeypatch.setattr(garmin_sync, "get_garmin_client", lambda *a, **k: fake_client)
 
     summary = garmin_sync.sync_daily_summary(date(2026, 6, 10))
     assert summary is not None
@@ -395,7 +395,7 @@ def test_sync_daily_summary_updates_existing(db, patch_db_session, monkeypatch):
     fake_client.get_heart_rates.return_value = {}
     fake_client.get_all_day_stress.return_value = {}
     fake_client.get_hrv_data.return_value = {}
-    monkeypatch.setattr(garmin_sync, "get_garmin_client", lambda: fake_client)
+    monkeypatch.setattr(garmin_sync, "get_garmin_client", lambda *a, **k: fake_client)
 
     garmin_sync.sync_daily_summary(date(2026, 6, 10))
     db.expire_all()
@@ -445,7 +445,7 @@ def test_fetch_garmin_profile_fields_tolerates_missing_data():
 
 def test_sync_athlete_profile_creates_row(db, patch_db_session, monkeypatch):
     patch_db_session(garmin_sync)
-    monkeypatch.setattr(garmin_sync, "get_garmin_client", _profile_client)
+    monkeypatch.setattr(garmin_sync, "get_garmin_client", lambda *a, **k: _profile_client())
 
     profile = garmin_sync.sync_athlete_profile()
     assert profile is not None
@@ -460,7 +460,7 @@ def test_sync_athlete_profile_overwrites_garmin_fields_but_keeps_others(db, patc
     db.add(AthleteProfile(name="Old Name", weight_kg=80.0, goal_race="Berlin Marathon"))
     db.commit()
 
-    monkeypatch.setattr(garmin_sync, "get_garmin_client", _profile_client)
+    monkeypatch.setattr(garmin_sync, "get_garmin_client", lambda *a, **k: _profile_client())
     garmin_sync.sync_athlete_profile()
     db.expire_all()
 
@@ -484,7 +484,7 @@ def test_backfill_activities_walks_pages(db, patch_db_session, monkeypatch):
           "duration": 1800, "distance": 5000}],
     ]
     fake_client.get_activity_details.return_value = {"metricDescriptors": []}
-    monkeypatch.setattr(garmin_sync, "get_garmin_client", lambda: fake_client)
+    monkeypatch.setattr(garmin_sync, "get_garmin_client", lambda *a, **k: fake_client)
 
     garmin_sync.backfill_activities()
     assert db.query(Activity).filter(Activity.garmin_id == 3001).count() == 1
@@ -495,7 +495,7 @@ def test_backfill_activities_skips_when_complete(db, patch_db_session, monkeypat
     patch_db_session(garmin_sync)
     garmin_sync._set_sync_status(db, "backfill_activities", "complete")
     monkeypatch.setattr(garmin_sync, "get_garmin_client",
-                        lambda: pytest.fail("client should not be created"))
+                        lambda *a, **k: pytest.fail("client should not be created"))
     garmin_sync.backfill_activities()  # returns immediately
 
 
@@ -547,10 +547,56 @@ def test_sync_calendar_upserts_events(db, patch_db_session, monkeypatch):
         return {}
 
     fake_client.connectapi.side_effect = fake_connectapi
-    monkeypatch.setattr(garmin_sync, "get_garmin_client", lambda: fake_client)
+    monkeypatch.setattr(garmin_sync, "get_garmin_client", lambda *a, **k: fake_client)
     monkeypatch.setattr(garmin_sync.time, "sleep", lambda *a, **k: None)
 
     count = garmin_sync.sync_calendar()
     assert count >= 1
     races = db.query(GarminCalendarEvent).filter(GarminCalendarEvent.event_type == "race").all()
     assert any(r.title == "Future Race" for r in races)
+
+
+# --- Phase 3: per-user scoping + needs_reauth ------------------------------
+
+def test_sync_activities_tags_rows_with_user_id(db, patch_db_session, monkeypatch):
+    patch_db_session(garmin_sync)
+    monkeypatch.setattr(garmin_sync.time, "sleep", lambda *a, **k: None)
+    monkeypatch.setattr(garmin_sync, "_fetch_activity_details", lambda c, gid: {})
+
+    fake_client = MagicMock()
+    fake_client.get_activities.return_value = [
+        {"activityId": 4242, "activityType": {"typeKey": "running"},
+         "activityName": "Run", "startTimeLocal": "2026-06-10 07:00:00",
+         "duration": 1800, "distance": 5000},
+    ]
+    fake_client.get_activity_details.return_value = {"metricDescriptors": []}
+    monkeypatch.setattr(garmin_sync, "get_garmin_client", lambda *a, **k: fake_client)
+
+    user = User(id=9, email="nine@example.com", garmin_email="nine@garmin.com")
+    garmin_sync.sync_activities(user)
+
+    row = db.query(Activity).filter(Activity.garmin_id == 4242).first()
+    assert row is not None
+    assert row.user_id == 9
+
+
+def test_garmin_connection_status_reports_needs_reauth():
+    user = User(id=3, email="x@example.com", garmin_email="x@garmin.com",
+                garmin_needs_reauth=True)
+    status = garmin_sync.garmin_connection_status(user)
+    assert status["connected"] is True
+    assert status["needs_reauth"] is True
+
+
+def test_mark_garmin_needs_reauth_sets_and_clears(db, patch_db_session):
+    patch_db_session(garmin_sync)
+    db.add(User(id=4, email="r@example.com", garmin_email="r@garmin.com"))
+    db.commit()
+
+    garmin_sync.mark_garmin_needs_reauth(4, True)
+    db.expire_all()
+    assert db.query(User).filter(User.id == 4).first().garmin_needs_reauth is True
+
+    garmin_sync.mark_garmin_needs_reauth(4, False)
+    db.expire_all()
+    assert db.query(User).filter(User.id == 4).first().garmin_needs_reauth is False

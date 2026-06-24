@@ -15,7 +15,8 @@ from fastapi.staticfiles import StaticFiles
 import pytz
 
 from app.config import settings
-from app.database import init_db
+from app.database import db_session, init_db
+from app.models import User
 
 logging.basicConfig(
     level=logging.INFO,
@@ -50,41 +51,96 @@ def _trim_after_job(_event):
     _trim_memory()
 
 
-def _scheduled_activity_sync():
-    """Scheduled job: sync activities and calendar."""
-    from app.garmin_sync import sync_activities, sync_calendar
+def _iter_garmin_users() -> list[User]:
+    """Return all users with a Garmin connection, scoped for per-user sync.
 
-    sync_activities()
+    Excludes users flagged ``garmin_needs_reauth`` — a cron can't answer their
+    MFA prompt, so they're skipped until they reconnect from Settings. Returned
+    objects are detached but carry the id + credential fields the sync path
+    needs (no further DB access required).
+    """
+    with db_session() as db:
+        users = (
+            db.query(User)
+            .filter(
+                User.garmin_email.isnot(None),
+                User.garmin_needs_reauth == False,  # noqa: E712
+            )
+            .all()
+        )
+        for u in users:
+            db.expunge(u)
+        return users
+
+
+def _authenticate_or_flag(user: User) -> bool:
+    """Verify a user's Garmin client authenticates; flag for re-auth if not.
+
+    A cron can't satisfy an interactive MFA prompt, so when a user's tokens are
+    gone/expired and login fails we mark them ``needs_reauth`` and skip — the
+    Settings UI surfaces a Reconnect action. Returns True when authenticated.
+    """
+    from app.garmin_sync import get_garmin_client, mark_garmin_needs_reauth
 
     try:
-        sync_calendar()
+        get_garmin_client(user)
+        return True
     except Exception:
-        logger.exception("Calendar sync failed")
+        logger.exception("Garmin auth failed for user %s; flagging needs_reauth", user.id)
+        mark_garmin_needs_reauth(user.id, True)
+        return False
 
 
-def _scheduled_daily_sync():
-    """Scheduled job: sync a rolling window of daily summaries and trigger AI.
+def run_activity_sync_for_user(user_id: int) -> None:
+    """Sync one user's activities + calendar (used by the API manual trigger)."""
+    from app.garmin_sync import sync_activities, sync_calendar
+
+    with db_session() as db:
+        user = db.query(User).filter(User.id == user_id).first()
+        if user is None:
+            return
+        db.expunge(user)
+
+    if not _authenticate_or_flag(user):
+        return
+    sync_activities(user)
+    try:
+        sync_calendar(user)
+    except Exception:
+        logger.exception("Calendar sync failed for user %s", user_id)
+
+
+def run_daily_sync_for_user(user_id: int) -> None:
+    """Sync one user's rolling window of daily summaries and analyze today.
 
     Garmin attributes overnight metrics (sleep, HRV, resting HR) to the wake-up
     day, so we sync *today* to capture last night's data on the correct date, and
     re-sync the prior days in the window so their full-day totals finalize. AI
-    analysis runs only on today's (newest) summary to avoid re-analyzing days that
-    were already covered on previous runs.
+    analysis runs only on today's (newest) summary.
     """
     from app.garmin_sync import sync_athlete_profile, sync_daily_summary
     from app.ai_coach import analyze_daily_summary
 
+    with db_session() as db:
+        user = db.query(User).filter(User.id == user_id).first()
+        if user is None:
+            return
+        db.expunge(user)
+
+    if not _authenticate_or_flag(user):
+        return
+
     try:
-        sync_athlete_profile()
+        sync_athlete_profile(user)
     except Exception:
-        logger.exception("Athlete profile sync failed")
+        logger.exception("Athlete profile sync failed for user %s", user_id)
 
     window = max(1, settings.daily_sync_window_days)
     today = date.today()
     today_summary = None
     for offset in range(window):
         target = today - timedelta(days=offset)
-        summary = sync_daily_summary(target)
+        summary = sync_daily_summary(target, user)
         if offset == 0:
             today_summary = summary
 
@@ -95,18 +151,44 @@ def _scheduled_daily_sync():
             logger.exception("AI analysis failed for daily summary %s", today_summary.id)
 
 
+def _scheduled_activity_sync():
+    """Scheduled job: sync activities + calendar for every connected user."""
+    for user in _iter_garmin_users():
+        try:
+            run_activity_sync_for_user(user.id)
+        except Exception:
+            logger.exception("Activity sync failed for user %s", user.id)
+
+
+def _scheduled_daily_sync():
+    """Scheduled job: per-user rolling daily-summary sync + AI analysis."""
+    for user in _iter_garmin_users():
+        try:
+            run_daily_sync_for_user(user.id)
+        except Exception:
+            logger.exception("Daily sync failed for user %s", user.id)
+
+
 def _scheduled_weekly_review():
-    """Scheduled job: weekly training review."""
+    """Scheduled job: weekly training review for every connected user."""
     from app.ai_coach import weekly_review
 
-    weekly_review()
+    for user in _iter_garmin_users():
+        try:
+            weekly_review(user_id=user.id)
+        except Exception:
+            logger.exception("Weekly review failed for user %s", user.id)
 
 
 def _scheduled_plan_generation():
-    """Scheduled job: regenerate the training plan each week."""
+    """Scheduled job: regenerate the training plan for every connected user."""
     from app.ai_coach import generate_training_plan
 
-    generate_training_plan()
+    for user in _iter_garmin_users():
+        try:
+            generate_training_plan(user_id=user.id)
+        except Exception:
+            logger.exception("Plan generation failed for user %s", user.id)
 
 
 def _run_backfill():

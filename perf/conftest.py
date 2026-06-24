@@ -33,6 +33,16 @@ os.environ["DB_PATH"] = _DB_COPY
 os.environ["GARMIN_TOKEN_DIR"] = os.path.join(_TMP_DIR, "tokens")
 os.environ["AUTH_ENABLED"] = "false"
 
+# Apply any pending migrations so the copied db matches the current schema.
+_PROJECT_ROOT = _PERF_DIR.parent
+from alembic.config import Config as _AlembicConfig
+from alembic import command as _alembic_command
+
+_alembic_cfg = _AlembicConfig(str(_PROJECT_ROOT / "alembic.ini"))
+_alembic_cfg.set_main_option("sqlalchemy.url", f"sqlite:///{_DB_COPY}")
+_alembic_cfg.set_main_option("script_location", str(_PROJECT_ROOT / "alembic"))
+_alembic_command.upgrade(_alembic_cfg, "head")
+
 
 def _noop(*_args, **_kwargs):
     return None
