@@ -470,12 +470,13 @@ def _store_activity(
 
     # Fetch the per-sample detail streams (power/speed/HR/elevation time series).
     # Request high chart resolution so short-duration efforts aren't smoothed
-    # away (needed for accurate mean-maximal curves), and skip the GPS polyline
-    # we don't use.
+    # away (needed for accurate mean-maximal curves). Include the GPS polyline
+    # (maxpoly>0) so directLatitude/directLongitude land in activityDetailMetrics,
+    # aligned with the other streams, for the route silhouette on the detail view.
     laps = None
     try:
         detail_client = client or get_garmin_client()
-        laps = detail_client.get_activity_details(garmin_id, maxchart=10000, maxpoly=0)
+        laps = detail_client.get_activity_details(garmin_id, maxchart=10000, maxpoly=10000)
     except Exception as e:
         logger.debug("No detailed data for %s: %s", garmin_id, e)
 
