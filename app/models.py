@@ -268,6 +268,17 @@ class AthleteProfile(Base):
     injury_history = Column(Text, nullable=True)
     weekly_availability = Column(Text, nullable=True)
     training_preferences = Column(Text, nullable=True)
+    # Structured plan preferences (set via onboarding / plan-setup UI)
+    training_volume = Column(Text, nullable=True)    # gradual | steady | progressive
+    difficulty = Column(Text, nullable=True)          # comfortable | balanced | challenging
+    running_ability = Column(Text, nullable=True)    # beginner | intermediate | advanced | elite
+    elevation_profile = Column(Text, nullable=True)  # flat | rolling | moderate | hilly
+    weekly_mileage_km = Column(Float, nullable=True)
+    longest_run_km = Column(Float, nullable=True)
+    runs_per_week = Column(Integer, nullable=True)
+    available_days = Column(Text, nullable=True)      # JSON array e.g. '["Mon","Wed","Sun"]'
+    long_run_day = Column(Text, nullable=True)        # e.g. "Sunday"
+    race_times_json = Column(Text, nullable=True)    # JSON obj e.g. '{"marathon":"4:06:10"}'
     created_at = Column(DateTime, default=_utcnow)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 

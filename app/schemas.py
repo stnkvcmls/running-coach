@@ -341,6 +341,17 @@ class AthleteProfileRequest(BaseModel):
     injury_history: str | None = None
     weekly_availability: str | None = None
     training_preferences: str | None = None
+    # Structured plan preferences
+    training_volume: str | None = None
+    difficulty: str | None = None
+    running_ability: str | None = None
+    elevation_profile: str | None = None
+    weekly_mileage_km: float | None = None
+    longest_run_km: float | None = None
+    runs_per_week: int | None = None
+    available_days: str | None = None
+    long_run_day: str | None = None
+    race_times_json: str | None = None
 
 
 class AthleteProfileResponse(BaseModel):
@@ -359,6 +370,17 @@ class AthleteProfileResponse(BaseModel):
     injury_history: str | None = None
     weekly_availability: str | None = None
     training_preferences: str | None = None
+    # Structured plan preferences
+    training_volume: str | None = None
+    difficulty: str | None = None
+    running_ability: str | None = None
+    elevation_profile: str | None = None
+    weekly_mileage_km: float | None = None
+    longest_run_km: float | None = None
+    runs_per_week: int | None = None
+    available_days: str | None = None
+    long_run_day: str | None = None
+    race_times_json: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

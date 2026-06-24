@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { ClipboardList, RefreshCw, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { ClipboardList, RefreshCw, ChevronLeft, ChevronRight, AlertTriangle, Settings2 } from 'lucide-react'
 import { useTrainingPlan, useGenerateTrainingPlan, useRealignmentStatus, useRealignPlan } from '../../api/hooks'
 import type { TrainingPlanDay, TrainingPlanWeek } from '../../api/types'
 import './PlanView.css'
@@ -126,6 +127,7 @@ export default function PlanView() {
   const { data: plan, isLoading } = useTrainingPlan()
   const { mutate: generate, isPending: isGenerating } = useGenerateTrainingPlan()
   const [weekIndex, setWeekIndex] = useState(0)
+  const navigate = useNavigate()
 
   if (isLoading) return <div className="spinner" />
 
@@ -171,15 +173,25 @@ export default function PlanView() {
             Generated {new Date(plan.generated_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
           </span>
         </div>
-        <button
-          className="plan-regen-btn"
-          onClick={() => generate()}
-          disabled={isGenerating}
-          title="Regenerate plan"
-        >
-          <RefreshCw size={16} className={isGenerating ? 'spin' : ''} />
-          {isGenerating ? 'Generating…' : 'Regenerate'}
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            className="plan-regen-btn"
+            onClick={() => navigate('/plan/setup')}
+            title="Training preferences"
+          >
+            <Settings2 size={16} />
+            Preferences
+          </button>
+          <button
+            className="plan-regen-btn"
+            onClick={() => generate()}
+            disabled={isGenerating}
+            title="Regenerate plan"
+          >
+            <RefreshCw size={16} className={isGenerating ? 'spin' : ''} />
+            {isGenerating ? 'Generating…' : 'Regenerate'}
+          </button>
+        </div>
       </div>
 
       {plan.overview && (
