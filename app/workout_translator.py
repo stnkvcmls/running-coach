@@ -26,8 +26,8 @@ _STEP_RECOVERY = {"stepTypeId": 4, "stepTypeKey": "recovery", "displayOrder": 4}
 _STEP_REST     = {"stepTypeId": 5, "stepTypeKey": "rest",     "displayOrder": 5}
 _STEP_REPEAT   = {"stepTypeId": 6, "stepTypeKey": "repeat",   "displayOrder": 6}
 
-# End conditions: DISTANCE=1, TIME=2, ITERATIONS=7 (per ConditionType in garminconnect)
-_END_DISTANCE   = {"conditionTypeId": 1, "conditionTypeKey": "distance",   "displayOrder": 1, "displayable": True}
+# End conditions: verified from live Garmin API behaviour (conditionTypeId 1 = lap button press)
+_END_DISTANCE   = {"conditionTypeId": 3, "conditionTypeKey": "distance",   "displayOrder": 3, "displayable": True}
 _END_TIME       = {"conditionTypeId": 2, "conditionTypeKey": "time",       "displayOrder": 2, "displayable": True}
 _END_ITERATIONS = {"conditionTypeId": 7, "conditionTypeKey": "iterations", "displayOrder": 7, "displayable": False}
 
@@ -162,8 +162,10 @@ def _build_interval(dist_m: float, pace_min_km: float | None) -> list[dict]:
     else:
         rep_m = 1600.0
 
-    reps = max(3, min(8, int(round(work_dist / (rep_m * 1.4)))))
-    recovery_secs = int(rep_m * 0.4 / (pace_min_km / 60.0 if pace_min_km else 5.5) * 0.8) if pace_min_km else 90
+    # Recovery is time-based so reps = work distance / rep distance
+    reps = max(3, min(8, int(round(work_dist / rep_m))))
+    # ~90s per 1 km of rep; minimum 60s
+    recovery_secs = max(60, int(rep_m * 0.09))
 
     target = _pace_target(pace_min_km) if pace_min_km else None
     child_steps = [
