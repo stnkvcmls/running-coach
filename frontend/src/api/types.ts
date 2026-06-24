@@ -291,6 +291,7 @@ export interface AthleteProfile {
   available_days: string | null
   long_run_day: string | null
   race_times_json: string | null
+  target_weekly_km: number | null
   created_at: string | null
   updated_at: string | null
 }
@@ -320,6 +321,7 @@ export interface AthleteProfileRequest {
   available_days?: string | null
   long_run_day?: string | null
   race_times_json?: string | null
+  target_weekly_km?: number | null
 }
 
 export interface ZoneConfig {

@@ -279,6 +279,7 @@ class AthleteProfile(Base):
     available_days = Column(Text, nullable=True)      # JSON array e.g. '["Mon","Wed","Sun"]'
     long_run_day = Column(Text, nullable=True)        # e.g. "Sunday"
     race_times_json = Column(Text, nullable=True)    # JSON obj e.g. '{"marathon":"4:06:10"}'
+    target_weekly_km = Column(Float, nullable=True)  # target km/week for the plan
     created_at = Column(DateTime, default=_utcnow)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 

@@ -356,6 +356,8 @@ def _format_athlete_profile_context(profile: AthleteProfile, reference_date: dat
         }
         hint = _elev_hints.get(profile.elevation_profile, "")
         lines.append(f"- Elevation Profile: {profile.elevation_profile}" + (f" ({hint})" if hint else ""))
+    if getattr(profile, "target_weekly_km", None):
+        lines.append(f"- Target Weekly Mileage: {profile.target_weekly_km:.1f} km")
     if getattr(profile, "weekly_mileage_km", None):
         lines.append(f"- Current Weekly Mileage: {profile.weekly_mileage_km:.1f} km")
     if getattr(profile, "longest_run_km", None):

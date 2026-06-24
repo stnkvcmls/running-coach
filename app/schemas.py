@@ -352,6 +352,7 @@ class AthleteProfileRequest(BaseModel):
     available_days: str | None = None
     long_run_day: str | None = None
     race_times_json: str | None = None
+    target_weekly_km: float | None = None
 
 
 class AthleteProfileResponse(BaseModel):
@@ -381,6 +382,7 @@ class AthleteProfileResponse(BaseModel):
     available_days: str | None = None
     long_run_day: str | None = None
     race_times_json: str | None = None
+    target_weekly_km: float | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

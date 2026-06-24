@@ -9,7 +9,7 @@ interface RaceTime {
 }
 
 const DISTANCES: RaceTime[] = [
-  { key: 'marathon', label: 'Half / Full marathon time', abbr: '42.2' },
+  { key: 'marathon', label: 'Full marathon time', abbr: '42.2' },
   { key: 'half_marathon', label: 'Half marathon time', abbr: '21.1' },
   { key: '10k', label: '10 km time', abbr: '10K' },
   { key: '5k', label: '5 km time', abbr: '5K' },

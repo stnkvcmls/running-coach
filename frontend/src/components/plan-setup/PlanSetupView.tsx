@@ -57,6 +57,7 @@ export default function PlanSetupView() {
       <div className="psu-section">
         <Row label="Training Volume" value={cap(p?.training_volume ?? '') || 'Not set'} onClick={() => setSheet('volume')} />
         <Row label="Difficulty" value={cap(p?.difficulty ?? '') || 'Not set'} onClick={() => setSheet('difficulty')} />
+        <Row label="Total Weekly Mileage" value={p?.target_weekly_km != null ? `${p.target_weekly_km} km` : 'Not set'} onClick={() => setSheet('mileage')} />
         <Row label="Current Weekly Mileage" value={p?.weekly_mileage_km != null ? `${p.weekly_mileage_km} km` : 'Not set'} onClick={() => setSheet('mileage')} />
         <Row label="Current Longest Run" value={p?.longest_run_km != null ? `${p.longest_run_km} km` : 'Not set'} onClick={() => setSheet('mileage')} />
       </div>
@@ -119,7 +120,8 @@ export default function PlanSetupView() {
         onClose={() => setSheet(null)}
         initialWeekly={p?.weekly_mileage_km ?? null}
         initialLongest={p?.longest_run_km ?? null}
-        onSave={(weekly, longest) => update({ weekly_mileage_km: weekly, longest_run_km: longest })}
+        initialTarget={p?.target_weekly_km ?? null}
+        onSave={(weekly, longest, target) => update({ weekly_mileage_km: weekly, longest_run_km: longest, target_weekly_km: target })}
       />
       <ScheduleSheet
         open={sheet === 'schedule'}
