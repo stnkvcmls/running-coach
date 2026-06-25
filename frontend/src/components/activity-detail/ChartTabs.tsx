@@ -5,7 +5,7 @@ import {
 } from 'recharts'
 import type { ChartSeries, MetricZone } from '../../api/types'
 import { useTheme } from '../../App'
-import { getChartTooltipStyle } from '../../utils/theme'
+import { getChartTooltipStyle, getChartTooltipTextStyle } from '../../utils/theme'
 import './ChartTabs.css'
 
 const chartColors: Record<string, string> = {
@@ -63,6 +63,7 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
   const reversed = activeKey === 'pace'
 
   const tooltipStyle = getChartTooltipStyle(theme)
+  const tooltipTextStyle = getChartTooltipTextStyle(theme)
 
   const formatValue = (value: any) => {
     if (value === null || value === undefined) return ['-', series.label]
@@ -104,6 +105,8 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
               <YAxis dataKey="y" hide domain={['auto', 'auto']} />
               <Tooltip
                 contentStyle={tooltipStyle}
+                labelStyle={tooltipTextStyle}
+                itemStyle={tooltipTextStyle}
                 formatter={(value: any) => formatValue(value)}
                 labelFormatter={() => ''}
               />
@@ -163,6 +166,8 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
             />
             <Tooltip
               contentStyle={tooltipStyle}
+              labelStyle={tooltipTextStyle}
+              itemStyle={tooltipTextStyle}
               formatter={formatValue}
               labelFormatter={() => ''}
             />

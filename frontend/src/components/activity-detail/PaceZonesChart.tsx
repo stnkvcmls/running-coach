@@ -2,7 +2,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { useZoneConfigs } from '../../api/hooks'
 import type { ChartSeries } from '../../api/types'
 import { useTheme } from '../../App'
-import { getChartTooltipStyle, getChartTickColor } from '../../utils/theme'
+import { getChartTooltipStyle, getChartTickColor, getChartTooltipTextStyle } from '../../utils/theme'
 import './PaceZonesChart.css'
 
 interface Props {
@@ -91,6 +91,8 @@ export default function PaceZonesChart({ paceSeries }: Props) {
             />
             <Tooltip
               contentStyle={getChartTooltipStyle(theme)}
+              labelStyle={getChartTooltipTextStyle(theme)}
+              itemStyle={getChartTooltipTextStyle(theme)}
               formatter={(value: number, _name: string, props: any) => [
                 `${value}% (${props.payload.rangeLabel})`,
                 'Time',
