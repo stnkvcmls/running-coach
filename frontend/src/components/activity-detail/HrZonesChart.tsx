@@ -16,7 +16,7 @@ export default function HrZonesChart({ zones }: Props) {
   if (!zones || !Array.isArray(zones) || zones.length === 0) return null
 
   const data = zones.map((z: any, i: number) => {
-    const secs = z?.secsInZone || z?.zoneLowBoundary || 0
+    const secs = z?.secsInZone ?? 0
     const mins = Math.round(secs / 60)
     return {
       zone: ZONE_LABELS[i] || `Zone ${i + 1}`,
