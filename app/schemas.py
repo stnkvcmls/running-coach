@@ -555,3 +555,9 @@ class IntensityTrendsResponse(BaseModel):
     weeks: list[IntensityWeek] = []
     zone_type: str
     days: int
+
+
+class PushWorkoutResponse(BaseModel):
+    workout_name: str
+    garmin_workout_id: int | str
+    scheduled_date: str

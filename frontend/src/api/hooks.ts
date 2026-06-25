@@ -16,6 +16,7 @@ import type {
   IntensityTrendsResponse,
   PerformanceCurveResponse,
   PlanRealignmentStatus,
+  PushWorkoutResponse,
   SettingsResponse,
   AiConfigResponse,
   AiConfigRequest,
@@ -322,5 +323,12 @@ export function useRealignPlan() {
       qc.invalidateQueries({ queryKey: ['training-plan'] })
       qc.invalidateQueries({ queryKey: ['realignment-status'] })
     },
+  })
+}
+
+export function usePushWorkoutToGarmin() {
+  return useMutation({
+    mutationFn: (dayId: number) =>
+      apiPost<PushWorkoutResponse>(`/training-plan/days/${dayId}/push-to-garmin`, {}),
   })
 }

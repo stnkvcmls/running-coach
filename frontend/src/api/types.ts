@@ -479,3 +479,9 @@ export interface IntensityTrendsResponse {
   zone_type: string
   days: number
 }
+
+export interface PushWorkoutResponse {
+  workout_name: string
+  garmin_workout_id: number | string
+  scheduled_date: string
+}
