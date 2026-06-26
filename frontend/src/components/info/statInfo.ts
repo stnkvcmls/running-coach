@@ -93,6 +93,100 @@ export const STAT_INFO: Record<string, InfoTopic> = {
     ],
   },
 
+  'performance-curve': {
+    title: 'Performance Curve',
+    intro:
+      'The performance curve (also called a mean-maximal or power-duration curve) shows the best ' +
+      'sustained pace or power achieved over a range of durations within the selected time window. ' +
+      'A two-parameter model is then fit to that frontier to derive physiological benchmarks ' +
+      'and race time predictions.',
+    stats: [
+      {
+        name: 'Mean-Maximal Curve',
+        description:
+          'For each standard duration (5 s to 90 min) the app finds the single best time-weighted ' +
+          'average pace or power you achieved anywhere within any activity in the window. Together ' +
+          'these "frontier best" points form the mean-maximal curve — the upper envelope of what ' +
+          'you can sustain.',
+        formula:
+          'best(d) = max over all windows of length d of: Σ(value × dt) ÷ Σ(dt)',
+        limits:
+          'Meaningful only when you have at least a few activities with full GPS or power stream data. ' +
+          'Maximal efforts for short durations (< 2 min) need dedicated speed or interval sessions — ' +
+          'easy runs leave those points blank.',
+      },
+      {
+        name: 'Critical Velocity',
+        acronym: 'CV (Critical Velocity)',
+        description:
+          'The highest sustainable aerobic running speed — essentially your running "threshold pace". ' +
+          'Estimated by fitting a two-parameter (hyperbolic) model to the mean-maximal pace curve. ' +
+          'It represents the asymptote the curve approaches as duration grows: the speed you could ' +
+          'theoretically hold forever on fresh legs.',
+        formula:
+          'speed(d) = CV + D′ ÷ d  →  CV is the slope (m/s), D′ is the y-intercept offset (m)',
+        limits:
+          'Requires efforts at multiple durations for a stable fit — at least a few runs with varied ' +
+          'pace including something near threshold. Displayed as pace (min/km) for readability. ' +
+          'Confidence rises with more activities in the window.',
+      },
+      {
+        name: 'D′',
+        acronym: 'D′ (Distance Prime)',
+        description:
+          'The finite anaerobic distance capacity above Critical Velocity — the total distance ' +
+          '"budget" you can run faster than CV before exhaustion forces you back below it. ' +
+          'Once spent it recovers slowly during sub-CV running. The pace analogue of W′ (work ' +
+          'capacity above Critical Power).',
+        formula: 'D′ = (speed(d) − CV) × d,  solved from the two-parameter CV fit (units: metres)',
+        limits:
+          'Typical recreational range: 100–400 m. A larger D′ means you can sustain surges and ' +
+          'short hard efforts longer before blowing up. Noisy until you have several near-maximal ' +
+          'short efforts in the data.',
+      },
+      {
+        name: 'Critical Power',
+        acronym: 'CP (Critical Power)',
+        description:
+          'The highest power output that can be sustained aerobically — the power equivalent of ' +
+          'Critical Velocity. Only shown when your activities include running power data (from a ' +
+          'Garmin running dynamics pod or foot pod). Analogous to cycling FTP but derived from ' +
+          'multi-duration maximal efforts rather than a single test.',
+        formula:
+          'power(d) = CP + W′ ÷ d  →  CP is the asymptote (W), W′ is the finite work capacity (J)',
+        limits:
+          'Requires power stream data across multiple durations. Displayed alongside W′ (kJ). ' +
+          'Absent if no power data is available in the selected window.',
+      },
+      {
+        name: 'W′',
+        acronym: 'W′ (W-Prime / Anaerobic Work Capacity)',
+        description:
+          'The finite anaerobic energy reserve above Critical Power — the total extra work ' +
+          '(in joules) you can do above CP before exhaustion. Once depleted it recovers when ' +
+          'power drops below CP. The power analogue of D′.',
+        formula: 'W′ = (power(d) − CP) × d,  solved from the CP two-parameter fit (units: joules)',
+        limits:
+          'Displayed in kJ. Typical trained recreational range: 15–30 kJ. Like D′, it stabilises ' +
+          'once the data includes genuine short-duration maximal efforts.',
+      },
+      {
+        name: 'Race Predictions',
+        description:
+          'Estimated finish times for standard distances (5 K, 10 K, Half Marathon, Marathon) ' +
+          'derived from the Critical Velocity model. For each distance the model solves for the ' +
+          'duration at which average speed equals CV + D′ / duration.',
+        formula:
+          'time(dist) = D′ ÷ (target_speed − CV),  where target_speed satisfies dist = target_speed × time(dist)',
+        limits:
+          'Predictions assume ideal conditions and fully fresh legs. They get more accurate as more ' +
+          'varied-effort runs enter the window. They are most reliable close to race distances you ' +
+          'have actually trained at — extrapolating to the marathon from only 5-km efforts ' +
+          'is speculative.',
+      },
+    ],
+  },
+
   'training-readiness': {
     title: 'Training Readiness',
     intro:

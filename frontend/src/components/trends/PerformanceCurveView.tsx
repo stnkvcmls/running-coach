@@ -12,6 +12,7 @@ import { usePerformanceCurve } from '../../api/hooks'
 import { useTheme } from '../../App'
 import { getChartTickColor } from '../../utils/theme'
 import type { PerformanceCurvePoint } from '../../api/types'
+import StatHelpButton from '../info/StatHelpButton'
 import './PerformanceCurveView.css'
 
 type Days = 30 | 60 | 90
@@ -91,7 +92,10 @@ export default function PerformanceCurveView() {
     return (
       <div className="perf-curve-view">
         <div className="perf-curve-header">
-          <span style={{ fontSize: '0.9rem', fontWeight: 700 }}>Performance Curve</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ fontSize: '0.9rem', fontWeight: 700 }}>Performance Curve</span>
+            <StatHelpButton topic="performance-curve" label="Performance Curve" />
+          </div>
           <div className="perf-curve-tab-strip">
             {DAY_OPTIONS.map(o => (
               <button
@@ -144,7 +148,10 @@ export default function PerformanceCurveView() {
   return (
     <div className="perf-curve-view">
       <div className="perf-curve-header">
-        <span style={{ fontSize: '0.9rem', fontWeight: 700 }}>Performance Curve</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ fontSize: '0.9rem', fontWeight: 700 }}>Performance Curve</span>
+          <StatHelpButton topic="performance-curve" label="Performance Curve" />
+        </div>
         <div className="perf-curve-controls">
           <div className="perf-curve-tab-strip">
             {DAY_OPTIONS.map(o => (
