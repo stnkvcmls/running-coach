@@ -93,6 +93,90 @@ export const STAT_INFO: Record<string, InfoTopic> = {
     ],
   },
 
+  'activity-performance': {
+    title: 'Activity Performance',
+    intro:
+      'These metrics describe the physiological stimulus of a single run — how aerobic, how ' +
+      'anaerobic, how aerobically efficient you were, and whether your heart rate stayed in sync ' +
+      'with your effort throughout.',
+    stats: [
+      {
+        name: 'Aerobic Training Effect',
+        acronym: 'Aerobic TE',
+        description:
+          'How much this run contributed to improving or maintaining your aerobic fitness. ' +
+          'Computed by your Garmin device from the combination of heart-rate intensity and ' +
+          'duration. A score of 3–4 is a productive aerobic workout; 5 indicates an overreaching ' +
+          'effort that should be followed by extra recovery.',
+        formula: 'Proprietary Garmin algorithm based on EPOC (Excess Post-exercise Oxygen Consumption) and HR-based intensity',
+        limits:
+          '0.0–1.9 = minor / recovery stimulus; 2.0–2.9 = maintaining fitness; 3.0–3.9 = improving; ' +
+          '4.0–4.9 = highly improving; 5.0 = overreaching. Needs a heart-rate monitor.',
+      },
+      {
+        name: 'Anaerobic Training Effect',
+        acronym: 'Anaerobic TE',
+        description:
+          'How much this run contributed to improving your speed and high-intensity capacity ' +
+          'by stressing the anaerobic energy system. High-anaerobic TE appears on interval and ' +
+          'tempo sessions; easy runs score near zero. Complements Aerobic TE — the two together ' +
+          'describe the full physiological demand of a session.',
+        formula: 'Proprietary Garmin algorithm based on above-threshold heart-rate time and intensity',
+        limits:
+          '0.0–0.9 = no anaerobic stimulus; 1.0–1.9 = minor; 2.0–2.9 = maintaining; ' +
+          '3.0–3.9 = improving; 4.0–4.9 = highly improving; 5.0 = overreaching.',
+      },
+      {
+        name: 'VO2max Estimate',
+        acronym: 'VO2max (maximal oxygen uptake)',
+        description:
+          'An estimate of your aerobic ceiling — the maximum rate at which your body can ' +
+          'use oxygen during exercise, in ml/kg/min. Garmin derives it by comparing your speed ' +
+          'and heart rate during outdoor GPS runs (GPS + heart rate required; treadmill and ' +
+          'indoor runs are excluded). The number improves gradually as fitness builds — ' +
+          'a single run can shift it only slightly, but the trend over weeks is meaningful.',
+        formula: 'Proprietary Garmin/Firstbeat algorithm: inferred from the speed-to-HR relationship over multiple runs',
+        limits:
+          'Values are age- and sex-dependent. Broad reference bands (all ages, male/female combined): ' +
+          '< 34 = poor; 34–42 = below average; 42–50 = average; 50–58 = above average; ' +
+          '58–65 = excellent; > 65 = elite. Requires consistent outdoor GPS running to be reliable.',
+      },
+      {
+        name: 'Aerobic Decoupling',
+        acronym: 'Pa:HR Decoupling (%)',
+        description:
+          'How much your heart rate drifted upward relative to your pace (or power) between ' +
+          'the first and second halves of the run — a measure of cardiac drift and aerobic ' +
+          'durability. A well-coupled run means your aerobic system handled the effort; a ' +
+          'high value means you were working progressively harder to hold the same pace.',
+        formula:
+          'decoupling = (first-half ratio − second-half ratio) ÷ first-half ratio × 100,  ' +
+          'where ratio = time-weighted avg GAP-speed ÷ avg HR for each half',
+        limits:
+          '< 3% = excellent aerobic durability; 3–5% = good, typical for a well-paced aerobic run; ' +
+          '5–8% = moderate cardiac drift; > 8% = significant drift — suggests the effort ' +
+          'exceeded aerobic threshold, the run was too long given fitness, or conditions were ' +
+          'unusually hot. Computed only for runs of 10 min or more with GPS and HR data.',
+      },
+      {
+        name: 'Efficiency Factor',
+        acronym: 'EF (Efficiency Factor)',
+        description:
+          'Average GAP-speed (grade-adjusted pace, converted to m/s) divided by average ' +
+          'heart rate for the entire run — a measure of aerobic economy. A rising EF over ' +
+          'similar efforts over weeks signals improving aerobic fitness. Compare across ' +
+          'runs at the same effort level, not across hard and easy days.',
+        formula:
+          'EF = avg GAP-speed (m/s) ÷ avg HR (bpm),  displayed as mm/s per bpm (× 1000). ' +
+          'Falls back to raw GPS speed when elevation data is unavailable.',
+        limits:
+          'Absolute values vary by athlete and conditions; trend matters more than the number ' +
+          'itself. Higher is better at the same relative effort. Compare easy runs with easy ' +
+          'runs, threshold with threshold. Computed only when GPS and HR streams are present.',
+      },
+    ],
+  },
+
   'performance-curve': {
     title: 'Performance Curve',
     intro:

@@ -14,6 +14,7 @@ import AiInsightCard from './AiInsightCard'
 import FeedbackPrompt from './FeedbackPrompt'
 import WorkoutSteps from '../today/WorkoutSteps'
 import AdherenceCard from './AdherenceCard'
+import StatHelpButton from '../info/StatHelpButton'
 import './ActivityDetailView.css'
 
 export default function ActivityDetailView() {
@@ -133,7 +134,10 @@ export default function ActivityDetailView() {
         {/* Performance */}
         {perfStats.length > 0 && (
           <section className="detail-section">
-            <h3 className="section-title">Performance</h3>
+            <div className="section-title-row">
+              <h3 className="section-title">Performance</h3>
+              <StatHelpButton topic="activity-performance" label="Performance" />
+            </div>
             <StatGrid stats={perfStats} columns={3} />
           </section>
         )}
