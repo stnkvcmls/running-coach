@@ -160,6 +160,38 @@ def test_compute_adherence_slower_pace():
     assert result.adherence_score < 80.0
 
 
+def test_planned_pace_weighted_average_for_alternating_intervals():
+    """Repeat block alternating fast + slow intervals uses distance-weighted avg pace.
+
+    A 7×(300m fast @ 4:50/km + 300m slow @ 5:35/km) workout has a blended
+    expected pace of (290+335)/2 = 312.5 s/km ≈ 5:12/km. An actual pace of
+    5:10/km (310 s/km) should register as ~2 s/km *faster* than plan and yield
+    a high adherence score — not 21 s/km slower as the old first-step logic gave.
+    """
+    steps = make_steps([
+        {"stepType": "repeat", "repeatCount": 7, "workoutSteps": [
+            {"stepType": "interval", "endCondition": "distance", "endConditionValue": 300,
+             "targetType": "pace", "targetValueOne": 1000 / 290},  # 4:50/km
+            {"stepType": "interval", "endCondition": "distance", "endConditionValue": 300,
+             "targetType": "pace", "targetValueOne": 1000 / 335},  # 5:35/km
+        ]},
+    ])
+    # 14 × 300m laps alternating between the two paces; blended actual ≈ 5:12/km.
+    lap_dtos = []
+    for _ in range(7):
+        lap_dtos.append({"distance": 300, "duration": 87, "intensityType": "INTERVAL"})   # 4:50/km
+        lap_dtos.append({"distance": 300, "duration": 100.5, "intensityType": "INTERVAL"})# 5:35/km
+    activity = FakeActivity(distance_m=4200.0, splits_json=json.dumps({"lapDTOs": lap_dtos}))
+    result = adh.compute_adherence(activity, steps)
+
+    # Weighted planned pace = (290×300 + 335×300) × 7 / (600×7) = 312.5 s/km ≈ 5:12/km
+    assert result.planned_pace_display == "5:12/km"
+
+    # Actual blended pace ≈ 312.5 s/km → delta near 0, not 20+ s slower.
+    assert result.pace_delta_sec_per_km == pytest.approx(0.0, abs=2.0)
+    assert result.adherence_score >= 95.0
+
+
 def test_compute_adherence_interval_count_from_repeat():
     """3x interval in a repeat block → planned_intervals = 3."""
     steps = make_steps([

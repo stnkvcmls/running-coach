@@ -561,18 +561,29 @@ def compute_adherence(
 
     flat = _flatten_steps(workout_steps)
 
-    # --- Planned pace: first interval step with a concrete pace target ---
-    # Computed first so it can serve as the fallback pace when converting
-    # time-based steps (warmup/cooldown/intervals given in time) to distance.
+    # --- Planned pace: distance-weighted average of all interval pace targets ---
+    # Using only the first pace target misrepresents workouts where intervals
+    # alternate between speeds (e.g. 300 m fast + 300 m slow × 7): the blended
+    # actual pace would be compared against the fast target alone, making a
+    # perfectly executed run look slow. A weighted average reflects what the
+    # athlete's overall pace is expected to be across the full workout.
     planned_pace_display: str | None = None
     planned_pace_sec: float | None = None
+    _pace_num = 0.0  # sum of pace_sec × distance_m
+    _pace_den = 0.0  # sum of distance_m
     for step in flat:
-        if step.step_type == "interval" and step.target_type == "pace" and step.target_display:
-            parsed = _parse_pace_display(step.target_display)
-            if parsed is not None:
-                planned_pace_display = step.target_display
-                planned_pace_sec = parsed
-                break
+        if step.step_type != "interval" or step.target_type != "pace" or not step.target_display:
+            continue
+        parsed = _parse_pace_display(step.target_display)
+        if parsed is None:
+            continue
+        # Use the step's own distance when known; fall back to equal weighting.
+        dist = _step_distance_m(step, parsed) or 1.0
+        _pace_num += parsed * dist
+        _pace_den += dist
+    if _pace_den > 0:
+        planned_pace_sec = _pace_num / _pace_den
+        planned_pace_display = _format_pace_sec(planned_pace_sec)
 
     # --- Planned distance: running periods only (warmup + cooldown + intervals).
     # Rest/recovery is excluded and tracked separately. Time-based running steps
