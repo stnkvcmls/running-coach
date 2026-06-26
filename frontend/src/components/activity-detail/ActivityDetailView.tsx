@@ -43,7 +43,7 @@ export default function ActivityDetailView() {
     activity.max_hr ? { label: 'Max HR', value: String(activity.max_hr), unit: 'bpm' } : null,
     activity.elevation_gain ? { label: 'Elev. Gain', value: `${Math.round(activity.elevation_gain)}`, unit: 'm' } : null,
     activity.calories ? { label: 'Calories', value: String(Math.round(activity.calories)), unit: 'kcal' } : null,
-    activity.avg_cadence ? { label: 'Cadence', value: String(Math.round(activity.avg_cadence * 2)), unit: 'spm' } : null,
+    activity.avg_cadence ? { label: 'Cadence', value: String(Math.round(activity.avg_cadence)), unit: 'spm' } : null,
     activity.avg_stride ? { label: 'Stride', value: activity.avg_stride.toFixed(2), unit: 'm' } : null,
   ].filter(Boolean) as { label: string; value: string; unit?: string }[]
 
