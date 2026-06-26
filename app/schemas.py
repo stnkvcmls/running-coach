@@ -151,6 +151,10 @@ class ActivityDetail(BaseModel):
     run_time_sec: float | None = None
     walk_time_sec: float | None = None
 
+    # Aerobic coupling metrics
+    decoupling_pct: float | None = None
+    efficiency_factor: float | None = None
+
     # Parsed JSON fields
     splits: Any | None = None
     hr_zones: Any | None = None

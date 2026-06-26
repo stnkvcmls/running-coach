@@ -80,6 +80,7 @@ from app import training_load
 from app import threshold as threshold_mod
 from app import adherence as adherence_mod
 from app import intensity as intensity_mod
+from app import streams as streams_mod
 from app.config import AVAILABLE_MODELS
 from app.utils import safe_json_loads, parse_activity_charts, parse_activity_route, calculate_age
 
@@ -379,6 +380,17 @@ def api_activity_detail(
                 logger.debug("On-demand route fetch failed for %s: %s", activity.garmin_id, e)
 
     chart_data = parse_activity_charts(laps)
+
+    # Backfill aerobic metrics for activities synced before this feature landed.
+    if activity.decoupling_pct is None and laps:
+        try:
+            dec, ef = streams_mod.compute_aerobic_metrics_from_details(laps)
+            if dec is not None or ef is not None:
+                activity.decoupling_pct = dec
+                activity.efficiency_factor = ef
+                db.commit()
+        except Exception:
+            pass
 
     insight = (
         db.query(Insight)

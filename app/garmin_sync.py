@@ -482,6 +482,8 @@ def _store_activity(
 
     # Mean-maximal curves derived from those streams.
     mean_max = None
+    decoupling_pct = None
+    efficiency_factor = None
     if laps:
         try:
             curves = streams.compute_curves_from_details(laps, fields.get("activity_type"))
@@ -489,6 +491,10 @@ def _store_activity(
                 mean_max = json.dumps(curves)
         except Exception as e:
             logger.debug("Could not compute mean-max curves for %s: %s", garmin_id, e)
+        try:
+            decoupling_pct, efficiency_factor = streams.compute_aerobic_metrics_from_details(laps)
+        except Exception as e:
+            logger.debug("Could not compute aerobic metrics for %s: %s", garmin_id, e)
 
     activity = Activity(
         **fields,
@@ -502,6 +508,8 @@ def _store_activity(
         typed_splits_json=json.dumps(typed_splits) if typed_splits else None,
         power_zones_json=json.dumps(power_zones) if power_zones else None,
         mean_max_json=mean_max,
+        decoupling_pct=decoupling_pct,
+        efficiency_factor=efficiency_factor,
         raw_json=json.dumps(summary, default=str),
         synced_at=datetime.now(timezone.utc),
         ai_analyzed=skip_ai,
