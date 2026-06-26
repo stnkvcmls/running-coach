@@ -344,7 +344,7 @@ def _extract_activity_fields(summary: dict, details: dict | None = None) -> dict
         "elevation_gain": summary.get("elevationGain"),
         "elevation_loss": summary.get("elevationLoss"),
         "avg_cadence": summary.get("averageRunningCadenceInStepsPerMinute"),
-        "avg_stride": summary.get("avgStrideLength"),
+        "avg_stride": summary.get("avgStrideLength") / 100 if summary.get("avgStrideLength") is not None else None,
         "training_effect_aerobic": summary.get("aerobicTrainingEffect"),
         "training_effect_anaerobic": summary.get("anaerobicTrainingEffect"),
         "vo2max": summary.get("vO2MaxValue"),
