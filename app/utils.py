@@ -1,6 +1,8 @@
 import json
 from datetime import date
 
+from app.streams import grade_adjusted_speed
+
 
 def calculate_age(dob: date | None, reference: date | None = None) -> int | None:
     """Return age in whole years from a date of birth, or None if unset."""
@@ -83,6 +85,25 @@ def parse_activity_charts(laps_data) -> dict:
             round(v * 2) if v is not None else None
             for v in charts["cadence"]["data"]
         ]
+
+    # GAP (grade-adjusted pace): reuse speed/elevation/distance columns if available.
+    spd_idx = col_map.get("directSpeed")
+    elev_idx = col_map.get("directElevation")
+    dist_idx = col_map.get("sumDistance")
+    if spd_idx is not None and elev_idx is not None and dist_idx is not None:
+        spd_raw, elev_raw, dist_raw = [], [], []
+        for m in sampled:
+            arr = m.get("metrics", [])
+            spd_raw.append(arr[spd_idx] if spd_idx < len(arr) else None)
+            elev_raw.append(arr[elev_idx] if elev_idx < len(arr) else None)
+            dist_raw.append(arr[dist_idx] if dist_idx < len(arr) else None)
+        gap_speed = grade_adjusted_speed(spd_raw, elev_raw, dist_raw)
+        gap_pace = [
+            round(1000 / (60 * v), 2) if v and v > 0 else None
+            for v in gap_speed
+        ]
+        if any(v is not None for v in gap_pace):
+            charts["gap_pace"] = {"label": "GAP", "unit": "min/km", "data": gap_pace}
 
     return charts
 

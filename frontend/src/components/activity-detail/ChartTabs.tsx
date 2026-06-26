@@ -12,6 +12,7 @@ const chartColors: Record<string, string> = {
   heart_rate: '#e74c3c',
   elevation: '#2ecc71',
   pace: '#f39c12',
+  gap_pace: '#fd9644',
   cadence: '#0984e3',
   power: '#e84393',
   gct: '#6c5ce7',
@@ -59,8 +60,8 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
   const isScatter = SCATTER_METRICS.has(activeKey)
   const zones = metricZones?.[activeKey]
 
-  // Reverse Y for pace (lower pace = faster = better)
-  const reversed = activeKey === 'pace'
+  // Reverse Y for pace metrics (lower value = faster = better)
+  const reversed = activeKey === 'pace' || activeKey === 'gap_pace'
 
   const tooltipStyle = getChartTooltipStyle(theme)
   const tooltipTextStyle = getChartTooltipTextStyle(theme)
@@ -68,7 +69,7 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
   const formatValue = (value: any) => {
     if (value === null || value === undefined) return ['-', series.label]
     const num = Number(value)
-    if (activeKey === 'pace') {
+    if (activeKey === 'pace' || activeKey === 'gap_pace') {
       const m = Math.floor(num)
       const s = Math.round((num - m) * 60)
       return [`${m}:${s.toString().padStart(2, '0')}`, series.label]
