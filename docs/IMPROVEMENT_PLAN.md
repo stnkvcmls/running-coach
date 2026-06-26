@@ -115,7 +115,7 @@ reuse `_build_context`), `app/api.py` (`POST /chat`, history fetch; SSE optional
 `frontend/src/components/chat/*`, `frontend/src/api/` hooks + types, bottom-nav
 entry in `frontend/src/components/layout/*`.
 
-#### P0-2 · Aerobic decoupling / efficiency factor
+#### ✅ P0-2 · Aerobic decoupling / efficiency factor
 **What:** From the aligned power/GAP-speed/HR stream arrays already parsed in
 `app/streams.py`, compute **aerobic decoupling** (first-half vs second-half
 power-or-pace : HR ratio) and **efficiency factor** (NP/avg-HR or GAP-speed/avg-

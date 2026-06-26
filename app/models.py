@@ -130,6 +130,12 @@ class Activity(Base):
     # computed from the per-sample detail streams. See app/streams.py.
     mean_max_json = Column(Text)
 
+    # Aerobic coupling metrics derived from aligned pace/power + HR streams.
+    # decoupling_pct: Pa:HR drift between first and second half (< 5% = well coupled).
+    # efficiency_factor: avg GAP-speed / avg HR in m/s per bpm.
+    decoupling_pct = Column(Float, nullable=True)
+    efficiency_factor = Column(Float, nullable=True)
+
     # User feedback
     feedback_rating = Column(String(10), nullable=True)   # "good" or "bad"
     feedback_tags = Column(Text, nullable=True)            # JSON array of setback tags

@@ -292,6 +292,137 @@ def compute_curves_from_details(
     return result
 
 
+def compute_aerobic_metrics(
+    streams: dict[str, list[float | None]],
+) -> tuple[float | None, float | None]:
+    """Compute aerobic decoupling and efficiency factor from aligned stream arrays.
+
+    Aerobic decoupling (Pa:HR) measures cardiac drift: the change in the
+    pace-or-power : HR ratio between the first and second halves of the run.
+    A value below ~5% indicates good aerobic coupling at the effort level used.
+
+    Efficiency Factor (EF) = avg_GAP_speed / avg_HR, expressed in m/s/bpm.
+    Falls back to raw speed when GAP is unavailable.
+
+    Returns (decoupling_pct, efficiency_factor), either or both may be None when
+    the streams lack sufficient data (no HR, too short, etc.).
+    """
+    time = streams.get("time", [])
+    hr = streams.get("hr", [])
+    speed = streams.get("speed", [])
+    elevation = streams.get("elevation", [])
+    distance = streams.get("distance", [])
+
+    gap = grade_adjusted_speed(speed, elevation, distance)
+
+    # Build clean (t, pace_proxy, hr) triples — prefer GAP, fall back to speed.
+    pts: list[tuple[float, float, float]] = []
+    for t, s, g, h in zip(time, speed, gap, hr):
+        if not isinstance(t, (int, float)):
+            continue
+        if not isinstance(h, (int, float)) or h <= 0:
+            continue
+        v = g if isinstance(g, (int, float)) and g > 0 else (s if isinstance(s, (int, float)) and s > 0 else None)
+        if v is None:
+            continue
+        pts.append((float(t), float(v), float(h)))
+
+    if len(pts) < 20:
+        return None, None
+
+    pts.sort(key=lambda p: p[0])
+    t0, t1 = pts[0][0], pts[-1][0]
+    total_duration = t1 - t0
+    if total_duration < 600:  # need at least 10 min
+        return None, None
+
+    mid = t0 + total_duration / 2
+
+    # Time-weighted means for first and second halves.
+    def _half_means(subset: list[tuple[float, float, float]]) -> tuple[float, float] | None:
+        if len(subset) < 2:
+            return None
+        sum_vdt = sum_hdt = sum_dt = 0.0
+        for i in range(1, len(subset)):
+            dt = subset[i][0] - subset[i - 1][0]
+            if dt <= 0:
+                continue
+            sum_vdt += subset[i - 1][1] * dt
+            sum_hdt += subset[i - 1][2] * dt
+            sum_dt += dt
+        if sum_dt <= 0:
+            return None
+        return sum_vdt / sum_dt, sum_hdt / sum_dt
+
+    first_half = [p for p in pts if p[0] <= mid]
+    second_half = [p for p in pts if p[0] > mid]
+
+    f = _half_means(first_half)
+    s = _half_means(second_half)
+    if f is None or s is None or f[1] <= 0 or s[1] <= 0:
+        return None, None
+
+    first_ratio = f[0] / f[1]
+    second_ratio = s[0] / s[1]
+
+    # Positive decoupling = HR drifted up relative to pace in second half (normal).
+    if first_ratio <= 0:
+        decoupling_pct = None
+    else:
+        decoupling_pct = round((first_ratio - second_ratio) / first_ratio * 100, 2)
+
+    # EF over the whole activity.
+    all_means = _half_means(pts)
+    if all_means is None or all_means[1] <= 0:
+        ef = None
+    else:
+        ef = round(all_means[0] / all_means[1], 6)  # m/s per bpm
+
+    return decoupling_pct, ef
+
+
+def compute_aerobic_metrics_from_details(
+    details: dict | None,
+) -> tuple[float | None, float | None]:
+    """Parse Garmin detail payload and return (decoupling_pct, efficiency_factor)."""
+    parsed = parse_streams(details)
+    if parsed is None:
+        return None, None
+    return compute_aerobic_metrics(parsed)
+
+
+def backfill_missing_aerobic_metrics(db: Session, limit: int = 500, user_id: int | None = None) -> int:
+    """Compute decoupling_pct / efficiency_factor for activities that lack them.
+
+    Mirrors the pattern of backfill_missing_curves. Returns the number of rows updated.
+    """
+    from app.models import Activity
+
+    query = db.query(Activity).filter(
+        Activity.decoupling_pct.is_(None),
+        Activity.laps_json.isnot(None),
+    )
+    if user_id is not None:
+        query = query.filter(Activity.user_id == user_id)
+    rows = query.order_by(Activity.started_at.desc()).limit(limit).all()
+
+    updated = 0
+    for act in rows:
+        try:
+            details = json.loads(act.laps_json)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        dec, ef = compute_aerobic_metrics_from_details(details)
+        if dec is not None or ef is not None:
+            act.decoupling_pct = dec
+            act.efficiency_factor = ef
+            updated += 1
+    if updated:
+        db.commit()
+        logger.info("Backfilled aerobic metrics for %d activities", updated)
+    return updated
+
+
 def backfill_missing_curves(db: Session, limit: int = 500, user_id: int | None = None) -> int:
     """Compute ``mean_max_json`` for synced activities that lack it.
 

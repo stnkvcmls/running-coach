@@ -207,6 +207,19 @@ def _format_activity_context(
         except (json.JSONDecodeError, TypeError):
             pass
 
+    # Aerobic coupling metrics
+    if activity.decoupling_pct is not None:
+        coupling = (
+            "excellent aerobic durability" if activity.decoupling_pct < 3
+            else "good aerobic durability" if activity.decoupling_pct < 5
+            else "moderate cardiac drift" if activity.decoupling_pct < 8
+            else "significant cardiac drift"
+        )
+        parts.append(f"Aerobic Decoupling: {activity.decoupling_pct:.1f}% — {coupling}")
+    if activity.efficiency_factor is not None:
+        # Convert m/s per bpm to a more readable format (multiply by 1000 → mm/s per bpm)
+        parts.append(f"Efficiency Factor: {activity.efficiency_factor * 1000:.2f} mm/s/bpm")
+
     # Add lap data if available
     if activity.laps_json:
         try:

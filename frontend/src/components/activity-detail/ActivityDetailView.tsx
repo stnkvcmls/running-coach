@@ -63,6 +63,8 @@ export default function ActivityDetailView() {
     activity.training_effect_aerobic ? { label: 'Aerobic TE', value: activity.training_effect_aerobic.toFixed(1) } : null,
     activity.training_effect_anaerobic ? { label: 'Anaerobic TE', value: activity.training_effect_anaerobic.toFixed(1) } : null,
     activity.vo2max ? { label: 'VO2max', value: activity.vo2max.toFixed(1) } : null,
+    activity.decoupling_pct != null ? { label: 'Decoupling', value: activity.decoupling_pct.toFixed(1), unit: '%' } : null,
+    activity.efficiency_factor != null ? { label: 'EF', value: (activity.efficiency_factor * 1000).toFixed(2), unit: 'mm/s/bpm' } : null,
   ].filter(Boolean) as { label: string; value: string; unit?: string }[]
 
   return (

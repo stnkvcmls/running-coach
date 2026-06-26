@@ -103,6 +103,8 @@ export interface ActivityDetail extends ActivitySummary {
   max_respiration_rate: number | null
   run_time_sec: number | null
   walk_time_sec: number | null
+  decoupling_pct: number | null
+  efficiency_factor: number | null
   splits: any
   hr_zones: any
   weather: any
