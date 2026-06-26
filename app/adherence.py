@@ -404,45 +404,40 @@ def _lap_channel(intensity: str, is_rest: bool) -> str:
     return "work"
 
 
-def _merge_lap_segments(laps: list[dict]) -> list[dict]:
-    """Collapse consecutive laps that belong to the same workout step.
+def _consume_channel_laps(
+    laps: list[dict], start: int, planned_dist_m: float | None
+) -> tuple[dict, int]:
+    """Consume one or more raw laps from ``start`` to match one planned step.
 
-    Garmin auto-lap (e.g. a per-km split) breaks one workout step into several
-    laps that share the same ``intensityType`` (a 2 km warmup → two 1 km laps).
-    Merging consecutive laps with the same non-empty intensity restores one
-    segment per step. Distinct steps never merge because intervals and rests
-    alternate intensities. Untyped laps (no ``intensityType``) are never merged.
+    For distance-based steps the function greedily consumes consecutive laps
+    until the accumulated distance reaches at least 85 % of ``planned_dist_m``.
+    This handles Garmin auto-lap (e.g. a 2 km warmup recorded as two 1 km laps)
+    without over-consuming into a separately planned step.
+    For time-based or distance-unknown steps a single lap is consumed.
+
+    Returns ``(segment_dict, next_cursor)``.
     """
-    segments: list[dict] = []
-    for lap in laps:
-        prev = segments[-1] if segments else None
-        if (
-            prev is not None
-            and lap["intensity"]
-            and lap["intensity"] == prev["intensity"]
-        ):
-            prev["distance"] += lap["distance"]
-            if lap["duration"] is None or prev["duration"] is None:
-                prev["duration"] = None
-            else:
-                prev["duration"] += lap["duration"]
-        else:
-            segments.append(
-                {
-                    "distance": lap["distance"],
-                    "duration": lap["duration"],
-                    "intensity": lap["intensity"],
-                    "is_rest": lap["is_rest"],
-                    "channel": _lap_channel(lap["intensity"], lap["is_rest"]),
-                }
-            )
-    for seg in segments:
-        seg["pace_sec"] = (
-            seg["duration"] / (seg["distance"] / 1000.0)
-            if seg["duration"] and seg["distance"]
-            else None
-        )
-    return segments
+    lap = laps[start]
+    total_dist = lap["distance"]
+    total_dur = lap["duration"] or 0.0
+    end = start + 1
+
+    if planned_dist_m is not None:
+        threshold = planned_dist_m * 0.85
+        while end < len(laps) and total_dist < threshold:
+            nxt = laps[end]
+            total_dist += nxt["distance"]
+            total_dur += nxt["duration"] or 0.0
+            end += 1
+
+    pace_sec = total_dur / (total_dist / 1000.0) if total_dur and total_dist else None
+    return {
+        "distance": total_dist,
+        "duration": total_dur if total_dur else None,
+        "pace_sec": pace_sec,
+        "intensity": lap["intensity"],
+        "is_rest": lap["is_rest"],
+    }, end
 
 
 def _align_intervals(
@@ -453,13 +448,20 @@ def _align_intervals(
 
     Planned steps and executed laps do not line up by index in practice: Garmin
     auto-lap splits long steps and the recorded lap count rarely equals the
-    planned step count. Instead, each side is bucketed into channels
-    (warmup / work-interval / rest / cooldown); laps are merged per step
-    (:func:`_merge_lap_segments`) and then paired in order *within* each channel.
-    Rows are emitted in planned order, so the table still reads top to bottom as
-    the workout was prescribed. Steps with no remaining lap in their channel are
-    returned with ``matched=False``. Returns ``[]`` for trivial workouts (no
-    interval structure) so the UI only shows the breakdown when it adds value.
+    planned step count. Each side is bucketed into channels
+    (warmup / work-interval / rest / cooldown) and paired in order within each
+    channel. Rows are emitted in planned order, so the table still reads top to
+    bottom as the workout was prescribed. Steps with no remaining lap in their
+    channel are returned with ``matched=False``. Returns ``[]`` for trivial
+    workouts (no interval structure) so the UI only shows the breakdown when it
+    adds value.
+
+    Laps are NOT pre-merged. Instead, :func:`_consume_channel_laps` greedily
+    consumes one or more raw laps per planned step, guided by the step's planned
+    distance. This correctly handles both Garmin auto-lap splits (a 2 km warmup
+    → two 1 km laps that are consumed together) and back-to-back intervals that
+    share the same Garmin ``intensityType`` but have distinct planned distances
+    (each 300 m step gets its own lap rather than all being merged into one).
 
     Planned pace and distance are taken from each step's *own* target only.
     Steps without a pace target of their own (warmup, cooldown, untargeted
@@ -471,11 +473,11 @@ def _align_intervals(
     if not has_structure or not laps:
         return []
 
-    # Per-channel FIFO queues of executed lap segments.
-    queues: dict[str, list[dict]] = {"warmup": [], "work": [], "rest": [], "cooldown": []}
-    for seg in _merge_lap_segments(laps):
-        queues[seg["channel"]].append(seg)
-    cursor: dict[str, int] = {ch: 0 for ch in queues}
+    # Per-channel FIFO queues of raw executed laps (no pre-merging).
+    raw_queues: dict[str, list[dict]] = {"warmup": [], "work": [], "rest": [], "cooldown": []}
+    for lap in laps:
+        raw_queues[_lap_channel(lap["intensity"], lap["is_rest"])].append(lap)
+    cursor: dict[str, int] = {ch: 0 for ch in raw_queues}
 
     counters: dict[str, int] = {}
     rows: list[IntervalAdherence] = []
@@ -499,9 +501,10 @@ def _align_intervals(
 
         channel = _step_channel(step)
         seg = None
-        if cursor[channel] < len(queues[channel]):
-            seg = queues[channel][cursor[channel]]
-            cursor[channel] += 1
+        if cursor[channel] < len(raw_queues[channel]):
+            seg, cursor[channel] = _consume_channel_laps(
+                raw_queues[channel], cursor[channel], planned_dist
+            )
 
         if seg is None:
             rows.append(
@@ -558,18 +561,29 @@ def compute_adherence(
 
     flat = _flatten_steps(workout_steps)
 
-    # --- Planned pace: first interval step with a concrete pace target ---
-    # Computed first so it can serve as the fallback pace when converting
-    # time-based steps (warmup/cooldown/intervals given in time) to distance.
+    # --- Planned pace: distance-weighted average of all interval pace targets ---
+    # Using only the first pace target misrepresents workouts where intervals
+    # alternate between speeds (e.g. 300 m fast + 300 m slow × 7): the blended
+    # actual pace would be compared against the fast target alone, making a
+    # perfectly executed run look slow. A weighted average reflects what the
+    # athlete's overall pace is expected to be across the full workout.
     planned_pace_display: str | None = None
     planned_pace_sec: float | None = None
+    _pace_num = 0.0  # sum of pace_sec × distance_m
+    _pace_den = 0.0  # sum of distance_m
     for step in flat:
-        if step.step_type == "interval" and step.target_type == "pace" and step.target_display:
-            parsed = _parse_pace_display(step.target_display)
-            if parsed is not None:
-                planned_pace_display = step.target_display
-                planned_pace_sec = parsed
-                break
+        if step.step_type != "interval" or step.target_type != "pace" or not step.target_display:
+            continue
+        parsed = _parse_pace_display(step.target_display)
+        if parsed is None:
+            continue
+        # Use the step's own distance when known; fall back to equal weighting.
+        dist = _step_distance_m(step, parsed) or 1.0
+        _pace_num += parsed * dist
+        _pace_den += dist
+    if _pace_den > 0:
+        planned_pace_sec = _pace_num / _pace_den
+        planned_pace_display = _format_pace_sec(planned_pace_sec)
 
     # --- Planned distance: running periods only (warmup + cooldown + intervals).
     # Rest/recovery is excluded and tracked separately. Time-based running steps

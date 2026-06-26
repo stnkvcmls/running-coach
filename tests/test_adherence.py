@@ -160,6 +160,38 @@ def test_compute_adherence_slower_pace():
     assert result.adherence_score < 80.0
 
 
+def test_planned_pace_weighted_average_for_alternating_intervals():
+    """Repeat block alternating fast + slow intervals uses distance-weighted avg pace.
+
+    A 7×(300m fast @ 4:50/km + 300m slow @ 5:35/km) workout has a blended
+    expected pace of (290+335)/2 = 312.5 s/km ≈ 5:12/km. An actual pace of
+    5:10/km (310 s/km) should register as ~2 s/km *faster* than plan and yield
+    a high adherence score — not 21 s/km slower as the old first-step logic gave.
+    """
+    steps = make_steps([
+        {"stepType": "repeat", "repeatCount": 7, "workoutSteps": [
+            {"stepType": "interval", "endCondition": "distance", "endConditionValue": 300,
+             "targetType": "pace", "targetValueOne": 1000 / 290},  # 4:50/km
+            {"stepType": "interval", "endCondition": "distance", "endConditionValue": 300,
+             "targetType": "pace", "targetValueOne": 1000 / 335},  # 5:35/km
+        ]},
+    ])
+    # 14 × 300m laps alternating between the two paces; blended actual ≈ 5:12/km.
+    lap_dtos = []
+    for _ in range(7):
+        lap_dtos.append({"distance": 300, "duration": 87, "intensityType": "INTERVAL"})   # 4:50/km
+        lap_dtos.append({"distance": 300, "duration": 100.5, "intensityType": "INTERVAL"})# 5:35/km
+    activity = FakeActivity(distance_m=4200.0, splits_json=json.dumps({"lapDTOs": lap_dtos}))
+    result = adh.compute_adherence(activity, steps)
+
+    # Weighted planned pace = (290×300 + 335×300) × 7 / (600×7) = 312.5 s/km ≈ 5:12/km
+    assert result.planned_pace_display == "5:12/km"
+
+    # Actual blended pace ≈ 312.5 s/km → delta near 0, not 20+ s slower.
+    assert result.pace_delta_sec_per_km == pytest.approx(0.0, abs=2.0)
+    assert result.adherence_score >= 95.0
+
+
 def test_compute_adherence_interval_count_from_repeat():
     """3x interval in a repeat block → planned_intervals = 3."""
     steps = make_steps([
@@ -555,6 +587,57 @@ def test_align_intervals_autolap_split_and_standalone_rest():
     assert rec1.actual_pace_display is None
     assert rec1.planned_distance_m is None
     assert rec1.distance_delta_m is None
+
+
+def test_align_intervals_repeat_alternating_same_intensity():
+    """7×(fast 300m + slow 300m + 90s rest) where Garmin tags both runs INTERVAL.
+
+    The old merge-by-intensity logic collapsed all 14 run laps into one 4.20 km
+    segment, matching only Interval 1 and marking Intervals 2-14 as missed.
+    Distance-guided consumption must match each lap to its own planned step.
+    """
+    steps = make_steps([
+        {"stepType": "warmup", "endCondition": "distance", "endConditionValue": 2000},
+        {"stepType": "repeat", "repeatCount": 7, "workoutSteps": [
+            {"stepType": "interval", "endCondition": "distance", "endConditionValue": 300,
+             "targetType": "pace", "targetValueOne": 1000 / 280},  # 4:40/km
+            {"stepType": "interval", "endCondition": "distance", "endConditionValue": 300,
+             "targetType": "pace", "targetValueOne": 1000 / 335},  # 5:35/km
+            {"stepType": "rest", "endCondition": "time", "endConditionValue": 90},
+        ]},
+        {"stepType": "cooldown", "endCondition": "distance", "endConditionValue": 1500},
+    ])
+    lap_dtos = [{"distance": 2000, "duration": 693, "intensityType": "WARMUP"}]
+    for _ in range(7):
+        lap_dtos.append({"distance": 300, "duration": 84, "intensityType": "INTERVAL"})   # 4:42/km
+        lap_dtos.append({"distance": 300, "duration": 101, "intensityType": "INTERVAL"})  # 5:37/km
+        lap_dtos.append({"distance": 118, "duration": 90, "intensityType": "REST"})
+    lap_dtos.append({"distance": 1500, "duration": 540, "intensityType": "COOLDOWN"})
+
+    activity = FakeActivity(distance_m=7710.0, splits_json=json.dumps({"lapDTOs": lap_dtos}))
+    result = adh.compute_adherence(activity, steps)
+
+    assert result.intervals is not None
+    # warmup + 7×(fast + slow + rest) + cooldown = 23 rows
+    assert len(result.intervals) == 23
+
+    interval_rows = [iv for iv in result.intervals if iv.label.startswith("Interval")]
+    assert len(interval_rows) == 14
+
+    # Every interval must be matched with ~300m actual distance.
+    for iv in interval_rows:
+        assert iv.matched is True, f"{iv.label} was not matched"
+        assert iv.actual_distance_m == pytest.approx(300.0)
+
+    # Fast intervals (odd-numbered 1,3,5,...): should be ~2s slower than 4:40 target.
+    fast_intervals = interval_rows[0::2]
+    for iv in fast_intervals:
+        assert iv.pace_delta_sec_per_km == pytest.approx(2.0, abs=2.0)
+
+    # Slow intervals (even-numbered 2,4,6,...): should be ~2s slower than 5:35 target.
+    slow_intervals = interval_rows[1::2]
+    for iv in slow_intervals:
+        assert iv.pace_delta_sec_per_km == pytest.approx(2.0, abs=2.0)
 
 
 def test_align_intervals_none_for_trivial_workout():
