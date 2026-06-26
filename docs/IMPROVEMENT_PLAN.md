@@ -94,7 +94,7 @@ days.
 
 ### P0 — Highest leverage, infrastructure already present
 
-#### P0-1 · Conversational AI coach (chat)
+#### ✅ P0-1 · Conversational AI coach (chat)
 **What:** A chat surface where the athlete converses with the coach in context.
 Reuse `_build_context` to seed a system/context block, then run a **multi-turn**
 exchange through the existing provider dispatch — add a `chat()` entry point
