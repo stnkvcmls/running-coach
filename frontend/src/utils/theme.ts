@@ -11,3 +11,7 @@ export function getChartTooltipStyle(theme: Theme): CSSProperties {
 export function getChartTickColor(theme: Theme): string {
   return theme === 'light' ? '#6b7280' : '#888'
 }
+
+export function getChartTooltipTextStyle(theme: Theme): CSSProperties {
+  return { color: theme === 'light' ? '#1a1a2e' : '#e0e0e0' }
+}

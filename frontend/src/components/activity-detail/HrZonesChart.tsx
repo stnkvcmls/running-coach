@@ -1,6 +1,6 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { useTheme } from '../../App'
-import { getChartTooltipStyle, getChartTickColor } from '../../utils/theme'
+import { getChartTooltipStyle, getChartTickColor, getChartTooltipTextStyle } from '../../utils/theme'
 import './HrZonesChart.css'
 
 const ZONE_COLORS = ['#2ecc71', '#27ae60', '#f39c12', '#e67e22', '#e74c3c']
@@ -44,6 +44,8 @@ export default function HrZonesChart({ zones }: Props) {
             />
             <Tooltip
               contentStyle={getChartTooltipStyle(theme)}
+              labelStyle={getChartTooltipTextStyle(theme)}
+              itemStyle={getChartTooltipTextStyle(theme)}
               formatter={(value: number) => [`${value} min`, 'Time']}
             />
             <Bar dataKey="minutes" radius={[0, 4, 4, 0]} barSize={20}>
