@@ -561,3 +561,23 @@ class PushWorkoutResponse(BaseModel):
     workout_name: str
     garmin_workout_id: int | str
     scheduled_date: str
+
+
+class ChatMessageResponse(BaseModel):
+    id: int
+    role: str
+    content: str
+    created_at: datetime | None = None
+    activity_id: int | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class ChatRequest(BaseModel):
+    message: str
+    activity_id: int | None = None
+
+
+class ChatHistoryResponse(BaseModel):
+    messages: list[ChatMessageResponse] = []

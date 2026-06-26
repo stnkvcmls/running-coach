@@ -1599,3 +1599,119 @@ def weekly_review(user_id: int = DEFAULT_USER_ID):
             logger.info("Weekly review complete: %s", summary[:80])
         except Exception:
             logger.exception("Weekly review failed")
+
+
+# ---------------------------------------------------------------------------
+# Conversational coach — streaming chat (P0-1)
+# ---------------------------------------------------------------------------
+
+CHAT_SYSTEM_PROMPT = SYSTEM_PROMPT + """
+
+You are now in **conversational mode**. The athlete can ask you anything about
+their training, upcoming races, recovery, or specific workouts. You have full
+access to their recent training context below.
+
+Guidelines for chat responses:
+- Be conversational but precise — no need for a rigid 3-5 bullet format
+- Answer the specific question asked, then offer one follow-up insight if relevant
+- Reference specific data from their context when it supports your point
+- Keep responses concise (2-4 short paragraphs max) unless they ask for detail
+- Use markdown sparingly — only headers/bullets when they genuinely help clarity"""
+
+
+def _build_chat_context(
+    db: Session, user_id: int, activity_id: int | None = None
+) -> str:
+    """Build the context block injected into the chat system prompt."""
+    if activity_id:
+        activity = (
+            db.query(Activity)
+            .filter(Activity.id == activity_id, Activity.user_id == user_id)
+            .first()
+        )
+        if activity:
+            zones_by_metric = _load_zones(db)
+            zc = _load_zone_configs(db, user_id)
+            activity_context = _format_activity_context(
+                activity,
+                zones_by_metric,
+                zc["hr"],
+                zc["pace"],
+                zc["threshold_hr"],
+                zc["threshold_pace"],
+            )
+            trigger_data = (
+                f"The athlete is asking about a specific activity:\n\n{activity_context}"
+            )
+            return _build_context(db, "chat", trigger_data, user_id=user_id)
+
+    trigger_data = "The athlete is conversing with the AI running coach."
+    return _build_context(db, "chat", trigger_data, user_id=user_id)
+
+
+def _stream_claude(history: list[dict], system: str, model: str):
+    """Yield text tokens from the Claude streaming API."""
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    try:
+        with client.messages.stream(
+            model=model,
+            max_tokens=2048,
+            system=system,
+            messages=history,
+        ) as stream:
+            for text in stream.text_stream:
+                yield text
+    except (
+        anthropic.RateLimitError,
+        anthropic.APITimeoutError,
+        anthropic.APIConnectionError,
+        anthropic.InternalServerError,
+    ) as exc:
+        raise AITransientError(str(exc)) from exc
+    except (
+        anthropic.AuthenticationError,
+        anthropic.PermissionDeniedError,
+        anthropic.BadRequestError,
+        anthropic.NotFoundError,
+    ) as exc:
+        raise AIFatalError(str(exc)) from exc
+
+
+def _stream_gemini(history: list[dict], system: str, model: str):
+    """Yield text tokens from the Gemini streaming API."""
+    client = genai.Client(api_key=settings.gemini_api_key)
+    contents = []
+    for msg in history:
+        role = "user" if msg["role"] == "user" else "model"
+        contents.append({"role": role, "parts": [{"text": msg["content"]}]})
+    try:
+        for chunk in client.models.generate_content_stream(
+            model=model,
+            contents=contents,
+            config=_genai_types.GenerateContentConfig(system_instruction=system),
+        ):
+            if chunk.text:
+                yield chunk.text
+    except _genai_errors.ServerError as exc:
+        raise AITransientError(str(exc)) from exc
+    except _genai_errors.ClientError as exc:
+        if getattr(exc, "code", None) == 429:
+            raise AITransientError(str(exc)) from exc
+        raise AIFatalError(str(exc)) from exc
+
+
+def chat_stream(
+    db: Session,
+    new_message: str,
+    history: list[dict],
+    user_id: int = DEFAULT_USER_ID,
+    activity_id: int | None = None,
+):
+    """Build context and return a token-streaming generator for the chat response."""
+    provider, model = _get_ai_config(db, user_id)
+    context = _build_chat_context(db, user_id, activity_id)
+    system = CHAT_SYSTEM_PROMPT + "\n\n---\n\n" + context
+
+    messages = list(history) + [{"role": "user", "content": new_message}]
+    stream_fn = _stream_gemini if provider == "gemini" else _stream_claude
+    return stream_fn(messages, system, model)

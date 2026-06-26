@@ -16,6 +16,7 @@ from app.database import get_db
 from app.models import (
     Activity,
     AthleteProfile,
+    ChatMessage,
     DailySummary,
     GarminCalendarEvent,
     Insight,
@@ -35,6 +36,9 @@ from app.schemas import (
     AthleteProfileResponse,
     CalendarDay,
     CalendarEventResponse,
+    ChatHistoryResponse,
+    ChatMessageResponse,
+    ChatRequest,
     DailySummaryDetail,
     DailySummaryResponse,
     FeedbackRequest,
@@ -1363,6 +1367,106 @@ def _enrich_event_with_steps(event: GarminCalendarEvent) -> CalendarEventRespons
         if steps:
             resp.workout_steps = steps
     return resp
+
+
+# --- Chat ---
+
+@api_router.get("/chat", response_model=ChatHistoryResponse)
+def api_get_chat(
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    messages = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.user_id == current_user.id)
+        .order_by(ChatMessage.created_at.asc())
+        .limit(limit)
+        .all()
+    )
+    return ChatHistoryResponse(
+        messages=[ChatMessageResponse.model_validate(m) for m in messages]
+    )
+
+
+@api_router.delete("/chat")
+def api_clear_chat(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    db.query(ChatMessage).filter(ChatMessage.user_id == current_user.id).delete()
+    db.commit()
+    return {"cleared": True}
+
+
+@api_router.post("/chat")
+def api_post_chat(
+    req: ChatRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from app.ai_coach import chat_stream as _chat_stream
+    from app.database import db_session as make_session
+
+    # Save user message immediately
+    user_msg = ChatMessage(
+        user_id=current_user.id,
+        role="user",
+        content=req.message,
+        activity_id=req.activity_id,
+    )
+    db.add(user_msg)
+    db.commit()
+    db.refresh(user_msg)
+
+    # Fetch conversation history (up to 20 prior turns) for multi-turn context
+    history_rows = (
+        db.query(ChatMessage)
+        .filter(
+            ChatMessage.user_id == current_user.id,
+            ChatMessage.id < user_msg.id,
+        )
+        .order_by(ChatMessage.created_at.asc())
+        .limit(20)
+        .all()
+    )
+    history = [{"role": m.role, "content": m.content} for m in history_rows]
+
+    user_id = current_user.id
+    new_message = req.message
+    activity_id = req.activity_id
+
+    def generate():
+        full_response: list[str] = []
+        try:
+            with make_session() as session:
+                token_iter = _chat_stream(session, new_message, history, user_id, activity_id)
+                for token in token_iter:
+                    full_response.append(token)
+                    yield f"data: {json.dumps({'token': token})}\n\n"
+
+                # Persist the complete AI response
+                assistant_msg = ChatMessage(
+                    user_id=user_id,
+                    role="assistant",
+                    content="".join(full_response),
+                )
+                session.add(assistant_msg)
+                session.commit()
+        except Exception as exc:
+            logger.exception("Chat streaming error")
+            yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+        finally:
+            yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 # --- Helpers ---

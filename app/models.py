@@ -328,6 +328,19 @@ class TrainingPlan(Base):
     raw_json = Column(Text, nullable=True)        # full AI JSON output
 
 
+class ChatMessage(Base):
+    """Persisted multi-turn chat messages between the athlete and the AI coach."""
+
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = _user_id_column()
+    role = Column(String(20), nullable=False)   # "user" or "assistant"
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=_utcnow, index=True)
+    activity_id = Column(Integer, nullable=True)  # optional activity context
+
+
 class TrainingPlanDay(Base):
     """One scheduled day within a TrainingPlan."""
 

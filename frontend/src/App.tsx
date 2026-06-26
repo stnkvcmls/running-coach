@@ -15,6 +15,7 @@ import TrendsView from './components/trends/TrendsView'
 import PlanView from './components/plan/PlanView'
 import PlanSetupView from './components/plan-setup/PlanSetupView'
 import StatInfoView from './components/info/StatInfoView'
+import ChatView from './components/chat/ChatView'
 import { useAthleteProfile } from './api/hooks'
 
 interface DateContextType {
@@ -108,6 +109,7 @@ export default function App() {
             <Route path="/settings" element={<SettingsView />} />
             <Route path="/info/:topic" element={<StatInfoView />} />
             <Route path="/onboarding" element={<OnboardingView />} />
+            <Route path="/chat" element={<ChatView />} />
           </Routes>
         </main>
         {!isDetailPage && <BottomNav />}
