@@ -143,6 +143,13 @@
   font-style: italic;
 }
 
+.adherence-interval-score {
+  font-size: 0.75rem;
+  font-weight: 700;
+  min-width: 24px;
+  text-align: right;
+}
+
 .adherence-bar-container {
   margin-top: 12px;
   height: 4px;

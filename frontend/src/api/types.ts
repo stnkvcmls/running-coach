@@ -61,6 +61,7 @@ export interface IntervalAdherence {
   pace_delta_sec_per_km: number | null     // positive = slower than plan
   distance_delta_m: number | null          // actual - planned
   matched: boolean                         // a lap aligned to this step
+  interval_score: number | null            // 0–100 composite (pace+distance) for graded steps
 }
 
 export interface WorkoutAdherence {

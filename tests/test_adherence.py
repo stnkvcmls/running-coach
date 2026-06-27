@@ -640,6 +640,156 @@ def test_align_intervals_repeat_alternating_same_intensity():
         assert iv.pace_delta_sec_per_km == pytest.approx(2.0, abs=2.0)
 
 
+# ---------------------------------------------------------------------------
+# Per-interval scoring (P2-3)
+# ---------------------------------------------------------------------------
+
+def test_interval_score_on_target():
+    """Interval run exactly on pace+distance → interval_score = 100."""
+    steps = make_steps([
+        {"stepType": "repeat", "repeatCount": 2, "workoutSteps": [
+            {"stepType": "interval", "endCondition": "distance", "endConditionValue": 1000,
+             "targetType": "pace", "targetValueOne": 1000 / 240},  # 4:00/km
+            {"stepType": "rest", "endCondition": "time", "endConditionValue": 90},
+        ]},
+    ])
+    lap_dtos = [
+        {"distance": 1000, "duration": 240, "intensityType": "INTERVAL"},
+        {"distance": 80, "duration": 90, "intensityType": "REST"},
+        {"distance": 1000, "duration": 240, "intensityType": "INTERVAL"},
+        {"distance": 80, "duration": 90, "intensityType": "REST"},
+    ]
+    activity = FakeActivity(distance_m=2160.0, splits_json=json.dumps({"lapDTOs": lap_dtos}))
+    result = adh.compute_adherence(activity, steps)
+
+    assert result.intervals is not None
+    iv1 = next(iv for iv in result.intervals if iv.label == "Interval 1")
+    assert iv1.interval_score == pytest.approx(100.0, abs=1.0)
+    assert result.adherence_score >= 95.0
+
+
+def test_interval_score_off_pace():
+    """Interval run 60 s/km slower → interval_score near 0."""
+    steps = make_steps([
+        {"stepType": "interval", "endCondition": "distance", "endConditionValue": 1000,
+         "targetType": "pace", "targetValueOne": 1000 / 240},  # 4:00/km plan
+        {"stepType": "interval", "endCondition": "distance", "endConditionValue": 1000,
+         "targetType": "pace", "targetValueOne": 1000 / 240},
+    ])
+    lap_dtos = [
+        {"distance": 1000, "duration": 240, "intensityType": "INTERVAL"},   # on target
+        {"distance": 1000, "duration": 300, "intensityType": "INTERVAL"},   # 5:00/km = 60s slow
+    ]
+    activity = FakeActivity(distance_m=2000.0, splits_json=json.dumps({"lapDTOs": lap_dtos}))
+    result = adh.compute_adherence(activity, steps)
+
+    assert result.intervals is not None
+    iv2 = next(iv for iv in result.intervals if iv.label == "Interval 2")
+    # 60 s/km off → pace score = 0; distance perfect → dist score = 100 → avg = 50
+    assert iv2.interval_score == pytest.approx(50.0, abs=5.0)
+
+
+def test_per_interval_score_beats_aggregate_for_cancel_out():
+    """A workout where fast + slow intervals cancel to on-target aggregate.
+
+    Aggregate scoring would give a near-perfect score because the mean pace
+    is on target. Per-interval scoring must penalise each rep that deviated.
+    """
+    steps = make_steps([
+        {"stepType": "repeat", "repeatCount": 4, "workoutSteps": [
+            {"stepType": "interval", "endCondition": "distance", "endConditionValue": 1000,
+             "targetType": "pace", "targetValueOne": 1000 / 240},  # 4:00/km plan
+            {"stepType": "rest", "endCondition": "time", "endConditionValue": 90},
+        ]},
+    ])
+    # Alternating: 30 s/km fast then 30 s/km slow → aggregate = on target (4:00/km).
+    lap_dtos = [
+        {"distance": 1000, "duration": 210, "intensityType": "INTERVAL"},   # 3:30/km
+        {"distance": 80, "duration": 90, "intensityType": "REST"},
+        {"distance": 1000, "duration": 270, "intensityType": "INTERVAL"},   # 4:30/km
+        {"distance": 80, "duration": 90, "intensityType": "REST"},
+        {"distance": 1000, "duration": 210, "intensityType": "INTERVAL"},   # 3:30/km
+        {"distance": 80, "duration": 90, "intensityType": "REST"},
+        {"distance": 1000, "duration": 270, "intensityType": "INTERVAL"},   # 4:30/km
+        {"distance": 80, "duration": 90, "intensityType": "REST"},
+    ]
+    activity = FakeActivity(distance_m=4320.0, splits_json=json.dumps({"lapDTOs": lap_dtos}))
+    result = adh.compute_adherence(activity, steps)
+
+    # Per-interval scoring: each rep is 30 s/km off → pace score ≈ 50 each → overall ~50.
+    # Aggregate scoring: mean pace = 4:00/km → pace delta ≈ 0 → pace score ≈ 100.
+    assert result.adherence_score < 90.0, (
+        "Per-interval scoring should penalise cancel-out workouts; "
+        f"got score {result.adherence_score:.1f}"
+    )
+
+
+def test_per_interval_score_perfect_workout_still_high():
+    """All intervals executed on pace → per-interval scoring also gives high score."""
+    steps = make_steps([
+        {"stepType": "repeat", "repeatCount": 4, "workoutSteps": [
+            {"stepType": "interval", "endCondition": "distance", "endConditionValue": 1000,
+             "targetType": "pace", "targetValueOne": 1000 / 240},  # 4:00/km
+            {"stepType": "rest", "endCondition": "time", "endConditionValue": 90},
+        ]},
+    ])
+    lap_dtos = []
+    for _ in range(4):
+        lap_dtos.append({"distance": 1000, "duration": 240, "intensityType": "INTERVAL"})
+        lap_dtos.append({"distance": 80, "duration": 90, "intensityType": "REST"})
+    activity = FakeActivity(distance_m=4320.0, splits_json=json.dumps({"lapDTOs": lap_dtos}))
+    result = adh.compute_adherence(activity, steps)
+
+    assert result.adherence_score >= 95.0
+
+
+def test_missed_interval_penalises_score():
+    """An unmatched (missed) interval step pushes per-interval score down."""
+    steps = make_steps([
+        {"stepType": "repeat", "repeatCount": 4, "workoutSteps": [
+            {"stepType": "interval", "endCondition": "distance", "endConditionValue": 1000,
+             "targetType": "pace", "targetValueOne": 1000 / 240},
+            {"stepType": "rest", "endCondition": "time", "endConditionValue": 90},
+        ]},
+    ])
+    # Only 3 of 4 intervals executed.
+    lap_dtos = []
+    for _ in range(3):
+        lap_dtos.append({"distance": 1000, "duration": 240, "intensityType": "INTERVAL"})
+        lap_dtos.append({"distance": 80, "duration": 90, "intensityType": "REST"})
+    activity = FakeActivity(distance_m=3240.0, splits_json=json.dumps({"lapDTOs": lap_dtos}))
+    result = adh.compute_adherence(activity, steps)
+
+    # Missed interval scores 0 → 3 × 100 + 1 × 0 = avg 75, blended with distance %.
+    assert result.adherence_score < 95.0
+
+
+def test_interval_score_none_for_warmup_cooldown():
+    """Warmup and cooldown rows carry no interval_score (no pace/distance target)."""
+    steps = make_steps([
+        {"stepType": "warmup", "endCondition": "distance", "endConditionValue": 1000},
+        {"stepType": "interval", "endCondition": "distance", "endConditionValue": 1000,
+         "targetType": "pace", "targetValueOne": 1000 / 240},
+        {"stepType": "interval", "endCondition": "distance", "endConditionValue": 1000,
+         "targetType": "pace", "targetValueOne": 1000 / 240},
+        {"stepType": "cooldown", "endCondition": "distance", "endConditionValue": 1000},
+    ])
+    lap_dtos = [
+        {"distance": 1000, "duration": 360, "intensityType": "WARMUP"},
+        {"distance": 1000, "duration": 240, "intensityType": "INTERVAL"},
+        {"distance": 1000, "duration": 240, "intensityType": "INTERVAL"},
+        {"distance": 1000, "duration": 360, "intensityType": "COOLDOWN"},
+    ]
+    activity = FakeActivity(distance_m=4000.0, splits_json=json.dumps({"lapDTOs": lap_dtos}))
+    result = adh.compute_adherence(activity, steps)
+
+    assert result.intervals is not None
+    warmup = next(iv for iv in result.intervals if iv.step_type == "warmup")
+    cooldown = next(iv for iv in result.intervals if iv.step_type == "cooldown")
+    assert warmup.interval_score is None
+    assert cooldown.interval_score is None
+
+
 def test_align_intervals_none_for_trivial_workout():
     """A single-step workout has no interval structure → intervals None."""
     steps = make_steps([
