@@ -1153,12 +1153,12 @@ def sync_calendar(user: User | None = None) -> int:
     client = get_garmin_client(user)
     today = date.today()
 
-    # Fetch current month + next 2 months
+    # Fetch current month + next 5 months (6 total) to capture races up to ~6 months out
     months_to_fetch = []
-    for offset in range(3):
+    for offset in range(6):
         m = today.month + offset
         y = today.year
-        if m > 12:
+        while m > 12:
             m -= 12
             y += 1
         months_to_fetch.append((y, m))
