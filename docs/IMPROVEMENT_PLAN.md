@@ -133,7 +133,7 @@ GAP, threshold) already exists — this is a pure analytic add over stored data.
 
 ### P1 — Execution & fatigue-resistance depth
 
-#### P1-1 · Race-day pacing strategy (split plan)
+#### ✅ P1-1 · Race-day pacing strategy (split plan)
 **What:** For an upcoming `Race`, generate a split-by-split target plan — even
 splits, negative split, or **GAP/elevation-aware** splits when a course route is
 available — anchored to the CP/CV race prediction from

@@ -1,14 +1,19 @@
-"""Translate a TrainingPlanDay into a Garmin structured-workout JSON payload.
+"""Translate a TrainingPlanDay or race pacing plan into a Garmin structured-workout JSON payload.
 
 Garmin's workout-service accepts a JSON document describing warmup/interval/
 cooldown steps. This module builds that document from the data available in a
-TrainingPlanDay (workout_type, target_distance_m, target_pace_min_km).
+TrainingPlanDay (workout_type, target_distance_m, target_pace_min_km) or from
+a list of per-split pacing targets for a race-day pacing plan.
 """
 from __future__ import annotations
 
-from typing import Any
+from datetime import date
+from typing import TYPE_CHECKING, Any
 
 from app.models import AthleteProfile, TrainingPlanDay
+
+if TYPE_CHECKING:
+    from app.pacing import PacingSplit
 
 # ---------------------------------------------------------------------------
 # Garmin constants
@@ -236,6 +241,41 @@ def translate_plan_day(
         "sportType": _SPORT_RUNNING,
         "estimatedDurationInSecs": est_duration_sec,
         "estimatedDistanceInMeters": round(dist_m, 1),
+        "author": {},
+        "workoutSegments": [
+            {
+                "segmentOrder": 1,
+                "sportType": _SPORT_RUNNING,
+                "workoutSteps": steps,
+            }
+        ],
+    }
+
+
+def translate_race_pacing(
+    race_name: str,
+    race_date: date,
+    splits: "list[PacingSplit]",
+) -> dict:
+    """Build a Garmin structured-workout JSON for a race-day pacing plan.
+
+    Each split becomes a distance-based interval step with a per-km pace target.
+    Uses a tighter 3% pace tolerance than training workouts.
+    """
+    steps = []
+    for i, split in enumerate(splits):
+        target = _pace_target(split.target_pace_min_km, tolerance_pct=0.03)
+        steps.append(_step_distance(_STEP_INTERVAL, i + 1, split.split_distance_m, target=target))
+
+    total_dist = sum(s.split_distance_m for s in splits)
+    total_time = sum(s.split_time_sec for s in splits)
+
+    return {
+        "workoutName": f"Race Pacing — {race_name}",
+        "description": f"Race day pacing plan for {race_name} on {race_date.isoformat()}",
+        "sportType": _SPORT_RUNNING,
+        "estimatedDurationInSecs": round(total_time),
+        "estimatedDistanceInMeters": round(total_dist, 1),
         "author": {},
         "workoutSegments": [
             {

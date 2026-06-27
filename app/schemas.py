@@ -586,3 +586,33 @@ class ChatRequest(BaseModel):
 
 class ChatHistoryResponse(BaseModel):
     messages: list[ChatMessageResponse] = []
+
+
+class PacingSplit(BaseModel):
+    split_number: int
+    split_distance_m: float       # this split's distance (m)
+    cumulative_distance_m: float  # running total (m)
+    target_pace_min_km: float     # target pace for this split (min/km)
+    split_time_sec: float         # time for this split (s)
+    cumulative_time_sec: float    # running total (s)
+
+
+class PacingStrategyResponse(BaseModel):
+    race_id: int
+    race_name: str | None
+    distance_m: float
+    distance_label: str | None
+    race_date: date
+    target_time_sec: float
+    target_pace_min_km: float
+    strategy: str               # "even" | "negative_split"
+    split_unit: str             # "km" | "mile"
+    splits: list[PacingSplit]
+    predicted_time_sec: float | None = None
+    source: str                 # "goal" | "predicted" | "custom"
+
+
+class PacingPushRequest(BaseModel):
+    strategy: str = "even"
+    split_unit: str = "km"
+    target_time_sec: int | None = None

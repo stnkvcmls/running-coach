@@ -1,0 +1,212 @@
+.race-pacing-card {
+  margin-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  padding-top: 8px;
+}
+
+.race-pacing-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 0;
+  width: 100%;
+  justify-content: space-between;
+}
+
+.race-pacing-toggle:hover {
+  color: #fff;
+}
+
+.race-pacing-toggle-label {
+  flex: 1;
+  text-align: left;
+}
+
+.race-pacing-body {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Strategy toggle */
+.race-pacing-controls {
+  display: flex;
+  justify-content: center;
+}
+
+.race-pacing-strategy-group {
+  display: flex;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.race-pacing-strategy-btn {
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.65);
+  cursor: pointer;
+  font-size: 0.73rem;
+  font-weight: 500;
+  padding: 4px 10px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.race-pacing-strategy-btn.active {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+.race-pacing-strategy-btn:hover:not(.active) {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Summary row */
+.race-pacing-summary {
+  display: flex;
+  justify-content: space-around;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.race-pacing-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.race-pacing-stat-label {
+  font-size: 0.62rem;
+  color: rgba(255, 255, 255, 0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.race-pacing-stat-value {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.race-pacing-source .race-pacing-stat-value {
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+/* Split table */
+.race-pacing-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.race-pacing-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.76rem;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.race-pacing-table th {
+  font-size: 0.63rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 6px 8px 4px;
+  text-align: right;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.race-pacing-table th:first-child {
+  text-align: left;
+}
+
+.race-pacing-table td {
+  padding: 5px 8px;
+  text-align: right;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.race-pacing-table td:first-child {
+  text-align: left;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.race-pacing-table tr:last-child td {
+  border-bottom: none;
+  font-weight: 600;
+  color: #fff;
+}
+
+.race-pacing-pace {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: #fff !important;
+}
+
+.race-pacing-cumul {
+  color: rgba(255, 255, 255, 0.6) !important;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Push button */
+.race-pacing-push-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 8px 14px;
+  transition: background 0.15s, opacity 0.15s;
+  width: 100%;
+}
+
+.race-pacing-push-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.race-pacing-push-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.race-pacing-loading,
+.race-pacing-error {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.65);
+  text-align: center;
+  padding: 8px 0;
+}
+
+.race-pacing-error {
+  color: rgba(255, 200, 150, 0.85);
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
