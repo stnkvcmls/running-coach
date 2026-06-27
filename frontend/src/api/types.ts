@@ -505,3 +505,33 @@ export interface ChatRequest {
   message: string
   activity_id?: number | null
 }
+
+export interface PacingSplit {
+  split_number: number
+  split_distance_m: number
+  cumulative_distance_m: number
+  target_pace_min_km: number
+  split_time_sec: number
+  cumulative_time_sec: number
+}
+
+export interface PacingStrategyResponse {
+  race_id: number
+  race_name: string | null
+  distance_m: number
+  distance_label: string | null
+  race_date: string
+  target_time_sec: number
+  target_pace_min_km: number
+  strategy: string        // "even" | "negative_split"
+  split_unit: string      // "km" | "mile"
+  splits: PacingSplit[]
+  predicted_time_sec: number | null
+  source: string          // "goal" | "predicted" | "custom"
+}
+
+export interface PacingPushRequest {
+  strategy: string
+  split_unit: string
+  target_time_sec?: number | null
+}
