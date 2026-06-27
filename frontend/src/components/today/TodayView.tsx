@@ -117,7 +117,7 @@ export default function TodayView() {
                   Goal: {formatDuration(race.goal_time_sec)}
                 </div>
               )}
-              <RacePacingCard race={race} />
+              {race.id > 0 && <RacePacingCard race={race} />}
             </div>
           ))}
         </section>

@@ -193,7 +193,7 @@ def api_today(
         .all()
     )
 
-    # Next 2 upcoming races
+    # Next 2 upcoming races — prefer Garmin calendar events, fall back to profile goal race
     next_race_rows = (
         db.query(GarminCalendarEvent)
         .filter(
@@ -217,6 +217,22 @@ def api_today(
         )
         for row in next_race_rows
     ]
+
+    # Fallback: show profile goal race when the Garmin calendar has no race events
+    if not next_races:
+        profile = db.query(AthleteProfile).filter(AthleteProfile.user_id == uid).first()
+        if profile and profile.goal_race_date and profile.goal_race_date >= date.today():
+            next_races = [
+                RaceInfo(
+                    id=0,  # sentinel: profile-sourced race, no Garmin calendar entry
+                    title=profile.goal_race or "Goal Race",
+                    date=profile.goal_race_date,
+                    distance_label=None,
+                    days_away=(profile.goal_race_date - date.today()).days,
+                    goal_time_sec=None,
+                    priority=None,
+                )
+            ]
 
     # Scheduled workout events for the selected date
     scheduled_events_rows = (
