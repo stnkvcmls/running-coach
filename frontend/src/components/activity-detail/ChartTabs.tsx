@@ -5,7 +5,7 @@ import {
 } from 'recharts'
 import type { ChartSeries, MetricZone } from '../../api/types'
 import { useTheme } from '../../App'
-import { getChartTooltipStyle, getChartTooltipTextStyle } from '../../utils/theme'
+import { getChartTooltipStyle, getChartTooltipTextStyle, getChartTickColor } from '../../utils/theme'
 import './ChartTabs.css'
 
 const chartColors: Record<string, string> = {
@@ -65,6 +65,16 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
 
   const tooltipStyle = getChartTooltipStyle(theme)
   const tooltipTextStyle = getChartTooltipTextStyle(theme)
+  const tickColor = getChartTickColor(theme)
+
+  const yTickFormatter = (v: number) => {
+    if (activeKey === 'pace' || activeKey === 'gap_pace') {
+      const m = Math.floor(v)
+      const s = Math.round((v - m) * 60)
+      return `${m}:${s.toString().padStart(2, '0')}`
+    }
+    return Math.round(v).toString()
+  }
 
   const formatValue = (value: any) => {
     if (value === null || value === undefined) return ['-', series.label]
@@ -101,9 +111,18 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
         </div>
         <div className="card chart-card">
           <ResponsiveContainer width="100%" height={200}>
-            <ScatterChart margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
+            <ScatterChart margin={{ top: 4, right: 4, bottom: 4, left: 0 }}>
               <XAxis dataKey="x" hide type="number" domain={['dataMin', 'dataMax']} />
-              <YAxis dataKey="y" hide domain={['auto', 'auto']} />
+              <YAxis
+                dataKey="y"
+                domain={['auto', 'auto']}
+                tickCount={3}
+                tickFormatter={yTickFormatter}
+                tick={{ fontSize: 10, fill: tickColor }}
+                axisLine={false}
+                tickLine={false}
+                width={38}
+              />
               <Tooltip
                 contentStyle={tooltipStyle}
                 labelStyle={tooltipTextStyle}
@@ -152,7 +171,7 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
       </div>
       <div className="card chart-card">
         <ResponsiveContainer width="100%" height={200}>
-          <AreaChart data={data} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
+          <AreaChart data={data} margin={{ top: 4, right: 4, bottom: 4, left: 0 }}>
             <defs>
               <linearGradient id={`grad-${activeKey}`} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={color} stopOpacity={0.3} />
@@ -161,9 +180,14 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
             </defs>
             <XAxis dataKey="i" hide />
             <YAxis
-              hide
               reversed={reversed}
               domain={['auto', 'auto']}
+              tickCount={3}
+              tickFormatter={yTickFormatter}
+              tick={{ fontSize: 10, fill: tickColor }}
+              axisLine={false}
+              tickLine={false}
+              width={38}
             />
             <Tooltip
               contentStyle={tooltipStyle}
