@@ -577,9 +577,24 @@ def _build_context(
                 gs = r.goal_time_sec % 60
                 goal = f" Goal: {gh}:{gm:02d}:{gs:02d}" if gh else f" Goal: {gm}:{gs:02d}"
             priority = f" [Priority {r.priority}]" if r.priority else ""
+            pacing_note = ""
+            if r.distance_m and r.goal_time_sec:
+                try:
+                    from app.pacing import generate_pacing_strategy
+                    plan = generate_pacing_strategy(
+                        distance_m=r.distance_m,
+                        target_time_sec=float(r.goal_time_sec),
+                        strategy="even",
+                        split_unit="km",
+                    )
+                    p_min = int(plan.target_pace_min_km)
+                    p_sec = int((plan.target_pace_min_km - p_min) * 60)
+                    pacing_note = f" Avg pace: {p_min}:{p_sec:02d}/km"
+                except Exception:
+                    pass
             race_lines.append(
                 f"- {r.title} ({r.distance_label or '?'}) on {r.date} "
-                f"({days_until} days away){goal}{priority}"
+                f"({days_until} days away){goal}{pacing_note}{priority}"
             )
         sections.append("## Upcoming Races\n" + "\n".join(race_lines))
 

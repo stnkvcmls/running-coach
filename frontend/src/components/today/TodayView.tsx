@@ -8,6 +8,7 @@ import WeekOverview from './WeekOverview'
 import TrainingLoadChart from './TrainingLoadChart'
 import ReadinessCard from './ReadinessCard'
 import InsightsList from './InsightsList'
+import RacePacingCard from './RacePacingCard'
 import StatHelpButton from '../info/StatHelpButton'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 import './TodayView.css'
@@ -116,6 +117,7 @@ export default function TodayView() {
                   Goal: {formatDuration(race.goal_time_sec)}
                 </div>
               )}
+              {race.id > 0 && <RacePacingCard race={race} />}
             </div>
           ))}
         </section>

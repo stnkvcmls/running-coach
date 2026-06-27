@@ -14,6 +14,8 @@ import type {
   GarminCredentialsRequest,
   InsightResponse,
   IntensityTrendsResponse,
+  PacingStrategyResponse,
+  PacingPushRequest,
   PerformanceCurveResponse,
   PlanRealignmentStatus,
   PushWorkoutResponse,
@@ -330,5 +332,26 @@ export function usePushWorkoutToGarmin() {
   return useMutation({
     mutationFn: (dayId: number) =>
       apiPost<PushWorkoutResponse>(`/training-plan/days/${dayId}/push-to-garmin`, {}),
+  })
+}
+
+export function useRacePacing(
+  raceId: number,
+  params: { strategy?: string; splitUnit?: string; targetTimeSec?: number | null } = {},
+) {
+  const { strategy = 'even', splitUnit = 'km', targetTimeSec } = params
+  const qs = new URLSearchParams({ strategy, split_unit: splitUnit })
+  if (targetTimeSec != null) qs.set('target_time_sec', String(targetTimeSec))
+  return useQuery({
+    queryKey: ['race-pacing', raceId, strategy, splitUnit, targetTimeSec ?? null],
+    queryFn: () => apiGet<PacingStrategyResponse>(`/races/${raceId}/pacing?${qs}`),
+    enabled: raceId > 0,
+  })
+}
+
+export function usePushRacePacing() {
+  return useMutation({
+    mutationFn: ({ raceId, body }: { raceId: number; body: PacingPushRequest }) =>
+      apiPost<PushWorkoutResponse>(`/races/${raceId}/pacing/push`, body),
   })
 }

@@ -1153,12 +1153,12 @@ def sync_calendar(user: User | None = None) -> int:
     client = get_garmin_client(user)
     today = date.today()
 
-    # Fetch current month + next 2 months
+    # Fetch current month + next 5 months (6 total) to capture races up to ~6 months out
     months_to_fetch = []
-    for offset in range(3):
+    for offset in range(6):
         m = today.month + offset
         y = today.year
-        if m > 12:
+        while m > 12:
             m -= 12
             y += 1
         months_to_fetch.append((y, m))
@@ -1386,6 +1386,64 @@ def push_workout_to_garmin(
 
     logger.info(
         "Scheduled Garmin workout %s on %s for user %s",
+        garmin_workout_id, scheduled_date, user.id,
+    )
+    return {
+        "workout_name": workout_name,
+        "garmin_workout_id": garmin_workout_id,
+        "scheduled_date": scheduled_date,
+    }
+
+
+def push_race_pacing_to_garmin(
+    user: User,
+    race_name: str,
+    race_date,
+    splits: list,
+) -> dict:
+    """Upload a race pacing plan as a structured workout to Garmin and schedule it.
+
+    Returns a dict with keys: workout_name, garmin_workout_id, scheduled_date.
+    Raises RuntimeError on Garmin API failures.
+    """
+    from app.workout_translator import translate_race_pacing
+
+    workout_payload = translate_race_pacing(race_name, race_date, splits)
+    workout_name = workout_payload["workoutName"]
+    scheduled_date = race_date.isoformat()
+
+    client = get_garmin_client(user)
+
+    logger.debug("Pushing race pacing payload to Garmin: %s", workout_payload)
+    try:
+        create_resp = client.upload_workout(workout_payload)
+    except Exception as exc:
+        raise RuntimeError(f"Failed to create race pacing workout on Garmin: {exc}") from exc
+
+    if not isinstance(create_resp, dict):
+        raise RuntimeError(
+            f"Garmin returned unexpected response type: {type(create_resp).__name__!r} — {create_resp!r}"
+        )
+    garmin_workout_id = create_resp.get("workoutId")
+    if not garmin_workout_id:
+        raise RuntimeError(
+            f"Garmin did not return a workoutId. Response: {create_resp!r}"
+        )
+    logger.info(
+        "Created Garmin race pacing workout %s ('%s') for user %s",
+        garmin_workout_id, workout_name, user.id,
+    )
+
+    try:
+        client.schedule_workout(garmin_workout_id, scheduled_date)
+    except Exception as exc:
+        logger.warning(
+            "Race pacing workout %s created but scheduling failed for date %s: %s",
+            garmin_workout_id, scheduled_date, exc,
+        )
+
+    logger.info(
+        "Scheduled Garmin race pacing workout %s on %s for user %s",
         garmin_workout_id, scheduled_date, user.id,
     )
     return {
