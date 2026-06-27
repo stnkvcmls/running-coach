@@ -531,6 +531,18 @@ def _align_intervals(
             round(actual_dist - planned_dist, 1) if planned_dist is not None else None
         )
 
+        # Per-interval composite score (pace + distance), only for interval steps.
+        # Warmup, cooldown, and rest carry no score since they lack pace targets.
+        iv_score: float | None = None
+        if step.step_type == "interval" and not is_rest:
+            iv_score_parts: list[float] = []
+            if own_pace is not None and actual_pace_sec is not None:
+                iv_score_parts.append(max(0.0, 100.0 - (abs(actual_pace_sec - own_pace) / 30.0) * 50.0))
+            if planned_dist is not None and actual_dist is not None:
+                iv_score_parts.append(min(100.0, (actual_dist / planned_dist) * 100.0))
+            if iv_score_parts:
+                iv_score = round(sum(iv_score_parts) / len(iv_score_parts), 1)
+
         rows.append(
             IntervalAdherence(
                 step_order=i + 1,
@@ -543,9 +555,38 @@ def _align_intervals(
                 pace_delta_sec_per_km=pace_delta,
                 distance_delta_m=distance_delta,
                 matched=True,
+                interval_score=iv_score,
             )
         )
     return rows
+
+
+def _compute_interval_pace_score(intervals: list[IntervalAdherence]) -> float | None:
+    """Distance-weighted composite score across all planned interval steps.
+
+    Unmatched steps contribute 0, so missed intervals drag the score down.
+    Returns None when no graded interval steps are present (no pace or distance
+    target on any interval step), so the caller can fall back to aggregate scoring.
+    """
+    has_graded = False
+    weighted_sum = 0.0
+    total_weight = 0.0
+    for iv in intervals:
+        if iv.step_type != "interval":
+            continue
+        weight = iv.planned_distance_m or 1.0
+        if not iv.matched:
+            # Missed interval — penalised as 0.
+            weighted_sum += 0.0
+            total_weight += weight
+            has_graded = True
+        elif iv.interval_score is not None:
+            weighted_sum += iv.interval_score * weight
+            total_weight += weight
+            has_graded = True
+    if not has_graded or total_weight == 0.0:
+        return None
+    return weighted_sum / total_weight
 
 
 def compute_adherence(
@@ -630,12 +671,26 @@ def compute_adherence(
     if actual_pace_sec is not None and planned_pace_sec is not None:
         pace_delta_sec = actual_pace_sec - planned_pace_sec
 
+    # --- Per-interval breakdown (computed early so the score can use it) ---
+    intervals = _align_intervals(flat, _ordered_laps(activity)) or None
+
     # --- Adherence score (0–100) ---
+    # Use per-interval weighted scores when available: this catches workouts
+    # where fast and slow intervals cancel out in the aggregate but each rep
+    # individually deviated from its target.
     score_components: list[float] = []
     if distance_pct is not None:
         score_components.append(distance_pct)
-    if pace_delta_sec is not None:
-        # 30 s/km tolerance → score drops linearly to 0 at 60 s/km off target
+    if intervals:
+        per_iv = _compute_interval_pace_score(intervals)
+        if per_iv is not None:
+            score_components.append(per_iv)
+        elif pace_delta_sec is not None:
+            # Intervals present but none have graded steps → fall back to aggregate.
+            pace_score = max(0.0, 100.0 - (abs(pace_delta_sec) / 30.0) * 50.0)
+            score_components.append(pace_score)
+    elif pace_delta_sec is not None:
+        # No per-interval breakdown available → aggregate pace score.
         pace_score = max(0.0, 100.0 - (abs(pace_delta_sec) / 30.0) * 50.0)
         score_components.append(pace_score)
     adherence_score = sum(score_components) / len(score_components) if score_components else 100.0
@@ -656,9 +711,6 @@ def compute_adherence(
         summary_parts.append("Workout completed (no distance/pace plan to compare)")
     if actual_rest_distance_m:
         summary_parts.append(f"{int(round(actual_rest_distance_m))} m in rest")
-
-    # --- Per-interval breakdown (lap ↔ step alignment) ---
-    intervals = _align_intervals(flat, _ordered_laps(activity)) or None
 
     return WorkoutAdherence(
         planned_distance_m=planned_distance_m,

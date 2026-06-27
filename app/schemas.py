@@ -96,6 +96,7 @@ class IntervalAdherence(BaseModel):
     pace_delta_sec_per_km: float | None = None   # positive = slower than plan
     distance_delta_m: float | None = None        # actual - planned
     matched: bool = True                          # a lap aligned to this step
+    interval_score: float | None = None          # 0–100 composite (pace+distance) for graded steps
 
 
 class WorkoutAdherence(BaseModel):

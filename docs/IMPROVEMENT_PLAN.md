@@ -207,7 +207,7 @@ thin. Builds on the plan schema already in place.
 **Files:** `app/ai_coach.py` (plan prompt/schema), possibly a seeded routine table
 in `app/models.py`, `frontend/src/components/plan/*` + `workout-detail/*`.
 
-#### P2-3 · Per-interval adherence — close the granularity gap
+#### ✅ P2-3 · Per-interval adherence — close the granularity gap
 **What:** Push the lap↔step alignment further so a workout that hits the right
 *totals* with the wrong *internal structure* scores correctly — per-rep pace/
 distance deltas weighted into the score, surfaced rep-by-rep.

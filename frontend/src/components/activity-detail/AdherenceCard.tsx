@@ -131,6 +131,15 @@ export default function AdherenceCard({ adherence }: Props) {
                         {Math.abs(iv.pace_delta_sec_per_km).toFixed(0)}s
                       </span>
                     )}
+                    {iv.interval_score !== null && iv.interval_score !== undefined && (
+                      <span
+                        className="adherence-interval-score"
+                        style={{ color: scoreColor(iv.interval_score) }}
+                        title="Interval score (pace + distance)"
+                      >
+                        {iv.interval_score.toFixed(0)}
+                      </span>
+                    )}
                   </div>
                 ) : (
                   <span className="adherence-interval-missed">missed</span>
