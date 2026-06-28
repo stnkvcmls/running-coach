@@ -32,6 +32,7 @@ import type {
   ThresholdEstimateResponse,
   ThresholdApplyRequest,
   DurabilityResponse,
+  DurabilityMode,
 } from './types'
 
 export function useMe() {
@@ -303,10 +304,10 @@ export function usePerformanceCurve(days = 90) {
   })
 }
 
-export function useDurability(days = 90) {
+export function useDurability(days = 90, mode: DurabilityMode = 'intra') {
   return useQuery({
-    queryKey: ['durability', days],
-    queryFn: () => apiGet<DurabilityResponse>(`/durability?days=${days}`),
+    queryKey: ['durability', days, mode],
+    queryFn: () => apiGet<DurabilityResponse>(`/durability?days=${days}&mode=${mode}`),
   })
 }
 

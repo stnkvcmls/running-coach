@@ -1059,11 +1059,14 @@ def api_get_performance_curve(
 @api_router.get("/durability", response_model=DurabilityResponse)
 def api_get_durability(
     days: int = Query(90, ge=30, le=365),
+    mode: str = Query("intra", pattern="^(intra|easy_baseline)$"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Durability / endurance score trend: fatigue-resistance index from mean-max curves."""
-    trend = durability_mod.compute_durability_trend(db, lookback_days=days, user_id=current_user.id)
+    trend = durability_mod.compute_durability_trend(
+        db, lookback_days=days, user_id=current_user.id, mode=mode
+    )
     return DurabilityResponse(
         trend_points=[
             DurabilityPoint(
@@ -1072,6 +1075,10 @@ def api_get_durability(
                 activity_name=p.activity_name,
                 duration_sec=p.duration_sec,
                 metric=p.metric,
+                early_window_start_sec=p.early_window_start_sec,
+                early_window_end_sec=p.early_window_end_sec,
+                late_window_start_sec=p.late_window_start_sec,
+                late_window_end_sec=p.late_window_end_sec,
             )
             for p in trend.trend_points
         ],
@@ -1081,6 +1088,12 @@ def api_get_durability(
         lookback_days=trend.lookback_days,
         fatigue_offset_sec=trend.fatigue_offset_sec,
         reference_duration_sec=trend.reference_duration_sec,
+        mode=trend.mode,
+        fresh_activity_name=trend.fresh_activity_name,
+        fresh_activity_date=trend.fresh_activity_date,
+        fresh_activity_duration_sec=trend.fresh_activity_duration_sec,
+        fresh_window_start_sec=trend.fresh_window_start_sec,
+        fresh_window_end_sec=trend.fresh_window_end_sec,
     )
 
 

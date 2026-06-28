@@ -497,6 +497,11 @@ class DurabilityPoint(BaseModel):
     activity_name: str
     duration_sec: float
     metric: str  # "pace" or "power"
+    # Window positions within the activity (seconds from activity start)
+    early_window_start_sec: float | None = None   # intra mode only
+    early_window_end_sec: float | None = None
+    late_window_start_sec: float | None = None
+    late_window_end_sec: float | None = None
 
 
 class DurabilityResponse(BaseModel):
@@ -507,6 +512,13 @@ class DurabilityResponse(BaseModel):
     lookback_days: int
     fatigue_offset_sec: int
     reference_duration_sec: int
+    mode: str = "intra"
+    # easy_baseline only: which activity holds the global fresh best
+    fresh_activity_name: str | None = None
+    fresh_activity_date: str | None = None
+    fresh_activity_duration_sec: float | None = None
+    fresh_window_start_sec: float | None = None
+    fresh_window_end_sec: float | None = None
 
 
 class TrainingPlanDayResponse(BaseModel):
