@@ -31,6 +31,7 @@ import type {
   ZoneConfigsResponse,
   ThresholdEstimateResponse,
   ThresholdApplyRequest,
+  DurabilityResponse,
 } from './types'
 
 export function useMe() {
@@ -299,6 +300,13 @@ export function usePerformanceCurve(days = 90) {
   return useQuery({
     queryKey: ['performance-curve', days],
     queryFn: () => apiGet<PerformanceCurveResponse>(`/performance-curve?days=${days}`),
+  })
+}
+
+export function useDurability(days = 90) {
+  return useQuery({
+    queryKey: ['durability', days],
+    queryFn: () => apiGet<DurabilityResponse>(`/durability?days=${days}`),
   })
 }
 

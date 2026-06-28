@@ -491,6 +491,24 @@ class PerformanceCurveResponse(BaseModel):
     activities_analyzed: int
 
 
+class DurabilityPoint(BaseModel):
+    date: str
+    durability_index: float
+    activity_name: str
+    duration_sec: float
+    metric: str  # "pace" or "power"
+
+
+class DurabilityResponse(BaseModel):
+    trend_points: list[DurabilityPoint] = []
+    mean_durability: float | None = None
+    durability_rating: str | None = None
+    activities_analyzed: int = 0
+    lookback_days: int
+    fatigue_offset_sec: int
+    reference_duration_sec: int
+
+
 class TrainingPlanDayResponse(BaseModel):
     id: int
     plan_id: int

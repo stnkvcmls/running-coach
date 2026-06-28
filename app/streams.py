@@ -391,6 +391,42 @@ def compute_aerobic_metrics_from_details(
     return compute_aerobic_metrics(parsed)
 
 
+def compute_late_mean_max_curve(
+    streams: dict[str, list[float | None]],
+    fatigue_offset_sec: float,
+    durations: list[int] = STANDARD_DURATIONS,
+) -> dict[str, dict[int, float]]:
+    """Mean-max curves computed only from the 'late' (fatigued) portion of a run.
+
+    Filters stream samples to those with elapsed time >= fatigue_offset_sec, then
+    runs mean_max_curve on each channel. Returns a dict with keys "power",
+    "speed", "gap_speed", "hr" (any may be empty if the late window is too short).
+    """
+    time = streams.get("time", [])
+
+    late_start = next(
+        (i for i, t in enumerate(time) if isinstance(t, (int, float)) and t >= fatigue_offset_sec),
+        None,
+    )
+    if late_start is None:
+        return {}
+
+    late_time = time[late_start:]
+    late_power = streams.get("power", [])[late_start:]
+    late_speed = streams.get("speed", [])[late_start:]
+    late_elev = streams.get("elevation", [])[late_start:]
+    late_dist = streams.get("distance", [])[late_start:]
+    late_hr = streams.get("hr", [])[late_start:]
+    late_gap = grade_adjusted_speed(late_speed, late_elev, late_dist)
+
+    return {
+        "power": mean_max_curve(late_time, late_power, durations),
+        "speed": mean_max_curve(late_time, late_speed, durations),
+        "gap_speed": mean_max_curve(late_time, late_gap, durations),
+        "hr": mean_max_curve(late_time, late_hr, durations),
+    }
+
+
 def backfill_missing_aerobic_metrics(db: Session, limit: int = 500, user_id: int | None = None) -> int:
     """Compute decoupling_pct / efficiency_factor for activities that lack them.
 

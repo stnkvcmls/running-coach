@@ -77,12 +77,15 @@ from app.schemas import (
     ZoneConfigResponse,
     ZoneConfigsResponse,
     PushWorkoutResponse,
+    DurabilityPoint,
+    DurabilityResponse,
 )
 from app import training_load
 from app import threshold as threshold_mod
 from app import adherence as adherence_mod
 from app import intensity as intensity_mod
 from app import streams as streams_mod
+from app import durability as durability_mod
 from app.config import AVAILABLE_MODELS
 from app.utils import safe_json_loads, parse_activity_charts, parse_activity_route, calculate_age
 
@@ -1048,6 +1051,36 @@ def api_get_performance_curve(
         ],
         lookback_days=data.lookback_days,
         activities_analyzed=data.activities_analyzed,
+    )
+
+
+# --- Durability ---
+
+@api_router.get("/durability", response_model=DurabilityResponse)
+def api_get_durability(
+    days: int = Query(90, ge=30, le=365),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Durability / endurance score trend: fatigue-resistance index from mean-max curves."""
+    trend = durability_mod.compute_durability_trend(db, lookback_days=days, user_id=current_user.id)
+    return DurabilityResponse(
+        trend_points=[
+            DurabilityPoint(
+                date=p.date,
+                durability_index=p.durability_index,
+                activity_name=p.activity_name,
+                duration_sec=p.duration_sec,
+                metric=p.metric,
+            )
+            for p in trend.trend_points
+        ],
+        mean_durability=trend.mean_durability,
+        durability_rating=trend.durability_rating,
+        activities_analyzed=trend.activities_analyzed,
+        lookback_days=trend.lookback_days,
+        fatigue_offset_sec=trend.fatigue_offset_sec,
+        reference_duration_sec=trend.reference_duration_sec,
     )
 
 

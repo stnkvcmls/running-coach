@@ -483,6 +483,24 @@ export interface IntensityTrendsResponse {
   days: number
 }
 
+export interface DurabilityPoint {
+  date: string
+  durability_index: number
+  activity_name: string
+  duration_sec: number
+  metric: string
+}
+
+export interface DurabilityResponse {
+  trend_points: DurabilityPoint[]
+  mean_durability: number | null
+  durability_rating: string | null
+  activities_analyzed: number
+  lookback_days: number
+  fatigue_offset_sec: number
+  reference_duration_sec: number
+}
+
 export interface PushWorkoutResponse {
   workout_name: string
   garmin_workout_id: number | string
