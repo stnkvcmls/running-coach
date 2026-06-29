@@ -239,7 +239,7 @@ sharpens the closed-loop plan's input signal.
   silently when Garmin changes shape. Add contract/snapshot tests over recorded
   payloads and a sync-health check that flags when expected fields go missing.
   **M.** Files: `tests/` fixtures, `app/garmin_sync.py` health surface.
-- **P3-5 · History browsing UX.** Activities/daily lists use manual page paging;
+- ✅ **P3-5 · History browsing UX.** Activities/daily lists use manual page paging;
   add infinite scroll or a "load all" for long archives
   (`CURRENT_STATE.md` "Pagination UX"). **S–M.** Files:
   `frontend/src/components/activities/*`, `daily/*`, `frontend/src/api/` hooks.

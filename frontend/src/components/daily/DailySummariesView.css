@@ -83,3 +83,7 @@
 .load-more-btn:hover {
   background: var(--bg-hover);
 }
+
+.scroll-sentinel {
+  height: 1px;
+}

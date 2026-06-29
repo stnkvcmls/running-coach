@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useDailySummaries } from '../../api/hooks'
 import { format, parseISO } from '../../utils/date'
@@ -6,9 +6,27 @@ import { formatSleepHours } from '../../utils/formatting'
 import './DailySummariesView.css'
 
 export default function DailySummariesView() {
-  const [page, setPage] = useState(1)
-  const { data: summaries, isLoading, error } = useDailySummaries(page)
+  const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } =
+    useDailySummaries()
   const navigate = useNavigate()
+  const sentinelRef = useRef<HTMLDivElement>(null)
+
+  const summaries = useMemo(() => data?.pages.flat() ?? [], [data])
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current
+    if (!sentinel) return
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage()
+        }
+      },
+      { rootMargin: '200px' },
+    )
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage])
 
   if (isLoading) return <div className="spinner" />
   if (error) return <div className="empty-state">Failed to load daily summaries</div>
@@ -16,11 +34,11 @@ export default function DailySummariesView() {
   return (
     <div className="daily-view">
       <h2 className="section-title">Daily Summaries</h2>
-      {(!summaries || summaries.length === 0) && (
+      {summaries.length === 0 && (
         <div className="empty-state">No daily summaries yet</div>
       )}
       <div className="daily-list">
-        {summaries?.map(s => (
+        {summaries.map(s => (
           <div key={s.id} className="daily-card card" onClick={() => navigate(`/daily/${s.id}`)}>
             <div className="daily-date-col">
               <span className="daily-day">{format(parseISO(s.date), 'd')}</span>
@@ -64,11 +82,9 @@ export default function DailySummariesView() {
         ))}
       </div>
 
-      {summaries && summaries.length >= 30 && (
-        <div className="load-more-wrap">
-          <button className="load-more-btn" onClick={() => setPage(p => p + 1)}>Load more</button>
-        </div>
-      )}
+      <div ref={sentinelRef} className="scroll-sentinel" />
+
+      {isFetchingNextPage && <div className="spinner" />}
     </div>
   )
 }
