@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPost, apiPut, apiDelete } from './client'
 import type {
   AIJobEnqueuedResponse,
@@ -64,12 +64,19 @@ export function useWellnessTrends(days = 90) {
   })
 }
 
-export function useActivities(page: number, type?: string) {
-  const params = new URLSearchParams({ page: String(page), limit: '30' })
-  if (type) params.set('type', type)
-  return useQuery({
-    queryKey: ['activities', page, type],
-    queryFn: () => apiGet<ActivitySummary[]>(`/activities?${params}`),
+export const ACTIVITIES_PAGE_SIZE = 30
+
+export function useActivities(type?: string) {
+  return useInfiniteQuery({
+    queryKey: ['activities', type],
+    queryFn: ({ pageParam }) => {
+      const params = new URLSearchParams({ page: String(pageParam), limit: String(ACTIVITIES_PAGE_SIZE) })
+      if (type) params.set('type', type)
+      return apiGet<ActivitySummary[]>(`/activities?${params}`)
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, _allPages, lastPageParam) =>
+      lastPage.length === ACTIVITIES_PAGE_SIZE ? (lastPageParam as number) + 1 : undefined,
   })
 }
 
@@ -81,10 +88,16 @@ export function useActivity(id: number) {
   })
 }
 
-export function useDailySummaries(page: number) {
-  return useQuery({
-    queryKey: ['daily-summaries', page],
-    queryFn: () => apiGet<DailySummaryResponse[]>(`/daily-summaries?page=${page}&limit=30`),
+export const DAILY_SUMMARIES_PAGE_SIZE = 30
+
+export function useDailySummaries() {
+  return useInfiniteQuery({
+    queryKey: ['daily-summaries'],
+    queryFn: ({ pageParam }) =>
+      apiGet<DailySummaryResponse[]>(`/daily-summaries?page=${pageParam}&limit=${DAILY_SUMMARIES_PAGE_SIZE}`),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, _allPages, lastPageParam) =>
+      lastPage.length === DAILY_SUMMARIES_PAGE_SIZE ? (lastPageParam as number) + 1 : undefined,
   })
 }
 

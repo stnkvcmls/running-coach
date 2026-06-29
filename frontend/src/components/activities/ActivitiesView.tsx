@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useActivities } from '../../api/hooks'
 import { format, parseISO } from '../../utils/date'
 import ActivityListItem from './ActivityListItem'
@@ -15,12 +15,13 @@ const FILTERS = [
 
 export default function ActivitiesView() {
   const [activeFilter, setActiveFilter] = useState('')
-  const [page, setPage] = useState(1)
-  const { data: activities, isLoading } = useActivities(page, activeFilter || undefined)
+  const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage } =
+    useActivities(activeFilter || undefined)
+  const sentinelRef = useRef<HTMLDivElement>(null)
 
-  // Group by month
+  const activities = useMemo(() => data?.pages.flat() ?? [], [data])
+
   const grouped = useMemo(() => {
-    if (!activities) return []
     const groups: { month: string; items: typeof activities }[] = []
     let currentMonth = ''
     let currentItems: typeof activities = []
@@ -39,15 +40,29 @@ export default function ActivitiesView() {
     return groups
   }, [activities])
 
+  useEffect(() => {
+    const sentinel = sentinelRef.current
+    if (!sentinel) return
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage()
+        }
+      },
+      { rootMargin: '200px' },
+    )
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage])
+
   return (
     <div className="activities-view">
-      {/* Filter chips */}
       <div className="filter-chips">
         {FILTERS.map(f => (
           <button
             key={f.value}
             className={`chip ${activeFilter === f.value ? 'active' : ''}`}
-            onClick={() => { setActiveFilter(f.value); setPage(1) }}
+            onClick={() => setActiveFilter(f.value)}
           >
             {f.label}
           </button>
@@ -71,13 +86,9 @@ export default function ActivitiesView() {
         </div>
       ))}
 
-      {activities && activities.length >= 30 && (
-        <div className="load-more-wrap">
-          <button className="load-more-btn" onClick={() => setPage(p => p + 1)}>
-            Load more
-          </button>
-        </div>
-      )}
+      <div ref={sentinelRef} className="scroll-sentinel" />
+
+      {isFetchingNextPage && <div className="spinner" />}
     </div>
   )
 }
