@@ -296,11 +296,14 @@ def _confidence_and_note(
 # Individual estimates
 # ---------------------------------------------------------------------------
 
-def _estimate_critical_power(
-    curves: list[tuple[float, dict]]
+def _fit_critical_power_from_frontier(
+    frontier: list[_FrontierPoint],
 ) -> tuple[FieldEstimate, float | None, float | None]:
-    """Estimate CP (W), and the supporting W' (J) and Pmax (W)."""
-    frontier = _build_frontier(curves, "power")
+    """Fit the CP model from a pre-built frontier (skips the _build_frontier call).
+
+    Used by both the full-recompute path and the incremental merge path so the
+    fitting logic is not duplicated.
+    """
     if not frontier:
         return _empty("No power data in recent activities."), None, None
     fit = _fit_two_param(frontier)
@@ -327,9 +330,10 @@ def _estimate_critical_power(
     )
 
 
-def _estimate_threshold_pace(curves: list[tuple[float, dict]]) -> tuple[FieldEstimate, float | None]:
-    """Estimate threshold pace (min/km) and CV (m/s) via critical velocity."""
-    frontier = _build_frontier(curves, "gap_speed")
+def _fit_threshold_pace_from_frontier(
+    frontier: list[_FrontierPoint],
+) -> tuple[FieldEstimate, float | None]:
+    """Fit the CV model from a pre-built frontier (skips the _build_frontier call)."""
     if not frontier:
         return _empty("No pace/GPS data in recent activities."), None
     fit = _fit_two_param(frontier)
@@ -345,6 +349,20 @@ def _estimate_threshold_pace(curves: list[tuple[float, dict]]) -> tuple[FieldEst
                       confidence=conf, sample_size=sample, note=note),
         cv,
     )
+
+
+def _estimate_critical_power(
+    curves: list[tuple[float, dict]]
+) -> tuple[FieldEstimate, float | None, float | None]:
+    """Estimate CP (W), and the supporting W' (J) and Pmax (W)."""
+    frontier = _build_frontier(curves, "power")
+    return _fit_critical_power_from_frontier(frontier)
+
+
+def _estimate_threshold_pace(curves: list[tuple[float, dict]]) -> tuple[FieldEstimate, float | None]:
+    """Estimate threshold pace (min/km) and CV (m/s) via critical velocity."""
+    frontier = _build_frontier(curves, "gap_speed")
+    return _fit_threshold_pace_from_frontier(frontier)
 
 
 def _garmin_lactate_threshold_hr(activities: list[Activity]) -> int | None:
@@ -463,6 +481,55 @@ def _estimate_threshold_hr(
 
 
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Frontier serialization helpers
+# ---------------------------------------------------------------------------
+
+def _frontier_to_list(frontier: list[_FrontierPoint]) -> list[dict]:
+    return [dataclasses.asdict(p) for p in frontier]
+
+
+def _list_to_frontier(data: list[dict]) -> list[_FrontierPoint]:
+    return [_FrontierPoint(**d) for d in data]
+
+
+def _merge_curves_into_frontier(
+    frontier: list[_FrontierPoint],
+    new_curves: list[tuple[float, dict]],
+    metric: str,
+) -> tuple[list[_FrontierPoint], bool]:
+    """Merge new activity curves into an existing frontier.
+
+    Returns ``(updated_frontier, changed)`` where ``changed`` is True only if
+    at least one duration gained a new best value (i.e., a new PR was recorded).
+    The support count for every duration is incremented for each new activity
+    that reaches it, regardless of whether it sets a new best.
+    """
+    best: dict[int, tuple[float, float]] = {p.duration: (p.value, p.weight) for p in frontier}
+    support: dict[int, int] = {p.duration: p.sample_size for p in frontier}
+    changed = False
+    for age_days, curve in new_curves:
+        sub = curve.get(metric) or {}
+        for dur_str, val in sub.items():
+            try:
+                dur = int(dur_str)
+                v = float(val)
+            except (TypeError, ValueError):
+                continue
+            support[dur] = support.get(dur, 0) + 1
+            w = _recency_weight(age_days)
+            if dur not in best or v > best[dur][0]:
+                best[dur] = (v, w)
+                changed = True
+    updated = [
+        _FrontierPoint(duration=d, value=best[d][0], weight=best[d][1],
+                       sample_size=support[d])
+        for d in sorted(best)
+    ]
+    return updated, changed
+
+
+# ---------------------------------------------------------------------------
 # Result cache (SyncStatus-backed memoization)
 # ---------------------------------------------------------------------------
 
@@ -502,10 +569,10 @@ def _deserialize_estimate(d: dict) -> ThresholdEstimate:
     )
 
 
-def _load_cached_threshold(
-    db: Session, lookback_days: int, cutoff: datetime, user_id: int
-) -> ThresholdEstimate | None:
-    """Return the cached estimate when the fingerprint matches, else None."""
+def _load_cached_threshold_raw(
+    db: Session, user_id: int
+) -> dict | None:
+    """Return the raw cache dict (without fingerprint validation) for incremental use."""
     row = (
         db.query(SyncStatus)
         .filter(SyncStatus.user_id == user_id, SyncStatus.key == _THRESHOLD_CACHE_KEY)
@@ -514,8 +581,17 @@ def _load_cached_threshold(
     if not row or not row.value:
         return None
     try:
-        data = json.loads(row.value)
+        return json.loads(row.value)
     except (json.JSONDecodeError, TypeError):
+        return None
+
+
+def _load_cached_threshold(
+    db: Session, lookback_days: int, cutoff: datetime, user_id: int
+) -> ThresholdEstimate | None:
+    """Return the cached estimate when the fingerprint matches, else None."""
+    data = _load_cached_threshold_raw(db, user_id)
+    if data is None:
         return None
     if data.get("fp") != _threshold_fingerprint(db, lookback_days, cutoff, user_id):
         return None
@@ -526,25 +602,166 @@ def _load_cached_threshold(
 
 
 def _save_cached_threshold(
-    db: Session, estimate: ThresholdEstimate, lookback_days: int, cutoff: datetime, user_id: int
+    db: Session,
+    estimate: ThresholdEstimate,
+    lookback_days: int,
+    cutoff: datetime,
+    user_id: int,
+    power_frontier: list[_FrontierPoint] | None = None,
+    pace_frontier: list[_FrontierPoint] | None = None,
 ) -> None:
-    """Persist the estimate alongside the current fingerprint."""
-    payload = json.dumps({
+    """Persist the estimate, fingerprint, and optional frontiers to SyncStatus."""
+    payload: dict = {
         "fp": _threshold_fingerprint(db, lookback_days, cutoff, user_id),
         "estimate": dataclasses.asdict(estimate),
-    })
+    }
+    if power_frontier is not None:
+        payload["power_frontier"] = _frontier_to_list(power_frontier)
+    if pace_frontier is not None:
+        payload["pace_frontier"] = _frontier_to_list(pace_frontier)
+    json_payload = json.dumps(payload)
     row = (
         db.query(SyncStatus)
         .filter(SyncStatus.user_id == user_id, SyncStatus.key == _THRESHOLD_CACHE_KEY)
         .first()
     )
     if row:
-        row.value = payload
+        row.value = json_payload
         row.updated_at = datetime.now(timezone.utc)
     else:
-        db.add(SyncStatus(user_id=user_id, key=_THRESHOLD_CACHE_KEY, value=payload,
+        db.add(SyncStatus(user_id=user_id, key=_THRESHOLD_CACHE_KEY, value=json_payload,
                           updated_at=datetime.now(timezone.utc)))
     db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Incremental threshold update (skip full refit when frontier unchanged)
+# ---------------------------------------------------------------------------
+
+def _try_incremental_threshold(
+    db: Session, lookback_days: int, cutoff: datetime, now: datetime, user_id: int
+) -> ThresholdEstimate | None:
+    """Attempt to update the threshold estimate without a full activity re-scan.
+
+    Strategy:
+    1. Load the cached frontier (stored alongside the estimate).
+    2. Parse the old fingerprint to determine how many runs were in the window.
+    3. If the new run count is lower (activities dropped out of the 90-day window),
+       return None — a full rebuild is required.
+    4. Otherwise, find new activities (synced after the last cache) and merge their
+       mean-max curves into the cached frontier.
+    5. If no new PRs result: return the cached estimate with an updated fingerprint.
+    6. If the frontier changed: refit CP/CV from the updated frontier (fast,
+       O(frontier points)) and return — skipping the re-parse of old activities.
+    """
+    cached_data = _load_cached_threshold_raw(db, user_id)
+    if cached_data is None:
+        return None
+    if "power_frontier" not in cached_data and "pace_frontier" not in cached_data:
+        return None  # Old cache entry without frontier; fall back to full rebuild.
+
+    old_fp = cached_data.get("fp", "")
+    parts = old_fp.split("|")
+    if len(parts) < 4:
+        return None
+    try:
+        old_run_count = int(parts[1])
+        old_max_sync_str = parts[3]
+        old_max_sync = datetime.fromisoformat(old_max_sync_str) if old_max_sync_str else None
+    except (ValueError, IndexError):
+        return None
+
+    new_run_count = (
+        db.query(func.count(Activity.id))
+        .filter(Activity.user_id == user_id, Activity.started_at >= cutoff)
+        .scalar() or 0
+    )
+    if new_run_count < old_run_count:
+        return None  # Activities dropped from window — full rebuild needed.
+
+    # Find new run activities with curves synced after the last cache.
+    new_query = (
+        db.query(Activity)
+        .filter(
+            Activity.user_id == user_id,
+            Activity.started_at >= cutoff,
+            Activity.started_at.isnot(None),
+            Activity.mean_max_json.isnot(None),
+        )
+    )
+    if old_max_sync is not None:
+        new_query = new_query.filter(Activity.synced_at > old_max_sync)
+    new_runs = [a for a in new_query.all() if _is_run(a.activity_type)]
+
+    def _age(a: Activity) -> float:
+        return (now - a.started_at).total_seconds() / 86400.0 if a.started_at else 9999.0
+
+    new_curves: list[tuple[float, dict]] = []
+    for a in new_runs:
+        try:
+            curve = json.loads(a.mean_max_json)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        new_curves.append((_age(a), curve))
+
+    power_frontier = _list_to_frontier(cached_data.get("power_frontier") or [])
+    pace_frontier = _list_to_frontier(cached_data.get("pace_frontier") or [])
+
+    if not new_curves:
+        # No new curve data — just refresh the fingerprint and return cached estimate.
+        try:
+            est = _deserialize_estimate(cached_data["estimate"])
+            _save_cached_threshold(db, est, lookback_days, cutoff, user_id,
+                                   power_frontier=power_frontier, pace_frontier=pace_frontier)
+            return est
+        except Exception:
+            return None
+
+    # Merge new curves into frontiers.
+    non_treadmill = [(age, c) for age, c in new_curves if not c.get("is_treadmill")]
+    power_frontier_new, power_changed = _merge_curves_into_frontier(
+        power_frontier, new_curves, "power"
+    )
+    pace_frontier_new, pace_changed = _merge_curves_into_frontier(
+        pace_frontier, non_treadmill, "gap_speed"
+    )
+
+    if not power_changed and not pace_changed:
+        # No new PRs: return cached estimate with updated fingerprint.
+        try:
+            est = _deserialize_estimate(cached_data["estimate"])
+            _save_cached_threshold(db, est, lookback_days, cutoff, user_id,
+                                   power_frontier=power_frontier_new,
+                                   pace_frontier=pace_frontier_new)
+            return est
+        except Exception:
+            return None
+
+    # Frontier changed: refit from the updated frontier (no full activity re-scan).
+    try:
+        cp, w_prime, pmax = _fit_critical_power_from_frontier(power_frontier_new)
+        pace, cv = _fit_threshold_pace_from_frontier(pace_frontier_new)
+        # HR estimates still require the full run list (they use raw laps/streams).
+        all_runs = [
+            a for a in db.query(Activity).filter(
+                Activity.user_id == user_id,
+                Activity.started_at >= cutoff,
+                Activity.started_at.isnot(None),
+            ).all()
+            if _is_run(a.activity_type)
+        ]
+        max_hr_est = _estimate_max_hr(all_runs)
+        thr_hr = _estimate_threshold_hr(all_runs, max_hr_est.value, cv)
+        estimate = ThresholdEstimate(
+            critical_power=cp, w_prime=w_prime, pmax=pmax,
+            threshold_pace_min_km=pace, threshold_hr=thr_hr, max_hr=max_hr_est,
+            lookback_days=lookback_days, activities_analyzed=len(all_runs),
+        )
+        _save_cached_threshold(db, estimate, lookback_days, cutoff, user_id,
+                               power_frontier=power_frontier_new, pace_frontier=pace_frontier_new)
+        return estimate
+    except Exception:
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -563,9 +780,9 @@ def estimate_thresholds(
 ) -> ThresholdEstimate:
     """Compute threshold estimates from the last ``lookback_days`` of activities.
 
-    Results are memoized in ``SyncStatus``; the cache is invalidated whenever the
-    set of activities in the lookback window changes or new mean-max curves appear
-    (e.g., after a backfill run).
+    On a fingerprint cache hit, returns immediately. On a miss, tries an
+    incremental frontier merge (merging only new activities' curves into the cached
+    frontier) before falling back to a full recompute from all activities.
     """
     now = datetime.utcnow()
     cutoff = now - timedelta(days=lookback_days)
@@ -574,7 +791,12 @@ def estimate_thresholds(
     if cached is not None:
         return cached
 
-    # Self-heal: compute curves for any older activities that predate this feature.
+    # Try incremental update: merge only new activities into the cached frontier.
+    incremental = _try_incremental_threshold(db, lookback_days, cutoff, now, user_id)
+    if incremental is not None:
+        return incremental
+
+    # Full recompute: self-heal missing curves, then rebuild frontier from scratch.
     try:
         streams.backfill_missing_curves(db, user_id=user_id)
     except Exception:
@@ -613,8 +835,12 @@ def estimate_thresholds(
     power_curves = _curves(include_treadmill=True)
     pace_curves = _curves(include_treadmill=False)
 
-    cp, w_prime, pmax = _estimate_critical_power(power_curves)
-    pace, cv = _estimate_threshold_pace(pace_curves)
+    # Build frontiers explicitly so we can cache them for the next incremental update.
+    power_frontier = _build_frontier(power_curves, "power")
+    pace_frontier = _build_frontier(pace_curves, "gap_speed")
+
+    cp, w_prime, pmax = _fit_critical_power_from_frontier(power_frontier)
+    pace, cv = _fit_threshold_pace_from_frontier(pace_frontier)
     max_hr = _estimate_max_hr(runs)
     thr_hr = _estimate_threshold_hr(runs, max_hr.value, cv)
 
@@ -630,7 +856,8 @@ def estimate_thresholds(
     )
 
     try:
-        _save_cached_threshold(db, estimate, lookback_days, cutoff, user_id)
+        _save_cached_threshold(db, estimate, lookback_days, cutoff, user_id,
+                               power_frontier=power_frontier, pace_frontier=pace_frontier)
     except Exception:
         logger.debug("Threshold estimate cache write failed", exc_info=True)
 
