@@ -414,19 +414,35 @@ export interface ThresholdApplyRequest {
   fields?: string[] | null
 }
 
+export interface StrengthExercise {
+  name: string
+  sets: number
+  reps: string
+  note: string | null
+}
+
+export interface StrengthRoutine {
+  id: string
+  name: string
+  focus: string
+  duration_min: number
+  exercises: StrengthExercise[]
+}
+
 export interface TrainingPlanDay {
   id: number
   plan_id: number
   day_date: string
   day_of_week: string
   week_number: number
-  workout_type: string  // easy | tempo | long | interval | rest | cross
+  workout_type: string  // easy | tempo | long | interval | rest | cross | strength
   target_distance_m: number | null
   target_pace_min_km: number | null
   target_pace_display: string | null
   description: string | null
   notes: string | null
   week_theme: string | null
+  routine: StrengthRoutine | null
 }
 
 export interface TrainingPlanWeek {

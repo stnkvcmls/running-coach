@@ -842,3 +842,102 @@ def test_generate_training_plan_exception_returns_none(db, patch_db_session, mon
     result = ai_coach.generate_training_plan(reference_date=date(2026, 7, 3))
 
     assert result is None
+
+
+# --- P2-2: strength routine_id storage ---
+
+def _plan_dict_with_strength(week_start: date, routine_id: str | None) -> dict:
+    """Plan dict with one strength day (week 1, day 1) that has a routine_id."""
+    from datetime import timedelta
+    weeks = []
+    for w in range(4):
+        days = []
+        for d in range(7):
+            day = week_start + timedelta(days=w * 7 + d)
+            wtype = "rest"
+            rid = None
+            if w == 0 and d == 0:
+                wtype = "strength"
+                rid = routine_id
+            days.append({
+                "date": day.isoformat(),
+                "day_of_week": day.strftime("%A"),
+                "workout_type": wtype,
+                "description": "Strength session" if wtype == "strength" else "Rest day",
+                "notes": None,
+                "target_distance_km": None,
+                "target_pace_display": None,
+                "routine_id": rid,
+            })
+        weeks.append({"week_number": w + 1, "theme": "Base", "notes": "Easy week", "days": days})
+    return {"phase": "base", "overview": "Test", "weeks": weeks}
+
+
+def test_store_training_plan_saves_valid_routine_id(db, patch_db_session):
+    """_store_training_plan stores a valid routine_id on the strength day."""
+    from app.models import TrainingPlanDay
+    patch_db_session(ai_coach)
+
+    week_start = date(2026, 7, 7)
+    plan_dict = _plan_dict_with_strength(week_start, "running-base")
+    plan = ai_coach._store_training_plan(db, plan_dict, week_start, "{}", user_id=1)
+
+    strength_day = (
+        db.query(TrainingPlanDay)
+        .filter(TrainingPlanDay.plan_id == plan.id, TrainingPlanDay.workout_type == "strength")
+        .first()
+    )
+    assert strength_day is not None
+    assert strength_day.routine_id == "running-base"
+
+
+def test_store_training_plan_ignores_unknown_routine_id(db, patch_db_session):
+    """_store_training_plan discards routine_id values not in the library."""
+    from app.models import TrainingPlanDay
+    patch_db_session(ai_coach)
+
+    week_start = date(2026, 7, 7)
+    plan_dict = _plan_dict_with_strength(week_start, "not-a-real-routine")
+    plan = ai_coach._store_training_plan(db, plan_dict, week_start, "{}", user_id=1)
+
+    strength_day = (
+        db.query(TrainingPlanDay)
+        .filter(TrainingPlanDay.plan_id == plan.id, TrainingPlanDay.workout_type == "strength")
+        .first()
+    )
+    assert strength_day is not None
+    assert strength_day.routine_id is None
+
+
+def test_store_training_plan_handles_null_routine_id(db, patch_db_session):
+    """_store_training_plan stores None when routine_id is null in the plan dict."""
+    from app.models import TrainingPlanDay
+    patch_db_session(ai_coach)
+
+    week_start = date(2026, 7, 7)
+    plan_dict = _plan_dict_with_strength(week_start, None)
+    plan = ai_coach._store_training_plan(db, plan_dict, week_start, "{}", user_id=1)
+
+    strength_day = (
+        db.query(TrainingPlanDay)
+        .filter(TrainingPlanDay.plan_id == plan.id, TrainingPlanDay.workout_type == "strength")
+        .first()
+    )
+    assert strength_day is not None
+    assert strength_day.routine_id is None
+
+
+def test_plan_system_prompt_includes_routine_catalog():
+    """_PLAN_SYSTEM_PROMPT should contain all routine IDs from the library."""
+    from app.strength_routines import ROUTINE_IDS
+    for rid in ROUTINE_IDS:
+        assert rid in ai_coach._PLAN_SYSTEM_PROMPT
+
+
+def test_plan_tool_schema_includes_routine_id():
+    """_PLAN_TOOL_SCHEMA day items should declare routine_id."""
+    day_props = (
+        ai_coach._PLAN_TOOL_SCHEMA["input_schema"]["properties"]["weeks"]["items"]
+        ["properties"]["days"]["items"]["properties"]
+    )
+    assert "routine_id" in day_props

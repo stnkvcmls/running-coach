@@ -416,3 +416,4 @@ class TrainingPlanDay(Base):
     description = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)
     week_theme = Column(Text, nullable=True)                 # e.g. "Aerobic Base"
+    routine_id = Column(Text, nullable=True)                 # → strength_routines.ROUTINE_LIBRARY key

@@ -58,6 +58,7 @@ from app.schemas import (
     RaceInfo,
     RacePrediction,
     SettingsResponse,
+    StrengthRoutine,
     TodayResponse,
     TrainingLoadResponse,
     MissedPlanSession,
@@ -83,6 +84,7 @@ from app.schemas import (
     AIJobEnqueuedResponse,
     AIJobResponse,
 )
+from app.strength_routines import ROUTINE_LIBRARY, get_routine
 from app import training_load
 from app import threshold as threshold_mod
 from app import adherence as adherence_mod
@@ -1099,6 +1101,16 @@ def api_get_aerobic_trends(
 
 # --- Training Plan ---
 
+def _day_to_response(d: TrainingPlanDay) -> TrainingPlanDayResponse:
+    """Convert a TrainingPlanDay ORM row to its response schema, hydrating routine."""
+    resp = TrainingPlanDayResponse.model_validate(d)
+    if d.routine_id:
+        raw = get_routine(d.routine_id)
+        if raw:
+            resp.routine = StrengthRoutine.model_validate(raw)
+    return resp
+
+
 def _build_plan_response(plan: TrainingPlan, db: Session) -> TrainingPlanResponse:
     """Assemble a TrainingPlanResponse with nested week/day structure."""
     days = (
@@ -1125,7 +1137,7 @@ def _build_plan_response(plan: TrainingPlan, db: Session) -> TrainingPlanRespons
             week_start=week_start_date,
             week_end=week_end_date,
             theme=theme,
-            days=[TrainingPlanDayResponse.model_validate(d) for d in sorted_days],
+            days=[_day_to_response(d) for d in sorted_days],
         ))
 
     return TrainingPlanResponse(
@@ -1137,6 +1149,12 @@ def _build_plan_response(plan: TrainingPlan, db: Session) -> TrainingPlanRespons
         overview=plan.overview,
         weeks=plan_weeks,
     )
+
+
+@api_router.get("/strength-routines", response_model=list[StrengthRoutine])
+def api_get_strength_routines():
+    """Return the full catalog of strength & mobility routines."""
+    return [StrengthRoutine.model_validate(r) for r in ROUTINE_LIBRARY.values()]
 
 
 @api_router.get("/training-plan", response_model=TrainingPlanResponse | None)

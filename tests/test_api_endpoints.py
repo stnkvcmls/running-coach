@@ -439,3 +439,91 @@ def test_realign_regenerate_clears_dismiss(client, db, patch_db_session):
 def test_realign_invalid_action(client):
     resp = client.post("/api/v1/training-plan/realign", json={"action": "bogus"})
     assert resp.status_code == 422
+
+
+# --- P2-2: /strength-routines ---
+
+def test_strength_routines_returns_catalog(client):
+    """GET /strength-routines returns the full static library with expected shape."""
+    resp = client.get("/api/v1/strength-routines")
+    assert resp.status_code == 200
+    routines = resp.json()
+    assert isinstance(routines, list)
+    assert len(routines) > 0
+
+    ids = {r["id"] for r in routines}
+    assert "running-base" in ids
+    assert "hip-glute" in ids
+    assert "lower-leg" in ids
+    assert "core-stability" in ids
+    assert "mobility-recovery" in ids
+
+    for r in routines:
+        assert "id" in r
+        assert "name" in r
+        assert "focus" in r
+        assert "duration_min" in r
+        assert isinstance(r["exercises"], list)
+        assert len(r["exercises"]) > 0
+        for ex in r["exercises"]:
+            assert "name" in ex
+            assert "sets" in ex
+            assert "reps" in ex
+
+
+def test_training_plan_day_includes_routine(client, db):
+    """When a plan day has a routine_id the response includes hydrated routine data."""
+    from datetime import timezone
+    plan = TrainingPlan(
+        generated_at=datetime(2026, 6, 1, 0, 0, tzinfo=timezone.utc),
+        week_start=date(2026, 6, 16),
+        plan_weeks=1,
+    )
+    db.add(plan)
+    db.flush()
+    db.add(TrainingPlanDay(
+        plan_id=plan.id,
+        day_date=date(2026, 6, 16),
+        day_of_week="Monday",
+        week_number=1,
+        workout_type="strength",
+        description="Strength session",
+        routine_id="running-base",
+    ))
+    db.commit()
+
+    resp = client.get("/api/v1/training-plan")
+    assert resp.status_code == 200
+    body = resp.json()
+    days = body["weeks"][0]["days"]
+    strength_day = next(d for d in days if d["workout_type"] == "strength")
+    assert strength_day["routine"] is not None
+    assert strength_day["routine"]["id"] == "running-base"
+    assert len(strength_day["routine"]["exercises"]) > 0
+
+
+def test_training_plan_day_no_routine_when_id_missing(client, db):
+    """A plan day without a routine_id returns routine: null."""
+    from datetime import timezone
+    plan = TrainingPlan(
+        generated_at=datetime(2026, 6, 1, 0, 0, tzinfo=timezone.utc),
+        week_start=date(2026, 6, 16),
+        plan_weeks=1,
+    )
+    db.add(plan)
+    db.flush()
+    db.add(TrainingPlanDay(
+        plan_id=plan.id,
+        day_date=date(2026, 6, 16),
+        day_of_week="Monday",
+        week_number=1,
+        workout_type="easy",
+        description="Easy run",
+    ))
+    db.commit()
+
+    resp = client.get("/api/v1/training-plan")
+    assert resp.status_code == 200
+    body = resp.json()
+    day = body["weeks"][0]["days"][0]
+    assert day["routine"] is None

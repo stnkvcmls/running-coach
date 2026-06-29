@@ -195,7 +195,7 @@ observable AI execution becomes the backbone rather than a nicety.
 loop / scheduler job), `app/ai_coach.py` (enqueue instead of inline), `app/api.py`
 (enqueue + status endpoints), frontend "analysis in progress" states.
 
-#### P2-2 · Strength & mobility content depth
+#### ✅ P2-2 · Strength & mobility content depth
 **What:** Turn the plan's strength/cross days from a prose target into **concrete,
 selectable sessions** — a small library of strength/mobility routines (the prompt
 already references "running durability" exercises at `app/ai_coach.py:1100`) with
