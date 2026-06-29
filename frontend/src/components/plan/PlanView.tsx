@@ -213,7 +213,7 @@ export default function PlanView() {
 
   function handleGenerate() {
     generate(undefined, {
-      onSuccess: (data) => { if (data?.id) setPlanJobId(data.id) },
+      onSuccess: (data) => { if (data?.job_id) setPlanJobId(data.job_id) },
     })
   }
 

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPost, apiPut, apiDelete } from './client'
 import type {
+  AIJobEnqueuedResponse,
   AIJobResponse,
   TodayResponse,
   ActivitySummary,
@@ -157,7 +158,7 @@ export function useJobStatus(jobId: number | null) {
 
 export function useTriggerAnalysis() {
   return useMutation({
-    mutationFn: (id: number) => apiPost<AIJobResponse>(`/activities/${id}/analyze`),
+    mutationFn: (id: number) => apiPost<AIJobEnqueuedResponse>(`/activities/${id}/analyze`),
   })
 }
 
@@ -165,7 +166,7 @@ export function useSubmitFeedback() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, feedback }: { id: number; feedback: FeedbackRequest }) =>
-      apiPost<AIJobResponse>(`/activities/${id}/feedback`, feedback),
+      apiPost<AIJobEnqueuedResponse>(`/activities/${id}/feedback`, feedback),
     onSuccess: (_, { id }) => {
       // Immediately refresh so the card shows the pending state; job polling
       // in ActivityDetailView handles subsequent refreshes on completion.
@@ -297,7 +298,7 @@ export function useTrainingPlan() {
 
 export function useGenerateTrainingPlan() {
   return useMutation({
-    mutationFn: () => apiPost<AIJobResponse>('/training-plan/generate', {}),
+    mutationFn: () => apiPost<AIJobEnqueuedResponse>('/training-plan/generate', {}),
   })
 }
 
@@ -333,7 +334,7 @@ export function useRealignPlan() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (action: 'regenerate' | 'dismiss') =>
-      apiPost<AIJobResponse | { status: string; until: string }>('/training-plan/realign', { action }),
+      apiPost<AIJobEnqueuedResponse | { status: string; until: string }>('/training-plan/realign', { action }),
     onSuccess: (_data, action) => {
       if (action === 'dismiss') {
         qc.invalidateQueries({ queryKey: ['realignment-status'] })

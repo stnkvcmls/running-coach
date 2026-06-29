@@ -3,6 +3,11 @@ export interface UserResponse {
   full_name: string | null
 }
 
+export interface AIJobEnqueuedResponse {
+  status: string
+  job_id: number
+}
+
 export interface AIJobResponse {
   id: number
   task_type: string

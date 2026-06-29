@@ -41,7 +41,7 @@ export default function ActivityDetailView() {
 
   function handleReanalyze() {
     triggerAnalysis.mutate(activity!.id, {
-      onSuccess: (data) => { if (data?.id) setAnalysisJobId(data.id) },
+      onSuccess: (data) => { if (data?.job_id) setAnalysisJobId(data.job_id) },
     })
   }
 
