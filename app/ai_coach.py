@@ -30,6 +30,7 @@ from app.models import (
     ZoneConfig,
 )
 from app.utils import calculate_age
+from app.strength_routines import catalog_summary, get_routine
 
 logger = logging.getLogger(__name__)
 
@@ -1160,32 +1161,39 @@ def backfill_missing_insights(user_id: int = DEFAULT_USER_ID):
         logger.info("Insight backfill complete")
 
 
-_PLAN_SYSTEM_PROMPT = """You are an expert running coach generating a periodized training plan.
+def _build_plan_system_prompt() -> str:
+    """Build the plan generation system prompt, embedding the current routine catalog."""
+    routine_catalog = catalog_summary()
+    return f"""You are an expert running coach generating a periodized training plan.
 Output ONLY a valid JSON object with no markdown fences, no commentary — just raw JSON.
 
 Schema:
-{
+{{
   "phase": "<base|build|peak|taper>",
   "overview": "<2-3 sentence narrative about the plan's intent>",
   "weeks": [
-    {
+    {{
       "week_number": 1,
       "theme": "<short theme, e.g. 'Aerobic Base'>",
       "notes": "<1-2 sentence coaching note for the week>",
       "days": [
-        {
+        {{
           "date": "YYYY-MM-DD",
           "day_of_week": "<Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday>",
           "workout_type": "<easy|tempo|long|interval|rest|cross|strength>",
           "target_distance_km": <number or null>,
           "target_pace_display": "<e.g. '5:15/km' or null>",
           "description": "<brief workout description>",
-          "notes": "<optional coaching note or null>"
-        }
+          "notes": "<optional coaching note or null>",
+          "routine_id": "<routine id from the catalog below, or null>"
+        }}
       ]
-    }
+    }}
   ]
-}
+}}
+
+Available strength & mobility routines (use the exact id string for routine_id):
+{routine_catalog}
 
 Rules:
 - Generate exactly 4 weeks, each with exactly 7 days in order starting from the given week_start.
@@ -1199,16 +1207,16 @@ Rules:
 - Strength & cross-training:
   * Include 1–2 `strength` sessions per week during base and build phases; 0–1 during taper
     (maintenance only, reduced load).
-  * For `strength` days set target_distance_km and target_pace_display to null. Write a
-    description with 4–6 specific exercises, sets, and reps targeting running durability, e.g.:
-    "3×10 single-leg squats, 3×15 glute bridges, 3×12 calf raises, 2×45s side planks,
-    3×10 Romanian deadlifts". Tailor exercises to the athlete's injury history when relevant
-    (e.g. hip-stability work for IT-band issues, calf/Achilles work for lower-leg history).
+  * For `strength` days set target_distance_km and target_pace_display to null. Set routine_id
+    to the most appropriate routine from the catalog above. Choose based on the athlete's injury
+    history (e.g. "hip-glute" for IT-band issues, "lower-leg" for calf/Achilles history,
+    "mobility-recovery" for recovery weeks, "running-base" as the general default).
+    Also write a brief description summarising the focus of the session.
   * Schedule `strength` on easy or rest-adjacent days. Do not pair strength with tempo,
     interval, or long-run days.
   * For `cross` days describe the activity (cycling, swimming, elliptical, yoga/pilates) and
-    approximate duration, e.g. "45 min easy cycling or 30 min yoga". Set target_distance_km
-    and target_pace_display to null.
+    approximate duration, e.g. "45 min easy cycling or 30 min yoga". Set target_distance_km,
+    target_pace_display, and routine_id to null.
 - Plan Difficulty (if provided):
   * comfortable → 1 hard session (tempo or interval) per week max; avoid mandatory pace targets
     on long runs; keep easy days truly easy.
@@ -1237,6 +1245,9 @@ Rules:
   * After multiple consecutive missed sessions, treat the first week of the new plan as a
     rebuild week (easy/moderate volume) before resuming normal load.
 """
+
+
+_PLAN_SYSTEM_PROMPT = _build_plan_system_prompt()
 
 # Anthropic tool-use schema — forces a schema-valid plan object instead of free text.
 _PLAN_TOOL_SCHEMA = {
@@ -1276,6 +1287,7 @@ _PLAN_TOOL_SCHEMA = {
                                     "target_pace_display": {"type": ["string", "null"]},
                                     "description": {"type": "string"},
                                     "notes": {"type": ["string", "null"]},
+                                    "routine_id": {"type": ["string", "null"]},
                                 },
                                 "required": ["date", "day_of_week", "workout_type", "description"],
                             },
@@ -1317,6 +1329,7 @@ _PLAN_GEMINI_RESPONSE_SCHEMA = {
                                 "target_pace_display": {"type": "string"},
                                 "description": {"type": "string"},
                                 "notes": {"type": "string"},
+                                "routine_id": {"type": "string"},
                             },
                             "required": ["date", "day_of_week", "workout_type", "description"],
                         },
@@ -1552,6 +1565,8 @@ def _store_training_plan(
             dist_m = dist_km * 1000 if dist_km is not None else None
             pace_display = day_data.get("target_pace_display")
             pace_num = _parse_pace_display(pace_display) if pace_display else None
+            raw_routine_id = day_data.get("routine_id")
+            routine_id = raw_routine_id if get_routine(raw_routine_id or "") else None
             db.add(TrainingPlanDay(
                 user_id=user_id,
                 plan_id=plan.id,
@@ -1565,6 +1580,7 @@ def _store_training_plan(
                 description=day_data.get("description"),
                 notes=day_data.get("notes"),
                 week_theme=theme,
+                routine_id=routine_id,
             ))
     db.commit()
     return plan

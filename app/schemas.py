@@ -504,6 +504,21 @@ class AerobicTrendsResponse(BaseModel):
     days: int
 
 
+class StrengthExercise(BaseModel):
+    name: str
+    sets: int
+    reps: str
+    note: str | None = None
+
+
+class StrengthRoutine(BaseModel):
+    id: str
+    name: str
+    focus: str
+    duration_min: int
+    exercises: list[StrengthExercise]
+
+
 class TrainingPlanDayResponse(BaseModel):
     id: int
     plan_id: int
@@ -517,6 +532,7 @@ class TrainingPlanDayResponse(BaseModel):
     description: str | None = None
     notes: str | None = None
     week_theme: str | None = None
+    routine: StrengthRoutine | None = None
 
     class Config:
         from_attributes = True

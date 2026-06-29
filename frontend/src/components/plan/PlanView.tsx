@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { ClipboardList, RefreshCw, ChevronLeft, ChevronRight, AlertTriangle, Settings2, Watch, CheckCircle } from 'lucide-react'
+import { ClipboardList, RefreshCw, ChevronLeft, ChevronRight, AlertTriangle, Settings2, Watch, CheckCircle, ChevronDown, ChevronUp, Dumbbell } from 'lucide-react'
 import { useTrainingPlan, useGenerateTrainingPlan, useRealignmentStatus, useRealignPlan, usePushWorkoutToGarmin, useJobStatus } from '../../api/hooks'
-import type { TrainingPlanDay, TrainingPlanWeek } from '../../api/types'
+import type { StrengthRoutine, TrainingPlanDay, TrainingPlanWeek } from '../../api/types'
 import './PlanView.css'
 
 const WORKOUT_COLORS: Record<string, string> = {
@@ -80,6 +80,34 @@ function SendToWatchButton({ dayId }: { dayId: number }) {
   )
 }
 
+function RoutinePanel({ routine }: { routine: StrengthRoutine }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="plan-routine">
+      <button className="plan-routine-toggle" onClick={() => setOpen(o => !o)}>
+        <Dumbbell size={13} />
+        <span>{routine.name}</span>
+        <span className="plan-routine-duration">~{routine.duration_min} min</span>
+        {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+      </button>
+      {open && (
+        <div className="plan-routine-body">
+          <p className="plan-routine-focus">{routine.focus}</p>
+          <ol className="plan-routine-exercises">
+            {routine.exercises.map((ex, i) => (
+              <li key={i} className="plan-routine-exercise">
+                <span className="plan-routine-ex-name">{ex.name}</span>
+                <span className="plan-routine-ex-sets">{ex.sets}×{ex.reps}</span>
+                {ex.note && <span className="plan-routine-ex-note">{ex.note}</span>}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function DayCard({ day }: { day: TrainingPlanDay }) {
   const isToday = day.day_date === today()
   const isPast = day.day_date < today()
@@ -111,6 +139,7 @@ function DayCard({ day }: { day: TrainingPlanDay }) {
       {day.description && (
         <p className="plan-day-desc">{day.description}</p>
       )}
+      {day.routine && <RoutinePanel routine={day.routine} />}
       {day.notes && (
         <p className="plan-day-notes">{day.notes}</p>
       )}
