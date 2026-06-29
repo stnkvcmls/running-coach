@@ -320,8 +320,83 @@ def _set_sync_status(db: Session, key: str, value: str, user_id: int = DEFAULT_U
     db.commit()
 
 
+# ---------------------------------------------------------------------------
+# Garmin API schema-drift canary
+# ---------------------------------------------------------------------------
+
+# Expected top-level fields in a Garmin activity summary list item (from
+# ``get_activities``). The code falls back to ``None`` on absent keys, so
+# drift silently corrupts synced data without raising an error.
+_ACTIVITY_SUMMARY_CONTRACT: tuple[str, ...] = (
+    "activityId",
+    "activityType",
+    "activityName",
+    "startTimeLocal",
+    "duration",
+    "distance",
+    "averageHR",
+    "maxHR",
+    "calories",
+    "elevationGain",
+)
+
+# Expected fields in the ``get_stats`` daily-stats response.
+_DAILY_STATS_CONTRACT: tuple[str, ...] = (
+    "totalSteps",
+    "totalKilocalories",
+    "restingHeartRate",
+    "moderateIntensityMinutes",
+    "vigorousIntensityMinutes",
+)
+
+# Top-level key in the ``get_sleep_data`` response.
+_SLEEP_DATA_CONTRACT: tuple[str, ...] = ("dailySleepDTO",)
+
+# Top-level key in the ``get_hrv_data`` response.
+_HRV_DATA_CONTRACT: tuple[str, ...] = ("hrvSummary",)
+
+# Required keys in the ``get_activity_details`` stream payload.
+_ACTIVITY_STREAM_CONTRACT: tuple[str, ...] = (
+    "metricDescriptors",
+    "activityDetailMetrics",
+)
+
+# Required top-level key in the Garmin calendar API response.
+_CALENDAR_RESPONSE_CONTRACT: tuple[str, ...] = ("calendarItems",)
+
+
+def check_payload_fields(
+    payload: dict,
+    contract: tuple[str, ...] | list[str],
+    source: str,
+) -> dict:
+    """Check a Garmin API response against an expected field contract.
+
+    Returns ``{"ok": bool, "present": list[str], "missing": list[str]}``.
+    Logs a WARNING for each absent field so schema drift surfaces in logs
+    without aborting the sync path.
+    """
+    if not isinstance(payload, dict):
+        logger.warning(
+            "Garmin schema canary [%s]: expected dict, got %s",
+            source,
+            type(payload).__name__,
+        )
+        return {"ok": False, "present": [], "missing": list(contract)}
+    present = [f for f in contract if f in payload]
+    missing = [f for f in contract if f not in payload]
+    if missing:
+        logger.warning(
+            "Garmin schema drift [%s]: missing fields %s",
+            source,
+            missing,
+        )
+    return {"ok": not missing, "present": present, "missing": missing}
+
+
 def _extract_activity_fields(summary: dict, details: dict | None = None) -> dict:
     """Extract relevant fields from Garmin activity data."""
+    check_payload_fields(summary, _ACTIVITY_SUMMARY_CONTRACT, "activity_summary")
     activity_id = summary.get("activityId")
     duration = summary.get("duration")
     distance = summary.get("distance")
@@ -485,6 +560,7 @@ def _store_activity(
     decoupling_pct = None
     efficiency_factor = None
     if laps:
+        check_payload_fields(laps, _ACTIVITY_STREAM_CONTRACT, "activity_stream")
         try:
             curves = streams.compute_curves_from_details(laps, fields.get("activity_type"))
             if curves:
@@ -613,6 +689,7 @@ def sync_daily_summary(
         uid = _scope_uid(db, user)
         try:
             stats = client.get_stats(date_str)
+            check_payload_fields(stats, _DAILY_STATS_CONTRACT, "daily_stats")
             user_summary = client.get_user_summary(date_str)
 
             raw = {"stats": stats, "user_summary": user_summary}
@@ -639,6 +716,7 @@ def sync_daily_summary(
             sleep_score = None
             if raw.get("sleep"):
                 sleep_data = raw["sleep"]
+                check_payload_fields(sleep_data, _SLEEP_DATA_CONTRACT, "sleep_data")
                 sleep_seconds = sleep_data.get("dailySleepDTO", {}).get("sleepTimeSeconds")
                 sleep_score = sleep_data.get("dailySleepDTO", {}).get("sleepScores", {}).get("overall", {}).get("value")
 
@@ -651,6 +729,7 @@ def sync_daily_summary(
             hrv_weekly_avg = None
             hrv_status = None
             if raw.get("hrv"):
+                check_payload_fields(raw["hrv"] or {}, _HRV_DATA_CONTRACT, "hrv_data")
                 hrv_summary = (raw["hrv"] or {}).get("hrvSummary", {}) or {}
                 hrv_avg = hrv_summary.get("lastNightAvg")
                 hrv_weekly_avg = hrv_summary.get("weeklyAvg")
@@ -961,6 +1040,7 @@ def _parse_race_priority(raw) -> str | None:
 
 def _parse_calendar_response(data: dict) -> list[dict]:
     """Parse Garmin calendar API response into event dicts."""
+    check_payload_fields(data, _CALENDAR_RESPONSE_CONTRACT, "calendar_response")
     events = []
     items = data.get("calendarItems", [])
 

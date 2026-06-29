@@ -1,0 +1,23 @@
+{
+  "dailySleepDTO": {
+    "calendarDate": "2026-06-10",
+    "sleepTimeSeconds": 27000,
+    "napTimeSeconds": 0,
+    "sleepWindowConfirmed": true,
+    "sleepScores": {
+      "overall": {
+        "value": 78,
+        "qualifierKey": "FAIR"
+      },
+      "recovery": {
+        "value": 72
+      },
+      "restfulness": {
+        "value": 80
+      }
+    },
+    "averageSpO2Value": 96.2,
+    "averageRespirationValue": 14.8,
+    "averageStressLevelDuringSleep": 28
+  }
+}

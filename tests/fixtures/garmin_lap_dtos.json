@@ -1,0 +1,40 @@
+{
+  "lapDTOs": [
+    {
+      "lapIndex": 0,
+      "distance": 1000.0,
+      "duration": 360.0,
+      "movingDuration": 355.0,
+      "elapsedDuration": 362.0,
+      "intensityType": "WARMUP",
+      "startTimeLocal": "2026-06-10T07:00:00"
+    },
+    {
+      "lapIndex": 1,
+      "distance": 3000.0,
+      "duration": 750.0,
+      "movingDuration": 748.0,
+      "elapsedDuration": 752.0,
+      "intensityType": "ACTIVE",
+      "startTimeLocal": "2026-06-10T07:06:00"
+    },
+    {
+      "lapIndex": 2,
+      "distance": 3000.0,
+      "duration": 760.0,
+      "movingDuration": 757.0,
+      "elapsedDuration": 763.0,
+      "intensityType": "ACTIVE",
+      "startTimeLocal": "2026-06-10T07:18:30"
+    },
+    {
+      "lapIndex": 3,
+      "distance": 1000.0,
+      "duration": 380.0,
+      "movingDuration": 376.0,
+      "elapsedDuration": 382.0,
+      "intensityType": "COOLDOWN",
+      "startTimeLocal": "2026-06-10T07:31:10"
+    }
+  ]
+}
