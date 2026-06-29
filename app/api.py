@@ -77,15 +77,14 @@ from app.schemas import (
     ZoneConfigResponse,
     ZoneConfigsResponse,
     PushWorkoutResponse,
-    DurabilityPoint,
-    DurabilityResponse,
+    AerobicTrendPoint,
+    AerobicTrendsResponse,
 )
 from app import training_load
 from app import threshold as threshold_mod
 from app import adherence as adherence_mod
 from app import intensity as intensity_mod
 from app import streams as streams_mod
-from app import durability as durability_mod
 from app.config import AVAILABLE_MODELS
 from app.utils import safe_json_loads, parse_activity_charts, parse_activity_route, calculate_age
 
@@ -1054,46 +1053,40 @@ def api_get_performance_curve(
     )
 
 
-# --- Durability ---
+# --- Aerobic Trends ---
 
-@api_router.get("/durability", response_model=DurabilityResponse)
-def api_get_durability(
+@api_router.get("/aerobic-trends", response_model=AerobicTrendsResponse)
+def api_get_aerobic_trends(
     days: int = Query(90, ge=30, le=365),
-    mode: str = Query("intra", pattern="^(intra|easy_baseline)$"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Durability / endurance score trend: fatigue-resistance index from mean-max curves."""
-    trend = durability_mod.compute_durability_trend(
-        db, lookback_days=days, user_id=current_user.id, mode=mode
+    """Aerobic decoupling % and efficiency factor trend per run."""
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    RUN_TYPES = ("running", "trail_running", "treadmill_running", "indoor_running")
+    activities = (
+        db.query(Activity)
+        .filter(
+            Activity.user_id == current_user.id,
+            Activity.started_at >= cutoff,
+            func.lower(Activity.activity_type).in_(RUN_TYPES),
+            func.coalesce(Activity.decoupling_pct, Activity.efficiency_factor).isnot(None),
+        )
+        .order_by(Activity.started_at)
+        .all()
     )
-    return DurabilityResponse(
-        trend_points=[
-            DurabilityPoint(
-                date=p.date,
-                durability_index=p.durability_index,
-                activity_name=p.activity_name,
-                duration_sec=p.duration_sec,
-                metric=p.metric,
-                early_window_start_sec=p.early_window_start_sec,
-                early_window_end_sec=p.early_window_end_sec,
-                late_window_start_sec=p.late_window_start_sec,
-                late_window_end_sec=p.late_window_end_sec,
+    return AerobicTrendsResponse(
+        points=[
+            AerobicTrendPoint(
+                date=a.started_at.date().isoformat() if isinstance(a.started_at, datetime) else str(a.started_at)[:10],
+                activity_name=a.name or "",
+                duration_sec=a.duration_sec or 0,
+                decoupling_pct=a.decoupling_pct,
+                efficiency_factor=a.efficiency_factor,
             )
-            for p in trend.trend_points
+            for a in activities
         ],
-        mean_durability=trend.mean_durability,
-        durability_rating=trend.durability_rating,
-        activities_analyzed=trend.activities_analyzed,
-        lookback_days=trend.lookback_days,
-        fatigue_offset_sec=trend.fatigue_offset_sec,
-        reference_duration_sec=trend.reference_duration_sec,
-        mode=trend.mode,
-        fresh_activity_name=trend.fresh_activity_name,
-        fresh_activity_date=trend.fresh_activity_date,
-        fresh_activity_duration_sec=trend.fresh_activity_duration_sec,
-        fresh_window_start_sec=trend.fresh_window_start_sec,
-        fresh_window_end_sec=trend.fresh_window_end_sec,
+        days=days,
     )
 
 

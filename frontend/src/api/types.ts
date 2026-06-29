@@ -483,34 +483,17 @@ export interface IntensityTrendsResponse {
   days: number
 }
 
-export interface DurabilityPoint {
+export interface AerobicTrendPoint {
   date: string
-  durability_index: number
   activity_name: string
   duration_sec: number
-  metric: string
-  early_window_start_sec: number | null
-  early_window_end_sec: number | null
-  late_window_start_sec: number | null
-  late_window_end_sec: number | null
+  decoupling_pct: number | null
+  efficiency_factor: number | null
 }
 
-export type DurabilityMode = 'intra' | 'easy_baseline'
-
-export interface DurabilityResponse {
-  trend_points: DurabilityPoint[]
-  mean_durability: number | null
-  durability_rating: string | null
-  activities_analyzed: number
-  lookback_days: number
-  fatigue_offset_sec: number
-  reference_duration_sec: number
-  mode: DurabilityMode
-  fresh_activity_name: string | null
-  fresh_activity_date: string | null
-  fresh_activity_duration_sec: number | null
-  fresh_window_start_sec: number | null
-  fresh_window_end_sec: number | null
+export interface AerobicTrendsResponse {
+  points: AerobicTrendPoint[]
+  days: number
 }
 
 export interface PushWorkoutResponse {

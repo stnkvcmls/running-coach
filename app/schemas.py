@@ -491,34 +491,17 @@ class PerformanceCurveResponse(BaseModel):
     activities_analyzed: int
 
 
-class DurabilityPoint(BaseModel):
+class AerobicTrendPoint(BaseModel):
     date: str
-    durability_index: float
     activity_name: str
     duration_sec: float
-    metric: str  # "pace" or "power"
-    # Window positions within the activity (seconds from activity start)
-    early_window_start_sec: float | None = None   # intra mode only
-    early_window_end_sec: float | None = None
-    late_window_start_sec: float | None = None
-    late_window_end_sec: float | None = None
+    decoupling_pct: float | None = None
+    efficiency_factor: float | None = None
 
 
-class DurabilityResponse(BaseModel):
-    trend_points: list[DurabilityPoint] = []
-    mean_durability: float | None = None
-    durability_rating: str | None = None
-    activities_analyzed: int = 0
-    lookback_days: int
-    fatigue_offset_sec: int
-    reference_duration_sec: int
-    mode: str = "intra"
-    # easy_baseline only: which activity holds the global fresh best
-    fresh_activity_name: str | None = None
-    fresh_activity_date: str | None = None
-    fresh_activity_duration_sec: float | None = None
-    fresh_window_start_sec: float | None = None
-    fresh_window_end_sec: float | None = None
+class AerobicTrendsResponse(BaseModel):
+    points: list[AerobicTrendPoint] = []
+    days: int
 
 
 class TrainingPlanDayResponse(BaseModel):

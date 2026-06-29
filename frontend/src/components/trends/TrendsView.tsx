@@ -2,15 +2,15 @@ import { useState } from 'react'
 import WellnessTrendsView from './WellnessTrendsView'
 import PerformanceCurveView from './PerformanceCurveView'
 import IntensityTrendsView from './IntensityTrendsView'
-import DurabilityView from './DurabilityView'
+import AerobicTrendsView from './AerobicTrendsView'
 
-type Tab = 'wellness' | 'intensity' | 'performance' | 'durability'
+type Tab = 'wellness' | 'intensity' | 'performance' | 'aerobic'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'wellness', label: 'Wellness' },
   { id: 'intensity', label: 'Intensity' },
   { id: 'performance', label: 'Performance' },
-  { id: 'durability', label: 'Durability' },
+  { id: 'aerobic', label: 'Aerobic' },
 ]
 
 export default function TrendsView() {
@@ -50,7 +50,7 @@ export default function TrendsView() {
       {tab === 'wellness' && <WellnessTrendsView />}
       {tab === 'intensity' && <IntensityTrendsView />}
       {tab === 'performance' && <PerformanceCurveView />}
-      {tab === 'durability' && <DurabilityView />}
+      {tab === 'aerobic' && <AerobicTrendsView />}
     </div>
   )
 }

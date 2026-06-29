@@ -533,16 +533,6 @@ def _build_context(
     except Exception:
         logger.debug("Intensity context skipped", exc_info=True)
 
-    # Durability (fatigue resistance) — late-effort vs fresh mean-max comparison
-    try:
-        from app import durability as durability_mod
-        dur_trend = durability_mod.compute_durability_trend(db, lookback_days=90, user_id=user_id)
-        dur_context = durability_mod.format_durability_context(dur_trend)
-        if dur_context:
-            sections.append(dur_context)
-    except Exception:
-        logger.debug("Durability context skipped", exc_info=True)
-
     # Recent daily summaries (last 7 days)
     recent_days = (
         db.query(DailySummary)
