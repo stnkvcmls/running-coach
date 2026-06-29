@@ -334,6 +334,30 @@ class TrainingPlan(Base):
     raw_json = Column(Text, nullable=True)        # full AI JSON output
 
 
+class AIJob(Base):
+    """Persisted job ledger for durable AI task execution.
+
+    Replaces ephemeral daemon threads and blocking inline calls. The APScheduler
+    worker polls for pending rows, marks them running, executes, and records the
+    outcome. Failed jobs are retried up to max_attempts before being marked failed.
+    """
+
+    __tablename__ = "ai_jobs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = _user_id_column()
+    task_type = Column(String(50), nullable=False)   # analyze_activity | analyze_feedback | generate_plan | weekly_review
+    payload_json = Column(Text, nullable=True)        # JSON task args (e.g. {"activity_id": 123})
+    status = Column(String(20), nullable=False, default="pending", index=True)  # pending | running | done | failed
+    attempts = Column(Integer, nullable=False, default=0)
+    max_attempts = Column(Integer, nullable=False, default=3)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=_utcnow, index=True)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+
+
 class ChatMessage(Base):
     """Persisted multi-turn chat messages between the athlete and the AI coach."""
 

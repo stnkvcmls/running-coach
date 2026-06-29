@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import (
+    AIJob,
     Activity,
     AthleteProfile,
     ChatMessage,
@@ -79,6 +80,8 @@ from app.schemas import (
     PushWorkoutResponse,
     AerobicTrendPoint,
     AerobicTrendsResponse,
+    AIJobEnqueuedResponse,
+    AIJobResponse,
 )
 from app import training_load
 from app import threshold as threshold_mod
@@ -1153,23 +1156,16 @@ def api_get_training_plan(
     return _build_plan_response(plan, db)
 
 
-@api_router.post("/training-plan/generate", response_model=TrainingPlanResponse | None)
+@api_router.post("/training-plan/generate", response_model=AIJobEnqueuedResponse)
 def api_generate_training_plan(current_user: User = Depends(get_current_user)):
-    """Trigger AI plan generation and return the new plan synchronously.
+    """Enqueue AI plan generation and return the job id for polling.
 
-    Generation typically takes 5–15 seconds. The function opens its own DB
-    session internally, so we re-query via a fresh dependency after completion.
+    Clients poll GET /api/v1/jobs/{job_id} until status is 'done', then
+    refresh the training plan via GET /api/v1/training-plan.
     """
-    from app.ai_coach import generate_training_plan
-    from app.database import db_session as make_session
-    plan = generate_training_plan(user_id=current_user.id)
-    if plan is None:
-        raise HTTPException(status_code=500, detail="Plan generation failed — check AI config")
-    with make_session() as fresh_db:
-        db_plan = fresh_db.query(TrainingPlan).filter(TrainingPlan.id == plan.id).first()
-        if not db_plan:
-            raise HTTPException(status_code=500, detail="Plan not found after generation")
-        return _build_plan_response(db_plan, fresh_db)
+    from app.ai_coach import enqueue_job
+    job_id = enqueue_job("generate_plan", {}, current_user.id)
+    return AIJobEnqueuedResponse(status="queued", job_id=job_id)
 
 
 @api_router.get("/training-plan/realignment-status", response_model=PlanRealignmentStatus)
@@ -1219,13 +1215,9 @@ def api_realign_plan(
         db.commit()
         return {"status": "dismissed", "until": dismiss_until}
 
-    # action == "regenerate"
-    from app.ai_coach import generate_training_plan
-    from app.database import db_session as make_session
-    plan = generate_training_plan(user_id=current_user.id)
-    if plan is None:
-        raise HTTPException(status_code=500, detail="Plan generation failed — check AI config")
-    # Clear dismiss snooze after generating a new plan
+    # action == "regenerate" — enqueue and return job id for polling
+    from app.ai_coach import enqueue_job
+    # Clear any existing dismiss snooze when the user triggers regeneration
     row = db.query(SyncStatus).filter(
         SyncStatus.user_id == current_user.id,
         SyncStatus.key == "plan_realignment_dismissed_until",
@@ -1233,11 +1225,8 @@ def api_realign_plan(
     if row:
         db.delete(row)
         db.commit()
-    with make_session() as fresh_db:
-        db_plan = fresh_db.query(TrainingPlan).filter(TrainingPlan.id == plan.id).first()
-        if not db_plan:
-            raise HTTPException(status_code=500, detail="Plan not found after generation")
-        return _build_plan_response(db_plan, fresh_db)
+    job_id = enqueue_job("generate_plan", {}, current_user.id)
+    return AIJobEnqueuedResponse(status="queued", job_id=job_id)
 
 
 @api_router.post("/training-plan/days/{day_id}/push-to-garmin", response_model=PushWorkoutResponse)
@@ -1463,9 +1452,9 @@ def api_trigger_analysis(
     )
     if not activity:
         raise HTTPException(status_code=404, detail="Activity not found")
-    from app.ai_coach import analyze_activity_force
-    threading.Thread(target=analyze_activity_force, args=(activity_id,), daemon=True).start()
-    return {"status": "accepted"}
+    from app.ai_coach import enqueue_job
+    job_id = enqueue_job("analyze_activity", {"activity_id": activity_id}, current_user.id)
+    return AIJobEnqueuedResponse(status="queued", job_id=job_id)
 
 
 @api_router.post("/activities/{activity_id}/feedback")
@@ -1496,9 +1485,9 @@ def api_submit_feedback(
     ).delete()
     db.commit()
 
-    from app.ai_coach import analyze_activity_with_feedback
-    threading.Thread(target=analyze_activity_with_feedback, args=(activity_id,), daemon=True).start()
-    return {"status": "accepted"}
+    from app.ai_coach import enqueue_job
+    job_id = enqueue_job("analyze_feedback", {"activity_id": activity_id}, current_user.id)
+    return AIJobEnqueuedResponse(status="queued", job_id=job_id)
 
 
 @api_router.post("/sync/{sync_type}")
@@ -1517,6 +1506,19 @@ def api_trigger_sync(sync_type: str, current_user: User = Depends(get_current_us
     else:
         raise HTTPException(status_code=400, detail=f"Unknown sync type: {sync_type}")
     return {"status": "accepted"}
+
+
+@api_router.get("/jobs/{job_id}", response_model=AIJobResponse)
+def api_get_job(
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return the status of an AI background job owned by the current user."""
+    job = db.query(AIJob).filter(AIJob.id == job_id, AIJob.user_id == current_user.id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
 
 
 def _sync_calendar_for_user(user_id: int) -> None:

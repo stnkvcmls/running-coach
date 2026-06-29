@@ -629,3 +629,23 @@ class PacingPushRequest(BaseModel):
     strategy: str = "even"
     split_unit: str = "km"
     target_time_sec: int | None = None
+
+
+class AIJobEnqueuedResponse(BaseModel):
+    status: str
+    job_id: int
+
+
+class AIJobResponse(BaseModel):
+    id: int
+    task_type: str
+    status: str          # pending | running | done | failed
+    attempts: int
+    max_attempts: int
+    error_message: str | None = None
+    created_at: datetime | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+
+    class Config:
+        from_attributes = True

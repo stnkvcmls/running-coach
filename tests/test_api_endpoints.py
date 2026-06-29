@@ -247,18 +247,24 @@ def no_threads(monkeypatch):
     monkeypatch.setattr(garmin_sync, "sync_calendar", MagicMock())
 
 
-def test_trigger_analysis_accepted(client, db, no_threads):
+def test_trigger_analysis_accepted(client, db, patch_db_session):
+    import app.ai_coach as ai_coach
+    patch_db_session(ai_coach)
     act = _add_activity(db, datetime(2026, 6, 1, 7, 0))
     resp = client.post(f"/api/v1/activities/{act.id}/analyze")
     assert resp.status_code == 200
-    assert resp.json()["status"] == "accepted"
+    body = resp.json()
+    assert body["status"] == "queued"
+    assert isinstance(body["job_id"], int)
 
 
 def test_trigger_analysis_404(client, no_threads):
     assert client.post("/api/v1/activities/999/analyze").status_code == 404
 
 
-def test_submit_feedback(client, db, no_threads):
+def test_submit_feedback(client, db, patch_db_session):
+    import app.ai_coach as ai_coach
+    patch_db_session(ai_coach)
     act = _add_activity(db, datetime(2026, 6, 1, 7, 0))
     db.add(Insight(trigger_type="activity", trigger_id=act.id, content="old", summary="old"))
     db.commit()
@@ -267,6 +273,9 @@ def test_submit_feedback(client, db, no_threads):
         json={"rating": "bad", "tags": ["tough_pace"], "text": "legs heavy"},
     )
     assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "queued"
+    assert isinstance(body["job_id"], int)
     db.expire_all()
     refreshed = db.get(Activity, act.id)
     assert refreshed.feedback_rating == "bad"
@@ -402,30 +411,23 @@ def test_realign_dismiss_idempotent(client, db):
     assert second == first  # same date since both calls happen on the same day
 
 
-def test_realign_regenerate(client, db, monkeypatch, patch_db_session):
-    import app.database as _app_db
-    plan = _seed_plan_and_days(db, [])
-    # Stub the AI generation to return the existing plan's id
-    class _FakePlan:
-        id = plan.id
-    monkeypatch.setattr("app.ai_coach.generate_training_plan", lambda *a, **kw: _FakePlan())
-    # Redirect db_session (used by the endpoint's make_session) to the test DB
-    patch_db_session(_app_db)
+def test_realign_regenerate(client, db, patch_db_session):
+    import app.ai_coach as ai_coach
+    _seed_plan_and_days(db, [])
+    patch_db_session(ai_coach)
     resp = client.post("/api/v1/training-plan/realign", json={"action": "regenerate"})
     assert resp.status_code == 200
     body = resp.json()
-    assert "id" in body
+    assert body["status"] == "queued"
+    assert isinstance(body["job_id"], int)
 
 
-def test_realign_regenerate_clears_dismiss(client, db, monkeypatch, patch_db_session):
-    import app.database as _app_db
-    plan = _seed_plan_and_days(db, [])
+def test_realign_regenerate_clears_dismiss(client, db, patch_db_session):
+    import app.ai_coach as ai_coach
+    _seed_plan_and_days(db, [])
     db.add(SyncStatus(key="plan_realignment_dismissed_until", value="2099-01-01"))
     db.commit()
-    class _FakePlan:
-        id = plan.id
-    monkeypatch.setattr("app.ai_coach.generate_training_plan", lambda *a, **kw: _FakePlan())
-    patch_db_session(_app_db)
+    patch_db_session(ai_coach)
     client.post("/api/v1/training-plan/realign", json={"action": "regenerate"})
     db.expire_all()
     row = db.query(SyncStatus).filter(

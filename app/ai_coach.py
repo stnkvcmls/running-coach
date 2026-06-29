@@ -812,6 +812,80 @@ def _save_error_insight(
         logger.exception("Failed to save error insight for activity %s", activity_id)
 
 
+def enqueue_job(task_type: str, payload: dict, user_id: int) -> int:
+    """Persist a pending AIJob and return its id.
+
+    Called from API request handlers to hand off AI work to the background
+    worker instead of blocking the request or spawning a daemon thread.
+    """
+    from app.models import AIJob
+
+    job = AIJob(
+        user_id=user_id,
+        task_type=task_type,
+        payload_json=json.dumps(payload),
+        status="pending",
+        attempts=0,
+        max_attempts=3,
+    )
+    with db_session() as db:
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        return job.id
+
+
+def execute_job(job_id: int) -> None:
+    """Claim and execute a single AIJob. Called by the APScheduler worker.
+
+    Atomically marks the job running, dispatches to the appropriate AI
+    function, then records done or schedules a retry (up to max_attempts).
+    """
+    from app.models import AIJob
+
+    with db_session() as db:
+        job = db.query(AIJob).filter(AIJob.id == job_id).first()
+        if job is None or job.status not in ("pending",):
+            return
+        job.status = "running"
+        job.started_at = datetime.now(timezone.utc)
+        job.attempts += 1
+        db.commit()
+        task_type = job.task_type
+        payload = json.loads(job.payload_json or "{}")
+        attempts = job.attempts
+        max_attempts = job.max_attempts
+        user_id = job.user_id
+
+    try:
+        if task_type == "analyze_activity":
+            analyze_activity_force(payload["activity_id"])
+        elif task_type == "analyze_feedback":
+            analyze_activity_with_feedback(payload["activity_id"])
+        elif task_type == "generate_plan":
+            generate_training_plan(user_id=user_id)
+        elif task_type == "weekly_review":
+            weekly_review(user_id=user_id)
+        else:
+            raise ValueError(f"Unknown task_type: {task_type!r}")
+
+        with db_session() as db:
+            job = db.query(AIJob).filter(AIJob.id == job_id).first()
+            if job:
+                job.status = "done"
+                job.completed_at = datetime.now(timezone.utc)
+                db.commit()
+    except Exception as exc:
+        logger.exception("Job %s (%s) failed on attempt %s/%s", job_id, task_type, attempts, max_attempts)
+        with db_session() as db:
+            job = db.query(AIJob).filter(AIJob.id == job_id).first()
+            if job:
+                job.error_message = str(exc)[:1000]
+                job.completed_at = datetime.now(timezone.utc)
+                job.status = "failed" if attempts >= max_attempts else "pending"
+                db.commit()
+
+
 def _load_zones(db: Session) -> dict[str, list[MetricZone]]:
     """Load metric zones from the database, grouped by metric_key."""
     zones_by_metric: dict[str, list[MetricZone]] = {}

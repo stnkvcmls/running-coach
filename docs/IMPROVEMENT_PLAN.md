@@ -181,7 +181,7 @@ provider call sites), possibly `app/config.py` (per-call token budgets).
 
 ### P2 — Reliability, breadth, and coaching depth
 
-#### P2-1 · Durable AI task queue
+#### ✅ P2-1 · Durable AI task queue
 **What:** Replace inline / short-lived-daemon-thread AI execution (on-demand
 re-analysis and plan generation) with a **persisted job ledger** + worker, so a
 slow/failed provider call neither blocks the request nor is lost on restart, and
