@@ -1,0 +1,14 @@
+{
+  "totalSteps": 9842,
+  "totalKilocalories": 2310,
+  "activeKilocalories": 680,
+  "restingHeartRate": 48,
+  "maxHeartRate": 172,
+  "averageStressLevel": 32,
+  "bodyBatteryHighestValue": 88,
+  "bodyBatteryLowestValue": 14,
+  "moderateIntensityMinutes": 22,
+  "vigorousIntensityMinutes": 18,
+  "floorsAscended": 9,
+  "floorsDescended": 8
+}

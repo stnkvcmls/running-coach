@@ -234,7 +234,7 @@ sharpens the closed-loop plan's input signal.
   `app/config.py` as code; lift the catalog to env/config so new model IDs don't
   require a code edit (`CURRENT_STATE.md` "Config / Catalog Drift"). **S.** Files:
   `app/config.py`, `app/ai_coach.py`.
-- **P3-4 · Garmin schema-drift canary.** The extensive field-name fallback logic in
+- ✅ **P3-4 · Garmin schema-drift canary.** The extensive field-name fallback logic in
   `garmin_sync.py`/`adherence.py`/`streams.py`/`workout_translator.py` fails
   silently when Garmin changes shape. Add contract/snapshot tests over recorded
   payloads and a sync-health check that flags when expected fields go missing.

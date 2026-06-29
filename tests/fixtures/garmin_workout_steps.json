@@ -1,0 +1,34 @@
+{
+  "workoutId": 654321,
+  "workoutName": "Tempo Run 10km",
+  "description": "10km tempo run with warmup and cooldown",
+  "sportType": {"sportTypeId": 1, "sportTypeKey": "running"},
+  "workoutSteps": [
+    {
+      "stepOrder": 1,
+      "stepType": {"stepTypeId": 1, "stepTypeKey": "warmup"},
+      "endCondition": {"conditionTypeId": 3, "conditionTypeKey": "distance"},
+      "endConditionValue": 2000.0,
+      "targetType": {"workoutTargetTypeId": 1, "workoutTargetTypeKey": "no.target"},
+      "description": "Easy warmup jog"
+    },
+    {
+      "stepOrder": 2,
+      "stepType": {"stepTypeId": 3, "stepTypeKey": "interval"},
+      "endCondition": {"conditionTypeId": 3, "conditionTypeKey": "distance"},
+      "endConditionValue": 6000.0,
+      "targetType": {"workoutTargetTypeId": 6, "workoutTargetTypeKey": "pace.zone"},
+      "targetValueOne": 3.5,
+      "targetValueTwo": 3.3,
+      "description": "Tempo effort at threshold pace"
+    },
+    {
+      "stepOrder": 3,
+      "stepType": {"stepTypeId": 2, "stepTypeKey": "cooldown"},
+      "endCondition": {"conditionTypeId": 3, "conditionTypeKey": "distance"},
+      "endConditionValue": 2000.0,
+      "targetType": {"workoutTargetTypeId": 1, "workoutTargetTypeKey": "no.target"},
+      "description": "Easy cooldown jog"
+    }
+  ]
+}

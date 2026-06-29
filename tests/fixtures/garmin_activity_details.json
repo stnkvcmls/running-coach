@@ -1,0 +1,22 @@
+{
+  "metricDescriptors": [
+    {"metricsIndex": 0, "key": "sumElapsedDuration"},
+    {"metricsIndex": 1, "key": "directPower"},
+    {"metricsIndex": 2, "key": "directSpeed"},
+    {"metricsIndex": 3, "key": "directHeartRate"},
+    {"metricsIndex": 4, "key": "directElevation"},
+    {"metricsIndex": 5, "key": "sumDistance"}
+  ],
+  "activityDetailMetrics": [
+    {"metrics": [0,  220, 3.2, 140, 100.0,   0.0]},
+    {"metrics": [10, 225, 3.3, 142, 100.5,  32.0]},
+    {"metrics": [20, 228, 3.4, 144, 101.0,  65.0]},
+    {"metrics": [30, 232, 3.5, 146, 101.0, 100.0]},
+    {"metrics": [40, 235, 3.5, 148, 101.5, 135.0]},
+    {"metrics": [50, 230, 3.4, 150, 102.0, 169.0]},
+    {"metrics": [60, 226, 3.3, 151, 102.0, 202.0]},
+    {"metrics": [70, 222, 3.2, 150, 102.5, 234.0]},
+    {"metrics": [80, 228, 3.3, 149, 103.0, 267.0]},
+    {"metrics": [90, 231, 3.4, 148, 103.0, 301.0]}
+  ]
+}

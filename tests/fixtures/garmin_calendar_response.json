@@ -1,0 +1,35 @@
+{
+  "calendarItems": [
+    {
+      "itemType": "race",
+      "date": "2026-09-27",
+      "eventId": 1001,
+      "title": "Berlin Marathon",
+      "distance": 42195,
+      "primaryEvent": true,
+      "shareableEventUuid": "abc-123-def",
+      "completionTarget": {"value": null, "unit": null}
+    },
+    {
+      "itemType": "race",
+      "date": "2026-08-10",
+      "eventId": 1002,
+      "title": "City 10K",
+      "distance": 10000,
+      "primaryEvent": false,
+      "shareableEventUuid": null
+    },
+    {
+      "itemType": "workout",
+      "date": "2026-06-15",
+      "workoutId": 500,
+      "title": "Easy Run",
+      "workoutType": "running",
+      "workoutDescription": "Easy aerobic run"
+    },
+    {
+      "itemType": "sleep",
+      "date": "2026-06-10"
+    }
+  ]
+}
