@@ -1,6 +1,8 @@
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, RotateCcw, Loader } from 'lucide-react'
-import { useActivity, useTriggerAnalysis } from '../../api/hooks'
+import { useActivity, useTriggerAnalysis, useJobStatus } from '../../api/hooks'
 import { getActivityColor, colorMap } from '../../utils/colors'
 import { formatDistance, formatDuration, formatPace } from '../../utils/formatting'
 import { format, parseISO } from '../../utils/date'
@@ -20,8 +22,28 @@ import './ActivityDetailView.css'
 export default function ActivityDetailView() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const qc = useQueryClient()
   const { data: activity, isLoading } = useActivity(Number(id) || 0)
   const triggerAnalysis = useTriggerAnalysis()
+  const [analysisJobId, setAnalysisJobId] = useState<number | null>(null)
+  const { data: analysisJob } = useJobStatus(analysisJobId)
+
+  const isAnalyzing =
+    triggerAnalysis.isPending ||
+    (analysisJobId != null && analysisJob?.status !== 'done' && analysisJob?.status !== 'failed')
+
+  useEffect(() => {
+    if (analysisJob?.status === 'done' || analysisJob?.status === 'failed') {
+      qc.invalidateQueries({ queryKey: ['activity', Number(id) || 0] })
+      setAnalysisJobId(null)
+    }
+  }, [analysisJob?.status, id, qc])
+
+  function handleReanalyze() {
+    triggerAnalysis.mutate(activity!.id, {
+      onSuccess: (data) => { if (data?.id) setAnalysisJobId(data.id) },
+    })
+  }
 
   if (isLoading) return <div className="spinner" />
   if (!activity) return <div className="empty-state">Activity not found</div>
@@ -164,8 +186,8 @@ export default function ActivityDetailView() {
         {activity.insight ? (
           <AiInsightCard
             insight={activity.insight}
-            onReanalyze={() => triggerAnalysis.mutate(activity.id)}
-            isAnalyzing={triggerAnalysis.isPending}
+            onReanalyze={handleReanalyze}
+            isAnalyzing={isAnalyzing}
           />
         ) : activity.feedback_rating ? (
           <section className="detail-section">

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPost, apiPut, apiDelete } from './client'
 import type {
+  AIJobResponse,
   TodayResponse,
   ActivitySummary,
   ActivityDetail,
@@ -142,13 +143,21 @@ export function useTriggerSync() {
   })
 }
 
-export function useTriggerAnalysis() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (id: number) => apiPost<{ status: string }>(`/activities/${id}/analyze`),
-    onSuccess: (_, id) => {
-      setTimeout(() => qc.invalidateQueries({ queryKey: ['activity', id] }), 5000)
+export function useJobStatus(jobId: number | null) {
+  return useQuery({
+    queryKey: ['job', jobId],
+    queryFn: () => apiGet<AIJobResponse>(`/jobs/${jobId}`),
+    enabled: jobId != null && jobId > 0,
+    refetchInterval: (query) => {
+      const s = query.state.data?.status
+      return s === 'pending' || s === 'running' ? 2000 : false
     },
+  })
+}
+
+export function useTriggerAnalysis() {
+  return useMutation({
+    mutationFn: (id: number) => apiPost<AIJobResponse>(`/activities/${id}/analyze`),
   })
 }
 
@@ -156,11 +165,11 @@ export function useSubmitFeedback() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, feedback }: { id: number; feedback: FeedbackRequest }) =>
-      apiPost<{ status: string }>(`/activities/${id}/feedback`, feedback),
+      apiPost<AIJobResponse>(`/activities/${id}/feedback`, feedback),
     onSuccess: (_, { id }) => {
+      // Immediately refresh so the card shows the pending state; job polling
+      // in ActivityDetailView handles subsequent refreshes on completion.
       qc.invalidateQueries({ queryKey: ['activity', id] })
-      setTimeout(() => qc.invalidateQueries({ queryKey: ['activity', id] }), 5000)
-      setTimeout(() => qc.invalidateQueries({ queryKey: ['activity', id] }), 12000)
     },
   })
 }
@@ -287,12 +296,8 @@ export function useTrainingPlan() {
 }
 
 export function useGenerateTrainingPlan() {
-  const qc = useQueryClient()
   return useMutation({
-    mutationFn: () => apiPost<TrainingPlanResponse>('/training-plan/generate', {}),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['training-plan'] })
-    },
+    mutationFn: () => apiPost<AIJobResponse>('/training-plan/generate', {}),
   })
 }
 
@@ -328,10 +333,12 @@ export function useRealignPlan() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (action: 'regenerate' | 'dismiss') =>
-      apiPost<unknown>('/training-plan/realign', { action }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['training-plan'] })
-      qc.invalidateQueries({ queryKey: ['realignment-status'] })
+      apiPost<AIJobResponse | { status: string; until: string }>('/training-plan/realign', { action }),
+    onSuccess: (_data, action) => {
+      if (action === 'dismiss') {
+        qc.invalidateQueries({ queryKey: ['realignment-status'] })
+      }
+      // For 'regenerate', the caller polls via useJobStatus and invalidates on done
     },
   })
 }

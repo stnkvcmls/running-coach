@@ -3,6 +3,18 @@ export interface UserResponse {
   full_name: string | null
 }
 
+export interface AIJobResponse {
+  id: number
+  task_type: string
+  status: 'pending' | 'running' | 'done' | 'failed'
+  attempts: number
+  max_attempts: number
+  error_message: string | null
+  created_at: string | null
+  started_at: string | null
+  completed_at: string | null
+}
+
 export interface ActivitySummary {
   id: number
   garmin_id: number | null

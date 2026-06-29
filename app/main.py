@@ -191,6 +191,36 @@ def _scheduled_plan_generation():
             logger.exception("Plan generation failed for user %s", user.id)
 
 
+def _worker_run_pending_jobs():
+    """APScheduler job: claim and execute pending AIJobs.
+
+    Picks up at most 5 pending jobs per poll cycle (oldest first) and runs
+    them synchronously in the scheduler thread. Each job atomically transitions
+    pending → running → done|failed, with retries up to max_attempts.
+    """
+    from app.ai_coach import execute_job
+    from app.models import AIJob
+
+    with db_session() as db:
+        pending = (
+            db.query(AIJob)
+            .filter(
+                AIJob.status == "pending",
+                AIJob.attempts < AIJob.max_attempts,
+            )
+            .order_by(AIJob.created_at)
+            .limit(5)
+            .all()
+        )
+        job_ids = [j.id for j in pending]
+
+    for job_id in job_ids:
+        try:
+            execute_job(job_id)
+        except Exception:
+            logger.exception("Worker: unexpected error executing job %s", job_id)
+
+
 def _run_backfill():
     """Run historical backfill in a background thread."""
     from app.garmin_sync import backfill_activities, backfill_daily_summaries, sync_athlete_profile
@@ -263,6 +293,15 @@ async def lifespan(app: FastAPI):
         CronTrigger(day_of_week="sun", hour=9, minute=0, timezone=tz),
         id="plan_generation",
         name="Training Plan Generation",
+        replace_existing=True,
+    )
+
+    # Poll the AI job ledger every 30 seconds and execute pending jobs
+    scheduler.add_job(
+        _worker_run_pending_jobs,
+        IntervalTrigger(seconds=30),
+        id="ai_job_worker",
+        name="AI Job Worker",
         replace_existing=True,
     )
 

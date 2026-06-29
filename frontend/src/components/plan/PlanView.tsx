@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { ClipboardList, RefreshCw, ChevronLeft, ChevronRight, AlertTriangle, Settings2, Watch, CheckCircle } from 'lucide-react'
-import { useTrainingPlan, useGenerateTrainingPlan, useRealignmentStatus, useRealignPlan, usePushWorkoutToGarmin } from '../../api/hooks'
+import { useTrainingPlan, useGenerateTrainingPlan, useRealignmentStatus, useRealignPlan, usePushWorkoutToGarmin, useJobStatus } from '../../api/hooks'
 import type { TrainingPlanDay, TrainingPlanWeek } from '../../api/types'
 import './PlanView.css'
 
@@ -122,11 +123,19 @@ function DayCard({ day }: { day: TrainingPlanDay }) {
   )
 }
 
-function RealignmentBanner() {
+function RealignmentBanner({ onJobEnqueued }: { onJobEnqueued: (jobId: number) => void }) {
   const { data: status } = useRealignmentStatus()
   const { mutate: realign, isPending } = useRealignPlan()
 
   if (!status?.should_prompt) return null
+
+  function handleRegenerate() {
+    realign('regenerate', {
+      onSuccess: (data) => {
+        if (data && 'job_id' in data) onJobEnqueued(data.job_id)
+      },
+    })
+  }
 
   return (
     <div className="realignment-banner">
@@ -139,7 +148,7 @@ function RealignmentBanner() {
         <div className="realignment-actions">
           <button
             className="btn-primary realignment-btn"
-            onClick={() => realign('regenerate')}
+            onClick={handleRegenerate}
             disabled={isPending}
           >
             {isPending ? <RefreshCw size={13} className="spin" /> : null}
@@ -184,10 +193,29 @@ function WeekView({ week }: { week: TrainingPlanWeek }) {
 }
 
 export default function PlanView() {
+  const qc = useQueryClient()
   const { data: plan, isLoading } = useTrainingPlan()
-  const { mutate: generate, isPending: isGenerating } = useGenerateTrainingPlan()
+  const { mutate: generate } = useGenerateTrainingPlan()
   const [weekIndex, setWeekIndex] = useState(0)
+  const [planJobId, setPlanJobId] = useState<number | null>(null)
+  const { data: jobStatus } = useJobStatus(planJobId)
   const navigate = useNavigate()
+
+  const isGenerating = planJobId != null && jobStatus?.status !== 'done' && jobStatus?.status !== 'failed'
+
+  useEffect(() => {
+    if (jobStatus?.status === 'done' || jobStatus?.status === 'failed') {
+      qc.invalidateQueries({ queryKey: ['training-plan'] })
+      qc.invalidateQueries({ queryKey: ['realignment-status'] })
+      setPlanJobId(null)
+    }
+  }, [jobStatus?.status, qc])
+
+  function handleGenerate() {
+    generate(undefined, {
+      onSuccess: (data) => { if (data?.id) setPlanJobId(data.id) },
+    })
+  }
 
   if (isLoading) return <div className="spinner" />
 
@@ -200,7 +228,7 @@ export default function PlanView() {
           <p>Generate a personalised 4-week plan based on your fitness, readiness, and upcoming races.</p>
           <button
             className="btn-primary"
-            onClick={() => generate()}
+            onClick={handleGenerate}
             disabled={isGenerating}
           >
             {isGenerating ? (
@@ -222,7 +250,7 @@ export default function PlanView() {
 
   return (
     <div className="plan-view">
-      <RealignmentBanner />
+      <RealignmentBanner onJobEnqueued={setPlanJobId} />
 
       <div className="plan-header">
         <div className="plan-meta">
@@ -244,7 +272,7 @@ export default function PlanView() {
           </button>
           <button
             className="plan-regen-btn"
-            onClick={() => generate()}
+            onClick={handleGenerate}
             disabled={isGenerating}
             title="Regenerate plan"
           >
