@@ -491,6 +491,19 @@ class PerformanceCurveResponse(BaseModel):
     activities_analyzed: int
 
 
+class AerobicTrendPoint(BaseModel):
+    date: str
+    activity_name: str
+    duration_sec: float
+    decoupling_pct: float | None = None
+    efficiency_factor: float | None = None
+
+
+class AerobicTrendsResponse(BaseModel):
+    points: list[AerobicTrendPoint] = []
+    days: int
+
+
 class TrainingPlanDayResponse(BaseModel):
     id: int
     plan_id: int

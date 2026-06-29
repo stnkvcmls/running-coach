@@ -245,6 +245,58 @@ def _best_mean(time: list[float | None], values: list[float | None], duration: f
     return best
 
 
+def _best_mean_with_position(
+    time: list[float | None],
+    values: list[float | None],
+    duration: float,
+) -> tuple[float, float] | None:
+    """Like ``_best_mean`` but also returns the start time of the best window.
+
+    Returns ``(best_value, window_start_sec)`` or ``None``.
+    """
+    pts = [
+        (t, v)
+        for t, v in zip(time, values)
+        if isinstance(t, (int, float)) and isinstance(v, (int, float))
+    ]
+    pts.sort(key=lambda p: p[0])
+    n = len(pts)
+    if n < 2:
+        return None
+    if pts[-1][0] - pts[0][0] < duration:
+        return None
+
+    cum_t = [0.0] * n
+    cum_vt = [0.0] * n
+    for i in range(1, n):
+        dt = pts[i][0] - pts[i - 1][0]
+        if dt <= 0:
+            dt = 0.0
+        cum_t[i] = cum_t[i - 1] + dt
+        cum_vt[i] = cum_vt[i - 1] + pts[i - 1][1] * dt
+
+    best: float | None = None
+    best_start: float | None = None
+    j = 0
+    for i in range(n):
+        if j < i:
+            j = i
+        while j < n and cum_t[j] - cum_t[i] < duration:
+            j += 1
+        if j >= n:
+            break
+        window_t = cum_t[j] - cum_t[i]
+        if window_t <= 0:
+            continue
+        mean = (cum_vt[j] - cum_vt[i]) / window_t
+        if best is None or mean > best:
+            best = mean
+            best_start = pts[i][0]
+    if best is None or best_start is None:
+        return None
+    return (best, best_start)
+
+
 def mean_max_curve(
     time: list[float | None],
     values: list[float | None],
@@ -290,6 +342,38 @@ def compute_curves_from_details(
     if not (result["power"] or result["gap_speed"] or result["speed"]):
         return None
     return result
+
+
+def compute_early_mean_max_curve(
+    streams: dict[str, list[float | None]],
+    fatigue_offset_sec: float,
+    durations: list[int] = STANDARD_DURATIONS,
+) -> dict[str, dict[int, float]]:
+    """Mean-max curves from only the 'fresh' (early) portion before fatigue_offset_sec.
+
+    Mirror of ``compute_late_mean_max_curve`` for the first half of the run.
+    """
+    time = streams.get("time", [])
+
+    early_end = next(
+        (i for i, t in enumerate(time) if isinstance(t, (int, float)) and t >= fatigue_offset_sec),
+        len(time),
+    )
+
+    early_time = time[:early_end]
+    early_power = streams.get("power", [])[:early_end]
+    early_speed = streams.get("speed", [])[:early_end]
+    early_elev = streams.get("elevation", [])[:early_end]
+    early_dist = streams.get("distance", [])[:early_end]
+    early_hr = streams.get("hr", [])[:early_end]
+    early_gap = grade_adjusted_speed(early_speed, early_elev, early_dist)
+
+    return {
+        "power": mean_max_curve(early_time, early_power, durations),
+        "speed": mean_max_curve(early_time, early_speed, durations),
+        "gap_speed": mean_max_curve(early_time, early_gap, durations),
+        "hr": mean_max_curve(early_time, early_hr, durations),
+    }
 
 
 def compute_aerobic_metrics(
@@ -389,6 +473,42 @@ def compute_aerobic_metrics_from_details(
     if parsed is None:
         return None, None
     return compute_aerobic_metrics(parsed)
+
+
+def compute_late_mean_max_curve(
+    streams: dict[str, list[float | None]],
+    fatigue_offset_sec: float,
+    durations: list[int] = STANDARD_DURATIONS,
+) -> dict[str, dict[int, float]]:
+    """Mean-max curves computed only from the 'late' (fatigued) portion of a run.
+
+    Filters stream samples to those with elapsed time >= fatigue_offset_sec, then
+    runs mean_max_curve on each channel. Returns a dict with keys "power",
+    "speed", "gap_speed", "hr" (any may be empty if the late window is too short).
+    """
+    time = streams.get("time", [])
+
+    late_start = next(
+        (i for i, t in enumerate(time) if isinstance(t, (int, float)) and t >= fatigue_offset_sec),
+        None,
+    )
+    if late_start is None:
+        return {}
+
+    late_time = time[late_start:]
+    late_power = streams.get("power", [])[late_start:]
+    late_speed = streams.get("speed", [])[late_start:]
+    late_elev = streams.get("elevation", [])[late_start:]
+    late_dist = streams.get("distance", [])[late_start:]
+    late_hr = streams.get("hr", [])[late_start:]
+    late_gap = grade_adjusted_speed(late_speed, late_elev, late_dist)
+
+    return {
+        "power": mean_max_curve(late_time, late_power, durations),
+        "speed": mean_max_curve(late_time, late_speed, durations),
+        "gap_speed": mean_max_curve(late_time, late_gap, durations),
+        "hr": mean_max_curve(late_time, late_hr, durations),
+    }
 
 
 def backfill_missing_aerobic_metrics(db: Session, limit: int = 500, user_id: int | None = None) -> int:

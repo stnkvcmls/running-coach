@@ -483,6 +483,19 @@ export interface IntensityTrendsResponse {
   days: number
 }
 
+export interface AerobicTrendPoint {
+  date: string
+  activity_name: string
+  duration_sec: number
+  decoupling_pct: number | null
+  efficiency_factor: number | null
+}
+
+export interface AerobicTrendsResponse {
+  points: AerobicTrendPoint[]
+  days: number
+}
+
 export interface PushWorkoutResponse {
   workout_name: string
   garmin_workout_id: number | string

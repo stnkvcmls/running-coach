@@ -77,6 +77,8 @@ from app.schemas import (
     ZoneConfigResponse,
     ZoneConfigsResponse,
     PushWorkoutResponse,
+    AerobicTrendPoint,
+    AerobicTrendsResponse,
 )
 from app import training_load
 from app import threshold as threshold_mod
@@ -1048,6 +1050,47 @@ def api_get_performance_curve(
         ],
         lookback_days=data.lookback_days,
         activities_analyzed=data.activities_analyzed,
+    )
+
+
+# --- Aerobic Trends ---
+
+@api_router.get("/aerobic-trends", response_model=AerobicTrendsResponse)
+def api_get_aerobic_trends(
+    days: int = Query(90, ge=30, le=365),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Aerobic decoupling % and efficiency factor trend per run."""
+    try:
+        streams_mod.backfill_missing_aerobic_metrics(db, user_id=current_user.id)
+    except Exception:
+        pass
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    RUN_TYPES = ("running", "trail_running", "treadmill_running", "indoor_running")
+    activities = (
+        db.query(Activity)
+        .filter(
+            Activity.user_id == current_user.id,
+            Activity.started_at >= cutoff,
+            func.lower(Activity.activity_type).in_(RUN_TYPES),
+            func.coalesce(Activity.decoupling_pct, Activity.efficiency_factor).isnot(None),
+        )
+        .order_by(Activity.started_at)
+        .all()
+    )
+    return AerobicTrendsResponse(
+        points=[
+            AerobicTrendPoint(
+                date=a.started_at.date().isoformat() if isinstance(a.started_at, datetime) else str(a.started_at)[:10],
+                activity_name=a.name or "",
+                duration_sec=a.duration_sec or 0,
+                decoupling_pct=a.decoupling_pct,
+                efficiency_factor=a.efficiency_factor,
+            )
+            for a in activities
+        ],
+        days=days,
     )
 
 

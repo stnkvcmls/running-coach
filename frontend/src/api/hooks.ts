@@ -31,6 +31,7 @@ import type {
   ZoneConfigsResponse,
   ThresholdEstimateResponse,
   ThresholdApplyRequest,
+  AerobicTrendsResponse,
 } from './types'
 
 export function useMe() {
@@ -299,6 +300,13 @@ export function usePerformanceCurve(days = 90) {
   return useQuery({
     queryKey: ['performance-curve', days],
     queryFn: () => apiGet<PerformanceCurveResponse>(`/performance-curve?days=${days}`),
+  })
+}
+
+export function useAerobicTrends(days = 90) {
+  return useQuery({
+    queryKey: ['aerobic-trends', days],
+    queryFn: () => apiGet<AerobicTrendsResponse>(`/aerobic-trends?days=${days}`),
   })
 }
 
