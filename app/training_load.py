@@ -8,9 +8,14 @@ HR-based hrTSS, then a duration-only floor) so non-power runs still contribute.
 - **CTL** (Chronic Training Load, "Fitness") — 42-day exponentially-weighted average of TSS.
 - **ATL** (Acute Training Load, "Fatigue") — 7-day exponentially-weighted average of TSS.
 - **TSB** (Training Stress Balance, "Form") — CTL − ATL.
+
+Series are persisted incrementally to ``DailyLoadSeries``: on recompute, only
+rows from the first "dirty" date (the earliest newly-synced activity) are deleted
+and re-inserted. The EWMA checkpoint for all earlier days is read directly from
+the table, so a typical new-activity sync re-processes a handful of days instead
+of the full history.
 """
 
-import json
 import logging
 import math
 from collections import defaultdict
@@ -19,12 +24,21 @@ from datetime import date, datetime, timedelta, timezone
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models import DEFAULT_USER_ID, Activity, AthleteProfile, DailySummary, SyncStatus
+from app.models import (
+    DEFAULT_USER_ID,
+    Activity,
+    AthleteProfile,
+    DailyLoadSeries,
+    DailySummary,
+    SyncStatus,
+)
 from app.schemas import TrainingLoadPoint, TrainingReadiness
 
 logger = logging.getLogger(__name__)
 
-_SERIES_CACHE_KEY = "training_load_series"
+# Watermark key: stores max(activity.synced_at) of the last series compute so we
+# can find activities added since then without scanning the full table.
+_LOAD_WATERMARK_KEY = "training_load_watermark"
 
 CTL_DAYS = 42
 ATL_DAYS = 7
@@ -79,69 +93,121 @@ def estimate_tss(activity: Activity, profile: AthleteProfile | None) -> tuple[fl
     return _intensity_to_tss(duration_hr, _DEFAULT_IF), "duration"
 
 
-def _series_fingerprint(db: Session, user_id: int) -> str:
-    """Cheap cache key: activity count + newest sync timestamp + profile update time."""
-    count = db.query(func.count(Activity.id)).filter(Activity.user_id == user_id).scalar() or 0
-    max_sync = db.query(func.max(Activity.synced_at)).filter(Activity.user_id == user_id).scalar()
-    profile = db.query(AthleteProfile).filter(AthleteProfile.user_id == user_id).first()
-    return "|".join([
-        str(count),
-        max_sync.isoformat() if max_sync else "",
-        profile.updated_at.isoformat() if (profile and profile.updated_at) else "",
-    ])
+# ---------------------------------------------------------------------------
+# Watermark helpers (dirty-date detection)
+# ---------------------------------------------------------------------------
 
-
-def _load_cached_series(db: Session, user_id: int) -> list[TrainingLoadPoint] | None:
-    """Return the cached full series when the fingerprint matches, else None."""
+def _get_load_watermark(db: Session, user_id: int) -> datetime | None:
+    """Return the synced_at watermark from the last series compute, or None."""
     row = (
         db.query(SyncStatus)
-        .filter(SyncStatus.user_id == user_id, SyncStatus.key == _SERIES_CACHE_KEY)
+        .filter(SyncStatus.user_id == user_id, SyncStatus.key == _LOAD_WATERMARK_KEY)
         .first()
     )
     if not row or not row.value:
         return None
     try:
-        data = json.loads(row.value)
-    except (json.JSONDecodeError, TypeError):
-        return None
-    if data.get("fp") != _series_fingerprint(db, user_id):
-        return None
-    try:
-        return [TrainingLoadPoint(**p) for p in data["series"]]
-    except Exception:
+        return datetime.fromisoformat(row.value)
+    except (ValueError, TypeError):
         return None
 
 
-def _save_cached_series(db: Session, series: list[TrainingLoadPoint], user_id: int) -> None:
-    """Persist the full series alongside the current fingerprint."""
-    payload = json.dumps({
-        "fp": _series_fingerprint(db, user_id),
-        "series": [p.model_dump(mode="json") for p in series],
-    })
+def _set_load_watermark(db: Session, watermark: datetime | None, user_id: int) -> None:
+    """Persist the watermark (called after a series compute completes)."""
+    value = watermark.isoformat() if watermark else ""
     row = (
         db.query(SyncStatus)
-        .filter(SyncStatus.user_id == user_id, SyncStatus.key == _SERIES_CACHE_KEY)
+        .filter(SyncStatus.user_id == user_id, SyncStatus.key == _LOAD_WATERMARK_KEY)
         .first()
     )
     if row:
-        row.value = payload
+        row.value = value
         row.updated_at = datetime.now(timezone.utc)
     else:
-        db.add(SyncStatus(user_id=user_id, key=_SERIES_CACHE_KEY, value=payload,
-                          updated_at=datetime.now(timezone.utc)))
-    db.commit()
+        db.add(SyncStatus(
+            user_id=user_id,
+            key=_LOAD_WATERMARK_KEY,
+            value=value,
+            updated_at=datetime.now(timezone.utc),
+        ))
 
 
-def _daily_tss(
-    db: Session, end_date: date, profile: AthleteProfile | None, user_id: int
+def _find_dirty_date(db: Session, user_id: int, watermark: datetime | None) -> date | None:
+    """Return the earliest start date of activities synced after ``watermark``.
+
+    ``None`` means either there is no watermark yet (first compute) or no
+    activities were added since the last compute.
+    """
+    if watermark is None:
+        return None
+    result = (
+        db.query(func.min(Activity.started_at))
+        .filter(
+            Activity.user_id == user_id,
+            Activity.started_at.isnot(None),
+            Activity.synced_at > watermark,
+        )
+        .scalar()
+    )
+    if result is None:
+        return None
+    return result.date() if isinstance(result, datetime) else result
+
+
+# ---------------------------------------------------------------------------
+# DB-backed series read / write
+# ---------------------------------------------------------------------------
+
+def _load_series_points(
+    db: Session,
+    user_id: int,
+    end_date: date,
+    start_date: date | None = None,
+) -> list[TrainingLoadPoint]:
+    """Load persisted series rows as ``TrainingLoadPoint`` objects."""
+    query = (
+        db.query(DailyLoadSeries)
+        .filter(DailyLoadSeries.user_id == user_id, DailyLoadSeries.date <= end_date)
+    )
+    if start_date is not None:
+        query = query.filter(DailyLoadSeries.date >= start_date)
+    rows = query.order_by(DailyLoadSeries.date).all()
+    return [
+        TrainingLoadPoint(
+            date=row.date,
+            tss=row.tss,
+            ctl=row.ctl,
+            atl=row.atl,
+            tsb=row.tsb,
+            acwr=row.acwr,
+            ramp_rate_7d=row.ramp_rate_7d,
+            ramp_rate_28d=row.ramp_rate_28d,
+            injury_risk=row.injury_risk or "low",
+        )
+        for row in rows
+    ]
+
+
+# ---------------------------------------------------------------------------
+# TSS aggregation
+# ---------------------------------------------------------------------------
+
+def _daily_tss_range(
+    db: Session,
+    start_date: date,
+    end_date: date,
+    profile: AthleteProfile | None,
+    user_id: int,
 ) -> dict[date, float]:
-    """Sum estimated TSS per calendar day up to and including ``end_date``."""
+    """Sum estimated TSS per calendar day in [start_date, end_date]."""
+    start_dt = datetime.combine(start_date, datetime.min.time())
     end_dt = datetime.combine(end_date + timedelta(days=1), datetime.min.time())
     activities = (
         db.query(Activity)
         .filter(
             Activity.user_id == user_id,
             Activity.started_at.isnot(None),
+            Activity.started_at >= start_dt,
             Activity.started_at < end_dt,
         )
         .all()
@@ -154,6 +220,10 @@ def _daily_tss(
             totals[day] += tss
     return totals
 
+
+# ---------------------------------------------------------------------------
+# Injury risk
+# ---------------------------------------------------------------------------
 
 def _injury_risk(acwr: float | None, ramp_7d: float | None) -> str:
     """Classify injury risk from ACWR and short-term ramp rate."""
@@ -168,54 +238,115 @@ def _injury_risk(acwr: float | None, ramp_7d: float | None) -> str:
     return "low"
 
 
-def _compute_full_series(
-    db: Session, end_date: date, user_id: int = DEFAULT_USER_ID
-) -> list[TrainingLoadPoint]:
-    """Build the daily CTL/ATL/TSB/ACWR series from the first activity to ``end_date``.
+# ---------------------------------------------------------------------------
+# Incremental series compute
+# ---------------------------------------------------------------------------
 
-    Results are memoized in ``SyncStatus`` when ``end_date`` is today; the cache
-    is invalidated whenever the activity set or athlete profile changes.
+def _ensure_series_current(
+    db: Session, end_date: date, user_id: int = DEFAULT_USER_ID
+) -> None:
+    """Ensure ``DailyLoadSeries`` is populated through at least today.
+
+    Incremental strategy:
+    - No persisted rows: full compute from first activity.
+    - Dirty date after last row: extend forward from the last row's CTL/ATL.
+    - Dirty date at/before last row (backfilled activity): delete from dirty date,
+      load CTL/ATL from the preceding row, recompute only from there.
+    - No dirty activities and series already covers today: nothing to do.
     """
     today = date.today()
-    if end_date == today:
-        cached = _load_cached_series(db, user_id)
-        if cached is not None:
-            return cached
+    compute_to = today if end_date <= today else end_date
 
-    first_started = (
-        db.query(func.min(Activity.started_at)).filter(Activity.user_id == user_id).scalar()
+    watermark = _get_load_watermark(db, user_id)
+    dirty_date = _find_dirty_date(db, user_id, watermark)
+
+    last_row = (
+        db.query(DailyLoadSeries)
+        .filter(DailyLoadSeries.user_id == user_id)
+        .order_by(DailyLoadSeries.date.desc())
+        .first()
     )
-    if first_started is None:
-        return []
-    start_date = first_started.date() if isinstance(first_started, datetime) else first_started
-    if start_date > end_date:
-        return []
+
+    # Already up to date with no new activities.
+    if last_row is not None and dirty_date is None and last_row.date >= compute_to:
+        return
+
+    # Determine the recompute start and EWMA seed.
+    if last_row is None:
+        # No persisted data: must build from the user's very first activity.
+        first_started = (
+            db.query(func.min(Activity.started_at))
+            .filter(Activity.user_id == user_id)
+            .scalar()
+        )
+        if first_started is None:
+            return  # No activities yet.
+        recompute_from = (
+            first_started.date() if isinstance(first_started, datetime) else first_started
+        )
+        prev_ctl, prev_atl = 0.0, 0.0
+    elif dirty_date is not None and dirty_date <= last_row.date:
+        # A past activity was added/changed — recompute from dirty_date.
+        recompute_from = dirty_date
+        prev_row = (
+            db.query(DailyLoadSeries)
+            .filter(
+                DailyLoadSeries.user_id == user_id,
+                DailyLoadSeries.date < recompute_from,
+            )
+            .order_by(DailyLoadSeries.date.desc())
+            .first()
+        )
+        prev_ctl = prev_row.ctl if prev_row else 0.0
+        prev_atl = prev_row.atl if prev_row else 0.0
+    else:
+        # Extend forward: new activities are all after the series end, or the
+        # series doesn't reach compute_to yet.
+        recompute_from = (
+            (last_row.date + timedelta(days=1)) if last_row else compute_to
+        )
+        prev_ctl = last_row.ctl if last_row else 0.0
+        prev_atl = last_row.atl if last_row else 0.0
+
+    if recompute_from > compute_to:
+        return  # Nothing to compute.
+
+    # Delete stale rows and query only the needed TSS range.
+    db.query(DailyLoadSeries).filter(
+        DailyLoadSeries.user_id == user_id,
+        DailyLoadSeries.date >= recompute_from,
+    ).delete()
+    db.commit()
 
     profile = db.query(AthleteProfile).filter(AthleteProfile.user_id == user_id).first()
-    daily = _daily_tss(db, end_date, profile, user_id)
+    daily_tss_map = _daily_tss_range(db, recompute_from, compute_to, profile, user_id)
 
-    series: list[TrainingLoadPoint] = []
-    ctl = 0.0
-    atl = 0.0
-    day = start_date
-    while day <= end_date:
-        tss = daily.get(day, 0.0)
+    # Load the 28-day ramp-rate lookback from the persisted table.
+    lookback_start = recompute_from - timedelta(days=28)
+    history = _load_series_points(
+        db, user_id, recompute_from - timedelta(days=1), start_date=lookback_start
+    )
+
+    now_ts = datetime.now(timezone.utc)
+    new_db_rows: list[DailyLoadSeries] = []
+    new_points: list[TrainingLoadPoint] = []
+    ctl, atl = prev_ctl, prev_atl
+    day = recompute_from
+    while day <= compute_to:
+        tss = daily_tss_map.get(day, 0.0)
         ctl += (tss - ctl) * _CTL_ALPHA
         atl += (tss - atl) * _ATL_ALPHA
 
-        # ACWR: only meaningful when CTL is established (> 1 to avoid divide-by-zero).
+        all_before = history + new_points
+        idx = len(all_before)
         acwr: float | None = round(atl / ctl, 3) if ctl > 1.0 else None
+        ramp_7d: float | None = round(ctl - all_before[idx - 7].ctl, 1) if idx >= 7 else None
+        ramp_28d: float | None = (
+            round(ctl - all_before[idx - 28].ctl, 1) if idx >= 28 else None
+        )
+        risk = _injury_risk(acwr, ramp_7d)
 
-        # Ramp rates: CTL change over the last 7 and 28 days.
-        idx = len(series)
-        ramp_7d: float | None = None
-        ramp_28d: float | None = None
-        if idx >= 7:
-            ramp_7d = round(ctl - series[idx - 7].ctl, 1)
-        if idx >= 28:
-            ramp_28d = round(ctl - series[idx - 28].ctl, 1)
-
-        series.append(
+        new_points.append(
             TrainingLoadPoint(
                 date=day,
                 tss=round(tss, 1),
@@ -225,18 +356,43 @@ def _compute_full_series(
                 acwr=acwr,
                 ramp_rate_7d=ramp_7d,
                 ramp_rate_28d=ramp_28d,
-                injury_risk=_injury_risk(acwr, ramp_7d),
+                injury_risk=risk,
+            )
+        )
+        new_db_rows.append(
+            DailyLoadSeries(
+                user_id=user_id,
+                date=day,
+                tss=round(tss, 1),
+                ctl=round(ctl, 1),
+                atl=round(atl, 1),
+                tsb=round(ctl - atl, 1),
+                acwr=acwr,
+                ramp_rate_7d=ramp_7d,
+                ramp_rate_28d=ramp_28d,
+                injury_risk=risk,
+                computed_at=now_ts,
             )
         )
         day += timedelta(days=1)
 
-    if end_date == today and series:
-        try:
-            _save_cached_series(db, series, user_id)
-        except Exception:
-            logger.debug("Training load series cache write failed", exc_info=True)
+    db.bulk_save_objects(new_db_rows)
 
-    return series
+    max_synced = (
+        db.query(func.max(Activity.synced_at))
+        .filter(Activity.user_id == user_id)
+        .scalar()
+    )
+    _set_load_watermark(db, max_synced, user_id)
+    db.commit()
+
+
+def _compute_full_series(
+    db: Session, end_date: date, user_id: int = DEFAULT_USER_ID
+) -> list[TrainingLoadPoint]:
+    """Return the full series up to ``end_date``, computing/extending as needed."""
+    _ensure_series_current(db, end_date, user_id)
+    return _load_series_points(db, user_id, end_date)
 
 
 def compute_load_series(
@@ -244,18 +400,25 @@ def compute_load_series(
 ) -> list[TrainingLoadPoint]:
     """Return the last ``days`` of the CTL/ATL/TSB series ending at ``end_date``."""
     end_date = end_date or date.today()
-    full = _compute_full_series(db, end_date, user_id)
+    _ensure_series_current(db, end_date, user_id)
     if days and days > 0:
-        return full[-days:]
-    return full
+        start_date = end_date - timedelta(days=days - 1)
+        return _load_series_points(db, user_id, end_date, start_date=start_date)
+    return _load_series_points(db, user_id, end_date)
 
 
 def current_load(
     db: Session, as_of: date | None = None, user_id: int = DEFAULT_USER_ID
 ) -> TrainingLoadPoint | None:
     """Return the most recent CTL/ATL/TSB snapshot as of ``as_of``."""
-    full = _compute_full_series(db, as_of or date.today(), user_id)
-    return full[-1] if full else None
+    as_of = as_of or date.today()
+    _ensure_series_current(db, as_of, user_id)
+    points = _load_series_points(db, user_id, as_of, start_date=as_of)
+    if points:
+        return points[-1]
+    # No row exactly on as_of — return the nearest preceding row.
+    all_points = _load_series_points(db, user_id, as_of)
+    return all_points[-1] if all_points else None
 
 
 def _interpret_tsb(tsb: float) -> str:

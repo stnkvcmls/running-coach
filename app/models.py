@@ -371,6 +371,33 @@ class ChatMessage(Base):
     activity_id = Column(Integer, nullable=True)  # optional activity context
 
 
+class DailyLoadSeries(Base):
+    """Persisted daily CTL/ATL/TSB series for incremental training load computation.
+
+    One row per (user, date). Updated incrementally: only rows from the earliest
+    "dirty" date (a newly synced activity) are deleted and recomputed, so the EWMA
+    carries forward without re-scanning the full activity history.
+    """
+
+    __tablename__ = "daily_load_series"
+    __table_args__ = (
+        UniqueConstraint("user_id", "date", name="uq_daily_load_series_user_date"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = _user_id_column()
+    date = Column(Date, nullable=False, index=True)
+    tss = Column(Float, nullable=False, default=0.0)
+    ctl = Column(Float, nullable=False)
+    atl = Column(Float, nullable=False)
+    tsb = Column(Float, nullable=False)
+    acwr = Column(Float, nullable=True)
+    ramp_rate_7d = Column(Float, nullable=True)
+    ramp_rate_28d = Column(Float, nullable=True)
+    injury_risk = Column(String(20), nullable=True)
+    computed_at = Column(DateTime, default=_utcnow)
+
+
 class TrainingPlanDay(Base):
     """One scheduled day within a TrainingPlan."""
 

@@ -287,3 +287,64 @@ def test_series_cache_bypassed_for_historical_date(db):
     assert len(series_hist) > 0
     # Historical series ends at the requested date.
     assert series_hist[-1].date == historical_date
+
+
+# --- Incremental series compute (DailyLoadSeries persistence) ---
+
+def test_daily_load_series_rows_persisted_after_compute(db):
+    """compute_load_series writes rows to DailyLoadSeries."""
+    from app.models import DailyLoadSeries
+    base = datetime(2026, 6, 1, 7, 0)
+    for i in range(5):
+        _add_activity(db, base + timedelta(days=i), tss=80.0)
+    training_load.compute_load_series(db)
+    assert db.query(DailyLoadSeries).count() > 0
+
+
+def test_watermark_set_after_series_compute(db):
+    """A training_load_watermark entry is written to SyncStatus after compute."""
+    _add_activity(db, datetime(2026, 6, 20, 7, 0), tss=70.0)
+    training_load.compute_load_series(db)
+    watermark = training_load._get_load_watermark(db, user_id=1)
+    assert watermark is not None
+
+
+def test_backfill_recomputes_ctl_from_dirty_date(db):
+    """Adding a high-TSS backdated activity raises CTL from that date onwards."""
+    from app.models import DailyLoadSeries
+    base = datetime(2026, 6, 10, 7, 0)
+    for i in range(7):
+        _add_activity(db, base + timedelta(days=i), tss=60.0)
+    training_load.compute_load_series(db)
+
+    mid_date = (base + timedelta(days=3)).date()
+    ctl_before = (
+        db.query(DailyLoadSeries)
+        .filter(DailyLoadSeries.date == mid_date)
+        .first()
+        .ctl
+    )
+
+    # Backdated activity on the same calendar day but a different time (unique garmin_id).
+    _add_activity(db, base + timedelta(days=3) + timedelta(hours=10), tss=200.0)
+    training_load.compute_load_series(db)
+
+    ctl_after = (
+        db.query(DailyLoadSeries)
+        .filter(DailyLoadSeries.date == mid_date)
+        .first()
+        .ctl
+    )
+    assert ctl_after > ctl_before
+
+
+def test_second_compute_noop_when_no_new_activities(db):
+    """A second compute with no new activities does not alter the persisted rows."""
+    from app.models import DailyLoadSeries
+    _add_activity(db, datetime(2026, 6, 20, 7, 0), tss=70.0)
+    training_load.compute_load_series(db)
+    count_first = db.query(DailyLoadSeries).count()
+
+    training_load.compute_load_series(db)
+    count_second = db.query(DailyLoadSeries).count()
+    assert count_first == count_second

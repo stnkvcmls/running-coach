@@ -225,7 +225,7 @@ sharpens the closed-loop plan's input signal.
   (`CURRENT_STATE.md`). Add a startup guard that refuses (or loudly warns) when
   auth is disabled and the bind address isn't loopback, and document the safe
   default. **S–M.** Files: `app/main.py`, `app/auth.py`, `app/config.py`, docs.
-- **P3-2 · Incremental load & threshold compute.** Cache misses still recompute
+- ✅ **P3-2 · Incremental load & threshold compute.** Cache misses still recompute
   CTL/ATL/TSB and CP/CV from full history per request. Persist a daily series and
   extend incrementally rather than refitting wholesale. **M.** Files:
   `app/training_load.py`, `app/threshold.py`, optional series table in

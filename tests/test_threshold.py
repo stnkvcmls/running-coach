@@ -394,6 +394,48 @@ def test_threshold_cache_roundtrip_preserves_fields(db):
     assert cached.lookback_days == est.lookback_days
 
 
+# --- Incremental threshold compute (frontier caching) ---
+
+def test_frontier_stored_in_cache_after_full_compute(db):
+    """Full compute stores power and pace frontiers alongside the estimate."""
+    _add(db, mean_max=_curve_json(power=_power_curve(250, 15000),
+                                  gap_speed=_gap_curve(3.5, 200)))
+    threshold.estimate_thresholds(db)
+    raw = threshold._load_cached_threshold_raw(db, user_id=1)
+    assert raw is not None
+    assert "power_frontier" in raw
+    assert "pace_frontier" in raw
+    assert len(raw["power_frontier"]) > 0
+
+
+def test_incremental_skips_refit_when_no_new_prs(db):
+    """New activity with lower power than the cached frontier keeps CP unchanged."""
+    _add(db, mean_max=_curve_json(power=_power_curve(250, 15000)), days_ago=10)
+    est1 = threshold.estimate_thresholds(db)
+    assert est1.critical_power.value is not None
+    assert abs(est1.critical_power.value - 250) < 5
+
+    # Lower-power activity — does not set any new PRs on the frontier.
+    _add(db, mean_max=_curve_json(power=_power_curve(150, 5000)), days_ago=5)
+    est2 = threshold.estimate_thresholds(db)
+    assert est2.critical_power.value is not None
+    # CP anchored by the original 250 W activity; incremental path returns it unchanged.
+    assert abs(est2.critical_power.value - 250) < 5
+
+
+def test_incremental_refits_when_new_pr_recorded(db):
+    """New activity with higher power triggers an incremental refit to the higher CP."""
+    _add(db, mean_max=_curve_json(power=_power_curve(250, 15000)), days_ago=10)
+    est1 = threshold.estimate_thresholds(db)
+    assert est1.critical_power.value is not None
+
+    # Stronger activity — sets new PRs across the power frontier.
+    _add(db, mean_max=_curve_json(power=_power_curve(300, 15000)), days_ago=5)
+    est2 = threshold.estimate_thresholds(db)
+    assert est2.critical_power.value is not None
+    assert est2.critical_power.value > est1.critical_power.value
+
+
 # --- Performance curve + race predictions ---
 
 def test_predict_race_times_basic():
