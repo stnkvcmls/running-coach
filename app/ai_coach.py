@@ -44,6 +44,7 @@ class AIFatalError(Exception):
 
 _MAX_RETRIES = 3
 _BACKOFF_BASE = 2  # seconds; delays are 1s, 2s before the 3rd attempt
+_PLAN_MAX_TOKENS = 16000
 
 
 SYSTEM_PROMPT = """You are an experienced, data-driven running coach. You analyze training data from Garmin Connect and provide actionable insights.
@@ -1163,6 +1164,97 @@ Rules:
     rebuild week (easy/moderate volume) before resuming normal load.
 """
 
+# Anthropic tool-use schema — forces a schema-valid plan object instead of free text.
+_PLAN_TOOL_SCHEMA = {
+    "name": "generate_plan",
+    "description": "Return the 4-week running training plan as a structured object.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "phase": {
+                "type": "string",
+                "enum": ["base", "build", "peak", "taper"],
+            },
+            "overview": {"type": "string"},
+            "weeks": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "week_number": {"type": "integer"},
+                        "theme": {"type": "string"},
+                        "notes": {"type": "string"},
+                        "days": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "date": {"type": "string"},
+                                    "day_of_week": {
+                                        "type": "string",
+                                        "enum": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+                                    },
+                                    "workout_type": {
+                                        "type": "string",
+                                        "enum": ["easy", "tempo", "long", "interval", "rest", "cross", "strength"],
+                                    },
+                                    "target_distance_km": {"type": ["number", "null"]},
+                                    "target_pace_display": {"type": ["string", "null"]},
+                                    "description": {"type": "string"},
+                                    "notes": {"type": ["string", "null"]},
+                                },
+                                "required": ["date", "day_of_week", "workout_type", "description"],
+                            },
+                        },
+                    },
+                    "required": ["week_number", "days"],
+                },
+            },
+        },
+        "required": ["phase", "overview", "weeks"],
+    },
+}
+
+# Gemini response_schema — enforces structured JSON output at the API level.
+# Gemini's schema dialect doesn't support type unions, so nullable fields are
+# left optional (absent) rather than typed as ["string", "null"].
+_PLAN_GEMINI_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "phase": {"type": "string"},
+        "overview": {"type": "string"},
+        "weeks": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "week_number": {"type": "integer"},
+                    "theme": {"type": "string"},
+                    "notes": {"type": "string"},
+                    "days": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "date": {"type": "string"},
+                                "day_of_week": {"type": "string"},
+                                "workout_type": {"type": "string"},
+                                "target_distance_km": {"type": "number"},
+                                "target_pace_display": {"type": "string"},
+                                "description": {"type": "string"},
+                                "notes": {"type": "string"},
+                            },
+                            "required": ["date", "day_of_week", "workout_type", "description"],
+                        },
+                    },
+                },
+                "required": ["week_number", "days"],
+            },
+        },
+    },
+    "required": ["phase", "overview", "weeks"],
+}
+
 
 def _build_plan_adherence_context(
     db: Session, reference_date: date, user_id: int = DEFAULT_USER_ID
@@ -1510,6 +1602,7 @@ def generate_training_plan(
 
             last_exc: Exception = RuntimeError("no attempts made")
             raw = None
+            plan_data: dict | None = None
             for attempt in range(_MAX_RETRIES):
                 try:
                     if provider == "gemini":
@@ -1520,6 +1613,8 @@ def generate_training_plan(
                                 contents=plan_prompt,
                                 config=_genai_types.GenerateContentConfig(
                                     system_instruction=_PLAN_SYSTEM_PROMPT,
+                                    response_mime_type="application/json",
+                                    response_schema=_PLAN_GEMINI_RESPONSE_SCHEMA,
                                 ),
                             )
                         except _genai_errors.ServerError as exc:
@@ -1534,8 +1629,10 @@ def generate_training_plan(
                         try:
                             response = client.messages.create(
                                 model=model,
-                                max_tokens=4096,
+                                max_tokens=_PLAN_MAX_TOKENS,
                                 system=_PLAN_SYSTEM_PROMPT,
+                                tools=[_PLAN_TOOL_SCHEMA],
+                                tool_choice={"type": "tool", "name": "generate_plan"},
                                 messages=[{"role": "user", "content": plan_prompt}],
                             )
                         except (
@@ -1552,7 +1649,18 @@ def generate_training_plan(
                             anthropic.NotFoundError,
                         ) as exc:
                             raise AIFatalError(str(exc)) from exc
-                        raw = response.content[0].text
+                        # Extract the structured dict from the guaranteed tool_use block.
+                        for block in response.content:
+                            if block.type == "tool_use" and block.name == "generate_plan":
+                                plan_data = block.input
+                                raw = json.dumps(plan_data)
+                                break
+                        # Fallback: model returned text instead of a tool call.
+                        if plan_data is None:
+                            for block in response.content:
+                                if hasattr(block, "text"):
+                                    raw = block.text
+                                    break
                     break  # success
                 except AIFatalError:
                     raise
@@ -1568,7 +1676,8 @@ def generate_training_plan(
             else:
                 raise last_exc
 
-            plan_data = _parse_plan_json(raw)
+            if plan_data is None:
+                plan_data = _parse_plan_json(raw)
             plan = _store_training_plan(db, plan_data, week_start, raw, user_id)
             logger.info(
                 "Training plan generated: %d weeks, phase=%s, week_start=%s",

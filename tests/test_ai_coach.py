@@ -709,3 +709,136 @@ def test_detect_realignment_expired_dismiss_prompts(db):
     db.commit()
     result = ai_coach.detect_plan_realignment(db, ref)
     assert result["should_prompt"] is True
+
+
+# --- generate_training_plan – P1-3 structured output ---
+
+def _minimal_plan_dict(week_start: date) -> dict:
+    """Smallest valid plan dict: 4 rest weeks starting from week_start."""
+    from datetime import timedelta
+    weeks = []
+    for w in range(4):
+        days = []
+        for d in range(7):
+            day = week_start + timedelta(days=w * 7 + d)
+            days.append({
+                "date": day.isoformat(),
+                "day_of_week": day.strftime("%A"),
+                "workout_type": "rest",
+                "description": "Rest day",
+                "notes": None,
+                "target_distance_km": None,
+                "target_pace_display": None,
+            })
+        weeks.append({"week_number": w + 1, "theme": "Base", "notes": "Easy week", "days": days})
+    return {"phase": "base", "overview": "Test plan overview", "weeks": weeks}
+
+
+def test_generate_training_plan_claude_tool_use(db, patch_db_session, monkeypatch):
+    """Claude path: plan_data is extracted from the tool_use block; no JSON parsing needed."""
+    patch_db_session(ai_coach)
+
+    week_start = date(2026, 7, 7)  # next Monday after 2026-07-03
+    plan_dict = _minimal_plan_dict(week_start)
+
+    tool_block = MagicMock()
+    tool_block.type = "tool_use"
+    tool_block.name = "generate_plan"
+    tool_block.input = plan_dict
+
+    mock_response = MagicMock()
+    mock_response.content = [tool_block]
+
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = mock_response
+
+    monkeypatch.setattr(ai_coach, "_get_ai_config", lambda db, user_id=1: ("claude", "claude-sonnet-4-6"))
+    monkeypatch.setattr(ai_coach.anthropic, "Anthropic", lambda **kw: mock_client)
+
+    result = ai_coach.generate_training_plan(reference_date=date(2026, 7, 3))
+
+    assert result is not None
+    assert result.phase == "base"
+    assert result.plan_weeks == 4
+    # raw_json is the serialised tool input, not a free-text response
+    assert result.raw_json == json.dumps(plan_dict)
+
+    kwargs = mock_client.messages.create.call_args[1]
+    assert "tools" in kwargs
+    assert kwargs["tool_choice"] == {"type": "tool", "name": "generate_plan"}
+    assert kwargs["max_tokens"] == ai_coach._PLAN_MAX_TOKENS
+
+
+def test_generate_training_plan_gemini_structured_output(db, patch_db_session, monkeypatch):
+    """Gemini path: response_schema + response_mime_type enforce schema-valid JSON."""
+    patch_db_session(ai_coach)
+
+    week_start = date(2026, 7, 7)
+    plan_dict = _minimal_plan_dict(week_start)
+    plan_json = json.dumps(plan_dict)
+
+    mock_response = MagicMock()
+    mock_response.text = plan_json
+
+    mock_models = MagicMock()
+    mock_models.generate_content.return_value = mock_response
+
+    mock_gemini_client = MagicMock()
+    mock_gemini_client.models = mock_models
+
+    monkeypatch.setattr(ai_coach, "_get_ai_config", lambda db, user_id=1: ("gemini", "gemini-2.5-flash"))
+    monkeypatch.setattr(ai_coach.genai, "Client", lambda **kw: mock_gemini_client)
+
+    result = ai_coach.generate_training_plan(reference_date=date(2026, 7, 3))
+
+    assert result is not None
+    assert result.phase == "base"
+    assert result.plan_weeks == 4
+
+    kwargs = mock_models.generate_content.call_args[1]
+    config = kwargs["config"]
+    assert config.response_mime_type == "application/json"
+    assert config.response_schema is not None
+
+
+def test_generate_training_plan_claude_text_fallback(db, patch_db_session, monkeypatch):
+    """When Claude returns plain text (no tool call), _parse_plan_json is used as fallback."""
+    patch_db_session(ai_coach)
+
+    week_start = date(2026, 7, 7)
+    plan_dict = _minimal_plan_dict(week_start)
+    plan_json = json.dumps(plan_dict)
+
+    text_block = MagicMock()
+    text_block.type = "text"
+    text_block.text = plan_json
+    # Ensure hasattr(block, "text") returns True (MagicMock does this by default)
+
+    mock_response = MagicMock()
+    mock_response.content = [text_block]
+
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = mock_response
+
+    monkeypatch.setattr(ai_coach, "_get_ai_config", lambda db, user_id=1: ("claude", "claude-sonnet-4-6"))
+    monkeypatch.setattr(ai_coach.anthropic, "Anthropic", lambda **kw: mock_client)
+
+    result = ai_coach.generate_training_plan(reference_date=date(2026, 7, 3))
+
+    assert result is not None
+    assert result.phase == "base"
+    assert result.plan_weeks == 4
+
+
+def test_generate_training_plan_exception_returns_none(db, patch_db_session, monkeypatch):
+    """Any unexpected exception during generation returns None without raising."""
+    patch_db_session(ai_coach)
+
+    def _raise(*a, **kw):
+        raise RuntimeError("unexpected boom")
+
+    monkeypatch.setattr(ai_coach, "_get_ai_config", _raise)
+
+    result = ai_coach.generate_training_plan(reference_date=date(2026, 7, 3))
+
+    assert result is None

@@ -164,7 +164,7 @@ machinery already computed and stored per activity.
 `app/api.py` (trend endpoint), `app/ai_coach.py` context,
 `frontend/src/components/trends/*` + hooks/types.
 
-#### P1-3 · Harden AI plan generation (structured output)
+#### ✅ P1-3 · Harden AI plan generation (structured output)
 **What:** Replace fragile free-text JSON parsing in `generate_training_plan` with
 provider **structured-output / tool-use** (Claude tool schema; Gemini
 `response_schema`) so the model returns schema-valid plan objects, and raise the
