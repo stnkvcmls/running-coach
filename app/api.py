@@ -1062,6 +1062,10 @@ def api_get_aerobic_trends(
     current_user: User = Depends(get_current_user),
 ):
     """Aerobic decoupling % and efficiency factor trend per run."""
+    try:
+        streams_mod.backfill_missing_aerobic_metrics(db, user_id=current_user.id)
+    except Exception:
+        pass
     cutoff = datetime.utcnow() - timedelta(days=days)
     RUN_TYPES = ("running", "trail_running", "treadmill_running", "indoor_running")
     activities = (

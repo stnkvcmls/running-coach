@@ -70,8 +70,8 @@ export default function AerobicTrendsView() {
 
   const efData = pts.map((p, i) => ({
     label: formatDate(p.date),
-    value: p.efficiency_factor != null ? +p.efficiency_factor.toFixed(2) : null,
-    mean: efMeans[i] != null ? +efMeans[i]!.toFixed(3) : null,
+    value: p.efficiency_factor != null ? +(p.efficiency_factor * 1000).toFixed(2) : null,
+    mean: efMeans[i] != null ? +(efMeans[i]! * 1000).toFixed(2) : null,
     name: p.activity_name,
     duration: formatDuration(p.duration_sec),
   }))
@@ -165,7 +165,7 @@ export default function AerobicTrendsView() {
         <ResponsiveContainer width="100%" height={200}>
           <ComposedChart data={efData} margin={{ top: 8, right: 8, bottom: 0, left: -10 }}>
             <XAxis dataKey="label" tick={{ fontSize: 11, fill: tickColor }} tickLine={false} axisLine={false} />
-            <YAxis tick={{ fontSize: 11, fill: tickColor }} tickLine={false} axisLine={false} tickFormatter={v => v.toFixed(1)} />
+            <YAxis tick={{ fontSize: 11, fill: tickColor }} tickLine={false} axisLine={false} tickFormatter={v => `${v.toFixed(1)}`} />
             <Tooltip content={<ChartTooltip unit=" mm/s·bpm" />} />
             <Scatter dataKey="value" fill="#00b894" opacity={0.7} name="EF" r={4} />
             <Line dataKey="mean" stroke="#00b894" strokeWidth={2} dot={false} name="7-run avg" connectNulls />
