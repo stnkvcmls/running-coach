@@ -602,12 +602,20 @@ class PushWorkoutResponse(BaseModel):
     scheduled_date: str
 
 
+class ChatAction(BaseModel):
+    type: str
+    status: str
+    job_id: int | None = None
+    summary: str
+
+
 class ChatMessageResponse(BaseModel):
     id: int
     role: str
     content: str
     created_at: datetime | None = None
     activity_id: int | None = None
+    actions: list[ChatAction] | None = None
 
     class Config:
         from_attributes = True

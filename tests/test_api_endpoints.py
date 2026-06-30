@@ -6,6 +6,7 @@ import pytest
 
 from app.models import (
     Activity,
+    ChatMessage,
     DailySummary,
     GarminCalendarEvent,
     Insight,
@@ -527,3 +528,83 @@ def test_training_plan_day_no_routine_when_id_missing(client, db):
     body = resp.json()
     day = body["weeks"][0]["days"][0]
     assert day["routine"] is None
+
+
+# ---------------------------------------------------------------------------
+# POST /chat — chat tool-use action events (P0-2)
+# ---------------------------------------------------------------------------
+
+def test_api_post_chat_streams_action_and_persists(client, db, patch_db_session, monkeypatch):
+    """When chat_stream yields an action event, it's relayed over SSE and persisted."""
+    import app.ai_coach as ai_mod
+    import app.database as database_mod
+    patch_db_session(database_mod)
+
+    def fake_chat_stream(db_, new_message, history, user_id, activity_id):
+        yield {
+            "type": "action",
+            "action": {
+                "type": "regenerate_plan",
+                "status": "queued",
+                "job_id": 7,
+                "summary": "Regenerating your training plan.",
+            },
+        }
+        yield {"type": "token", "text": "Done"}
+        yield {"type": "token", "text": "!"}
+
+    monkeypatch.setattr(ai_mod, "chat_stream", fake_chat_stream)
+
+    resp = client.post("/api/v1/chat", json={"message": "rework my plan"})
+    assert resp.status_code == 200
+    body = resp.text
+    assert '"action"' in body
+    assert "[DONE]" in body
+
+    msg = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.role == "assistant")
+        .order_by(ChatMessage.id.desc())
+        .first()
+    )
+    assert msg is not None
+    assert msg.content == "Done!"
+    actions = json.loads(msg.actions_json)
+    assert len(actions) == 1
+    assert actions[0]["type"] == "regenerate_plan"
+    assert actions[0]["job_id"] == 7
+
+    # Round-trips through GET /chat
+    resp2 = client.get("/api/v1/chat")
+    assert resp2.status_code == 200
+    history = resp2.json()["messages"]
+    assistant_entry = [m for m in history if m["role"] == "assistant"][-1]
+    assert assistant_entry["actions"][0]["summary"] == "Regenerating your training plan."
+
+
+def test_api_post_chat_plain_text_has_no_actions(client, db, patch_db_session, monkeypatch):
+    """Plain Q&A turns persist with actions=None, matching pre-P0-2 behavior."""
+    import app.ai_coach as ai_mod
+    import app.database as database_mod
+    patch_db_session(database_mod)
+
+    def fake_chat_stream(db_, new_message, history, user_id, activity_id):
+        yield {"type": "token", "text": "Looks good."}
+
+    monkeypatch.setattr(ai_mod, "chat_stream", fake_chat_stream)
+
+    resp = client.post("/api/v1/chat", json={"message": "how was my week?"})
+    assert resp.status_code == 200
+    assert '"action"' not in resp.text
+
+    msg = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.role == "assistant")
+        .order_by(ChatMessage.id.desc())
+        .first()
+    )
+    assert msg.actions_json is None
+
+    resp2 = client.get("/api/v1/chat")
+    assistant_entry = [m for m in resp2.json()["messages"] if m["role"] == "assistant"][-1]
+    assert assistant_entry["actions"] is None

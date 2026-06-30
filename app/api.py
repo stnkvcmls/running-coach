@@ -1662,7 +1662,17 @@ def api_get_chat(
         .all()
     )
     return ChatHistoryResponse(
-        messages=[ChatMessageResponse.model_validate(m) for m in messages]
+        messages=[
+            ChatMessageResponse(
+                id=m.id,
+                role=m.role,
+                content=m.content,
+                created_at=m.created_at,
+                activity_id=m.activity_id,
+                actions=json.loads(m.actions_json) if m.actions_json else None,
+            )
+            for m in messages
+        ]
     )
 
 
@@ -1715,18 +1725,24 @@ def api_post_chat(
 
     def generate():
         full_response: list[str] = []
+        actions: list[dict] = []
         try:
             with make_session() as session:
-                token_iter = _chat_stream(session, new_message, history, user_id, activity_id)
-                for token in token_iter:
-                    full_response.append(token)
-                    yield f"data: {json.dumps({'token': token})}\n\n"
+                event_iter = _chat_stream(session, new_message, history, user_id, activity_id)
+                for event in event_iter:
+                    if event["type"] == "token":
+                        full_response.append(event["text"])
+                        yield f"data: {json.dumps({'token': event['text']})}\n\n"
+                    elif event["type"] == "action":
+                        actions.append(event["action"])
+                        yield f"data: {json.dumps({'action': event['action']})}\n\n"
 
                 # Persist the complete AI response
                 assistant_msg = ChatMessage(
                     user_id=user_id,
                     role="assistant",
                     content="".join(full_response),
+                    actions_json=json.dumps(actions) if actions else None,
                 )
                 session.add(assistant_msg)
                 session.commit()

@@ -112,10 +112,10 @@ new sync.
 `frontend/src/components/activity-detail/ActivityDetailView.tsx` + `.css`,
 `tests/test_weather.py` (new, 19 tests).
 
-#### P0-2 · Let the coach act on the conversation (chat tool-use)
+#### P0-2 · Let the coach act on the conversation (chat tool-use) ✅ DONE (2026-06-30)
 **What:** Give `chat_stream` the same tool-use treatment plan generation already
 has. Define a small set of coach tools — `regenerate_plan`,
-`adjust_upcoming_week(reason)`, `mark_setback(tag, note)`, `explain_workout(day_id)`
+`adjust_upcoming_week(reason)`, `mark_setback(tag, note)`, `explain_workout(date)`
 — and let the model call them mid-conversation. Tool calls **enqueue `AIJob`s**
 (the durable queue already exists) rather than mutating inline, and the chat streams
 back a confirmation ("Reworked next week around your travel — easy runs Tue/Thu, long
@@ -127,10 +127,15 @@ Coach Leo / HumanGO ("Hugo") / Trenara are built on, and we already own every ha
 part: provider dispatch with tool-use, the context builder, the realignment /
 generation entry points, and the `AIJob` ledger to run them durably.
 **Effort:** M.
-**Files:** `app/ai_coach.py` (chat tool schema + dispatch, reuse
-`enqueue_job`/`generate_training_plan`/`detect_plan_realignment`), `app/api.py`
-(`POST /chat` handling of tool events over SSE), `app/schemas.py`,
-`frontend/src/components/chat/*` (render tool-action confirmations) + hooks/types.
+**Files:** `app/ai_coach.py` (`_CHAT_TOOL_SCHEMAS`/`_CHAT_GEMINI_TOOLS`,
+`_dispatch_chat_tool`, streaming tool-use loop in `_stream_claude`/`_stream_gemini`,
+optional `note` threaded through `generate_training_plan`/`execute_job`, reusing
+`enqueue_job`), `app/models.py` (`ChatMessage.actions_json`), `alembic/versions/`
+(migration), `app/api.py` (`POST /chat` relays `action` SSE events, `GET /chat`
+round-trips them), `app/schemas.py` (`ChatAction`), `frontend/src/api/types.ts`,
+`frontend/src/components/chat/ChatView.tsx` + `.css` (action chips),
+`tests/test_ai_coach.py`, `tests/test_job_queue.py`, `tests/test_api_endpoints.py`
+(17 new tests).
 
 ### P1 — Execution depth & daily adaptation
 
