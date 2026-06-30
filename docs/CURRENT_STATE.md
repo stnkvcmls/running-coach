@@ -328,12 +328,16 @@ step/condition type IDs). The schema-drift canary now raises an alarm when
 contracted fields disappear, but a Garmin change *within* a tolerated field (units,
 nesting, semantics) can still silently degrade parsing.
 
-### Durability / Endurance Score Still Missing
-Mean-maximal curves capture *peak* ability per duration, and aerobic decoupling now
-measures within-effort drift, but there's still no **fatigue-resistance / endurance
-score** comparing late-effort curves against the fresh curve (the Garmin Endurance
-Score / Stryd durability analogue, P1-2 in the improvement plan). It remains the
-main analytic blind spot.
+### Fatigue Resistance: Reframed as the Aerobic Efficiency Trend
+P1-2 in the improvement plan (a Garmin Endurance Score / Stryd durability analogue
+comparing late-effort mean-maximal curves against the fresh curve) was
+**redesigned** rather than built as specced. Instead, fatigue-resistance is now
+surfaced through the **aerobic efficiency trend** — per-activity aerobic
+decoupling (`Activity.decoupling_pct`) and efficiency factor
+(`Activity.efficiency_factor`) tracked over time via `/aerobic-trends` and the
+Trends UI. This reads "can you hold it?" from within-effort drift and economy
+rather than from a separate endurance index, so a discrete durability score is
+intentionally absent.
 
 ### Single Bootstrap Tenant in Practice
 The multi-user plumbing (auth, per-user scoping, per-user Garmin credentials) is
