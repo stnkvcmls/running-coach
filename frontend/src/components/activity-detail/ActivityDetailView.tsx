@@ -90,6 +90,15 @@ export default function ActivityDetailView() {
     activity.efficiency_factor != null ? { label: 'EF', value: (activity.efficiency_factor * 1000).toFixed(2), unit: 'mm/s/bpm' } : null,
   ].filter(Boolean) as { label: string; value: string; unit?: string }[]
 
+  const weatherStats = [
+    activity.weather_adjusted_pace_min_km != null
+      ? { label: 'Adj. Pace', value: formatPace(activity.weather_adjusted_pace_min_km), unit: '/km' }
+      : null,
+    activity.weather_penalty_sec_per_km != null
+      ? { label: 'Heat Penalty', value: `+${Math.round(activity.weather_penalty_sec_per_km)}`, unit: 's/km' }
+      : null,
+  ].filter(Boolean) as { label: string; value: string; unit?: string }[]
+
   return (
     <div className="activity-detail">
       {/* Header */}
@@ -161,6 +170,17 @@ export default function ActivityDetailView() {
               <StatHelpButton topic="activity-performance" label="Performance" />
             </div>
             <StatGrid stats={perfStats} columns={3} />
+          </section>
+        )}
+
+        {/* Weather conditions */}
+        {weatherStats.length > 0 && (
+          <section className="detail-section">
+            <h3 className="section-title">Conditions</h3>
+            <StatGrid stats={weatherStats} columns={2} />
+            {activity.weather_description && (
+              <p className="weather-description">{activity.weather_description}</p>
+            )}
           </section>
         )}
 

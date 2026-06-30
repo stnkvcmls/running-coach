@@ -92,7 +92,7 @@ present. Effort key: **S** ≈ <1 day · **M** ≈ 1–3 days · **L** ≈ sever
 
 ### P0 — Highest leverage, data/infra already present
 
-#### P0-1 · Weather-adjusted pace & heat-aware coaching
+#### P0-1 · Weather-adjusted pace & heat-aware coaching ✅ DONE (2026-06-30)
 **What:** Use the `Activity.weather_json` we already store. Add a small helper that
 derives a **heat/dew-point pace adjustment** (sec/km) and an effort-normalized
 "weather-adjusted pace" per run, then (a) show it on Activity Detail next to raw
@@ -106,10 +106,11 @@ is the biggest day-to-day pace confounder, and Runna, MeteoPace, and RunWeather 
 made weather-adjusted pace an expectation. Pure analytic add over stored data; no
 new sync.
 **Effort:** S–M.
-**Files:** new helper in `app/streams.py` or `app/pacing.py` (heat-adjustment
-model), `app/ai_coach.py` (`_format_activity_context`, readiness narrative),
-`app/api.py` (activity detail field; optional Today field), `app/schemas.py`,
-`frontend/src/components/activity-detail/*` + `today/*` + types.
+**Files:** `app/weather.py` (new), `app/ai_coach.py` (`_format_activity_context`,
+`_recent_heat_stress_note`, `_build_context`), `app/api.py` (activity detail),
+`app/schemas.py`, `frontend/src/api/types.ts`,
+`frontend/src/components/activity-detail/ActivityDetailView.tsx` + `.css`,
+`tests/test_weather.py` (new, 19 tests).
 
 #### P0-2 · Let the coach act on the conversation (chat tool-use)
 **What:** Give `chat_stream` the same tool-use treatment plan generation already
