@@ -116,7 +116,7 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
               <YAxis
                 dataKey="y"
                 domain={['auto', 'auto']}
-                tickCount={3}
+                tickCount={7}
                 tickFormatter={yTickFormatter}
                 tick={{ fontSize: 10, fill: tickColor }}
                 axisLine={false}
@@ -182,7 +182,7 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
             <YAxis
               reversed={reversed}
               domain={['auto', 'auto']}
-              tickCount={3}
+              tickCount={7}
               tickFormatter={yTickFormatter}
               tick={{ fontSize: 10, fill: tickColor }}
               axisLine={false}
