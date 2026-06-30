@@ -369,6 +369,7 @@ class ChatMessage(Base):
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=_utcnow, index=True)
     activity_id = Column(Integer, nullable=True)  # optional activity context
+    actions_json = Column(Text, nullable=True)  # JSON list of coach tool actions taken this turn
 
 
 class DailyLoadSeries(Base):

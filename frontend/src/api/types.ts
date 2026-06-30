@@ -538,12 +538,20 @@ export interface PushWorkoutResponse {
   scheduled_date: string
 }
 
+export interface ChatAction {
+  type: string
+  status: string
+  job_id: number | null
+  summary: string
+}
+
 export interface ChatMessage {
   id: number
   role: 'user' | 'assistant'
   content: string
   created_at: string | null
   activity_id: number | null
+  actions?: ChatAction[] | null
 }
 
 export interface ChatHistoryResponse {

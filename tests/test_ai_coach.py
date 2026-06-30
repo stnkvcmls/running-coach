@@ -1,5 +1,6 @@
 import json
 from datetime import date, datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -7,6 +8,7 @@ import pytest
 from app import ai_coach
 from app.models import (
     Activity,
+    AIJob,
     AthleteProfile,
     DailySummary,
     GarminCalendarEvent,
@@ -941,3 +943,284 @@ def test_plan_tool_schema_includes_routine_id():
         ["properties"]["days"]["items"]["properties"]
     )
     assert "routine_id" in day_props
+
+
+# ---------------------------------------------------------------------------
+# Chat tool-use (P0-2)
+# ---------------------------------------------------------------------------
+
+def test_generate_training_plan_with_note_appends_to_prompt(db, patch_db_session, monkeypatch):
+    """A note (e.g. from chat's adjust_upcoming_week) is folded into the plan prompt."""
+    patch_db_session(ai_coach)
+
+    week_start = date(2026, 7, 7)
+    plan_dict = _minimal_plan_dict(week_start)
+
+    tool_block = MagicMock()
+    tool_block.type = "tool_use"
+    tool_block.name = "generate_plan"
+    tool_block.input = plan_dict
+
+    mock_response = MagicMock()
+    mock_response.content = [tool_block]
+
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = mock_response
+
+    monkeypatch.setattr(ai_coach, "_get_ai_config", lambda db, user_id=1: ("claude", "claude-sonnet-4-6"))
+    monkeypatch.setattr(ai_coach.anthropic, "Anthropic", lambda **kw: mock_client)
+
+    result = ai_coach.generate_training_plan(reference_date=date(2026, 7, 3), note="travelling next week")
+
+    assert result is not None
+    prompt = mock_client.messages.create.call_args[1]["messages"][0]["content"]
+    assert "travelling next week" in prompt
+
+
+# --- _dispatch_chat_tool ---
+
+def test_dispatch_chat_tool_regenerate_plan(db, patch_db_session):
+    patch_db_session(ai_coach)
+
+    result, action = ai_coach._dispatch_chat_tool(db, 1, "regenerate_plan", {})
+
+    assert result["status"] == "queued"
+    job = db.query(AIJob).filter(AIJob.id == result["job_id"]).first()
+    assert job is not None
+    assert job.task_type == "generate_plan"
+    assert json.loads(job.payload_json) == {}
+    assert action["type"] == "regenerate_plan"
+    assert action["job_id"] == job.id
+
+
+def test_dispatch_chat_tool_adjust_upcoming_week(db, patch_db_session):
+    patch_db_session(ai_coach)
+
+    result, action = ai_coach._dispatch_chat_tool(
+        db, 1, "adjust_upcoming_week", {"reason": "travelling for work"}
+    )
+
+    assert result["status"] == "queued"
+    job = db.query(AIJob).filter(AIJob.id == result["job_id"]).first()
+    assert job is not None
+    assert job.task_type == "generate_plan"
+    assert json.loads(job.payload_json) == {"note": "travelling for work"}
+    assert "travelling for work" in action["summary"]
+
+
+def test_dispatch_chat_tool_mark_setback(db):
+    result, action = ai_coach._dispatch_chat_tool(
+        db, 1, "mark_setback", {"tag": "knee pain", "note": "Sore after long runs."}
+    )
+
+    assert result == {"status": "recorded"}
+    insight = db.query(Insight).filter(Insight.trigger_type == "chat_setback").first()
+    assert insight is not None
+    assert insight.user_id == 1
+    assert insight.summary == "knee pain"
+    assert insight.content == "Sore after long runs."
+    assert insight.category == "setback"
+    assert action["type"] == "mark_setback"
+    assert action["job_id"] is None
+
+
+def test_dispatch_chat_tool_explain_workout_found(db):
+    plan = TrainingPlan(generated_at=datetime(2026, 6, 1, tzinfo=timezone.utc), week_start=date(2026, 6, 15), plan_weeks=4)
+    db.add(plan)
+    db.flush()
+    db.add(TrainingPlanDay(
+        plan_id=plan.id,
+        day_date=date(2026, 6, 18),
+        day_of_week="Thursday",
+        week_number=1,
+        workout_type="tempo",
+        target_distance_m=8000,
+        target_pace_display="4:30/km",
+        description="Tempo run with 20min at threshold.",
+    ))
+    db.commit()
+
+    result, action = ai_coach._dispatch_chat_tool(db, 1, "explain_workout", {"date": "2026-06-18"})
+
+    assert result["status"] == "ok"
+    assert result["workout_type"] == "tempo"
+    assert result["target_distance_km"] == 8.0
+    assert result["description"] == "Tempo run with 20min at threshold."
+    assert action is None
+
+
+def test_dispatch_chat_tool_explain_workout_not_found(db):
+    result, action = ai_coach._dispatch_chat_tool(db, 1, "explain_workout", {"date": "2026-06-18"})
+    assert result == {"status": "not_found", "date": "2026-06-18"}
+    assert action is None
+
+
+def test_dispatch_chat_tool_explain_workout_invalid_date(db):
+    result, action = ai_coach._dispatch_chat_tool(db, 1, "explain_workout", {"date": "not-a-date"})
+    assert result["status"] == "invalid_date"
+    assert action is None
+
+
+def test_dispatch_chat_tool_unknown_raises(db):
+    with pytest.raises(ValueError):
+        ai_coach._dispatch_chat_tool(db, 1, "delete_everything", {})
+
+
+# --- _format_upcoming_plan_context ---
+
+def test_format_upcoming_plan_context_lists_next_7_days(db):
+    from datetime import timedelta
+    plan = TrainingPlan(generated_at=datetime(2026, 6, 1, tzinfo=timezone.utc), week_start=date(2026, 6, 15), plan_weeks=4)
+    db.add(plan)
+    db.flush()
+    today = date.today()
+    db.add(TrainingPlanDay(
+        plan_id=plan.id,
+        day_date=today + timedelta(days=1),
+        day_of_week="X",
+        week_number=1,
+        workout_type="easy",
+        description="Easy 5k",
+    ))
+    db.commit()
+
+    out = ai_coach._format_upcoming_plan_context(db, 1)
+    assert "Upcoming Plan This Week" in out
+    assert "easy" in out
+    assert "Easy 5k" in out
+
+
+def test_format_upcoming_plan_context_empty_when_no_plan(db):
+    assert ai_coach._format_upcoming_plan_context(db, 1) == ""
+
+
+# --- _stream_claude tool-use streaming ---
+
+class _FakeClaudeStream:
+    def __init__(self, events, final_message):
+        self._events = events
+        self._final_message = final_message
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def __iter__(self):
+        return iter(self._events)
+
+    def get_final_message(self):
+        return self._final_message
+
+
+def _text_delta_event(text):
+    return SimpleNamespace(
+        type="content_block_delta",
+        delta=SimpleNamespace(type="text_delta", text=text),
+    )
+
+
+def test_stream_claude_plain_text_no_tool_call(db, monkeypatch):
+    events = [_text_delta_event("Hello"), _text_delta_event(" there")]
+    final_message = SimpleNamespace(content=[SimpleNamespace(type="text", text="Hello there")])
+
+    mock_client = MagicMock()
+    mock_client.messages.stream.return_value = _FakeClaudeStream(events, final_message)
+    monkeypatch.setattr(ai_coach.anthropic, "Anthropic", lambda **kw: mock_client)
+
+    events_out = list(ai_coach._stream_claude([], "system", "claude-sonnet-4-6", db, 1))
+
+    assert events_out == [
+        {"type": "token", "text": "Hello"},
+        {"type": "token", "text": " there"},
+    ]
+    assert mock_client.messages.stream.call_count == 1
+
+
+def test_stream_claude_tool_use_dispatches_and_streams_confirmation(db, patch_db_session, monkeypatch):
+    patch_db_session(ai_coach)
+
+    tool_use_block = SimpleNamespace(type="tool_use", name="regenerate_plan", input={}, id="tu_1")
+    first_final = SimpleNamespace(content=[tool_use_block])
+    first_stream = _FakeClaudeStream([], first_final)
+
+    confirmation_events = [_text_delta_event("Regenerating"), _text_delta_event(" now.")]
+    second_final = SimpleNamespace(content=[SimpleNamespace(type="text", text="Regenerating now.")])
+    second_stream = _FakeClaudeStream(confirmation_events, second_final)
+
+    mock_client = MagicMock()
+    mock_client.messages.stream.side_effect = [first_stream, second_stream]
+    monkeypatch.setattr(ai_coach.anthropic, "Anthropic", lambda **kw: mock_client)
+
+    events_out = list(ai_coach._stream_claude([], "system", "claude-sonnet-4-6", db, 1))
+
+    assert mock_client.messages.stream.call_count == 2
+    action_events = [e for e in events_out if e["type"] == "action"]
+    token_events = [e for e in events_out if e["type"] == "token"]
+    assert len(action_events) == 1
+    assert action_events[0]["action"]["type"] == "regenerate_plan"
+    assert "".join(e["text"] for e in token_events) == "Regenerating now."
+
+    job = db.query(AIJob).filter(AIJob.task_type == "generate_plan").first()
+    assert job is not None
+
+    # First call carries tools; the follow-up confirmation call does not.
+    first_kwargs = mock_client.messages.stream.call_args_list[0][1]
+    second_kwargs = mock_client.messages.stream.call_args_list[1][1]
+    assert "tools" in first_kwargs
+    assert "tools" not in second_kwargs
+    assert second_kwargs["messages"][-1]["content"][0]["type"] == "tool_result"
+
+
+# --- _stream_gemini tool-use streaming ---
+
+def _gemini_text_chunk(text):
+    return SimpleNamespace(text=text, candidates=[])
+
+
+def _gemini_function_call_chunk(name, args):
+    part = SimpleNamespace(function_call=SimpleNamespace(name=name, args=args))
+    candidate = SimpleNamespace(content=SimpleNamespace(parts=[part]))
+    return SimpleNamespace(text=None, candidates=[candidate])
+
+
+def test_stream_gemini_plain_text_no_tool_call(db, monkeypatch):
+    chunks = [_gemini_text_chunk("Hi"), _gemini_text_chunk(" there")]
+    mock_models = MagicMock()
+    mock_models.generate_content_stream.return_value = chunks
+    mock_client = MagicMock()
+    mock_client.models = mock_models
+    monkeypatch.setattr(ai_coach.genai, "Client", lambda **kw: mock_client)
+
+    events_out = list(ai_coach._stream_gemini([], "system", "gemini-2.5-flash", db, 1))
+
+    assert events_out == [
+        {"type": "token", "text": "Hi"},
+        {"type": "token", "text": " there"},
+    ]
+    assert mock_models.generate_content_stream.call_count == 1
+
+
+def test_stream_gemini_tool_use_dispatches_and_streams_confirmation(db, monkeypatch):
+    chunks_first = [_gemini_function_call_chunk("mark_setback", {"tag": "knee pain", "note": "sore"})]
+    chunks_second = [_gemini_text_chunk("Noted, take it easy.")]
+
+    mock_models = MagicMock()
+    mock_models.generate_content_stream.side_effect = [chunks_first, chunks_second]
+    mock_client = MagicMock()
+    mock_client.models = mock_models
+    monkeypatch.setattr(ai_coach.genai, "Client", lambda **kw: mock_client)
+
+    events_out = list(ai_coach._stream_gemini([], "system", "gemini-2.5-flash", db, 1))
+
+    assert mock_models.generate_content_stream.call_count == 2
+    action_events = [e for e in events_out if e["type"] == "action"]
+    token_events = [e for e in events_out if e["type"] == "token"]
+    assert len(action_events) == 1
+    assert action_events[0]["action"]["type"] == "mark_setback"
+    assert "".join(e["text"] for e in token_events) == "Noted, take it easy."
+
+    insight = db.query(Insight).filter(Insight.trigger_type == "chat_setback").first()
+    assert insight is not None
+    assert insight.summary == "knee pain"

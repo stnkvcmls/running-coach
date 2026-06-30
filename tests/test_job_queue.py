@@ -103,7 +103,22 @@ def test_execute_job_dispatches_generate_plan(db, patch_db_session):
     with patch.object(ai_mod, "generate_training_plan") as mock_fn:
         execute_job(job_id)
 
-    mock_fn.assert_called_once_with(user_id=1)
+    mock_fn.assert_called_once_with(user_id=1, note=None)
+    job = db.query(AIJob).filter(AIJob.id == job_id).first()
+    assert job.status == "done"
+
+
+def test_execute_job_dispatches_generate_plan_with_note(db, patch_db_session):
+    """A note in the job payload (e.g. from the chat adjust_upcoming_week tool) is threaded through."""
+    import app.ai_coach as ai_mod
+    patch_db_session(ai_mod)
+
+    job_id = enqueue_job("generate_plan", {"note": "travelling next week"}, user_id=1)
+
+    with patch.object(ai_mod, "generate_training_plan") as mock_fn:
+        execute_job(job_id)
+
+    mock_fn.assert_called_once_with(user_id=1, note="travelling next week")
     job = db.query(AIJob).filter(AIJob.id == job_id).first()
     assert job.status == "done"
 

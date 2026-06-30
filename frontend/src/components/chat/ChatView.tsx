@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import ReactMarkdown from 'react-markdown'
-import { Send, BrainCircuit, Trash2 } from 'lucide-react'
-import type { ChatMessage } from '../../api/types'
+import { Send, BrainCircuit, Trash2, Zap } from 'lucide-react'
+import type { ChatAction, ChatMessage } from '../../api/types'
 import './ChatView.css'
 
 const BASE = '/api/v1'
@@ -19,11 +19,26 @@ function formatTime(iso: string | null): string {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
+function ActionChips({ actions }: { actions: ChatAction[] | null | undefined }) {
+  if (!actions || actions.length === 0) return null
+  return (
+    <div className="chat-action-chips">
+      {actions.map((action, i) => (
+        <div key={`${action.type}-${i}`} className="chat-action-chip">
+          <Zap size={12} />
+          {action.summary}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function ChatView() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
+  const [streamingActions, setStreamingActions] = useState<ChatAction[]>([])
   const [error, setError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -70,6 +85,7 @@ export default function ChatView() {
 
     setStreaming(true)
     setStreamingContent('')
+    setStreamingActions([])
 
     const ctrl = new AbortController()
     abortRef.current = ctrl
@@ -90,6 +106,7 @@ export default function ChatView() {
       const decoder = new TextDecoder()
       let buffer = ''
       let fullContent = ''
+      const fullActions: ChatAction[] = []
 
       while (true) {
         const { done, value } = await reader.read()
@@ -110,6 +127,9 @@ export default function ChatView() {
             } else if (parsed.token) {
               fullContent += parsed.token
               setStreamingContent(fullContent)
+            } else if (parsed.action) {
+              fullActions.push(parsed.action)
+              setStreamingActions([...fullActions])
             }
           } catch {
             // ignore malformed SSE lines
@@ -124,6 +144,7 @@ export default function ChatView() {
         content: fullContent,
         created_at: new Date().toISOString(),
         activity_id: null,
+        actions: fullActions.length > 0 ? fullActions : null,
       }
       setMessages(prev => [...prev, assistantMsg])
     } catch (err: any) {
@@ -133,6 +154,7 @@ export default function ChatView() {
     } finally {
       setStreaming(false)
       setStreamingContent('')
+      setStreamingActions([])
       abortRef.current = null
     }
   }, [streaming])
@@ -179,6 +201,7 @@ export default function ChatView() {
                   {msg.role === 'assistant' ? 'AI' : 'Me'}
                 </div>
                 <div>
+                  {msg.role === 'assistant' && <ActionChips actions={msg.actions} />}
                   <div className={`chat-bubble ${msg.role}`}>
                     {msg.role === 'assistant' ? (
                       <ReactMarkdown>{msg.content}</ReactMarkdown>
@@ -200,6 +223,7 @@ export default function ChatView() {
               <div className="chat-bubble-row assistant">
                 <div className="chat-avatar assistant">AI</div>
                 <div>
+                  <ActionChips actions={streamingActions} />
                   <div className={`chat-bubble assistant${streamingContent ? ' streaming' : ''}`}>
                     {streamingContent ? (
                       <ReactMarkdown>{streamingContent}</ReactMarkdown>

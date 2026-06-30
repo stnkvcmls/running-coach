@@ -136,6 +136,27 @@
   margin: 0.15em 0;
 }
 
+.chat-action-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.chat-action-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  max-width: 78%;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
 .chat-bubble.streaming::after {
   content: '▋';
   display: inline-block;
