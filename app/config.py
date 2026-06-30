@@ -1,6 +1,6 @@
 from pydantic_settings import BaseSettings
 
-AVAILABLE_MODELS: dict[str, list[str]] = {
+_DEFAULT_AVAILABLE_MODELS: dict[str, list[str]] = {
     "claude": ["claude-opus-4-8", "claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
     "gemini": [
         "gemini-2.5-flash",
@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     # finalize the morning after.
     daily_sync_window_days: int = 3
     ai_model: str = "claude-sonnet-4-6"
+    # Overridable via AVAILABLE_MODELS env var as a JSON object, e.g.:
+    # AVAILABLE_MODELS='{"claude": ["claude-opus-4-8"], "gemini": ["gemini-2.5-flash"]}'
+    available_models: dict[str, list[str]] = _DEFAULT_AVAILABLE_MODELS
 
     # Auth / multi-user
     auth_enabled: bool = False

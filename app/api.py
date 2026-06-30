@@ -90,7 +90,7 @@ from app import threshold as threshold_mod
 from app import adherence as adherence_mod
 from app import intensity as intensity_mod
 from app import streams as streams_mod
-from app.config import AVAILABLE_MODELS
+from app.config import settings as app_settings
 from app.utils import safe_json_loads, parse_activity_charts, parse_activity_route, calculate_age
 
 logger = logging.getLogger(__name__)
@@ -717,7 +717,6 @@ def api_get_ai_config(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    from app.config import settings as app_settings
     provider_row = (
         db.query(SyncStatus)
         .filter(SyncStatus.user_id == current_user.id, SyncStatus.key == "ai_provider")
@@ -733,8 +732,8 @@ def api_get_ai_config(
     return AiConfigResponse(
         provider=provider,
         model=model,
-        available_providers=list(AVAILABLE_MODELS.keys()),
-        available_models=AVAILABLE_MODELS,
+        available_providers=list(app_settings.available_models.keys()),
+        available_models=app_settings.available_models,
     )
 
 
@@ -744,9 +743,9 @@ def api_set_ai_config(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if config.provider not in AVAILABLE_MODELS:
+    if config.provider not in app_settings.available_models:
         raise HTTPException(status_code=400, detail=f"Unknown provider: {config.provider}")
-    if config.model not in AVAILABLE_MODELS[config.provider]:
+    if config.model not in app_settings.available_models[config.provider]:
         raise HTTPException(status_code=400, detail=f"Model {config.model} not valid for {config.provider}")
 
     for key, value in [("ai_provider", config.provider), ("ai_model", config.model)]:
@@ -764,8 +763,8 @@ def api_set_ai_config(
     return AiConfigResponse(
         provider=config.provider,
         model=config.model,
-        available_providers=list(AVAILABLE_MODELS.keys()),
-        available_models=AVAILABLE_MODELS,
+        available_providers=list(app_settings.available_models.keys()),
+        available_models=app_settings.available_models,
     )
 
 
