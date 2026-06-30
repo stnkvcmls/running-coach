@@ -8,6 +8,11 @@ Model (Ely et al. 2007 + running physiology consensus):
   - Dew point contribution:  +0.6 % per °C above 10 °C  (humidity/sweating load)
   - Combined factor ≥ 1.0 — pace is slower by this multiple in hot/humid conditions
   - weather_adjusted_pace = raw_pace / factor  (cool-equivalent effort)
+
+Note: Garmin Connect's activity-weather API returns temp/dewPoint in Fahrenheit
+regardless of the account's locale/display-unit setting — the Garmin app/Connect
+UI converts to Celsius for display, but the raw field stays °F. We convert to
+Celsius before applying the model.
 """
 
 from __future__ import annotations
@@ -34,6 +39,10 @@ def _get_field(data: dict, *keys: str, default=None):
         if k in data and data[k] is not None:
             return data[k]
     return default
+
+
+def _fahrenheit_to_celsius(value: float) -> float:
+    return (value - 32.0) * 5.0 / 9.0
 
 
 def heat_pace_adjustment(
@@ -67,15 +76,18 @@ def weather_pace_info(
     if not weather or avg_pace_min_km is None:
         return None, None, None
 
-    raw_temp = _get_field(weather, "temperature", "temp", "temperatureC", "apparentTemperature")
-    raw_dp = _get_field(weather, "dewPoint", "dew_point", "dewPointC")
+    raw_temp = _get_field(weather, "temp", "temperature", "apparentTemperature")
+    raw_dp = _get_field(weather, "dewPoint", "dew_point")
 
     if raw_temp is None and raw_dp is None:
         return None, None, None
 
+    # Garmin Connect's activity-weather endpoint always returns temp/dewPoint in
+    # Fahrenheit, regardless of the account's display-unit setting (the app
+    # converts for display) — convert here so the °C-based model is correct.
     try:
-        temp = float(raw_temp) if raw_temp is not None else None
-        dp = float(raw_dp) if raw_dp is not None else None
+        temp = _fahrenheit_to_celsius(float(raw_temp)) if raw_temp is not None else None
+        dp = _fahrenheit_to_celsius(float(raw_dp)) if raw_dp is not None else None
     except (TypeError, ValueError):
         return None, None, None
 

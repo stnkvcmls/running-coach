@@ -74,19 +74,36 @@ def test_hot_humid_conditions():
 
 
 # --- weather_pace_info ---
+#
+# Garmin's activity-weather API returns temp/dewPoint in Fahrenheit regardless
+# of locale (confirmed: a Garmin app showing 14°C corresponded to a stored
+# "temp": 57 in the raw payload — 57°F == 13.9°C). weather_pace_info converts
+# F -> C internally, so test fixtures below use Fahrenheit values.
 
 def test_neutral_conditions_returns_none():
-    # 11°C / no dew point data — penalty ~1.2 s/km, below the 2 s/km threshold
-    weather = {"temperature": 11}
+    # 52°F -> 11.1°C, no dew point data — penalty ~1.3 s/km, below the 2 s/km threshold
+    weather = {"temperature": 52}
     adj, pen, desc = weather_pace_info(weather, 5.0)
     assert adj is None
     assert pen is None
     assert desc is None
 
 
+def test_garmin_fahrenheit_payload_converts_correctly():
+    # Real-world regression: Garmin app showed 14°C / dew point 11°C, but the
+    # raw activity-weather payload was {"temp": 57, "dewPoint": 52} (°F).
+    weather = {"temp": 57, "dewPoint": 52}
+    adj, pen, desc = weather_pace_info(weather, 5.0)
+    assert desc is not None
+    assert "14°C" in desc
+    assert "11°C" in desc
+    assert "57°C" not in desc
+    assert "52°C" not in desc
+
+
 def test_hot_run_returns_adjusted_pace():
-    # 25°C / dew point 18°C with 5:00/km pace
-    weather = {"temperature": 25, "dewPoint": 18}
+    # 77°F / dew point 64°F == 25°C / dew point ~18°C, with 5:00/km pace
+    weather = {"temperature": 77, "dewPoint": 64}
     adj, pen, desc = weather_pace_info(weather, 5.0)
     assert adj is not None
     assert adj < 5.0  # adjusted pace should be faster (easier-equivalent)
@@ -104,29 +121,31 @@ def test_no_weather_returns_none():
 
 
 def test_no_pace_returns_none():
-    adj, pen, desc = weather_pace_info({"temperature": 30}, None)
+    adj, pen, desc = weather_pace_info({"temperature": 86}, None)
     assert (adj, pen, desc) == (None, None, None)
 
 
 def test_alternative_key_spellings():
-    # Garmin sometimes uses "temp" instead of "temperature"
-    weather = {"temp": 25, "dew_point": 18}
+    # Garmin sometimes uses "temp" instead of "temperature"; values in °F.
+    # 90°F / 80°F dew point == hot and humid once converted to °C.
+    weather = {"temp": 90, "dew_point": 80}
     adj, pen, desc = weather_pace_info(weather, 5.0)
     assert adj is not None
     assert pen is not None
 
 
 def test_temperature_only_no_dew_point():
-    # Hot but dry conditions — temperature key only
-    weather = {"temperature": 28}
+    # Hot but dry conditions — temperature key only (90°F == 32.2°C)
+    weather = {"temperature": 90}
     adj, pen, desc = weather_pace_info(weather, 5.0)
     assert adj is not None
-    assert "dew point" not in desc  # dew point not mentioned when ≤ 10°C default
+    assert "dew point" not in desc  # dew point not mentioned when absent
 
 
 def test_description_omits_dew_point_when_low():
-    # Dew point at 8°C — below the 10°C threshold, so not mentioned in desc
-    weather = {"temperature": 25, "dewPoint": 8}
+    # 77°F == 25°C temp, 45°F == 7.2°C dew point — below the 10°C threshold,
+    # so dew point is not mentioned in the description.
+    weather = {"temperature": 77, "dewPoint": 45}
     adj, pen, desc = weather_pace_info(weather, 5.0)
     if desc is not None:
         assert "dew point" not in desc
