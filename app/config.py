@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     cf_access_aud: str = ""          # AUD tag from Cloudflare Access app
     dev_user_email: str = ""         # fallback identity when auth_enabled=False
     encryption_key: str = ""         # Fernet key for storing Garmin passwords (Phase 2)
+    # Network binding — used by the startup security guard to detect public exposure
+    # without auth.  Must match the --host value passed to uvicorn.
+    bind_host: str = "127.0.0.1"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

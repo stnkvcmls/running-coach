@@ -175,6 +175,13 @@ All settings come from environment variables (see `app/config.py`):
 | `AUTH_ENABLED` | `false` | Enable Cloudflare Access JWT auth |
 | `CF_ACCESS_TEAM_DOMAIN` / `CF_ACCESS_AUD` | — | Required when auth is enabled |
 | `ENCRYPTION_KEY` | — | Fernet key for per-user Garmin passwords |
+| `BIND_HOST` | `127.0.0.1` | Interface uvicorn listens on (must match `--host`); used by the security guard |
+
+> **Safe-default rule:** `AUTH_ENABLED=false` is fine for local development
+> (`BIND_HOST=127.0.0.1`, the default).  If you expose the app on any
+> non-loopback interface — including Docker's `0.0.0.0` — you **must** set
+> `AUTH_ENABLED=true` and configure Cloudflare Access.  The app logs a
+> `CRITICAL` warning at startup when it detects the unsafe combination.
 
 Generate an encryption key once and keep it stable:
 

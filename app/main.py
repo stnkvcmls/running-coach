@@ -26,6 +26,31 @@ logger = logging.getLogger(__name__)
 
 scheduler = BackgroundScheduler()
 
+_LOOPBACK_HOSTS: frozenset[str] = frozenset({"127.0.0.1", "::1", "localhost"})
+
+
+def _check_security_config() -> None:
+    """Warn loudly when auth is disabled on a non-loopback bind address.
+
+    Auth-disabled mode trusts a synthetic dev user for every request — anyone
+    who can reach the socket gets full data access.  That is fine on loopback
+    (only local processes can connect) but catastrophic on 0.0.0.0 or any
+    public interface.  This guard fires once at startup so the warning appears
+    prominently in logs and container output.
+    """
+    if not settings.auth_enabled and settings.bind_host not in _LOOPBACK_HOSTS:
+        logger.critical(
+            "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
+            "  SECURITY WARNING\n"
+            "  auth_enabled=False  AND  bind_host=%r (non-loopback)\n"
+            "  Every request is accepted without authentication.\n"
+            "  All user data is publicly readable and writable.\n"
+            "  Set AUTH_ENABLED=true (with Cloudflare Access) or restrict\n"
+            "  BIND_HOST to 127.0.0.1 before exposing this instance.\n"
+            "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!",
+            settings.bind_host,
+        )
+
 _libc = None
 
 
@@ -247,6 +272,7 @@ def _run_backfill():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
+    _check_security_config()
     init_db()
     os.makedirs(settings.garmin_token_dir, exist_ok=True)
     # Seed user #1 from env GARMIN_EMAIL/PASSWORD and migrate the flat token dir

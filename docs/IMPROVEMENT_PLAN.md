@@ -220,7 +220,7 @@ sharpens the closed-loop plan's input signal.
 
 ### P3 — Hygiene & scale (largely independent)
 
-- **P3-1 · Security default / exposure guard.** `auth_enabled=False` trusts the
+- ✅ **P3-1 · Security default / exposure guard.** `auth_enabled=False` trusts the
   dev-user fallback, so a publicly exposed instance leaks all data
   (`CURRENT_STATE.md`). Add a startup guard that refuses (or loudly warns) when
   auth is disabled and the bind address isn't loopback, and document the safe
