@@ -230,7 +230,7 @@ sharpens the closed-loop plan's input signal.
   extend incrementally rather than refitting wholesale. **M.** Files:
   `app/training_load.py`, `app/threshold.py`, optional series table in
   `app/models.py`.
-- **P3-3 · Model catalog from config/env.** `AVAILABLE_MODELS` still lives in
+- ✅ **P3-3 · Model catalog from config/env.** `AVAILABLE_MODELS` still lives in
   `app/config.py` as code; lift the catalog to env/config so new model IDs don't
   require a code edit (`CURRENT_STATE.md` "Config / Catalog Drift"). **S.** Files:
   `app/config.py`, `app/ai_coach.py`.
