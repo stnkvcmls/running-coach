@@ -14,6 +14,7 @@ from app import training_load
 from app import threshold as threshold_mod
 from app import adherence as adherence_mod
 from app import intensity as intensity_mod
+from app import weather as weather_mod
 from app.config import settings
 from app.database import db_session
 from app.models import (
@@ -278,6 +279,18 @@ def _format_activity_context(
         except (json.JSONDecodeError, TypeError):
             pass
 
+    # Weather-adjusted pace
+    if activity.weather_json:
+        try:
+            weather = weather_mod.parse_weather(activity.weather_json)
+            _, penalty_sec, wx_desc = weather_mod.weather_pace_info(
+                weather, activity.avg_pace_min_km
+            )
+            if wx_desc:
+                parts.append(f"Weather: {wx_desc}")
+        except Exception:
+            pass
+
     return "\n".join(parts)
 
 
@@ -406,6 +419,46 @@ def _format_athlete_profile_context(profile: AthleteProfile, reference_date: dat
     return "## Athlete Profile\n" + "\n".join(lines)
 
 
+def _recent_heat_stress_note(
+    db: Session,
+    reference_date: date,
+    user_id: int = DEFAULT_USER_ID,
+) -> str:
+    """Return a one-line heat-stress note for the readiness section.
+
+    Checks the last 3 running activities with weather data. If any had a
+    notable heat penalty (≥ 5 s/km), surface a coaching note so the AI
+    factors environmental load into its recovery assessment.
+    """
+    cutoff = reference_date - timedelta(days=7)
+    recent = (
+        db.query(Activity)
+        .filter(
+            Activity.user_id == user_id,
+            Activity.started_at >= datetime.combine(cutoff, datetime.min.time(), tzinfo=timezone.utc),
+            Activity.weather_json.isnot(None),
+        )
+        .order_by(Activity.started_at.desc())
+        .limit(3)
+        .all()
+    )
+    hot_runs: list[str] = []
+    for act in recent:
+        try:
+            weather = weather_mod.parse_weather(act.weather_json)
+            _, penalty_sec, _ = weather_mod.weather_pace_info(weather, act.avg_pace_min_km)
+            if penalty_sec is not None and penalty_sec >= 5:
+                date_str = act.started_at.strftime("%m/%d") if act.started_at else "recent"
+                hot_runs.append(f"{date_str} (~{int(penalty_sec)} s/km heat penalty)")
+        except Exception:
+            continue
+
+    if not hot_runs:
+        return ""
+    runs_str = ", ".join(hot_runs)
+    return f"- Recent heat stress: {runs_str} — environmental load may be elevating fatigue"
+
+
 def _build_context(
     db: Session,
     trigger_type: str,
@@ -469,6 +522,13 @@ def _build_context(
     recent_rhr = [row[0] for row in recent_rhr_rows]
     readiness = training_load.compute_readiness(today_summary, load_point, recent_rhr)
     readiness_context = training_load.format_readiness_context(readiness)
+
+    # Append a heat-stress note to readiness when recent runs were hot/humid.
+    # Query the last 3 activities with weather data and check for notable penalties.
+    heat_penalty_note = _recent_heat_stress_note(db, reference_date, user_id)
+    if heat_penalty_note:
+        readiness_context = (readiness_context + "\n" + heat_penalty_note).strip()
+
     if readiness_context:
         insert_pos = min(3, len(sections))
         sections.insert(insert_pos, readiness_context)

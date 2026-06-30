@@ -156,6 +156,11 @@ class ActivityDetail(BaseModel):
     decoupling_pct: float | None = None
     efficiency_factor: float | None = None
 
+    # Weather-adjusted pace (None when conditions are neutral or no weather data)
+    weather_adjusted_pace_min_km: float | None = None
+    weather_penalty_sec_per_km: float | None = None
+    weather_description: str | None = None
+
     # Parsed JSON fields
     splits: Any | None = None
     hr_zones: Any | None = None

@@ -90,6 +90,7 @@ from app import threshold as threshold_mod
 from app import adherence as adherence_mod
 from app import intensity as intensity_mod
 from app import streams as streams_mod
+from app import weather as weather_mod
 from app.config import settings as app_settings
 from app.utils import safe_json_loads, parse_activity_charts, parse_activity_route, calculate_age
 
@@ -454,6 +455,10 @@ def api_activity_detail(
                 workout_steps = adherence_mod.parse_workout_steps(workout_event.raw_json)
                 activity_adherence = adherence_mod.compute_adherence(activity, workout_steps)
 
+    wx_adjusted_pace, wx_penalty_sec, wx_description = weather_mod.weather_pace_info(
+        weather, activity.avg_pace_min_km
+    )
+
     result = ActivityDetail.model_validate(activity)
     result.splits = splits
     result.hr_zones = hr_zones
@@ -466,6 +471,9 @@ def api_activity_detail(
     result.scheduled_workout = scheduled_workout
     result.adherence = activity_adherence
     result.feedback_tags = safe_json_loads(activity.feedback_tags)
+    result.weather_adjusted_pace_min_km = wx_adjusted_pace
+    result.weather_penalty_sec_per_km = wx_penalty_sec
+    result.weather_description = wx_description
     return result
 
 

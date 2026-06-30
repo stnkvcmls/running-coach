@@ -123,6 +123,9 @@ export interface ActivityDetail extends ActivitySummary {
   walk_time_sec: number | null
   decoupling_pct: number | null
   efficiency_factor: number | null
+  weather_adjusted_pace_min_km: number | null
+  weather_penalty_sec_per_km: number | null
+  weather_description: string | null
   splits: any
   hr_zones: any
   weather: any
