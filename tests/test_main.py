@@ -175,3 +175,37 @@ def test_spa_catch_all_rejects_api_paths():
     with __import__("pytest").raises(HTTPException) as exc:
         asyncio.run(main.spa_catch_all("api/v1/today"))
     assert exc.value.status_code == 404
+
+
+# --- _check_security_config ------------------------------------------------
+
+def test_security_guard_warns_when_auth_disabled_on_public_host(monkeypatch, caplog):
+    import logging
+    monkeypatch.setattr(main.settings, "auth_enabled", False)
+    monkeypatch.setattr(main.settings, "bind_host", "0.0.0.0")
+    with caplog.at_level(logging.CRITICAL, logger="app.main"):
+        main._check_security_config()
+    assert any("SECURITY WARNING" in r.message for r in caplog.records)
+    assert any(r.levelno == logging.CRITICAL for r in caplog.records)
+
+
+def test_security_guard_silent_when_auth_disabled_on_loopback(monkeypatch, caplog):
+    import logging
+    monkeypatch.setattr(main.settings, "auth_enabled", False)
+    for host in ("127.0.0.1", "::1", "localhost"):
+        caplog.clear()
+        monkeypatch.setattr(main.settings, "bind_host", host)
+        with caplog.at_level(logging.CRITICAL, logger="app.main"):
+            main._check_security_config()
+        assert not any(r.levelno == logging.CRITICAL for r in caplog.records), (
+            f"unexpected CRITICAL log for bind_host={host!r}"
+        )
+
+
+def test_security_guard_silent_when_auth_enabled_on_public_host(monkeypatch, caplog):
+    import logging
+    monkeypatch.setattr(main.settings, "auth_enabled", True)
+    monkeypatch.setattr(main.settings, "bind_host", "0.0.0.0")
+    with caplog.at_level(logging.CRITICAL, logger="app.main"):
+        main._check_security_config()
+    assert not any(r.levelno == logging.CRITICAL for r in caplog.records)
