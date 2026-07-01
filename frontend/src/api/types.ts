@@ -561,6 +561,29 @@ export interface AerobicTrendsResponse {
   days: number
 }
 
+export type CustomChartMetricGroup = 'activity' | 'wellness' | 'load'
+
+export interface CustomChartMetric {
+  id: string
+  label: string
+  unit: string
+  group: CustomChartMetricGroup
+}
+
+export interface CustomChartMetricsResponse {
+  metrics: CustomChartMetric[]
+}
+
+export interface CustomChartPoint {
+  date: string
+  values: Record<string, number | null>
+}
+
+export interface CustomChartDataResponse {
+  points: CustomChartPoint[]
+  days: number
+}
+
 export interface PushWorkoutResponse {
   workout_name: string
   garmin_workout_id: number | string
