@@ -32,6 +32,7 @@ import type {
   TrainingLoadResponse,
   TrainingPlanDay,
   TrainingPlanResponse,
+  SeasonPlanResponse,
   UserResponse,
   ZoneConfigBulkUpdate,
   ZoneConfigsResponse,
@@ -357,6 +358,13 @@ export function useTrainingPlan() {
 export function useGenerateTrainingPlan() {
   return useMutation({
     mutationFn: () => apiPost<AIJobEnqueuedResponse>('/training-plan/generate', {}),
+  })
+}
+
+export function useSeasonPlan() {
+  return useQuery({
+    queryKey: ['season-plan'],
+    queryFn: () => apiGet<SeasonPlanResponse | null>('/season-plan'),
   })
 }
 

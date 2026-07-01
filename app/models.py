@@ -334,6 +334,44 @@ class TrainingPlan(Base):
     raw_json = Column(Text, nullable=True)        # full AI JSON output
 
 
+class SeasonPlan(Base):
+    """Deterministic season-long periodization skeleton to a goal race.
+
+    Unlike TrainingPlan (AI-generated, rolling 4-week window), this is a
+    rule-based phase-block skeleton (base/build/peak/taper/race/recovery)
+    spanning the full season to the goal race, that the 4-week generator
+    reads as guidance. At most one active plan exists at a time (identified
+    by the latest ``generated_at``).
+    """
+
+    __tablename__ = "season_plans"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = _user_id_column()
+    generated_at = Column(DateTime, default=_utcnow, index=True)
+    start_date = Column(Date, nullable=False)          # Monday the skeleton begins
+    goal_race_title = Column(Text, nullable=True)
+    goal_race_date = Column(Date, nullable=False)
+    goal_race_distance_m = Column(Float, nullable=True)
+    goal_race_source = Column(Text, nullable=True)     # "garmin_calendar" | "profile"
+    peak_weekly_km = Column(Float, nullable=True)
+
+
+class SeasonPlanWeek(Base):
+    """One week within a SeasonPlan's phase-block skeleton."""
+
+    __tablename__ = "season_plan_weeks"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = _user_id_column()
+    season_plan_id = Column(Integer, nullable=False, index=True)  # → SeasonPlan.id
+    week_number = Column(Integer, nullable=False)
+    week_start = Column(Date, nullable=False, index=True)
+    phase = Column(Text, nullable=False)  # base, build, peak, taper, race, recovery
+    target_weekly_km = Column(Float, nullable=True)
+    notes = Column(Text, nullable=True)
+
+
 class AIJob(Base):
     """Persisted job ledger for durable AI task execution.
 

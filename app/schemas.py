@@ -667,6 +667,31 @@ class TrainingPlanResponse(BaseModel):
         from_attributes = True
 
 
+class SeasonPlanWeekResponse(BaseModel):
+    week_number: int
+    week_start: date
+    phase: str
+    target_weekly_km: float | None = None
+    notes: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class SeasonPlanResponse(BaseModel):
+    id: int
+    generated_at: datetime
+    start_date: date
+    goal_race_title: str | None = None
+    goal_race_date: date
+    goal_race_distance_m: float | None = None
+    peak_weekly_km: float | None = None
+    weeks: list[SeasonPlanWeekResponse] = []
+
+    class Config:
+        from_attributes = True
+
+
 class MissedPlanSession(BaseModel):
     date: date
     workout_type: str

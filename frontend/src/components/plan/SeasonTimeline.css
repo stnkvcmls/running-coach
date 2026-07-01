@@ -1,0 +1,95 @@
+.season-timeline {
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+}
+
+.season-timeline-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.season-timeline-icon {
+  color: var(--accent-light);
+  flex-shrink: 0;
+}
+
+.season-timeline-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.season-timeline-days {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.season-timeline-track {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+
+.season-timeline-track::-webkit-scrollbar {
+  display: none;
+}
+
+.season-timeline-chip {
+  flex: 1 0 10px;
+  min-width: 10px;
+  height: 18px;
+  border-radius: 3px;
+  opacity: 0.55;
+  cursor: default;
+  transition: opacity 0.15s;
+}
+
+.season-timeline-chip:hover {
+  opacity: 0.85;
+}
+
+.season-timeline-chip--current {
+  opacity: 1;
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+
+.season-timeline-chip--race {
+  opacity: 1;
+  border-radius: 3px 3px 6px 6px;
+}
+
+.season-timeline-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.season-timeline-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.season-timeline-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  opacity: 0.85;
+}

@@ -15,6 +15,7 @@ from app import threshold as threshold_mod
 from app import adherence as adherence_mod
 from app import intensity as intensity_mod
 from app import weather as weather_mod
+from app import season_plan as season_plan_mod
 from app.config import settings
 from app.database import db_session
 from app.models import (
@@ -1319,6 +1320,10 @@ Rules:
   progressive-build, adherence, and strength rules above for the specific weeks listed —
   do not increase volume during a listed RACE WEEK, TAPER, or RECOVERY week even if
   adherence has been excellent.
+- When a "Season Plan Skeleton" section is present, use its per-week phase and target
+  weekly volume as guidance for shaping this 4-week plan's phase/volume — it reflects the
+  season-long periodization to the goal race. Race Periodization Directives (if present)
+  still take precedence over it for the specific weeks they cover.
 - Respect injury history — avoid high-impact volume if relevant injuries are listed.
 - Strength & cross-training:
   * Include 1–2 `strength` sessions per week during base and build phases; 0–1 during taper
@@ -1783,6 +1788,13 @@ def _build_plan_context(
     )
     if periodization_ctx:
         sections.append(periodization_ctx)
+
+    # Season-long periodization skeleton (deterministic, no AI call)
+    season_ctx = season_plan_mod.build_season_plan_context(
+        db, user_id, resolved_week_start, plan_weeks, reference_date
+    )
+    if season_ctx:
+        sections.append(season_ctx)
 
     return "\n\n".join(sections)
 

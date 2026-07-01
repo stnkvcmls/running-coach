@@ -782,6 +782,30 @@ def test_build_plan_context_includes_periodization_directives(db):
     assert "RACE WEEK" in context
 
 
+# --- season plan skeleton in _build_plan_context (P3-1) ---
+
+def test_build_plan_context_includes_season_plan_skeleton(db):
+    db.add(GarminCalendarEvent(
+        garmin_id="s1", event_type="race", date=date(2026, 10, 3),
+        title="Autumn Marathon", distance_m=42195, priority="A",
+    ))
+    db.commit()
+
+    context = ai_coach._build_plan_context(
+        db, date(2026, 6, 10), week_start=date(2026, 6, 15), plan_weeks=4
+    )
+
+    assert "## Season Plan Skeleton" in context
+    assert "Autumn Marathon" in context
+
+
+def test_build_plan_context_no_season_plan_skeleton_without_goal_race(db):
+    context = ai_coach._build_plan_context(
+        db, date(2026, 6, 10), week_start=date(2026, 6, 15), plan_weeks=4
+    )
+    assert "## Season Plan Skeleton" not in context
+
+
 # --- detect_plan_realignment ---
 
 def _seed_plan_with_days(db, plan_start, days_config):

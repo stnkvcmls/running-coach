@@ -495,6 +495,25 @@ export interface TrainingPlanResponse {
   weeks: TrainingPlanWeek[]
 }
 
+export interface SeasonPlanWeek {
+  week_number: number
+  week_start: string
+  phase: string  // base | build | peak | taper | race | recovery
+  target_weekly_km: number | null
+  notes: string | null
+}
+
+export interface SeasonPlanResponse {
+  id: number
+  generated_at: string
+  start_date: string
+  goal_race_title: string | null
+  goal_race_date: string
+  goal_race_distance_m: number | null
+  peak_weekly_km: number | null
+  weeks: SeasonPlanWeek[]
+}
+
 export interface MissedPlanSession {
   date: string
   workout_type: string
