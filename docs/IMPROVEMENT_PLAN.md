@@ -281,11 +281,26 @@ badges replace the old client-side duplicate banding, plus a recommendation line
 
 ### P3 — Hygiene, scale & carryover (largely independent)
 
-- **P3-1 · Season-long / annual periodization.** Today's plan is a rolling 4-week
-  window; TrainingPeaks' ATP periodizes a whole season to an A-race with weekly TSS
-  targets. Add a longer-horizon plan skeleton (phase blocks to the goal race) that the
-  4-week generator fills in. **L.** Files: `app/ai_coach.py`, `app/models.py` + Alembic,
-  `frontend/src/components/plan/*`.
+- **P3-1 · Season-long / annual periodization** ✅ DONE (2026-07-01). Today's plan was a
+  rolling 4-week window; TrainingPeaks' ATP periodizes a whole season to an A-race.
+  Added a deterministic (no AI call) season-long skeleton — `base → build → peak →
+  taper → race → recovery` phase blocks with a target weekly km per week — spanning
+  from next Monday to the athlete's goal race, that the 4-week AI generator now reads
+  as guidance alongside the existing (and still authoritative) Race Periodization
+  Directives. The goal race is the nearest upcoming Garmin-calendar A-priority race,
+  falling back to the nearest race of any priority, then to `AthleteProfile.goal_race_date`,
+  else no skeleton is generated. Regenerates automatically whenever the resolved goal
+  race changes. **L.** Files: `app/models.py` (`SeasonPlan`, `SeasonPlanWeek`) +
+  Alembic (`m6n7o8p9q0r1_add_season_plan`), `app/season_plan.py` (new —
+  `select_goal_race`, `generate_season_plan`, `ensure_season_plan`,
+  `build_season_plan_context`), `app/ai_coach.py` (`_build_plan_context` appends the
+  "Season Plan Skeleton" section; new system-prompt rule bullet), `app/schemas.py`
+  (`SeasonPlanWeekResponse`, `SeasonPlanResponse`), `app/api.py` (`GET
+  /season-plan`), `frontend/src/api/types.ts`, `frontend/src/api/hooks.ts`
+  (`useSeasonPlan`), `frontend/src/components/plan/SeasonTimeline.tsx` + `.css` (new —
+  phase-colored week strip + legend on the Plan page), `PlanView.tsx`,
+  `tests/test_season_plan.py` (new, 30 tests), `tests/test_ai_coach.py` (2 new tests),
+  `tests/test_api_endpoints.py` (3 new tests).
 - **P3-2 · Strength progression & demos** ✅ DONE (2026-07-01). The routine library
   was static; Garmin/TrainingPeaks are adding progressive load and demo videos. Each
   routine now scales with the plan day's `week_number` — `get_routine_for_week` adds

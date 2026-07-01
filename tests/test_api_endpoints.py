@@ -791,6 +791,48 @@ def test_training_plan_day_routine_reflects_week_progression(client, db):
     assert "Progression" in ex["note"]
 
 
+# --- /season-plan (P3-1) ---
+
+def test_season_plan_none_without_goal_race(client):
+    resp = client.get("/api/v1/season-plan")
+    assert resp.status_code == 200
+    assert resp.json() is None
+
+
+def test_season_plan_returns_skeleton_for_goal_race(client, db):
+    race_date = date.today() + timedelta(days=180)
+    db.add(GarminCalendarEvent(
+        garmin_id="sp1", event_type="race", date=race_date,
+        title="Goal Marathon", distance_m=42195, priority="A",
+    ))
+    db.commit()
+
+    resp = client.get("/api/v1/season-plan")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body is not None
+    assert body["goal_race_title"] == "Goal Marathon"
+    assert body["goal_race_date"] == race_date.isoformat()
+    assert len(body["weeks"]) > 0
+    phases = {w["phase"] for w in body["weeks"]}
+    assert "base" in phases
+    assert "taper" in phases
+    assert "race" in phases
+
+
+def test_season_plan_stable_across_repeated_calls(client, db):
+    race_date = date.today() + timedelta(days=180)
+    db.add(GarminCalendarEvent(
+        garmin_id="sp1", event_type="race", date=race_date,
+        title="Goal Marathon", distance_m=42195, priority="A",
+    ))
+    db.commit()
+
+    first = client.get("/api/v1/season-plan").json()
+    second = client.get("/api/v1/season-plan").json()
+    assert first["id"] == second["id"]
+
+
 def test_training_plan_day_no_routine_when_id_missing(client, db):
     """A plan day without a routine_id returns routine: null."""
     from datetime import timezone

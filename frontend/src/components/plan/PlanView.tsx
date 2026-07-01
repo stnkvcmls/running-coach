@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { ClipboardList, RefreshCw, ChevronLeft, ChevronRight, AlertTriangle, Settings2, Watch, CheckCircle, ChevronDown, ChevronUp, Dumbbell, Droplet, PlayCircle } from 'lucide-react'
 import { useTrainingPlan, useGenerateTrainingPlan, useRealignmentStatus, useRealignPlan, usePushWorkoutToGarmin, useJobStatus } from '../../api/hooks'
 import type { StrengthRoutine, FuellingGuidance, TrainingPlanDay, TrainingPlanWeek } from '../../api/types'
+import SeasonTimeline from './SeasonTimeline'
 import './PlanView.css'
 
 const WORKOUT_COLORS: Record<string, string> = {
@@ -351,6 +352,8 @@ export default function PlanView() {
           </button>
         </div>
       </div>
+
+      <SeasonTimeline />
 
       {plan.overview && (
         <div className="plan-overview card">

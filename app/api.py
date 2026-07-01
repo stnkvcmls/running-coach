@@ -23,6 +23,7 @@ from app.models import (
     GarminCalendarEvent,
     Insight,
     MetricZone,
+    SeasonPlanWeek,
     SyncStatus,
     TrainingPlan,
     TrainingPlanDay,
@@ -62,6 +63,8 @@ from app.schemas import (
     PerformanceCurveResponse,
     RaceInfo,
     RacePrediction,
+    SeasonPlanResponse,
+    SeasonPlanWeekResponse,
     SettingsResponse,
     StrengthRoutine,
     TodayResponse,
@@ -1385,6 +1388,38 @@ def api_generate_training_plan(current_user: User = Depends(get_current_user)):
     from app.ai_coach import enqueue_job
     job_id = enqueue_job("generate_plan", {}, current_user.id)
     return AIJobEnqueuedResponse(status="queued", job_id=job_id)
+
+
+@api_router.get("/season-plan", response_model=SeasonPlanResponse | None)
+def api_get_season_plan(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return the season-long periodization skeleton to the athlete's goal race.
+
+    Deterministic and cheap (no AI call), so it's computed/refreshed inline on
+    read rather than via the job queue. Returns null if there's no goal race.
+    """
+    from app.season_plan import ensure_season_plan
+    plan = ensure_season_plan(db, current_user.id)
+    if not plan:
+        return None
+    weeks = (
+        db.query(SeasonPlanWeek)
+        .filter(SeasonPlanWeek.season_plan_id == plan.id, SeasonPlanWeek.user_id == current_user.id)
+        .order_by(SeasonPlanWeek.week_start.asc())
+        .all()
+    )
+    return SeasonPlanResponse(
+        id=plan.id,
+        generated_at=plan.generated_at,
+        start_date=plan.start_date,
+        goal_race_title=plan.goal_race_title,
+        goal_race_date=plan.goal_race_date,
+        goal_race_distance_m=plan.goal_race_distance_m,
+        peak_weekly_km=plan.peak_weekly_km,
+        weeks=[SeasonPlanWeekResponse.model_validate(w) for w in weeks],
+    )
 
 
 @api_router.post("/training-plan/adapt-day")
