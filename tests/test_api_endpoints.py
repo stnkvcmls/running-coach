@@ -382,6 +382,38 @@ def test_realignment_status_dismissed(client, db):
     assert body["missed_count"] == 2  # detected but suppressed
 
 
+def test_realignment_status_race_note_prompts(client, db):
+    """A race completed since the plan was generated flags should_prompt/race_note."""
+    _seed_plan_and_days(db, [
+        {"date": date(2026, 6, 17), "workout_type": "easy", "dist_m": 8000},
+    ])
+    _add_activity(db, datetime(2026, 6, 17, 8, 0), distance_m=8000)
+    db.add(GarminCalendarEvent(
+        garmin_id="race_ep", event_type="race", date=date.today() - timedelta(days=3),
+        title="Sunday 10K", distance_label="10K", distance_m=10000,
+    ))
+    db.commit()
+    resp = client.get("/api/v1/training-plan/realignment-status")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["should_prompt"] is True
+    assert body["race_note"] is not None
+    assert "Sunday 10K" in body["race_note"]
+
+
+def test_realignment_status_race_note_absent_by_default(client, db):
+    _seed_plan_and_days(db, [
+        {"date": date(2026, 6, 17), "workout_type": "easy", "dist_m": 8000},
+    ])
+    _add_activity(db, datetime(2026, 6, 17, 8, 0), distance_m=8000)
+    db.commit()
+    resp = client.get("/api/v1/training-plan/realignment-status")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["should_prompt"] is False
+    assert body["race_note"] is None
+
+
 # --- /training-plan/realign ---
 
 def test_realign_dismiss(client, db):

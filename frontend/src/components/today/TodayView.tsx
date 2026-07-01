@@ -33,8 +33,12 @@ function TodayRealignmentBanner() {
         <AlertTriangle size={16} className="today-realignment-icon" />
         <div className="today-realignment-body">
           <span className="today-realignment-msg">
-            {status.missed_count} planned session{status.missed_count !== 1 ? 's' : ''} missed.
-            Regenerate to adapt your plan?
+            {status.race_note ?? (
+              <>
+                {status.missed_count} planned session{status.missed_count !== 1 ? 's' : ''} missed.
+                Regenerate to adapt your plan?
+              </>
+            )}
           </span>
           <div className="today-realignment-actions">
             <button

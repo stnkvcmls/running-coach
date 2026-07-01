@@ -1289,6 +1289,11 @@ Rules:
 - Anchor pace targets to the athlete's threshold pace if available.
 - Distribute load progressively: build 2 weeks, recover 1 week, then race-specific or peak.
 - Account for any upcoming races as goal events (taper if race is within 3 weeks).
+- When a "Race Periodization Directives" section is present in the athlete context, the
+  per-week volume/intensity caps listed there are mandatory and override the generic
+  progressive-build, adherence, and strength rules above for the specific weeks listed —
+  do not increase volume during a listed RACE WEEK, TAPER, or RECOVERY week even if
+  adherence has been excellent.
 - Respect injury history — avoid high-impact volume if relevant injuries are listed.
 - Strength & cross-training:
   * Include 1–2 `strength` sessions per week during base and build phases; 0–1 during taper
@@ -1508,8 +1513,152 @@ def _build_plan_adherence_context(
     return "\n".join(lines)
 
 
+# Taper/recovery length (in weeks) by race distance category — the closer
+# categories to a marathon need longer taper and recovery windows.
+_TAPER_WEEKS_BY_CATEGORY = {"marathon": 3, "half": 2, "10k": 1, "short": 1}
+_RECOVERY_WEEKS_BY_CATEGORY = {"marathon": 2, "half": 2, "10k": 1, "short": 1}
+
+_RACE_WEEK_GUIDANCE = (
+    "cap weekly volume at ~40-50% of a normal build week; only easy shakeout runs "
+    "plus short race-pace strides; no hard efforts within 4 days of race day"
+)
+_TAPER_GUIDANCE = {
+    1: (
+        "final taper week — target ~65-75% of peak weekly volume, cut the long run "
+        "to ~50-60% of its peak length, one short race-pace tune-up early in the week, "
+        "nothing hard in the final 4 days"
+    ),
+    2: (
+        "target ~80-85% of peak weekly volume, begin trimming the long run, keep one "
+        "quality session but shorten it"
+    ),
+    3: (
+        "target ~85-90% of peak weekly volume, start easing off big long runs while "
+        "keeping intensity"
+    ),
+}
+_RECOVERY_GUIDANCE = {
+    1: (
+        "days 1-3 rest or easy cross-training only; days 4-7 easy running at ~30-40% "
+        "of the pre-race weekly volume; no quality sessions"
+    ),
+    2: (
+        "~55-70% of the pre-race weekly volume, still easy/moderate only, no quality "
+        "sessions until this week is complete"
+    ),
+}
+
+
+def _race_distance_category(distance_m: float | None) -> str:
+    """Classify a race distance into a taper/recovery category.
+
+    marathon >=30km, half >=18km, 10k >=8km, else short (5K or unknown distance).
+    """
+    if not distance_m:
+        return "short"
+    if distance_m >= 30000:
+        return "marathon"
+    if distance_m >= 18000:
+        return "half"
+    if distance_m >= 8000:
+        return "10k"
+    return "short"
+
+
+def _build_race_periodization_context(
+    db: Session, week_start: date, plan_weeks: int, user_id: int = DEFAULT_USER_ID
+) -> str | None:
+    """Deterministic taper/recovery directives for each week of the plan.
+
+    Scans tracked races (GarminCalendarEvent, event_type="race") in a window
+    bracketing the plan and, for every plan week that falls in a race week, its
+    taper, or its recovery block, emits a mandatory volume/intensity directive
+    scaled by race distance. Weeks with no nearby race get no directive, leaving
+    the generic progression rules in the system prompt in charge.
+    """
+    window_start = week_start - timedelta(days=21)
+    window_end = week_start + timedelta(days=7 * plan_weeks + 21)
+    races = (
+        db.query(GarminCalendarEvent)
+        .filter(
+            GarminCalendarEvent.user_id == user_id,
+            GarminCalendarEvent.event_type == "race",
+            GarminCalendarEvent.date >= window_start,
+            GarminCalendarEvent.date <= window_end,
+        )
+        .order_by(GarminCalendarEvent.date.asc())
+        .all()
+    )
+    if not races:
+        return None
+
+    lines: list[str] = []
+    for week_idx in range(plan_weeks):
+        w_start = week_start + timedelta(days=7 * week_idx)
+        w_end = w_start + timedelta(days=6)
+
+        race_week = next((r for r in races if w_start <= r.date <= w_end), None)
+        if race_week:
+            priority = f" (Priority {race_week.priority})" if race_week.priority else ""
+            lines.append(
+                f"- Week {week_idx + 1} ({w_start}–{w_end}): RACE WEEK — "
+                f"{race_week.title or 'race'}{priority} on {race_week.date}. "
+                f"{_RACE_WEEK_GUIDANCE}."
+            )
+            continue
+
+        # Recovery takes priority over taper (safety first) when both could apply.
+        recovery_hit: tuple[GarminCalendarEvent, int] | None = None
+        for r in races:
+            if r.date >= w_start:
+                continue
+            weeks_since = -(-(w_start - r.date).days // 7)  # ceil division
+            category = _race_distance_category(r.distance_m)
+            if 1 <= weeks_since <= _RECOVERY_WEEKS_BY_CATEGORY[category]:
+                if recovery_hit is None or weeks_since < recovery_hit[1]:
+                    recovery_hit = (r, weeks_since)
+        if recovery_hit:
+            r, weeks_since = recovery_hit
+            guidance = _RECOVERY_GUIDANCE.get(weeks_since, _RECOVERY_GUIDANCE[1])
+            lines.append(
+                f"- Week {week_idx + 1} ({w_start}–{w_end}): RECOVERY (week "
+                f"{weeks_since} post-race) — after {r.title or 'race'} on {r.date}. "
+                f"{guidance}."
+            )
+            continue
+
+        taper_hit: tuple[GarminCalendarEvent, int] | None = None
+        for r in races:
+            if r.date <= w_end:
+                continue
+            weeks_before = -(-(r.date - w_end).days // 7)  # ceil division
+            category = _race_distance_category(r.distance_m)
+            if 1 <= weeks_before <= _TAPER_WEEKS_BY_CATEGORY[category]:
+                if taper_hit is None or weeks_before < taper_hit[1]:
+                    taper_hit = (r, weeks_before)
+        if taper_hit:
+            r, weeks_before = taper_hit
+            guidance = _TAPER_GUIDANCE.get(weeks_before, _TAPER_GUIDANCE[1])
+            plural = "s" if weeks_before != 1 else ""
+            lines.append(
+                f"- Week {week_idx + 1} ({w_start}–{w_end}): TAPER ({weeks_before} "
+                f"week{plural} out) — {r.title or 'race'} on {r.date}. {guidance}."
+            )
+
+    if not lines:
+        return None
+    return (
+        "## Race Periodization Directives (mandatory — override default "
+        "progression for these weeks)\n" + "\n".join(lines)
+    )
+
+
 def _build_plan_context(
-    db: Session, reference_date: date, user_id: int = DEFAULT_USER_ID
+    db: Session,
+    reference_date: date,
+    user_id: int = DEFAULT_USER_ID,
+    week_start: date | None = None,
+    plan_weeks: int = 4,
 ) -> str:
     """Build context string for plan generation (profile + load + recent history)."""
     sections: list[str] = [f"Today's date: {reference_date}"]
@@ -1558,20 +1707,20 @@ def _build_plan_context(
     # Weekly volume last 8 weeks
     weeks = []
     for w in range(8):
-        week_start = reference_date - timedelta(days=reference_date.weekday() + 7 * w)
-        week_end = week_start + timedelta(days=7)
+        vol_week_start = reference_date - timedelta(days=reference_date.weekday() + 7 * w)
+        vol_week_end = vol_week_start + timedelta(days=7)
         result = (
             db.query(func.count(Activity.id), func.sum(Activity.distance_m))
             .filter(
                 Activity.user_id == user_id,
-                Activity.started_at >= datetime.combine(week_start, datetime.min.time()),
-                Activity.started_at < datetime.combine(week_end, datetime.min.time()),
+                Activity.started_at >= datetime.combine(vol_week_start, datetime.min.time()),
+                Activity.started_at < datetime.combine(vol_week_end, datetime.min.time()),
             )
             .first()
         )
         count, dist = result
         if count and count > 0:
-            weeks.append(f"- Week of {week_start}: {count} runs, {(dist or 0) / 1000:.1f} km")
+            weeks.append(f"- Week of {vol_week_start}: {count} runs, {(dist or 0) / 1000:.1f} km")
     if weeks:
         sections.append("## Recent Weekly Volume\n" + "\n".join(weeks))
 
@@ -1601,6 +1750,14 @@ def _build_plan_context(
                 f"({days_until} days away){priority}"
             )
         sections.append("## Upcoming Races\n" + "\n".join(race_lines))
+
+    # Deterministic taper/recovery directives for this plan's weeks
+    resolved_week_start = week_start or _next_monday(reference_date)
+    periodization_ctx = _build_race_periodization_context(
+        db, resolved_week_start, plan_weeks, user_id
+    )
+    if periodization_ctx:
+        sections.append(periodization_ctx)
 
     return "\n\n".join(sections)
 
@@ -1700,7 +1857,13 @@ def detect_plan_realignment(
         .order_by(TrainingPlan.generated_at.desc())
         .first()
     )
-    empty = {"should_prompt": False, "missed_count": 0, "total_scheduled": 0, "missed_sessions": []}
+    empty = {
+        "should_prompt": False,
+        "missed_count": 0,
+        "total_scheduled": 0,
+        "missed_sessions": [],
+        "race_note": None,
+    }
     if not plan:
         return empty
 
@@ -1746,11 +1909,38 @@ def detect_plan_realignment(
                 "target_distance_km": plan_day.target_distance_m / 1000 if plan_day.target_distance_m else None,
             })
 
+    # Race-aware realignment: a race that completed after this plan was
+    # generated means the plan predates it and won't reflect a recovery block.
+    race_note = None
+    completed_race = (
+        db.query(GarminCalendarEvent)
+        .filter(
+            GarminCalendarEvent.user_id == user_id,
+            GarminCalendarEvent.event_type == "race",
+            GarminCalendarEvent.date >= plan.generated_at.date(),
+            GarminCalendarEvent.date < reference_date,
+        )
+        .order_by(GarminCalendarEvent.date.desc())
+        .first()
+    )
+    if completed_race:
+        category = _race_distance_category(completed_race.distance_m)
+        recovery_days = _RECOVERY_WEEKS_BY_CATEGORY[category] * 7
+        if (reference_date - completed_race.date).days <= recovery_days:
+            race_note = (
+                f"Your plan predates {completed_race.title or 'your race'} on "
+                f"{completed_race.date} — regenerate to apply a recovery block."
+            )
+
     missed_count = len(missed_sessions)
     return {
-        "should_prompt": missed_count >= _REALIGNMENT_MISSED_THRESHOLD and not dismissed,
+        "should_prompt": (
+            (missed_count >= _REALIGNMENT_MISSED_THRESHOLD or race_note is not None)
+            and not dismissed
+        ),
         "missed_count": missed_count,
         "total_scheduled": len(past_days),
+        "race_note": race_note,
         "missed_sessions": missed_sessions,
     }
 
@@ -1770,7 +1960,7 @@ def generate_training_plan(
         week_start = _next_monday(ref)
 
         try:
-            context = _build_plan_context(db, ref, user_id)
+            context = _build_plan_context(db, ref, user_id, week_start=week_start)
             provider, model = _get_ai_config(db, user_id)
 
             plan_prompt = (

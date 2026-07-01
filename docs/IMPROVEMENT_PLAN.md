@@ -225,17 +225,29 @@ not fuel. Builds on profile + weather data already present.
 **Files:** new `app/nutrition.py` (targets model), `app/ai_coach.py` (plan/long-run
 context), `app/api.py`, `frontend/src/components/workout-detail/*` + `plan/*` + types.
 
-#### P2-2 · Post-race recovery & race-aware taper automation
-**What:** Use the `Race` / Garmin race calendar we already track to auto-shape the
-plan around key races: a **taper** ramp into an A-race and a structured **recovery
-block** after it (reduced volume, easy/cross days), folded into plan generation and
-realignment rather than left to the athlete.
+#### P2-2 · Post-race recovery & race-aware taper automation ✅ DONE (2026-07-01)
+**What:** Use the Garmin race calendar we already track (`GarminCalendarEvent`,
+`event_type="race"`, with `priority`/`distance_m`) to auto-shape the plan around key
+races: a **taper** ramp into a race and a structured **recovery block** after it
+(reduced volume, easy/cross days), folded into plan generation and realignment rather
+than left to the athlete.
 **Rationale:** Runna is adding post-race recovery setup; tapering/recovery is core
 periodization we don't automate despite knowing every race date and priority. Sharpens
 the closed-loop plan around the moments that matter most.
 **Effort:** M.
-**Files:** `app/ai_coach.py` (plan prompt/schema + realignment around race dates),
-possibly `app/training_load.py` (recovery-load shaping), `frontend/src/components/plan/*`.
+**Files:** `app/ai_coach.py` (`_build_race_periodization_context` computes
+deterministic, distance-scaled RACE WEEK / TAPER (1-3 wks out) / RECOVERY (1-2 wks
+post-race) directives, injected into `_build_plan_context` as a mandatory
+"Race Periodization Directives" section that `generate_training_plan` picks up on
+every regeneration — both the weekly cron and the realignment "Regenerate" path;
+`detect_plan_realignment` also flags `should_prompt`/`race_note` when a tracked race
+completed after the active plan was generated and is still within its recovery
+window, even with zero missed sessions), `app/schemas.py`
+(`PlanRealignmentStatus.race_note`), `app/api.py` (realignment-status endpoint),
+`frontend/src/api/types.ts`, `frontend/src/components/plan/PlanView.tsx`,
+`frontend/src/components/today/TodayView.tsx` (both realignment banners surface
+`race_note`), `tests/test_ai_coach.py` (10 new tests), `tests/test_api_endpoints.py`
+(2 new tests).
 
 #### P2-3 · Explicit Running Stress Balance guidance ✅ DONE (2026-07-01)
 **What:** Promote the TSB/ACWR we already compute into an explicit
