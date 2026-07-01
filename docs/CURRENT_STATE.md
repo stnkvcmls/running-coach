@@ -241,9 +241,10 @@ Mobile-first SPA with bottom navigation and an expandable calendar. Routes:
   falls back to a synthetic dev user, so local runs and the test suite work
   without Cloudflare.
 - A **startup security guard** (`_check_security_config` in `app/main.py`) logs a
-  prominent `CRITICAL` warning when `auth_enabled=False` and `bind_host` is not a
-  loopback address — the case where an unauthenticated instance would be publicly
-  readable/writable.
+  prominent `CRITICAL` warning and **refuses to start** when `auth_enabled=False`
+  and `bind_host` is not a loopback address — the case where an unauthenticated
+  instance would be publicly readable/writable. `ALLOW_INSECURE_BIND=true` opts
+  out of the refusal (warning still logs) for trusted, firewalled networks.
 - All API queries and compute paths are scoped by `user_id`; `DEFAULT_USER_ID = 1`
   is the bootstrap account that unscoped/test writes default to. The scheduler
   fans each job out across all Garmin-connected users, isolating per-user
@@ -341,11 +342,10 @@ intentionally absent.
 
 ### Single Bootstrap Tenant in Practice
 The multi-user plumbing (auth, per-user scoping, per-user Garmin credentials) is
-in place, and a startup guard now warns on unauthenticated public binds, but the
-common deployment is still single-tenant (env `GARMIN_EMAIL/PASSWORD` seeds user
-#1, and `auth_enabled` defaults to `False`). The guard *warns* rather than refuses
-to start, so a misconfigured public instance with auth disabled would still leak
-all data.
+in place, and a startup guard now refuses to start on unauthenticated public
+binds (opt-out via `ALLOW_INSECURE_BIND=true`), but the common deployment is
+still single-tenant (env `GARMIN_EMAIL/PASSWORD` seeds user #1, and
+`auth_enabled` defaults to `False`).
 
 ### AI Output Still Model-Dependent
 Plan generation now uses structured output with a fence-stripping fallback, and the

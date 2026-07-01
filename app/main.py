@@ -30,13 +30,15 @@ _LOOPBACK_HOSTS: frozenset[str] = frozenset({"127.0.0.1", "::1", "localhost"})
 
 
 def _check_security_config() -> None:
-    """Warn loudly when auth is disabled on a non-loopback bind address.
+    """Refuse to start when auth is disabled on a non-loopback bind address.
 
     Auth-disabled mode trusts a synthetic dev user for every request — anyone
     who can reach the socket gets full data access.  That is fine on loopback
     (only local processes can connect) but catastrophic on 0.0.0.0 or any
-    public interface.  This guard fires once at startup so the warning appears
-    prominently in logs and container output.
+    public interface.  This guard fires once at startup so the unsafe
+    combination is caught before the app ever accepts a request; set
+    ALLOW_INSECURE_BIND=true to explicitly opt out (e.g. a trusted, firewalled
+    private network) and downgrade this back to a warning.
     """
     if not settings.auth_enabled and settings.bind_host not in _LOOPBACK_HOSTS:
         logger.critical(
@@ -47,9 +49,16 @@ def _check_security_config() -> None:
             "  All user data is publicly readable and writable.\n"
             "  Set AUTH_ENABLED=true (with Cloudflare Access) or restrict\n"
             "  BIND_HOST to 127.0.0.1 before exposing this instance.\n"
+            "  Refusing to start. Set ALLOW_INSECURE_BIND=true to override.\n"
             "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!",
             settings.bind_host,
         )
+        if not settings.allow_insecure_bind:
+            raise RuntimeError(
+                f"Refusing to start: auth_enabled=False and bind_host={settings.bind_host!r} "
+                "(non-loopback). Set AUTH_ENABLED=true or BIND_HOST=127.0.0.1, or set "
+                "ALLOW_INSECURE_BIND=true to override."
+            )
 
 _libc = None
 
