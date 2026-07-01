@@ -1302,6 +1302,7 @@ def api_get_realignment_status(
             )
             for s in result["missed_sessions"]
         ],
+        race_note=result["race_note"],
     )
 
 

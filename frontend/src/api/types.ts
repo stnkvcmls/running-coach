@@ -494,6 +494,7 @@ export interface PlanRealignmentStatus {
   missed_count: number
   total_scheduled: number
   missed_sessions: MissedPlanSession[]
+  race_note: string | null
 }
 
 export interface PerformanceCurvePoint {

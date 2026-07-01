@@ -626,6 +626,105 @@ def test_build_plan_context_no_adherence_when_no_plan(db):
     assert "## Current Plan Adherence" not in context
 
 
+# --- _race_distance_category / _build_race_periodization_context (P2-2) ---
+
+def test_race_distance_category_thresholds():
+    assert ai_coach._race_distance_category(42195) == "marathon"
+    assert ai_coach._race_distance_category(21097) == "half"
+    assert ai_coach._race_distance_category(10000) == "10k"
+    assert ai_coach._race_distance_category(5000) == "short"
+    assert ai_coach._race_distance_category(None) == "short"
+
+
+def test_periodization_no_races_returns_none(db):
+    result = ai_coach._build_race_periodization_context(db, date(2026, 6, 15), 4)
+    assert result is None
+
+
+def test_periodization_race_week_directive(db):
+    db.add(GarminCalendarEvent(
+        garmin_id="r1", event_type="race", date=date(2026, 6, 20),
+        title="City 10K", distance_label="10K", distance_m=10000, priority="B",
+    ))
+    db.commit()
+
+    result = ai_coach._build_race_periodization_context(db, date(2026, 6, 15), 4)
+
+    assert result is not None
+    assert "RACE WEEK" in result
+    assert "City 10K" in result
+    assert "(Priority B)" in result
+    assert "Week 1" in result
+
+
+def test_periodization_marathon_taper_three_weeks(db):
+    # Marathon on a Saturday 3 plan-weeks into the window (week 4 of the plan).
+    db.add(GarminCalendarEvent(
+        garmin_id="r2", event_type="race", date=date(2026, 7, 4),
+        title="City Marathon", distance_label="Marathon", distance_m=42195, priority="A",
+    ))
+    db.commit()
+
+    result = ai_coach._build_race_periodization_context(db, date(2026, 6, 8), 4)
+
+    assert result is not None
+    assert "Week 1" in result and "TAPER (3 weeks out)" in result
+    assert "Week 2" in result and "TAPER (2 weeks out)" in result
+    assert "Week 3" in result and "TAPER (1 week out)" in result
+    assert "Week 4" in result and "RACE WEEK" in result
+
+
+def test_periodization_short_race_taper_one_week_only(db):
+    # 5K race two weeks into the plan window — short races only taper 1 week out.
+    db.add(GarminCalendarEvent(
+        garmin_id="r3", event_type="race", date=date(2026, 6, 27),
+        title="Parkrun 5K", distance_label="5K", distance_m=5000, priority="C",
+    ))
+    db.commit()
+
+    result = ai_coach._build_race_periodization_context(db, date(2026, 6, 8), 4)
+
+    assert result is not None
+    # Week 1 is too far out for a short race's 1-week taper window, so it gets
+    # no directive at all.
+    assert "- Week 1 (" not in result
+    assert "- Week 2 (" in result and "TAPER (1 week out)" in result
+    assert "- Week 3 (" in result and "RACE WEEK" in result
+
+
+def test_periodization_marathon_recovery_two_weeks(db):
+    # Marathon 3 days before the plan window starts.
+    db.add(GarminCalendarEvent(
+        garmin_id="r4", event_type="race", date=date(2026, 6, 5),
+        title="Spring Marathon", distance_label="Marathon", distance_m=42195,
+    ))
+    db.commit()
+
+    result = ai_coach._build_race_periodization_context(db, date(2026, 6, 8), 4)
+
+    assert result is not None
+    assert "- Week 1 (" in result and "RECOVERY (week 1 post-race)" in result
+    assert "- Week 2 (" in result and "RECOVERY (week 2 post-race)" in result
+    # Marathon recovery caps out at 2 weeks — weeks 3 and 4 get no directive.
+    assert "- Week 3 (" not in result
+    assert "- Week 4 (" not in result
+
+
+def test_build_plan_context_includes_periodization_directives(db):
+    db.add(GarminCalendarEvent(
+        garmin_id="r5", event_type="race", date=date(2026, 6, 20),
+        title="City 10K", distance_label="10K", distance_m=10000,
+    ))
+    db.commit()
+
+    context = ai_coach._build_plan_context(
+        db, date(2026, 6, 15), week_start=date(2026, 6, 15), plan_weeks=4
+    )
+
+    assert "## Race Periodization Directives" in context
+    assert "RACE WEEK" in context
+
+
 # --- detect_plan_realignment ---
 
 def _seed_plan_with_days(db, plan_start, days_config):
@@ -741,6 +840,76 @@ def test_detect_realignment_expired_dismiss_prompts(db):
     db.commit()
     result = ai_coach.detect_plan_realignment(db, ref)
     assert result["should_prompt"] is True
+
+
+# --- detect_plan_realignment: race-aware (P2-2) ---
+
+def test_detect_realignment_post_race_prompts_without_missed_sessions(db):
+    ref = date(2026, 6, 21)
+    _seed_plan_with_days(db, date(2026, 6, 16), [
+        {"date": date(2026, 6, 17), "workout_type": "easy", "dist_m": 8000},
+    ])
+    db.add(Activity(
+        garmin_id=601, name="Easy Run", activity_type="running",
+        started_at=datetime(2026, 6, 17, 8, 0), distance_m=8000,
+    ))
+    # Race completed after the plan was generated (generated_at=2026-06-01).
+    db.add(GarminCalendarEvent(
+        garmin_id="race1", event_type="race", date=date(2026, 6, 18),
+        title="City 10K", distance_label="10K", distance_m=10000,
+    ))
+    db.commit()
+
+    result = ai_coach.detect_plan_realignment(db, ref)
+
+    assert result["missed_count"] == 0
+    assert result["should_prompt"] is True
+    assert result["race_note"] is not None
+    assert "City 10K" in result["race_note"]
+
+
+def test_detect_realignment_no_race_note_when_race_predates_plan(db):
+    ref = date(2026, 6, 21)
+    _seed_plan_with_days(db, date(2026, 6, 16), [
+        {"date": date(2026, 6, 17), "workout_type": "easy", "dist_m": 8000},
+    ])
+    db.add(Activity(
+        garmin_id=602, name="Easy Run", activity_type="running",
+        started_at=datetime(2026, 6, 17, 8, 0), distance_m=8000,
+    ))
+    # Race happened before the plan was even generated — already accounted for.
+    db.add(GarminCalendarEvent(
+        garmin_id="race2", event_type="race", date=date(2026, 5, 20),
+        title="Old Race", distance_label="10K", distance_m=10000,
+    ))
+    db.commit()
+
+    result = ai_coach.detect_plan_realignment(db, ref)
+
+    assert result["should_prompt"] is False
+    assert result["race_note"] is None
+
+
+def test_detect_realignment_no_race_note_outside_recovery_window(db):
+    ref = date(2026, 6, 21)
+    _seed_plan_with_days(db, date(2026, 6, 16), [
+        {"date": date(2026, 6, 17), "workout_type": "easy", "dist_m": 8000},
+    ])
+    db.add(Activity(
+        garmin_id=603, name="Easy Run", activity_type="running",
+        started_at=datetime(2026, 6, 17, 8, 0), distance_m=8000,
+    ))
+    # A 5K's recovery window is 1 week; 12 days out is past it.
+    db.add(GarminCalendarEvent(
+        garmin_id="race3", event_type="race", date=date(2026, 6, 9),
+        title="Parkrun", distance_label="5K", distance_m=5000,
+    ))
+    db.commit()
+
+    result = ai_coach.detect_plan_realignment(db, ref)
+
+    assert result["should_prompt"] is False
+    assert result["race_note"] is None
 
 
 # --- generate_training_plan – P1-3 structured output ---

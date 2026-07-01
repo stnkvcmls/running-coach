@@ -171,8 +171,12 @@ function RealignmentBanner({ onJobEnqueued }: { onJobEnqueued: (jobId: number) =
       <AlertTriangle size={16} className="realignment-icon" />
       <div className="realignment-body">
         <span className="realignment-msg">
-          {status.missed_count} planned session{status.missed_count !== 1 ? 's' : ''} missed.
-          Regenerate to adapt your plan?
+          {status.race_note ?? (
+            <>
+              {status.missed_count} planned session{status.missed_count !== 1 ? 's' : ''} missed.
+              Regenerate to adapt your plan?
+            </>
+          )}
         </span>
         <div className="realignment-actions">
           <button

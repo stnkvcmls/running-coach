@@ -645,6 +645,7 @@ class PlanRealignmentStatus(BaseModel):
     missed_count: int
     total_scheduled: int
     missed_sessions: list[MissedPlanSession] = []
+    race_note: str | None = None
 
 
 class PlanRealignmentRequest(BaseModel):
