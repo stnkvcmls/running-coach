@@ -785,3 +785,80 @@ def test_api_post_chat_plain_text_has_no_actions(client, db, patch_db_session, m
     resp2 = client.get("/api/v1/chat")
     assistant_entry = [m for m in resp2.json()["messages"] if m["role"] == "assistant"][-1]
     assert assistant_entry["actions"] is None
+
+
+# --- /races/{id}/pacing terrain strategy ---
+
+def _elevation_details(samples: list[tuple[float, float]]) -> str:
+    """Build a minimal Garmin details payload (distance, elevation) as laps_json."""
+    descriptors = [
+        {"metricsIndex": 0, "key": "sumDistance"},
+        {"metricsIndex": 1, "key": "directElevation"},
+    ]
+    rows = [{"metrics": [dist, elev]} for dist, elev in samples]
+    return json.dumps({"metricDescriptors": descriptors, "activityDetailMetrics": rows})
+
+
+def _hilly_10k_samples() -> list[tuple[float, float]]:
+    # Climb for the first half, descend back down for the second half.
+    return [(float(i * 500), (i * 50.0 if i <= 10 else (20 - i) * 50.0)) for i in range(21)]
+
+
+def _add_race(db, **kw):
+    defaults = dict(
+        garmin_id="race-1", event_type="race", date=date(2026, 10, 11),
+        title="Test 10K", distance_m=10000.0, distance_label="10K",
+        goal_time_sec=2400,
+    )
+    defaults.update(kw)
+    race = GarminCalendarEvent(**defaults)
+    db.add(race)
+    db.commit()
+    db.refresh(race)
+    return race
+
+
+def test_race_pacing_terrain_uses_matched_activity(client, db):
+    race = _add_race(db)
+    act = _add_activity(
+        db, datetime(2026, 5, 1, 7, 0),
+        distance_m=10000, name="Hilly 10K",
+        laps_json=_elevation_details(_hilly_10k_samples()),
+    )
+
+    resp = client.get(f"/api/v1/races/{race.id}/pacing?strategy=terrain")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["strategy"] == "terrain"
+    assert body["course_activity_id"] == act.id
+    assert body["course_activity_name"] == "Hilly 10K"
+    # Early (uphill) splits should be slower than late (downhill) splits.
+    assert body["splits"][0]["target_pace_min_km"] > body["splits"][-1]["target_pace_min_km"]
+    assert body["splits"][0]["grade_pct"] is not None
+
+
+def test_race_pacing_terrain_no_matching_activity_422(client, db):
+    race = _add_race(db)
+    resp = client.get(f"/api/v1/races/{race.id}/pacing?strategy=terrain")
+    assert resp.status_code == 422
+    assert "terrain profile" in resp.json()["detail"].lower()
+
+
+def test_race_pacing_terrain_ignores_activity_without_elevation_stream(client, db):
+    race = _add_race(db)
+    _add_activity(db, datetime(2026, 5, 1, 7, 0), distance_m=10000, laps_json=None)
+    resp = client.get(f"/api/v1/races/{race.id}/pacing?strategy=terrain")
+    assert resp.status_code == 422
+
+
+def test_race_pacing_even_strategy_has_no_course_activity(client, db):
+    race = _add_race(db)
+    _add_activity(
+        db, datetime(2026, 5, 1, 7, 0), distance_m=10000,
+        laps_json=_elevation_details(_hilly_10k_samples()),
+    )
+    resp = client.get(f"/api/v1/races/{race.id}/pacing?strategy=even")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["course_activity_id"] is None
+    assert all(s["grade_pct"] is None for s in body["splits"])

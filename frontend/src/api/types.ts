@@ -612,6 +612,7 @@ export interface PacingSplit {
   target_pace_min_km: number
   split_time_sec: number
   cumulative_time_sec: number
+  grade_pct: number | null
 }
 
 export interface PacingStrategyResponse {
@@ -622,11 +623,13 @@ export interface PacingStrategyResponse {
   race_date: string
   target_time_sec: number
   target_pace_min_km: number
-  strategy: string        // "even" | "negative_split"
+  strategy: string        // "even" | "negative_split" | "terrain"
   split_unit: string      // "km" | "mile"
   splits: PacingSplit[]
   predicted_time_sec: number | null
   source: string          // "goal" | "predicted" | "custom"
+  course_activity_id: number | null
+  course_activity_name: string | null
 }
 
 export interface PacingPushRequest {

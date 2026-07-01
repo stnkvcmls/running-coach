@@ -154,7 +154,7 @@ def _clamp(v, lo: float, hi: float) -> float | None:
     return float(v)
 
 
-def _minetti_factor(grade: float) -> float:
+def minetti_factor(grade: float) -> float:
     """Flat-equivalent speed multiplier for a running gradient ``grade``.
 
     Ratio of Minetti's energy cost of running at ``grade`` to the flat cost, so
@@ -194,7 +194,7 @@ def grade_adjusted_speed(
         if dd <= 0:
             continue
         grade = (e1 - e0) / dd
-        out[i] = s * _minetti_factor(grade)
+        out[i] = s * minetti_factor(grade)
     return out
 
 

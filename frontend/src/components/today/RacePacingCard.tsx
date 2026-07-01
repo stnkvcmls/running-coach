@@ -18,17 +18,22 @@ function formatSplitDist(distM: number, splitUnit: string): string {
   return distM >= 950 ? `${(distM / 1000).toFixed(0)} km` : `${Math.round(distM)} m`
 }
 
+function formatGrade(gradePct: number): string {
+  const sign = gradePct > 0 ? '+' : ''
+  return `${sign}${gradePct.toFixed(1)}%`
+}
+
 interface Props {
   race: RaceInfo
 }
 
 export default function RacePacingCard({ race }: Props) {
   const [expanded, setExpanded] = useState(false)
-  const [strategy, setStrategy] = useState<'even' | 'negative_split'>('even')
+  const [strategy, setStrategy] = useState<'even' | 'negative_split' | 'terrain'>('even')
   const [splitUnit] = useState<'km' | 'mile'>('km')
   const [pushed, setPushed] = useState(false)
 
-  const { data: plan, isLoading, isError } = useRacePacing(race.id, {
+  const { data: plan, isLoading, isError, error } = useRacePacing(race.id, {
     strategy,
     splitUnit,
   })
@@ -69,13 +74,21 @@ export default function RacePacingCard({ race }: Props) {
               >
                 Negative Split
               </button>
+              <button
+                className={`race-pacing-strategy-btn${strategy === 'terrain' ? ' active' : ''}`}
+                onClick={() => setStrategy('terrain')}
+              >
+                Terrain
+              </button>
             </div>
           </div>
 
           {isLoading && <div className="race-pacing-loading">Loading splits…</div>}
           {isError && (
             <div className="race-pacing-error">
-              Unable to generate pacing plan. Set a goal time or sync more runs to build a fitness model.
+              {error instanceof Error && error.message
+                ? error.message
+                : 'Unable to generate pacing plan. Set a goal time or sync more runs to build a fitness model.'}
             </div>
           )}
 
@@ -104,12 +117,19 @@ export default function RacePacingCard({ race }: Props) {
                 </span>
               </div>
 
+              {strategy === 'terrain' && plan.course_activity_name && (
+                <div className="race-pacing-course-note">
+                  Course profile from "{plan.course_activity_name}" — effort held constant over the grade.
+                </div>
+              )}
+
               <div className="race-pacing-table-wrap">
                 <table className="race-pacing-table">
                   <thead>
                     <tr>
                       <th>Split</th>
                       <th>Dist</th>
+                      {strategy === 'terrain' && <th>Grade</th>}
                       <th>Pace</th>
                       <th>Time</th>
                       <th>Cumul.</th>
@@ -120,6 +140,11 @@ export default function RacePacingCard({ race }: Props) {
                       <tr key={s.split_number}>
                         <td>{s.split_number}</td>
                         <td>{formatSplitDist(s.split_distance_m, plan.split_unit)}</td>
+                        {strategy === 'terrain' && (
+                          <td className="race-pacing-grade">
+                            {s.grade_pct != null ? formatGrade(s.grade_pct) : '—'}
+                          </td>
+                        )}
                         <td className="race-pacing-pace">{formatPace(s.target_pace_min_km)}</td>
                         <td>{formatDuration(s.split_time_sec)}</td>
                         <td className="race-pacing-cumul">{formatDuration(s.cumulative_time_sec)}</td>

@@ -738,6 +738,7 @@ class PacingSplit(BaseModel):
     target_pace_min_km: float     # target pace for this split (min/km)
     split_time_sec: float         # time for this split (s)
     cumulative_time_sec: float    # running total (s)
+    grade_pct: float | None = None  # avg grade over this split (terrain strategy only)
 
 
 class PacingStrategyResponse(BaseModel):
@@ -748,11 +749,13 @@ class PacingStrategyResponse(BaseModel):
     race_date: date
     target_time_sec: float
     target_pace_min_km: float
-    strategy: str               # "even" | "negative_split"
+    strategy: str               # "even" | "negative_split" | "terrain"
     split_unit: str             # "km" | "mile"
     splits: list[PacingSplit]
     predicted_time_sec: float | None = None
     source: str                 # "goal" | "predicted" | "custom"
+    course_activity_id: int | None = None    # activity the terrain profile was sourced from
+    course_activity_name: str | None = None
 
 
 class PacingPushRequest(BaseModel):
