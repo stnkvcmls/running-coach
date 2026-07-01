@@ -521,3 +521,52 @@
   color: var(--text-muted);
   font-style: italic;
 }
+
+.plan-fuelling {
+  grid-column: 2;
+  margin-top: 4px;
+}
+
+.plan-fuelling-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-long, #0984e3);
+  background: none;
+  border: 1px solid color-mix(in srgb, var(--color-long, #0984e3) 35%, transparent);
+  border-radius: var(--radius-sm);
+  padding: 4px 9px;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.plan-fuelling-toggle:hover {
+  background: color-mix(in srgb, var(--color-long, #0984e3) 10%, transparent);
+}
+
+.plan-fuelling-body {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin-top: 6px;
+  background: var(--bg-surface, var(--bg-card));
+}
+
+.plan-fuelling-note {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin: 0 0 8px;
+  line-height: 1.4;
+}
+
+.plan-fuelling-stats {
+  display: flex;
+  gap: 12px;
+  font-size: 0.78rem;
+  color: var(--text);
+  font-weight: 500;
+}

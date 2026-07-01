@@ -47,6 +47,7 @@ from app.schemas import (
     DailySummaryDetail,
     DailySummaryResponse,
     FeedbackRequest,
+    FuellingGuidance,
     GarminConnectResult,
     GarminConnectionStatus,
     GarminCredentialsRequest,
@@ -97,6 +98,7 @@ from app import adherence as adherence_mod
 from app import intensity as intensity_mod
 from app import streams as streams_mod
 from app import weather as weather_mod
+from app import nutrition as nutrition_mod
 from app.config import settings as app_settings
 from app.utils import safe_json_loads, parse_activity_charts, parse_activity_route, calculate_age
 
@@ -699,7 +701,33 @@ def api_calendar_event_detail(
     )
     if not event:
         raise HTTPException(status_code=404, detail="Calendar event not found")
-    return _enrich_event_with_steps(event)
+    resp = _enrich_event_with_steps(event)
+
+    if event.event_type == "race":
+        duration_sec = (
+            event.goal_time_sec
+            or event.projected_race_time_sec
+            or event.predicted_race_time_sec
+        )
+        if duration_sec:
+            from app.ai_coach import recent_heat_stress
+
+            profile = (
+                db.query(AthleteProfile)
+                .filter(AthleteProfile.user_id == current_user.id)
+                .first()
+            )
+            heat_stress = recent_heat_stress(db, date.today(), current_user.id)
+            guidance = nutrition_mod.compute_fuelling_guidance(
+                duration_sec=float(duration_sec),
+                intensity="race",
+                weight_kg=profile.weight_kg if profile else None,
+                heat_stress=heat_stress,
+            )
+            if guidance:
+                resp.fuelling_guidance = FuellingGuidance(**guidance.__dict__)
+
+    return resp
 
 
 # --- Insights ---
@@ -1134,18 +1162,38 @@ def api_get_aerobic_trends(
 
 # --- Training Plan ---
 
-def _day_to_response(d: TrainingPlanDay) -> TrainingPlanDayResponse:
+def _day_to_response(
+    d: TrainingPlanDay,
+    weight_kg: float | None = None,
+    heat_stress: bool = False,
+) -> TrainingPlanDayResponse:
     """Convert a TrainingPlanDay ORM row to its response schema, hydrating routine."""
     resp = TrainingPlanDayResponse.model_validate(d)
     if d.routine_id:
         raw = get_routine(d.routine_id)
         if raw:
             resp.routine = StrengthRoutine.model_validate(raw)
+    if d.workout_type == "long" and d.target_distance_m and d.target_pace_min_km:
+        duration_sec = (d.target_distance_m / 1000.0) * d.target_pace_min_km * 60.0
+        guidance = nutrition_mod.compute_fuelling_guidance(
+            duration_sec=duration_sec,
+            intensity="long",
+            weight_kg=weight_kg,
+            heat_stress=heat_stress,
+        )
+        if guidance:
+            resp.fuelling_guidance = FuellingGuidance(**guidance.__dict__)
     return resp
 
 
 def _build_plan_response(plan: TrainingPlan, db: Session) -> TrainingPlanResponse:
     """Assemble a TrainingPlanResponse with nested week/day structure."""
+    from app.ai_coach import recent_heat_stress
+
+    profile = db.query(AthleteProfile).filter(AthleteProfile.user_id == plan.user_id).first()
+    weight_kg = profile.weight_kg if profile else None
+    heat_stress = recent_heat_stress(db, date.today(), plan.user_id)
+
     days = (
         db.query(TrainingPlanDay)
         .filter(TrainingPlanDay.plan_id == plan.id, TrainingPlanDay.user_id == plan.user_id)
@@ -1170,7 +1218,7 @@ def _build_plan_response(plan: TrainingPlan, db: Session) -> TrainingPlanRespons
             week_start=week_start_date,
             week_end=week_end_date,
             theme=theme,
-            days=[_day_to_response(d) for d in sorted_days],
+            days=[_day_to_response(d, weight_kg, heat_stress) for d in sorted_days],
         ))
 
     return TrainingPlanResponse(
@@ -1279,7 +1327,10 @@ def api_adapt_plan_day(
         plan_day.target_pace_display = None
     db.commit()
     db.refresh(plan_day)
-    return _day_to_response(plan_day)
+    profile = db.query(AthleteProfile).filter(AthleteProfile.user_id == uid).first()
+    from app.ai_coach import recent_heat_stress
+    heat_stress = recent_heat_stress(db, date.today(), uid)
+    return _day_to_response(plan_day, profile.weight_kg if profile else None, heat_stress)
 
 
 @api_router.get("/training-plan/realignment-status", response_model=PlanRealignmentStatus)

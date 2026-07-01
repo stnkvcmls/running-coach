@@ -69,6 +69,25 @@ export default function WorkoutDetailView() {
             </div>
           </section>
         ) : null}
+
+        {event.fuelling_guidance && (
+          <section className="detail-section">
+            <h3 className="section-title">Fuelling & Hydration</h3>
+            <div className="card workout-detail-fuelling">
+              <p className="workout-detail-fuelling-note">{event.fuelling_guidance.note}</p>
+              <div className="workout-detail-fuelling-stats">
+                <div>
+                  <div className="workout-detail-stat-value">{event.fuelling_guidance.total_carbs_g}g</div>
+                  <div className="workout-detail-stat-label">Total carbs</div>
+                </div>
+                <div>
+                  <div className="workout-detail-stat-value">{event.fuelling_guidance.total_fluid_ml}ml</div>
+                  <div className="workout-detail-stat-label">Total fluid</div>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
       </div>
     </div>
   )

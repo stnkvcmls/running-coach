@@ -196,6 +196,63 @@ def test_format_coach_memory_context_scoped_to_user(db):
     assert ai_coach._format_coach_memory_context(db, 1) == ""
 
 
+# --- recent_heat_stress ---
+
+def test_recent_heat_stress_true_for_hot_run(db):
+    db.add(Activity(
+        garmin_id=901, activity_type="running",
+        started_at=datetime(2026, 6, 15, 7, 0),
+        avg_pace_min_km=5.0,
+        weather_json=json.dumps({"temp": 73.4, "dewPoint": 64.4}),
+    ))
+    db.commit()
+    assert ai_coach.recent_heat_stress(db, date(2026, 6, 17)) is True
+
+
+def test_recent_heat_stress_false_when_no_weather(db):
+    db.add(Activity(
+        garmin_id=902, activity_type="running",
+        started_at=datetime(2026, 6, 15, 7, 0),
+        avg_pace_min_km=5.0,
+    ))
+    db.commit()
+    assert ai_coach.recent_heat_stress(db, date(2026, 6, 17)) is False
+
+
+def test_recent_heat_stress_false_outside_window(db):
+    db.add(Activity(
+        garmin_id=905, activity_type="running",
+        started_at=datetime(2026, 5, 1, 7, 0),
+        avg_pace_min_km=5.0,
+        weather_json=json.dumps({"temp": 73.4, "dewPoint": 64.4}),
+    ))
+    db.commit()
+    assert ai_coach.recent_heat_stress(db, date(2026, 6, 17)) is False
+
+
+def test_recent_heat_stress_scoped_to_user(db):
+    db.add(Activity(
+        user_id=2, garmin_id=903, activity_type="running",
+        started_at=datetime(2026, 6, 15, 7, 0),
+        avg_pace_min_km=5.0,
+        weather_json=json.dumps({"temp": 73.4, "dewPoint": 64.4}),
+    ))
+    db.commit()
+    assert ai_coach.recent_heat_stress(db, date(2026, 6, 17), user_id=1) is False
+
+
+def test_recent_heat_stress_note_reuses_same_data(db):
+    db.add(Activity(
+        garmin_id=904, activity_type="running",
+        started_at=datetime(2026, 6, 15, 7, 0),
+        avg_pace_min_km=5.0,
+        weather_json=json.dumps({"temp": 73.4, "dewPoint": 64.4}),
+    ))
+    db.commit()
+    assert ai_coach.recent_heat_stress(db, date(2026, 6, 17)) is True
+    assert "Recent heat stress" in ai_coach._recent_heat_stress_note(db, date(2026, 6, 17))
+
+
 # --- _extract_summary_and_category ---
 
 def test_extract_summary_from_marker():

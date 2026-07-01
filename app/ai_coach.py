@@ -440,16 +440,14 @@ def _format_coach_memory_context(db: Session, user_id: int) -> str:
     return "## What The Coach Remembers\n" + "\n".join(lines)
 
 
-def _recent_heat_stress_note(
+def _recent_hot_runs(
     db: Session,
     reference_date: date,
     user_id: int = DEFAULT_USER_ID,
-) -> str:
-    """Return a one-line heat-stress note for the readiness section.
+) -> list[str]:
+    """Return descriptions of recent runs with a notable heat penalty (>= 5 s/km).
 
-    Checks the last 3 running activities with weather data. If any had a
-    notable heat penalty (≥ 5 s/km), surface a coaching note so the AI
-    factors environmental load into its recovery assessment.
+    Checks the last 3 running activities with weather data in the past 7 days.
     """
     cutoff = reference_date - timedelta(days=7)
     recent = (
@@ -473,11 +471,38 @@ def _recent_heat_stress_note(
                 hot_runs.append(f"{date_str} (~{int(penalty_sec)} s/km heat penalty)")
         except Exception:
             continue
+    return hot_runs
 
+
+def _recent_heat_stress_note(
+    db: Session,
+    reference_date: date,
+    user_id: int = DEFAULT_USER_ID,
+) -> str:
+    """Return a one-line heat-stress note for the readiness section.
+
+    If any of the last 3 weathered runs had a notable heat penalty, surface a
+    coaching note so the AI factors environmental load into its recovery
+    assessment.
+    """
+    hot_runs = _recent_hot_runs(db, reference_date, user_id)
     if not hot_runs:
         return ""
     runs_str = ", ".join(hot_runs)
     return f"- Recent heat stress: {runs_str} — environmental load may be elevating fatigue"
+
+
+def recent_heat_stress(
+    db: Session,
+    reference_date: date,
+    user_id: int = DEFAULT_USER_ID,
+) -> bool:
+    """Whether any of the last 3 weathered runs (past 7 days) had a notable heat penalty.
+
+    Used to scale fluid targets in fuelling guidance (app/nutrition.py) for
+    upcoming long runs/races, where no direct weather reading exists yet.
+    """
+    return bool(_recent_hot_runs(db, reference_date, user_id))
 
 
 def _build_context(
