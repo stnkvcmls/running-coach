@@ -4,7 +4,7 @@ import json
 from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 
 class ActivitySummary(BaseModel):
@@ -284,6 +284,48 @@ class RaceInfo(BaseModel):
     priority: str | None = None
 
 
+def classify_tsb(tsb: float) -> tuple[str, str]:
+    """Classify Training Stress Balance (form) into a ``(zone_key, label)`` pair."""
+    if tsb > 15:
+        return "very_fresh", "Very fresh — detraining risk"
+    if tsb > 5:
+        return "fresh", "Fresh, tapered"
+    if tsb >= -10:
+        return "neutral", "Neutral — race-ready range"
+    if tsb >= -30:
+        return "productive_fatigue", "Productive training fatigue"
+    return "high_fatigue", "High fatigue — overreaching risk"
+
+
+def classify_acwr(acwr: float) -> tuple[str, str, str]:
+    """Classify ACWR into an explicit Running Stress Balance ``(zone_key, label,
+    recommendation)`` triple — the classic detraining / productive / overreaching
+    read."""
+    if acwr > 1.5:
+        return (
+            "overreaching", "Overreaching — high risk",
+            "ACWR is above 1.5 — significant overreaching and high injury risk. "
+            "Prioritize recovery and avoid hard sessions until the ratio comes down.",
+        )
+    if acwr > 1.3:
+        return (
+            "overreaching", "Overreaching — moderate risk",
+            "ACWR is elevated (1.3–1.5) — moderate injury risk. "
+            "Hold your current load rather than ramping further this week.",
+        )
+    if acwr >= 0.8:
+        return (
+            "productive", "Productive — sweet spot",
+            "ACWR is in the 0.8–1.3 sweet spot — load is well-balanced for fitness "
+            "gains with low injury risk. Keep building at this rate.",
+        )
+    return (
+        "detraining", "Detraining",
+        "ACWR is below 0.8 — recent load is low relative to your base. "
+        "Consider gradually increasing volume to avoid losing fitness.",
+    )
+
+
 class TrainingLoadPoint(BaseModel):
     date: date
     tss: float
@@ -294,6 +336,22 @@ class TrainingLoadPoint(BaseModel):
     ramp_rate_7d: float | None = None  # CTL change over last 7 days
     ramp_rate_28d: float | None = None # CTL change over last 28 days
     injury_risk: str | None = None     # "low" | "moderate" | "high"
+
+    # Explicit Running Stress Balance read, derived from tsb/acwr — see
+    # classify_tsb/classify_acwr above. Always populated from the raw values,
+    # never set directly by callers.
+    form_zone: str | None = None        # "very_fresh" | "fresh" | "neutral" | "productive_fatigue" | "high_fatigue"
+    form_zone_label: str | None = None
+    rsb_zone: str | None = None         # "detraining" | "productive" | "overreaching"
+    rsb_zone_label: str | None = None
+    rsb_recommendation: str | None = None
+
+    @model_validator(mode="after")
+    def _derive_rsb_zones(self) -> "TrainingLoadPoint":
+        self.form_zone, self.form_zone_label = classify_tsb(self.tsb)
+        if self.acwr is not None:
+            self.rsb_zone, self.rsb_zone_label, self.rsb_recommendation = classify_acwr(self.acwr)
+        return self
 
 
 class TrainingReadiness(BaseModel):

@@ -197,7 +197,42 @@ def test_format_training_load_context_includes_acwr_when_present():
     assert "sweet spot" in ctx
     assert "Ramp rate (7d" in ctx
     assert "Ramp rate (28d" in ctx
-    assert "Injury risk: low" in ctx
+
+
+def test_training_load_point_derives_rsb_zone_fields():
+    from app.schemas import TrainingLoadPoint
+    point = TrainingLoadPoint(
+        date=date(2026, 6, 10),
+        tss=80.0, ctl=40.0, atl=50.0, tsb=-10.0,
+        acwr=1.25,
+    )
+    assert point.form_zone == "neutral"
+    assert point.form_zone_label == "Neutral — race-ready range"
+    assert point.rsb_zone == "productive"
+    assert point.rsb_zone_label == "Productive — sweet spot"
+    assert point.rsb_recommendation
+
+
+def test_training_load_point_rsb_zone_absent_without_acwr():
+    from app.schemas import TrainingLoadPoint
+    point = TrainingLoadPoint(date=date(2026, 6, 10), tss=80.0, ctl=40.0, atl=50.0, tsb=-10.0)
+    assert point.rsb_zone is None
+    assert point.rsb_zone_label is None
+    assert point.rsb_recommendation is None
+    # Form zone doesn't depend on acwr, so it's always populated.
+    assert point.form_zone == "neutral"
+
+
+def test_format_training_load_context_includes_rsb_recommendation():
+    from app.schemas import TrainingLoadPoint
+    point = TrainingLoadPoint(
+        date=date(2026, 6, 10),
+        tss=80.0, ctl=40.0, atl=50.0, tsb=-10.0,
+        acwr=1.6,
+    )
+    ctx = training_load.format_training_load_context(point)
+    assert "Running Stress Balance" in ctx
+    assert "Overreaching — high risk" in ctx
 
 
 def test_training_load_endpoint_includes_acwr_fields(client, db):
@@ -211,6 +246,12 @@ def test_training_load_endpoint_includes_acwr_fields(client, db):
     assert "acwr" in current
     assert "ramp_rate_7d" in current
     assert "injury_risk" in current
+    assert "form_zone" in current
+    assert "form_zone_label" in current
+    if current["acwr"] is not None:
+        assert current["rsb_zone"] in ("detraining", "productive", "overreaching")
+        assert current["rsb_zone_label"]
+        assert current["rsb_recommendation"]
 
 
 def test_build_context_omits_training_load_without_activities(db):

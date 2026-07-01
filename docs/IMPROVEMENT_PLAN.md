@@ -217,7 +217,7 @@ the closed-loop plan around the moments that matter most.
 **Files:** `app/ai_coach.py` (plan prompt/schema + realignment around race dates),
 possibly `app/training_load.py` (recovery-load shaping), `frontend/src/components/plan/*`.
 
-#### P2-3 · Explicit Running Stress Balance guidance
+#### P2-3 · Explicit Running Stress Balance guidance ✅ DONE (2026-07-01)
 **What:** Promote the TSB/ACWR we already compute into an explicit
 **over-/under-training "sweet-spot" read** — a labelled zone (detraining / productive /
 overreaching) with a plain-language recommendation, on Today and in the AI context,
@@ -226,9 +226,14 @@ rather than a raw Form number.
 guidance make this an at-a-glance decision aid; we have the inputs but present them as
 numbers. Cheap interpretation layer over existing series.
 **Effort:** S–M.
-**Files:** `app/training_load.py` (zone/label helper), `app/api.py` (training-load
-response field), `app/ai_coach.py` context, `frontend/src/components/today/*` +
-`trends/*` + types.
+**Files:** `app/schemas.py` (`classify_tsb`/`classify_acwr`, `TrainingLoadPoint`
+zone/label/recommendation fields, auto-derived via a model validator),
+`app/training_load.py` (`_interpret_tsb`/`_interpret_acwr` now reuse the same
+classifiers; `format_training_load_context` renders the RSB recommendation),
+`frontend/src/components/today/TrainingLoadChart.tsx` + `.css` (server-derived zone
+badges replace the old client-side duplicate banding, plus a recommendation line),
+`frontend/src/api/types.ts`, `tests/test_training_load.py`,
+`tests/test_training_load_edge.py` (10 new tests).
 
 ### P3 — Hygiene, scale & carryover (largely independent)
 

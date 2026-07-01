@@ -250,6 +250,11 @@ export interface TrainingLoadPoint {
   ramp_rate_7d: number | null
   ramp_rate_28d: number | null
   injury_risk: string | null  // "low" | "moderate" | "high"
+  form_zone: string | null  // "very_fresh" | "fresh" | "neutral" | "productive_fatigue" | "high_fatigue"
+  form_zone_label: string | null
+  rsb_zone: string | null  // "detraining" | "productive" | "overreaching"
+  rsb_zone_label: string | null
+  rsb_recommendation: string | null
 }
 
 export interface TrainingReadiness {

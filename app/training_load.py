@@ -32,7 +32,7 @@ from app.models import (
     DailySummary,
     SyncStatus,
 )
-from app.schemas import TrainingLoadPoint, TrainingReadiness
+from app.schemas import TrainingLoadPoint, TrainingReadiness, classify_acwr, classify_tsb
 
 logger = logging.getLogger(__name__)
 
@@ -423,13 +423,14 @@ def current_load(
 
 def _interpret_tsb(tsb: float) -> str:
     """Plain-language reading of Training Stress Balance (form)."""
-    if tsb > 15:
+    zone, _label = classify_tsb(tsb)
+    if zone == "very_fresh":
         return "very fresh / detraining risk"
-    if tsb > 5:
+    if zone == "fresh":
         return "fresh, tapered"
-    if tsb >= -10:
+    if zone == "neutral":
         return "neutral / race-ready range"
-    if tsb >= -30:
+    if zone == "productive_fatigue":
         return "productive training fatigue"
     return "high fatigue — overreaching risk"
 
@@ -567,11 +568,14 @@ def compute_readiness(
 
 
 def _interpret_acwr(acwr: float) -> str:
-    if acwr > 1.5:
-        return "high injury risk — significant overreaching"
-    if acwr > 1.3:
-        return "moderate risk — monitor fatigue closely"
-    if acwr >= 0.8:
+    zone, _label, _recommendation = classify_acwr(acwr)
+    if zone == "overreaching":
+        return (
+            "high injury risk — significant overreaching"
+            if acwr > 1.5
+            else "moderate risk — monitor fatigue closely"
+        )
+    if zone == "productive":
         return "sweet spot — optimal training zone"
     return "low / detraining risk"
 
@@ -596,6 +600,8 @@ def format_training_load_context(point: TrainingLoadPoint | None) -> str:
         lines.append(f"- Ramp rate (28d CTL change): {point.ramp_rate_28d:+.1f}")
     if point.injury_risk:
         lines.append(f"- Injury risk: {point.injury_risk}")
+    if point.rsb_zone_label and point.rsb_recommendation:
+        lines.append(f"- Running Stress Balance: {point.rsb_zone_label}. {point.rsb_recommendation}")
     return "\n".join(lines)
 
 
