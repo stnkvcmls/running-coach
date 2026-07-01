@@ -129,6 +129,38 @@ def test_format_activity_context_rich_fields():
     assert "(Detailed lap/metric data available)" in text
 
 
+def test_format_activity_context_includes_weather_adjusted_pace():
+    act = Activity(
+        name="Hot Tempo", activity_type="running",
+        avg_pace_min_km=5.0,
+        weather_json=json.dumps({"temperature": 77, "dewPoint": 64}),  # 25C / ~18C
+    )
+    text = ai_coach._format_activity_context(act)
+    assert "Weather:" in text
+    assert "heat penalty" in text
+
+
+def test_format_activity_context_neutral_weather_omits_line():
+    act = Activity(
+        name="Cool Run", activity_type="running",
+        avg_pace_min_km=5.0,
+        weather_json=json.dumps({"temperature": 50}),  # ~10C, no penalty
+    )
+    text = ai_coach._format_activity_context(act)
+    assert "Weather:" not in text
+
+
+def test_format_activity_context_malformed_weather_json_ignored():
+    act = Activity(
+        name="Run", activity_type="running",
+        avg_pace_min_km=5.0,
+        weather_json="not valid json",
+    )
+    text = ai_coach._format_activity_context(act)
+    assert "Weather:" not in text
+    assert "**Run**" in text  # rest of the context still renders
+
+
 # --- _format_daily_context ---
 
 def test_format_daily_context():
@@ -239,6 +271,27 @@ def test_recent_heat_stress_scoped_to_user(db):
     ))
     db.commit()
     assert ai_coach.recent_heat_stress(db, date(2026, 6, 17), user_id=1) is False
+
+
+def test_recent_hot_runs_skips_malformed_weather_without_raising(db):
+    # An activity with unparseable weather_json is treated as "not hot" rather
+    # than raising or polluting the scan; other recent hot runs are unaffected.
+    db.add(Activity(
+        garmin_id=906, activity_type="running",
+        started_at=datetime(2026, 6, 16, 7, 0),
+        avg_pace_min_km=5.0,
+        weather_json="not valid json",
+    ))
+    db.add(Activity(
+        garmin_id=907, activity_type="running",
+        started_at=datetime(2026, 6, 15, 7, 0),
+        avg_pace_min_km=5.0,
+        weather_json=json.dumps({"temp": 73.4, "dewPoint": 64.4}),
+    ))
+    db.commit()
+    hot_runs = ai_coach._recent_hot_runs(db, date(2026, 6, 17))
+    assert len(hot_runs) == 1
+    assert "06/15" in hot_runs[0]
 
 
 def test_recent_heat_stress_note_reuses_same_data(db):
@@ -500,6 +553,26 @@ def test_build_context_full_sections(db):
     assert "Solid aerobic base" in context
     assert "## What The Coach Remembers" in context
     assert "[niggle] knee pain: Sore after long runs." in context
+
+
+def test_build_context_appends_heat_stress_note_to_readiness(db):
+    ref = date(2026, 6, 17)
+    # Today's wellness data so the readiness section is non-empty.
+    db.add(DailySummary(date=ref, sleep_score=80, sleep_seconds=27000, resting_hr=48))
+    # A hot recent run (within 7 days) with a notable heat penalty.
+    db.add(Activity(
+        garmin_id=1, activity_type="running",
+        started_at=datetime(2026, 6, 15, 7, 0), avg_pace_min_km=5.0,
+        weather_json=json.dumps({"temperature": 90, "dewPoint": 80}),
+    ))
+    db.commit()
+
+    context = ai_coach._build_context(db, "activity", "Trigger data", reference_date=ref)
+    assert "## Training Readiness" in context
+    assert "Recent heat stress" in context
+    # The note is folded into the readiness section, not a standalone block.
+    readiness_section = context.split("## Training Readiness", 1)[1]
+    assert "Recent heat stress" in readiness_section.split("\n\n", 1)[0]
 
 
 def test_weekly_review_generates_insight(db, patch_db_session, monkeypatch):
@@ -1378,6 +1451,71 @@ def test_format_upcoming_plan_context_lists_next_7_days(db):
 
 def test_format_upcoming_plan_context_empty_when_no_plan(db):
     assert ai_coach._format_upcoming_plan_context(db, 1) == ""
+
+
+def test_format_upcoming_plan_context_empty_when_no_days_in_window(db):
+    from datetime import timedelta
+    plan = TrainingPlan(generated_at=datetime(2026, 6, 1, tzinfo=timezone.utc), week_start=date(2026, 6, 15), plan_weeks=4)
+    db.add(plan)
+    db.flush()
+    # Plan exists, but its only day is well outside the next-7-days window.
+    db.add(TrainingPlanDay(
+        plan_id=plan.id,
+        day_date=date.today() + timedelta(days=30),
+        day_of_week="X",
+        week_number=1,
+        workout_type="easy",
+        description="Easy 5k",
+    ))
+    db.commit()
+
+    assert ai_coach._format_upcoming_plan_context(db, 1) == ""
+
+
+# --- _build_chat_context ---
+
+def test_build_chat_context_with_activity_id_includes_activity_and_plan(db):
+    from datetime import timedelta
+    act = Activity(
+        garmin_id=1, name="Hot Tempo", activity_type="running",
+        started_at=datetime(2026, 6, 16, 7, 0), distance_m=8000,
+        duration_sec=2400, avg_pace_min_km=5.0,
+        weather_json=json.dumps({"temperature": 90, "dewPoint": 80}),
+    )
+    db.add(act)
+    plan = TrainingPlan(generated_at=datetime(2026, 6, 1, tzinfo=timezone.utc), week_start=date(2026, 6, 15), plan_weeks=4)
+    db.add(plan)
+    db.flush()
+    db.add(TrainingPlanDay(
+        plan_id=plan.id, day_date=date.today() + timedelta(days=1), day_of_week="X",
+        week_number=1, workout_type="easy", description="Easy 5k",
+    ))
+    db.commit()
+    db.refresh(act)
+
+    context = ai_coach._build_chat_context(db, 1, activity_id=act.id)
+    assert "athlete is asking about a specific activity" in context
+    assert "Hot Tempo" in context
+    assert "Weather:" in context  # weather-adjusted pace folded into the activity context
+    assert "Upcoming Plan This Week" in context
+
+
+def test_build_chat_context_activity_id_not_found_falls_back_to_general(db):
+    # activity_id belongs to another user (or doesn't exist) — should fall back
+    # to the general conversational context rather than erroring.
+    other = Activity(user_id=2, garmin_id=1, name="Other's Run", activity_type="running")
+    db.add(other)
+    db.commit()
+    db.refresh(other)
+
+    context = ai_coach._build_chat_context(db, 1, activity_id=other.id)
+    assert "athlete is conversing with the AI running coach" in context
+    assert "Other's Run" not in context
+
+
+def test_build_chat_context_without_activity_id_uses_general_context(db):
+    context = ai_coach._build_chat_context(db, 1)
+    assert "athlete is conversing with the AI running coach" in context
 
 
 # --- _stream_claude tool-use streaming ---

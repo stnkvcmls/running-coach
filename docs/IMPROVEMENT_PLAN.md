@@ -339,9 +339,21 @@ badges replace the old client-side duplicate banding, plus a recommendation line
   `app/main.py` (`_check_security_config` raises unless overridden),
   `tests/test_main.py` (refusal + opt-out coverage), `README.md`,
   `docs/CURRENT_STATE.md`.
-- **P3-5 · Keep the suite green.** New surfaces (chat tool-use, weather, daily
-  adaptation, GPX) need contract/edge tests; preserve the 80% coverage gate (~551
-  backend tests today). **Throughout.** Files: `tests/`.
+- **P3-5 · Keep the suite green.** ✅ DONE (2026-07-01). Audited coverage across the
+  newer surfaces and closed the real contract/edge gaps: `app/weather.py` edge cases
+  (a weather payload with neither a temp nor dew-point key; non-numeric temp/dew-point
+  values), the weather-adjusted-pace line's wiring into `_format_activity_context`
+  (previously only `weather.py` itself was tested in isolation, not its integration
+  into the AI activity context), `_recent_hot_runs`' malformed-weather handling,
+  `_build_context`'s heat-stress note being folded into a non-empty readiness section,
+  `_build_chat_context`'s until-now-untested `activity_id` branch (chat about a
+  specific activity, plus the not-found/other-user fallback), and
+  `_format_upcoming_plan_context`'s "plan exists but no days in the next 7"
+  branch. Daily-adaptation (`app/plan_adaptation.py`, already 100%) and GPX/terrain
+  pacing (`/races/{id}/pacing?strategy=terrain`) already had solid contract coverage
+  and needed no changes. **Throughout.** Files: `tests/test_weather.py` (3 new tests),
+  `tests/test_ai_coach.py` (9 new tests). Suite: 795 backend tests, all green;
+  coverage 84.4% → 84.6% (gate: 80%).
 
 ---
 
