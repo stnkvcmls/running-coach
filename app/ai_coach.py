@@ -21,6 +21,7 @@ from app.models import (
     DEFAULT_USER_ID,
     Activity,
     AthleteProfile,
+    CoachMemory,
     DailySummary,
     GarminCalendarEvent,
     Insight,
@@ -419,6 +420,26 @@ def _format_athlete_profile_context(profile: AthleteProfile, reference_date: dat
     return "## Athlete Profile\n" + "\n".join(lines)
 
 
+# Cap on how many memory entries are injected per turn, so a long history of
+# resolved niggles doesn't crowd out the rest of the context.
+COACH_MEMORY_CONTEXT_LIMIT = 10
+
+
+def _format_coach_memory_context(db: Session, user_id: int) -> str:
+    """Format the athlete's active durable memories as a markdown block."""
+    memories = (
+        db.query(CoachMemory)
+        .filter(CoachMemory.user_id == user_id, CoachMemory.active.is_(True))
+        .order_by(CoachMemory.created_at.desc())
+        .limit(COACH_MEMORY_CONTEXT_LIMIT)
+        .all()
+    )
+    if not memories:
+        return ""
+    lines = [f"- [{m.category}] {m.tag}: {m.note}" for m in memories]
+    return "## What The Coach Remembers\n" + "\n".join(lines)
+
+
 def _recent_heat_stress_note(
     db: Session,
     reference_date: date,
@@ -485,6 +506,11 @@ def _build_context(
         profile_context = _format_athlete_profile_context(profile, reference_date)
         if profile_context:
             sections.insert(1, profile_context)
+
+    # What the coach remembers (durable niggles/constraints/preferences)
+    memory_context = _format_coach_memory_context(db, user_id)
+    if memory_context:
+        sections.insert(min(2, len(sections)), memory_context)
 
     # Auto-derived thresholds — surface only the ones the athlete hasn't set so the
     # AI still has a reference for Critical Power / threshold pace / LTHR.
@@ -2118,6 +2144,14 @@ def _dispatch_chat_tool(
             summary=tag,
             category="setback",
         ))
+        # Also persist as durable coach memory (P1-3) so it stays in context
+        # beyond the last-few-insights window, until resolved or deleted.
+        db.add(CoachMemory(
+            user_id=user_id,
+            category="niggle",
+            tag=tag,
+            note=note,
+        ))
         db.commit()
         return (
             {"status": "recorded"},
@@ -2125,7 +2159,7 @@ def _dispatch_chat_tool(
                 "type": "mark_setback",
                 "status": "recorded",
                 "job_id": None,
-                "summary": f"Noted: {tag}.",
+                "summary": f"Remembered: {tag}.",
             },
         )
 

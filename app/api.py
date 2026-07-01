@@ -18,6 +18,7 @@ from app.models import (
     Activity,
     AthleteProfile,
     ChatMessage,
+    CoachMemory,
     DailySummary,
     GarminCalendarEvent,
     Insight,
@@ -40,6 +41,9 @@ from app.schemas import (
     ChatHistoryResponse,
     ChatMessageResponse,
     ChatRequest,
+    CoachMemoryRequest,
+    CoachMemoryResponse,
+    CoachMemoryUpdateRequest,
     DailySummaryDetail,
     DailySummaryResponse,
     FeedbackRequest,
@@ -1760,6 +1764,79 @@ def api_post_chat(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# --- Coach Memory ---
+
+@api_router.get("/coach-memory", response_model=list[CoachMemoryResponse])
+def api_list_coach_memory(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    memories = (
+        db.query(CoachMemory)
+        .filter(CoachMemory.user_id == current_user.id)
+        .order_by(CoachMemory.created_at.desc())
+        .all()
+    )
+    return memories
+
+
+@api_router.post("/coach-memory", response_model=CoachMemoryResponse)
+def api_create_coach_memory(
+    req: CoachMemoryRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    memory = CoachMemory(
+        user_id=current_user.id,
+        category=req.category,
+        tag=req.tag,
+        note=req.note,
+    )
+    db.add(memory)
+    db.commit()
+    db.refresh(memory)
+    return memory
+
+
+@api_router.put("/coach-memory/{memory_id}", response_model=CoachMemoryResponse)
+def api_update_coach_memory(
+    memory_id: int,
+    req: CoachMemoryUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    memory = (
+        db.query(CoachMemory)
+        .filter(CoachMemory.id == memory_id, CoachMemory.user_id == current_user.id)
+        .first()
+    )
+    if memory is None:
+        raise HTTPException(status_code=404, detail="Memory not found")
+    for key, value in req.model_dump(exclude_unset=True).items():
+        setattr(memory, key, value)
+    db.commit()
+    db.refresh(memory)
+    return memory
+
+
+@api_router.delete("/coach-memory/{memory_id}")
+def api_delete_coach_memory(
+    memory_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    memory = (
+        db.query(CoachMemory)
+        .filter(CoachMemory.id == memory_id, CoachMemory.user_id == current_user.id)
+        .first()
+    )
+    if memory is None:
+        raise HTTPException(status_code=404, detail="Memory not found")
+    db.delete(memory)
+    db.commit()
+    return {"deleted": True}
 
 
 # --- Helpers ---

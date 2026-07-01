@@ -174,7 +174,7 @@ elevation), optional `app/garmin_sync.py` or new parser for GPX, `app/api.py`
 (`/races/{id}/pacing` params + course upload), `frontend/src/components/plan/` or
 `today/` pacing card + types.
 
-#### P1-3 · Persistent athlete memory for the coach
+#### P1-3 · Persistent athlete memory for the coach ✅ DONE (2026-07-01)
 **What:** A durable, user-scoped **coach memory** the AI reads on every analysis and
 chat turn: structured facts the athlete (or the coach, via P0-2 tool-use) records —
 current niggles, life constraints ("marathon training around shift work"),
@@ -186,10 +186,17 @@ worked, how you felt." We persist chat turns but never distill them into durable
 context, so every session re-derives the athlete from metrics alone. Turns the
 conversational coach from stateless Q&A into a relationship.
 **Effort:** M.
-**Files:** `app/models.py` + Alembic (`CoachMemory` / notes table, or structured
-fields), `app/ai_coach.py` (`_build_context` / `_build_chat_context` injection, a
-distill step), `app/api.py` (memory CRUD), `app/schemas.py`,
-`frontend/src/components/settings/*` or `chat/*` + types.
+**Files:** `app/models.py` (`CoachMemory`: category/tag/note/active) + Alembic
+(`l5m6n7o8p9q0_add_coach_memory`), `app/ai_coach.py`
+(`_format_coach_memory_context` injected into `_build_context`, which
+`_build_chat_context` already delegates to; the `mark_setback` chat tool now also
+writes a durable `CoachMemory` row alongside its existing `Insight`), `app/api.py`
+(`GET/POST /coach-memory`, `PUT/DELETE /coach-memory/{id}`), `app/schemas.py`
+(`CoachMemoryRequest`/`CoachMemoryUpdateRequest`/`CoachMemoryResponse`),
+`frontend/src/components/settings/CoachMemorySection.tsx` + `.css`,
+`frontend/src/api/types.ts`, `frontend/src/api/hooks.ts`,
+`tests/test_coach_memory.py` (new, 9 tests), `tests/test_ai_coach.py` (5 new/updated
+tests).
 
 ### P2 — Breadth & coaching completeness
 

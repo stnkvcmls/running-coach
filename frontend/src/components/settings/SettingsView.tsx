@@ -12,6 +12,7 @@ import {
   useDisconnectGarmin,
 } from '../../api/hooks'
 import AthleteProfileSection from './AthleteProfileSection'
+import CoachMemorySection from './CoachMemorySection'
 import ThresholdEstimateSection from './ThresholdEstimateSection'
 import ZoneConfigSection from './ZoneConfigSection'
 import './SettingsView.css'
@@ -261,6 +262,9 @@ export default function SettingsView() {
 
       {/* Athlete profile */}
       <AthleteProfileSection />
+
+      {/* Coach memory */}
+      <CoachMemorySection />
 
       {/* Auto-estimated thresholds */}
       <ThresholdEstimateSection />

@@ -26,6 +26,9 @@ import type {
   AiConfigRequest,
   AthleteProfile,
   AthleteProfileRequest,
+  CoachMemory,
+  CoachMemoryRequest,
+  CoachMemoryUpdateRequest,
   TrainingLoadResponse,
   TrainingPlanResponse,
   UserResponse,
@@ -260,6 +263,45 @@ export function useUpdateAthleteProfile() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['athlete-profile'] })
       qc.invalidateQueries({ queryKey: ['zone-configs'] })
+    },
+  })
+}
+
+export function useCoachMemories() {
+  return useQuery({
+    queryKey: ['coach-memory'],
+    queryFn: () => apiGet<CoachMemory[]>('/coach-memory'),
+  })
+}
+
+export function useCreateCoachMemory() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (memory: CoachMemoryRequest) =>
+      apiPost<CoachMemory>('/coach-memory', memory),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['coach-memory'] })
+    },
+  })
+}
+
+export function useUpdateCoachMemory() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, memory }: { id: number; memory: CoachMemoryUpdateRequest }) =>
+      apiPut<CoachMemory>(`/coach-memory/${id}`, memory),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['coach-memory'] })
+    },
+  })
+}
+
+export function useDeleteCoachMemory() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => apiDelete<{ deleted: boolean }>(`/coach-memory/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['coach-memory'] })
     },
   })
 }
