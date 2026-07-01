@@ -203,10 +203,12 @@ export const STAT_INFO: Record<string, InfoTopic> = {
         name: 'Critical Velocity',
         acronym: 'CV (Critical Velocity)',
         description:
-          'The highest sustainable aerobic running speed — essentially your running "threshold pace". ' +
-          'Estimated by fitting a two-parameter (hyperbolic) model to the mean-maximal pace curve. ' +
-          'It represents the asymptote the curve approaches as duration grows: the speed you could ' +
-          'theoretically hold forever on fresh legs.',
+          'The highest sustainable aerobic running speed — essentially your running "threshold pace", ' +
+          'typically sustainable for roughly 30–60 minutes rather than indefinitely. Estimated by ' +
+          'fitting a two-parameter (hyperbolic) model to the mean-maximal pace curve. CV is the ' +
+          'mathematical asymptote that curve approaches as duration grows — not a literal forever-pace; ' +
+          'real-world limiters (glycogen depletion, heat, dehydration) still bring you below it well ' +
+          'before "forever".',
         formula:
           'speed(d) = CV + D′ ÷ d  →  CV is the slope (m/s), D′ is the y-intercept offset (m)',
         limits:
@@ -258,15 +260,20 @@ export const STAT_INFO: Record<string, InfoTopic> = {
         name: 'Race Predictions',
         description:
           'Estimated finish times for standard distances (5 K, 10 K, Half Marathon, Marathon) ' +
-          'derived from the Critical Velocity model. For each distance the model solves for the ' +
-          'duration at which average speed equals CV + D′ / duration.',
+          'derived from the Critical Velocity model. For durations within the model\'s fitted range ' +
+          '(≈2–40 min) the model solves directly for the duration at which average speed equals ' +
+          'CV + D′ / duration. Beyond ~40 min — where the CV model is no longer trustworthy — the ' +
+          'prediction instead extrapolates with a fatigue (Riegel) exponent anchored to the model\'s ' +
+          'own 40-minute prediction, so marathon-length predictions taper to a pace slower than CV ' +
+          'instead of implying you could hold "threshold" pace for a whole marathon.',
         formula:
-          'time(dist) = D′ ÷ (target_speed − CV),  where target_speed satisfies dist = target_speed × time(dist)',
+          'time(dist) = D′ ÷ (target_speed − CV) for efforts ≤ ~40 min; beyond that, ' +
+          'time(dist) = T_anchor × (dist ÷ D_anchor)^1.06, anchored at the model\'s own 40-minute prediction',
         limits:
           'Predictions assume ideal conditions and fully fresh legs. They get more accurate as more ' +
           'varied-effort runs enter the window. They are most reliable close to race distances you ' +
           'have actually trained at — extrapolating to the marathon from only 5-km efforts ' +
-          'is speculative.',
+          'is still speculative, even with the fatigue adjustment.',
       },
     ],
   },
