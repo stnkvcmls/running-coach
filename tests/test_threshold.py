@@ -468,6 +468,38 @@ def test_predict_race_times_skips_when_d_prime_exceeds_distance():
     assert "Half Marathon" in labels
 
 
+def test_predict_race_times_marathon_slower_than_cv():
+    # Values matching the reported bug: marathon predicted faster than CV.
+    cv = 1000.0 / 291.0    # 4:51/km
+    d_prime = 245.0
+    cv_pace_min_km = (1000.0 / cv) / 60.0
+    preds = {p.distance_label: p for p in threshold._predict_race_times(cv, d_prime)}
+
+    # 5K is well inside the fitted window (~2-40 min) — unaffected, still
+    # faster than CV, matching the direct CV-model formula.
+    assert preds["5K"].predicted_pace_min_km < cv_pace_min_km
+
+    # Marathon (and half marathon) fall outside the fitted window and should
+    # now be extrapolated to a pace slower than CV, not faster.
+    assert preds["Marathon"].predicted_pace_min_km >= cv_pace_min_km
+    assert preds["Half Marathon"].predicted_pace_min_km >= preds["5K"].predicted_pace_min_km
+
+
+def test_predict_race_times_continuous_at_fit_boundary():
+    # A synthetic distance whose direct CV-model time lands exactly at
+    # _FIT_MAX_S should be unaffected by the Riegel branch (continuity check).
+    cv = 3.5
+    d_prime = 200.0
+    anchor_dist = cv * threshold._FIT_MAX_S + d_prime
+    direct_t = (anchor_dist - d_prime) / cv
+    assert direct_t == threshold._FIT_MAX_S
+
+    # Distance just beyond the anchor should equal the direct-formula time
+    # at that same point (both branches agree at the boundary).
+    riegel_t_at_anchor = threshold._FIT_MAX_S * (anchor_dist / anchor_dist) ** threshold._RIEGEL_FATIGUE_EXPONENT
+    assert abs(riegel_t_at_anchor - direct_t) < 1e-9
+
+
 def test_get_performance_curve_data_empty_db(db):
     data = threshold.get_performance_curve_data(db)
     assert data.power_points == []

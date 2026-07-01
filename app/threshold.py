@@ -54,6 +54,10 @@ DEFAULT_LOOKBACK_DAYS = 90
 # anaerobically dominated, longer ones drift below the asymptote.
 _FIT_MIN_S = 120
 _FIT_MAX_S = 2400
+# Riegel (1977) fatigue exponent, used to extrapolate race predictions beyond
+# _FIT_MAX_S: the CV/D' model has no fatigue term, so left unbounded it predicts
+# every race pace as faster than CV, no matter how long the race.
+_RIEGEL_FATIGUE_EXPONENT = 1.06
 # Anchors that make a fit well-conditioned.
 _SHORT_ANCHOR_S = 300
 _LONG_ANCHOR_S = 1200
@@ -905,14 +909,27 @@ class PerformanceCurveData:
 
 
 def _predict_race_times(cv: float, d_prime: float) -> list[RacePrediction]:
-    """Predict finish times for standard distances using the CV model: t = (D - D') / CV."""
+    """Predict finish times for standard distances.
+
+    Within the model's fitted window (t <= _FIT_MAX_S) uses the CV model
+    directly: t = (D - D') / CV. Beyond it, extrapolates with the Riegel
+    fatigue exponent anchored at the model's own _FIT_MAX_S prediction, so
+    long-race predictions taper below CV pace instead of the CV model's
+    unbounded (and unphysiological) faster-than-CV asymptote.
+    """
+    anchor_t = _FIT_MAX_S
+    anchor_d = cv * anchor_t + d_prime
     predictions: list[RacePrediction] = []
     for label, dist_m in RACE_DISTANCES:
         if d_prime >= dist_m:
             continue
-        t_sec = (dist_m - d_prime) / cv
-        if t_sec <= 0:
+        t_cv = (dist_m - d_prime) / cv
+        if t_cv <= 0:
             continue
+        if t_cv <= anchor_t:
+            t_sec = t_cv
+        else:
+            t_sec = anchor_t * (dist_m / anchor_d) ** _RIEGEL_FATIGUE_EXPONENT
         pace_min_km = (t_sec / dist_m) * 1000.0 / 60.0
         predictions.append(RacePrediction(
             distance_label=label,
