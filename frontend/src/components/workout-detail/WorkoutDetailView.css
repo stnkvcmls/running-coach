@@ -33,3 +33,15 @@
   overflow: hidden;
   padding: 0;
 }
+
+.workout-detail-fuelling-note {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0 0 12px;
+}
+
+.workout-detail-fuelling-stats {
+  display: flex;
+  gap: 24px;
+}

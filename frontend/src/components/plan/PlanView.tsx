@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { ClipboardList, RefreshCw, ChevronLeft, ChevronRight, AlertTriangle, Settings2, Watch, CheckCircle, ChevronDown, ChevronUp, Dumbbell } from 'lucide-react'
+import { ClipboardList, RefreshCw, ChevronLeft, ChevronRight, AlertTriangle, Settings2, Watch, CheckCircle, ChevronDown, ChevronUp, Dumbbell, Droplet } from 'lucide-react'
 import { useTrainingPlan, useGenerateTrainingPlan, useRealignmentStatus, useRealignPlan, usePushWorkoutToGarmin, useJobStatus } from '../../api/hooks'
-import type { StrengthRoutine, TrainingPlanDay, TrainingPlanWeek } from '../../api/types'
+import type { StrengthRoutine, FuellingGuidance, TrainingPlanDay, TrainingPlanWeek } from '../../api/types'
 import './PlanView.css'
 
 const WORKOUT_COLORS: Record<string, string> = {
@@ -108,6 +108,28 @@ function RoutinePanel({ routine }: { routine: StrengthRoutine }) {
   )
 }
 
+function FuellingPanel({ guidance }: { guidance: FuellingGuidance }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="plan-fuelling">
+      <button className="plan-fuelling-toggle" onClick={() => setOpen(o => !o)}>
+        <Droplet size={13} />
+        <span>Fuelling</span>
+        {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+      </button>
+      {open && (
+        <div className="plan-fuelling-body">
+          <p className="plan-fuelling-note">{guidance.note}</p>
+          <div className="plan-fuelling-stats">
+            <span>{guidance.total_carbs_g} g carbs total</span>
+            <span>{guidance.total_fluid_ml} ml fluid total</span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function DayCard({ day }: { day: TrainingPlanDay }) {
   const isToday = day.day_date === today()
   const isPast = day.day_date < today()
@@ -140,6 +162,7 @@ function DayCard({ day }: { day: TrainingPlanDay }) {
         <p className="plan-day-desc">{day.description}</p>
       )}
       {day.routine && <RoutinePanel routine={day.routine} />}
+      {day.fuelling_guidance && <FuellingPanel guidance={day.fuelling_guidance} />}
       {day.notes && (
         <p className="plan-day-notes">{day.notes}</p>
       )}

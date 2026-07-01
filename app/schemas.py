@@ -245,6 +245,15 @@ class WorkoutStepResponse(BaseModel):
     steps: list["WorkoutStepResponse"] | None = None
 
 
+class FuellingGuidance(BaseModel):
+    duration_sec: float
+    carbs_g_per_hour: int
+    fluid_ml_per_hour: int
+    total_carbs_g: int
+    total_fluid_ml: int
+    note: str
+
+
 class CalendarEventResponse(BaseModel):
     id: int
     event_type: str | None = None
@@ -257,6 +266,7 @@ class CalendarEventResponse(BaseModel):
     workout_type: str | None = None
     workout_description: str | None = None
     workout_steps: list[WorkoutStepResponse] | None = None
+    fuelling_guidance: FuellingGuidance | None = None
 
     class Config:
         from_attributes = True
@@ -608,6 +618,7 @@ class TrainingPlanDayResponse(BaseModel):
     notes: str | None = None
     week_theme: str | None = None
     routine: StrengthRoutine | None = None
+    fuelling_guidance: FuellingGuidance | None = None
 
     class Config:
         from_attributes = True

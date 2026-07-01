@@ -213,7 +213,7 @@ tests).
 
 ### P2 — Breadth & coaching completeness
 
-#### P2-1 · Fuelling & hydration guidance
+#### P2-1 · Fuelling & hydration guidance ✅ DONE (2026-07-01)
 **What:** Generate simple, personalized **fuelling/hydration** guidance for long runs
 and races — carb-per-hour and fluid targets scaled by duration, intensity, body weight
 (in `AthleteProfile`), and recent **heat** (reuses P0-1) — rendered on the long-run /
@@ -222,8 +222,20 @@ race workout detail, and optionally as in-plan reminders.
 reminders) and a recurring holistic-coaching differentiator; we cover strength now but
 not fuel. Builds on profile + weather data already present.
 **Effort:** M.
-**Files:** new `app/nutrition.py` (targets model), `app/ai_coach.py` (plan/long-run
-context), `app/api.py`, `frontend/src/components/workout-detail/*` + `plan/*` + types.
+**Files:** `app/nutrition.py` (new, `compute_fuelling_guidance` — duration-gated at 60
+min, carb tiers by duration/intensity, fluid scaled by body weight + heat stress),
+`app/ai_coach.py` (`_recent_hot_runs` extracted from `_recent_heat_stress_note`; new
+public `recent_heat_stress` reused for fuelling's heat signal on future/undated
+efforts), `app/schemas.py` (`FuellingGuidance`, added to `TrainingPlanDayResponse` and
+`CalendarEventResponse`), `app/api.py` (`_day_to_response` attaches guidance to `long`
+plan days with a known duration; `GET /calendar-events/{id}` attaches guidance to
+`race` events using `goal_time_sec`/projected/predicted finish time — both reuse a
+single profile + heat-stress lookup per response, no per-day queries),
+`frontend/src/api/types.ts`, `frontend/src/components/plan/PlanView.tsx` + `.css`
+(collapsible fuelling panel on long-run day cards, alongside the existing routine
+panel), `frontend/src/components/workout-detail/WorkoutDetailView.tsx` + `.css`
+(fuelling card on race detail), `tests/test_nutrition.py` (new, 14 tests),
+`tests/test_ai_coach.py` (5 new tests), `tests/test_api_endpoints.py` (6 new tests).
 
 #### P2-2 · Post-race recovery & race-aware taper automation ✅ DONE (2026-07-01)
 **What:** Use the Garmin race calendar we already track (`GarminCalendarEvent`,

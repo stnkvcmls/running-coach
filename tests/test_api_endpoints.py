@@ -6,6 +6,7 @@ import pytest
 
 from app.models import (
     Activity,
+    AthleteProfile,
     ChatMessage,
     DailySummary,
     GarminCalendarEvent,
@@ -169,6 +170,49 @@ def test_calendar_event_detail(client, db):
 
 def test_calendar_event_detail_404(client):
     assert client.get("/api/v1/calendar-events/77").status_code == 404
+
+
+def test_calendar_event_race_includes_fuelling_guidance(client, db):
+    db.add(AthleteProfile(weight_kg=70))
+    e = GarminCalendarEvent(
+        garmin_id="r1", event_type="race", date=date(2026, 6, 20), title="City Half",
+        distance_m=21097.5, goal_time_sec=6300,  # 1h45m
+    )
+    db.add(e)
+    db.commit()
+    db.refresh(e)
+    resp = client.get(f"/api/v1/calendar-events/{e.id}")
+    assert resp.status_code == 200
+    guidance = resp.json()["fuelling_guidance"]
+    assert guidance is not None
+    assert guidance["carbs_g_per_hour"] > 0
+    assert guidance["fluid_ml_per_hour"] > 0
+
+
+def test_calendar_event_short_race_has_no_fuelling_guidance(client, db):
+    e = GarminCalendarEvent(
+        garmin_id="r2", event_type="race", date=date(2026, 6, 20), title="5K",
+        distance_m=5000, goal_time_sec=1200,  # 20 min
+    )
+    db.add(e)
+    db.commit()
+    db.refresh(e)
+    resp = client.get(f"/api/v1/calendar-events/{e.id}")
+    assert resp.status_code == 200
+    assert resp.json()["fuelling_guidance"] is None
+
+
+def test_calendar_event_workout_has_no_fuelling_guidance(client, db):
+    e = GarminCalendarEvent(
+        garmin_id="w2", event_type="workout", date=date(2026, 6, 20), title="Tempo",
+        distance_m=10000,
+    )
+    db.add(e)
+    db.commit()
+    db.refresh(e)
+    resp = client.get(f"/api/v1/calendar-events/{e.id}")
+    assert resp.status_code == 200
+    assert resp.json()["fuelling_guidance"] is None
 
 
 # --- /insights ---
@@ -737,6 +781,67 @@ def test_training_plan_day_no_routine_when_id_missing(client, db):
     body = resp.json()
     day = body["weeks"][0]["days"][0]
     assert day["routine"] is None
+    assert day["fuelling_guidance"] is None
+
+
+def test_training_plan_long_day_includes_fuelling_guidance(client, db):
+    from datetime import timezone
+    db.add(AthleteProfile(weight_kg=68))
+    plan = TrainingPlan(
+        generated_at=datetime(2026, 6, 1, 0, 0, tzinfo=timezone.utc),
+        week_start=date(2026, 6, 16),
+        plan_weeks=1,
+    )
+    db.add(plan)
+    db.flush()
+    db.add(TrainingPlanDay(
+        plan_id=plan.id,
+        day_date=date(2026, 6, 21),
+        day_of_week="Sunday",
+        week_number=1,
+        workout_type="long",
+        target_distance_m=25000,
+        target_pace_min_km=5.5,  # ~2h17m
+        description="Long run",
+    ))
+    db.commit()
+
+    resp = client.get("/api/v1/training-plan")
+    assert resp.status_code == 200
+    days = resp.json()["weeks"][0]["days"]
+    long_day = next(d for d in days if d["workout_type"] == "long")
+    guidance = long_day["fuelling_guidance"]
+    assert guidance is not None
+    assert guidance["carbs_g_per_hour"] > 0
+    assert guidance["fluid_ml_per_hour"] > 0
+
+
+def test_training_plan_short_long_day_has_no_fuelling_guidance(client, db):
+    from datetime import timezone
+    plan = TrainingPlan(
+        generated_at=datetime(2026, 6, 1, 0, 0, tzinfo=timezone.utc),
+        week_start=date(2026, 6, 16),
+        plan_weeks=1,
+    )
+    db.add(plan)
+    db.flush()
+    db.add(TrainingPlanDay(
+        plan_id=plan.id,
+        day_date=date(2026, 6, 21),
+        day_of_week="Sunday",
+        week_number=1,
+        workout_type="long",
+        target_distance_m=8000,
+        target_pace_min_km=5.5,  # ~44 min — under the 60 min threshold
+        description="Long run",
+    ))
+    db.commit()
+
+    resp = client.get("/api/v1/training-plan")
+    assert resp.status_code == 200
+    days = resp.json()["weeks"][0]["days"]
+    long_day = next(d for d in days if d["workout_type"] == "long")
+    assert long_day["fuelling_guidance"] is None
 
 
 # ---------------------------------------------------------------------------

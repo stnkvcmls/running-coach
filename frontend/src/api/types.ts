@@ -204,6 +204,15 @@ export interface WorkoutStep {
   steps: WorkoutStep[] | null
 }
 
+export interface FuellingGuidance {
+  duration_sec: number
+  carbs_g_per_hour: number
+  fluid_ml_per_hour: number
+  total_carbs_g: number
+  total_fluid_ml: number
+  note: string
+}
+
 export interface CalendarEvent {
   id: number
   event_type: string | null
@@ -216,6 +225,7 @@ export interface CalendarEvent {
   workout_type: string | null
   workout_description: string | null
   workout_steps: WorkoutStep[] | null
+  fuelling_guidance: FuellingGuidance | null
 }
 
 export interface CalendarDay {
@@ -463,6 +473,7 @@ export interface TrainingPlanDay {
   notes: string | null
   week_theme: string | null
   routine: StrengthRoutine | null
+  fuelling_guidance: FuellingGuidance | null
 }
 
 export interface TrainingPlanWeek {
