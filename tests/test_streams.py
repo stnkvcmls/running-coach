@@ -72,9 +72,9 @@ def test_parse_streams_rebases_epoch_timestamp():
 # --- grade adjustment ---
 
 def test_minetti_factor_uphill_increases_downhill_decreases():
-    assert streams._minetti_factor(0.0) == 1.0
-    assert streams._minetti_factor(0.10) > 1.0
-    assert streams._minetti_factor(-0.10) < 1.0
+    assert streams.minetti_factor(0.0) == 1.0
+    assert streams.minetti_factor(0.10) > 1.0
+    assert streams.minetti_factor(-0.10) < 1.0
 
 
 def test_grade_adjusted_speed_uphill_faster_equivalent():

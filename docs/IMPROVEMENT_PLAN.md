@@ -163,23 +163,29 @@ migration needed), `frontend/src/api/types.ts`, `frontend/src/api/hooks.ts`
 `TodayView.tsx`, `tests/test_plan_adaptation.py` (new, 11 tests),
 `tests/test_api_endpoints.py` (9 new tests).
 
-#### P1-2 · Terrain / GAP-aware race pacing (+ optional course import)
+#### P1-2 · Terrain / GAP-aware race pacing ✅ DONE (2026-07-01)
 **What:** Extend `app/pacing.py` beyond flat even/negative splits to allocate pace by
-**gradient** using the GAP model already in `app/streams.py`: given a course
-elevation profile, hold *effort* (GAP-pace / power band) constant so uphill splits are
-slower and downhills faster while hitting the target time. Source the profile from an
-uploaded **GPX** (new lightweight parser) or from a matched prior activity's elevation
-stream. Render the elevation-aware split table and keep the existing push-to-watch
-path.
+**gradient** using the Minetti grade-cost model already in `app/streams.py`: given a
+course elevation profile, hold *effort* (GAP-equivalent pace) constant so uphill
+splits are slower and downhill splits faster while still hitting the target time.
+The profile is sourced from the athlete's own closest-distance past run (its stored
+elevation/distance stream) — no new upload path. Renders an elevation-aware split
+table (grade % per split) and keeps the existing push-to-watch path unchanged.
 **Rationale:** We compute GAP everywhere but pace races as if every course were flat —
 Stryd's Event Planner and Garmin PacePro pace the *actual course*. The natural
-"execute the real race" upgrade to the pacing feature shipped in v3; reuses GAP,
-race prediction, and the workout translator.
-**Effort:** M (L if GPX upload + course matching UI).
-**Files:** `app/pacing.py` (gradient-aware allocation), `app/streams.py` (reuse GAP /
-elevation), optional `app/garmin_sync.py` or new parser for GPX, `app/api.py`
-(`/races/{id}/pacing` params + course upload), `frontend/src/components/plan/` or
-`today/` pacing card + types.
+"execute the real race" upgrade to the pacing feature shipped in v3; reuses the
+Minetti model, race prediction, and the workout translator.
+**Effort:** M. (GPX/course-upload import remains a future L-effort follow-up, not
+implemented here.)
+**Files:** `app/pacing.py` (`"terrain"` strategy, gradient-aware split allocation,
+`grade_pct` on `PacingSplit`), `app/streams.py` (`minetti_factor` made public and
+reused), `app/api.py` (`_matched_course_profile` helper; `strategy=terrain` on
+`GET /races/{id}/pacing` and `POST /races/{id}/pacing/push`), `app/schemas.py`
+(`PacingSplit.grade_pct`, `PacingStrategyResponse.course_activity_id/name`),
+`frontend/src/api/types.ts`, `frontend/src/components/today/RacePacingCard.tsx` +
+`.css` (Terrain strategy button, grade column, course-source note),
+`tests/test_pacing.py` (new terrain-strategy unit tests),
+`tests/test_api_endpoints.py` (new terrain-pacing endpoint tests).
 
 #### P1-3 · Persistent athlete memory for the coach ✅ DONE (2026-07-01)
 **What:** A durable, user-scoped **coach memory** the AI reads on every analysis and

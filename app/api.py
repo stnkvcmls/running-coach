@@ -1391,10 +1391,47 @@ def _get_race_event(race_id: int, user_id: int, db: Session) -> GarminCalendarEv
     return race
 
 
+_MIN_COURSE_PROFILE_SAMPLES = 10
+
+
+def _matched_course_profile(
+    race: GarminCalendarEvent, user_id: int, db: Session,
+) -> tuple[list[tuple[float, float]], Activity] | None:
+    """Find the athlete's closest-distance past run with a usable elevation stream
+    and build a (distance_m, elevation_m) course profile from it.
+    """
+    candidates = (
+        db.query(Activity)
+        .filter(
+            Activity.user_id == user_id,
+            Activity.activity_type == "running",
+            Activity.laps_json.isnot(None),
+            Activity.distance_m.isnot(None),
+        )
+        .order_by(func.abs(Activity.distance_m - race.distance_m))
+        .limit(20)
+        .all()
+    )
+    for act in candidates:
+        details = safe_json_loads(act.laps_json)
+        parsed = streams_mod.parse_streams(details)
+        if not parsed:
+            continue
+        profile = sorted(
+            (d, e)
+            for d, e in zip(parsed["distance"], parsed["elevation"])
+            if isinstance(d, (int, float)) and isinstance(e, (int, float))
+        )
+        if len(profile) < _MIN_COURSE_PROFILE_SAMPLES or profile[-1][0] - profile[0][0] <= 0:
+            continue
+        return profile, act
+    return None
+
+
 @api_router.get("/races/{race_id}/pacing", response_model=PacingStrategyResponse)
 def api_race_pacing(
     race_id: int,
-    strategy: str = Query("even", pattern="^(even|negative_split)$"),
+    strategy: str = Query("even", pattern="^(even|negative_split|terrain)$"),
     split_unit: str = Query("km", pattern="^(km|mile)$"),
     target_time_sec: int | None = Query(None),
     db: Session = Depends(get_db),
@@ -1403,7 +1440,8 @@ def api_race_pacing(
     """Generate a race-day split-by-split pacing strategy.
 
     target_time_sec overrides goal_time_sec; if neither is set, falls back to
-    the CV-model prediction from the performance curve.
+    the CV-model prediction from the performance curve. "terrain" strategy
+    sources an elevation profile from the athlete's closest-distance past run.
     """
     from app import pacing as pacing_mod
 
@@ -1451,6 +1489,17 @@ def api_race_pacing(
         except Exception:
             pass
 
+    course_activity: Activity | None = None
+    elevation_profile: list[tuple[float, float]] | None = None
+    if strategy == "terrain":
+        match = _matched_course_profile(race, current_user.id, db)
+        if not match:
+            raise HTTPException(
+                status_code=422,
+                detail="No terrain profile available: sync a past run with elevation data close to this race's distance.",
+            )
+        elevation_profile, course_activity = match
+
     plan = pacing_mod.generate_pacing_strategy(
         distance_m=race.distance_m,
         target_time_sec=float(effective_target),
@@ -1458,6 +1507,7 @@ def api_race_pacing(
         split_unit=split_unit,
         predicted_time_sec=predicted_time,
         source=source,
+        elevation_profile=elevation_profile,
     )
 
     return PacingStrategyResponse(
@@ -1478,11 +1528,14 @@ def api_race_pacing(
                 "target_pace_min_km": s.target_pace_min_km,
                 "split_time_sec": s.split_time_sec,
                 "cumulative_time_sec": s.cumulative_time_sec,
+                "grade_pct": s.grade_pct,
             }
             for s in plan.splits
         ],
         predicted_time_sec=plan.predicted_time_sec,
         source=plan.source,
+        course_activity_id=course_activity.id if course_activity else None,
+        course_activity_name=course_activity.name if course_activity else None,
     )
 
 
@@ -1528,10 +1581,21 @@ def api_push_race_pacing(
                 detail="No target time available to build pacing plan.",
             )
 
+    elevation_profile: list[tuple[float, float]] | None = None
+    if body.strategy == "terrain":
+        match = _matched_course_profile(race, current_user.id, db)
+        if not match:
+            raise HTTPException(
+                status_code=422,
+                detail="No terrain profile available: sync a past run with elevation data close to this race's distance.",
+            )
+        elevation_profile, _course_activity = match
+
     plan = pacing_mod.generate_pacing_strategy(
         distance_m=race.distance_m,
         target_time_sec=float(effective_target),
         strategy=body.strategy,
+        elevation_profile=elevation_profile,
         split_unit=body.split_unit,
     )
 
