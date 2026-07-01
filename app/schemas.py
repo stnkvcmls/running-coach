@@ -688,6 +688,32 @@ class ChatHistoryResponse(BaseModel):
     messages: list[ChatMessageResponse] = []
 
 
+class CoachMemoryRequest(BaseModel):
+    category: str = "note"  # niggle | constraint | preference | note
+    tag: str
+    note: str
+
+
+class CoachMemoryUpdateRequest(BaseModel):
+    category: str | None = None
+    tag: str | None = None
+    note: str | None = None
+    active: bool | None = None
+
+
+class CoachMemoryResponse(BaseModel):
+    id: int
+    category: str
+    tag: str
+    note: str
+    active: bool
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    class Config:
+        from_attributes = True
+
+
 class PacingSplit(BaseModel):
     split_number: int
     split_distance_m: float       # this split's distance (m)

@@ -10,6 +10,7 @@ from app.models import (
     Activity,
     AIJob,
     AthleteProfile,
+    CoachMemory,
     DailySummary,
     GarminCalendarEvent,
     Insight,
@@ -168,6 +169,31 @@ def test_format_profile_context_goal_date_only():
     profile = AthleteProfile(goal_race_date=date(2026, 7, 1))
     text = ai_coach._format_athlete_profile_context(profile, reference_date=date(2026, 6, 17))
     assert "Goal Race Date: 2026-07-01 (14 days away)" in text
+
+
+# --- _format_coach_memory_context ---
+
+def test_format_coach_memory_context_emits_active_entries(db):
+    db.add(CoachMemory(user_id=1, category="niggle", tag="knee pain", note="Sore after long runs.", active=True))
+    db.add(CoachMemory(user_id=1, category="constraint", tag="travel", note="Away next week.", active=True))
+    db.add(CoachMemory(user_id=1, category="preference", tag="treadmill", note="Hates treadmills.", active=False))
+    db.commit()
+
+    text = ai_coach._format_coach_memory_context(db, 1)
+    assert "## What The Coach Remembers" in text
+    assert "[niggle] knee pain: Sore after long runs." in text
+    assert "[constraint] travel: Away next week." in text
+    assert "treadmill" not in text  # inactive entries are excluded
+
+
+def test_format_coach_memory_context_empty_returns_blank(db):
+    assert ai_coach._format_coach_memory_context(db, 1) == ""
+
+
+def test_format_coach_memory_context_scoped_to_user(db):
+    db.add(CoachMemory(user_id=2, category="niggle", tag="shin splints", note="Other athlete.", active=True))
+    db.commit()
+    assert ai_coach._format_coach_memory_context(db, 1) == ""
 
 
 # --- _extract_summary_and_category ---
@@ -401,6 +427,8 @@ def test_build_context_full_sections(db):
     # A prior insight to avoid repeating.
     db.add(Insight(trigger_type="activity", trigger_id=1, content="x",
                    summary="Solid aerobic base", category="workout_analysis"))
+    # A durable coach memory.
+    db.add(CoachMemory(user_id=1, category="niggle", tag="knee pain", note="Sore after long runs.", active=True))
     db.commit()
 
     context = ai_coach._build_context(db, "activity", "Trigger data", reference_date=ref)
@@ -413,6 +441,8 @@ def test_build_context_full_sections(db):
     assert "Marathon" in context
     assert "## Recent Insights (avoid repeating these)" in context
     assert "Solid aerobic base" in context
+    assert "## What The Coach Remembers" in context
+    assert "[niggle] knee pain: Sore after long runs." in context
 
 
 def test_weekly_review_generates_insight(db, patch_db_session, monkeypatch):
@@ -1020,6 +1050,12 @@ def test_dispatch_chat_tool_mark_setback(db):
     assert insight.summary == "knee pain"
     assert insight.content == "Sore after long runs."
     assert insight.category == "setback"
+    memory = db.query(CoachMemory).filter(CoachMemory.user_id == 1).first()
+    assert memory is not None
+    assert memory.category == "niggle"
+    assert memory.tag == "knee pain"
+    assert memory.note == "Sore after long runs."
+    assert memory.active is True
     assert action["type"] == "mark_setback"
     assert action["job_id"] is None
 

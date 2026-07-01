@@ -372,6 +372,27 @@ class ChatMessage(Base):
     actions_json = Column(Text, nullable=True)  # JSON list of coach tool actions taken this turn
 
 
+class CoachMemory(Base):
+    """Durable, structured facts the coach remembers about the athlete.
+
+    Unlike ``Insight`` (AI-generated commentary, surfaced only for the last few
+    turns to avoid repetition), these are athlete-facts — niggles, life
+    constraints, preferences — that stay in context until resolved or deleted,
+    recorded either by the athlete directly or by the coach via chat tool-use.
+    """
+
+    __tablename__ = "coach_memories"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = _user_id_column()
+    category = Column(String(20), nullable=False, default="note")  # niggle | constraint | preference | note
+    tag = Column(Text, nullable=False)
+    note = Column(Text, nullable=False)
+    active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=_utcnow, index=True)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
 class DailyLoadSeries(Base):
     """Persisted daily CTL/ATL/TSB series for incremental training load computation.
 

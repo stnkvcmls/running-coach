@@ -568,6 +568,31 @@ export interface ChatRequest {
   activity_id?: number | null
 }
 
+export type CoachMemoryCategory = 'niggle' | 'constraint' | 'preference' | 'note'
+
+export interface CoachMemory {
+  id: number
+  category: string
+  tag: string
+  note: string
+  active: boolean
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface CoachMemoryRequest {
+  category?: CoachMemoryCategory
+  tag: string
+  note: string
+}
+
+export interface CoachMemoryUpdateRequest {
+  category?: CoachMemoryCategory
+  tag?: string
+  note?: string
+  active?: boolean
+}
+
 export interface PacingSplit {
   split_number: number
   split_distance_m: number
