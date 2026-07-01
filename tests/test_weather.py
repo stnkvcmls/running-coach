@@ -154,3 +154,19 @@ def test_description_omits_dew_point_when_low():
 def test_empty_weather_dict_returns_none():
     adj, pen, desc = weather_pace_info({}, 5.0)
     assert (adj, pen, desc) == (None, None, None)
+
+
+def test_weather_dict_missing_temp_and_dew_point_keys_returns_none():
+    # Non-empty dict, but neither a temp nor a dew-point field is present.
+    adj, pen, desc = weather_pace_info({"windSpeed": 12}, 5.0)
+    assert (adj, pen, desc) == (None, None, None)
+
+
+def test_weather_non_numeric_temp_returns_none():
+    adj, pen, desc = weather_pace_info({"temperature": "N/A"}, 5.0)
+    assert (adj, pen, desc) == (None, None, None)
+
+
+def test_weather_non_numeric_dew_point_returns_none():
+    adj, pen, desc = weather_pace_info({"temperature": 77, "dewPoint": "unknown"}, 5.0)
+    assert (adj, pen, desc) == (None, None, None)
