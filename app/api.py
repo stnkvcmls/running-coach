@@ -89,6 +89,10 @@ from app.schemas import (
     AerobicTrendsResponse,
     AIJobEnqueuedResponse,
     AIJobResponse,
+    CustomChartDataResponse,
+    CustomChartMetric,
+    CustomChartMetricsResponse,
+    CustomChartPoint,
 )
 from app.strength_routines import ROUTINE_LIBRARY, get_routine
 from app import training_load
@@ -1158,6 +1162,122 @@ def api_get_aerobic_trends(
         ],
         days=days,
     )
+
+
+# --- Custom Charts ---
+
+# Registry of chartable metrics, spanning the three stored time-series sources:
+# per-run Activity rows (aggregated to one point per day), DailySummary
+# wellness rows (already one row per day), and the CTL/ATL/TSB/ACWR series
+# (computed/cached by app.training_load).
+_CUSTOM_CHART_METRICS: dict[str, dict] = {
+    "distance_km": {"label": "Distance", "unit": "km", "group": "activity", "column": Activity.distance_m, "agg": "sum", "scale": 0.001},
+    "duration_min": {"label": "Duration", "unit": "min", "group": "activity", "column": Activity.duration_sec, "agg": "sum", "scale": 1 / 60},
+    "avg_pace": {"label": "Avg Pace", "unit": "min/km", "group": "activity", "column": Activity.avg_pace_min_km, "agg": "avg"},
+    "avg_hr": {"label": "Avg Heart Rate", "unit": "bpm", "group": "activity", "column": Activity.avg_hr, "agg": "avg"},
+    "avg_cadence": {"label": "Avg Cadence", "unit": "spm", "group": "activity", "column": Activity.avg_cadence, "agg": "avg"},
+    "elevation_gain": {"label": "Elevation Gain", "unit": "m", "group": "activity", "column": Activity.elevation_gain, "agg": "sum"},
+    "calories": {"label": "Calories", "unit": "kcal", "group": "activity", "column": Activity.calories, "agg": "sum"},
+    "vo2max": {"label": "VO2max", "unit": "ml/kg/min", "group": "activity", "column": Activity.vo2max, "agg": "avg"},
+    "training_stress_score": {"label": "Training Stress Score", "unit": "TSS", "group": "activity", "column": Activity.training_stress_score, "agg": "sum"},
+    "efficiency_factor": {"label": "Efficiency Factor", "unit": "", "group": "activity", "column": Activity.efficiency_factor, "agg": "avg"},
+    "decoupling_pct": {"label": "Aerobic Decoupling", "unit": "%", "group": "activity", "column": Activity.decoupling_pct, "agg": "avg"},
+    "resting_hr": {"label": "Resting Heart Rate", "unit": "bpm", "group": "wellness", "column": DailySummary.resting_hr},
+    "sleep_score": {"label": "Sleep Score", "unit": "", "group": "wellness", "column": DailySummary.sleep_score},
+    "stress_avg": {"label": "Stress", "unit": "", "group": "wellness", "column": DailySummary.stress_avg},
+    "body_battery_high": {"label": "Body Battery (high)", "unit": "", "group": "wellness", "column": DailySummary.body_battery_high},
+    "hrv_avg": {"label": "HRV", "unit": "ms", "group": "wellness", "column": DailySummary.hrv_avg},
+    "steps": {"label": "Steps", "unit": "", "group": "wellness", "column": DailySummary.steps},
+    "ctl": {"label": "Fitness (CTL)", "unit": "", "group": "load", "attr": "ctl"},
+    "atl": {"label": "Fatigue (ATL)", "unit": "", "group": "load", "attr": "atl"},
+    "tsb": {"label": "Form (TSB)", "unit": "", "group": "load", "attr": "tsb"},
+    "acwr": {"label": "ACWR", "unit": "", "group": "load", "attr": "acwr"},
+}
+
+_CUSTOM_CHART_RUN_TYPES = ("running", "trail_running", "treadmill_running", "indoor_running")
+
+
+@api_router.get("/custom-charts/metrics", response_model=CustomChartMetricsResponse)
+def api_custom_chart_metrics():
+    return CustomChartMetricsResponse(
+        metrics=[
+            CustomChartMetric(id=metric_id, label=m["label"], unit=m["unit"], group=m["group"])
+            for metric_id, m in _CUSTOM_CHART_METRICS.items()
+        ]
+    )
+
+
+@api_router.get("/custom-charts/data", response_model=CustomChartDataResponse)
+def api_custom_chart_data(
+    metrics: str = Query(..., description="Comma-separated metric ids"),
+    days: int = Query(90, ge=7, le=365),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Merge one or more registered metrics into a unified daily time series."""
+    metric_ids = [m.strip() for m in metrics.split(",") if m.strip()]
+    if not metric_ids:
+        raise HTTPException(status_code=400, detail="At least one metric is required")
+    unknown = [m for m in metric_ids if m not in _CUSTOM_CHART_METRICS]
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"Unknown metric id(s): {', '.join(unknown)}")
+
+    end_date = date.today()
+    start_date = end_date - timedelta(days=days - 1)
+    by_date: dict[str, dict[str, float | None]] = {}
+
+    def _set(d: date, metric_id: str, value) -> None:
+        by_date.setdefault(d.isoformat(), {})[metric_id] = round(value, 4) if value is not None else None
+
+    load_points_cache = None
+
+    for metric_id in metric_ids:
+        m = _CUSTOM_CHART_METRICS[metric_id]
+        if m["group"] == "activity":
+            date_col = func.date(Activity.started_at)
+            agg_fn = func.avg(m["column"]) if m["agg"] == "avg" else func.sum(m["column"])
+            rows = (
+                db.query(date_col.label("d"), agg_fn.label("v"))
+                .filter(
+                    Activity.user_id == current_user.id,
+                    Activity.started_at >= datetime.combine(start_date, datetime.min.time()),
+                    Activity.started_at < datetime.combine(end_date + timedelta(days=1), datetime.min.time()),
+                    func.lower(Activity.activity_type).in_(_CUSTOM_CHART_RUN_TYPES),
+                    m["column"].isnot(None),
+                )
+                .group_by(date_col)
+                .all()
+            )
+            scale = m.get("scale", 1.0)
+            for r in rows:
+                d = r.d if isinstance(r.d, date) else datetime.strptime(str(r.d)[:10], "%Y-%m-%d").date()
+                _set(d, metric_id, r.v * scale if r.v is not None else None)
+        elif m["group"] == "wellness":
+            rows = (
+                db.query(DailySummary.date.label("d"), m["column"].label("v"))
+                .filter(
+                    DailySummary.user_id == current_user.id,
+                    DailySummary.date >= start_date,
+                    DailySummary.date <= end_date,
+                    m["column"].isnot(None),
+                )
+                .all()
+            )
+            for r in rows:
+                _set(r.d, metric_id, r.v)
+        else:  # load
+            if load_points_cache is None:
+                load_points_cache = training_load.compute_load_series(
+                    db, end_date=end_date, days=days, user_id=current_user.id
+                )
+            for p in load_points_cache:
+                _set(p.date, metric_id, getattr(p, m["attr"]))
+
+    result_points = [
+        CustomChartPoint(date=d, values={mid: by_date[d].get(mid) for mid in metric_ids})
+        for d in sorted(by_date.keys())
+    ]
+    return CustomChartDataResponse(points=result_points, days=days)
 
 
 # --- Training Plan ---

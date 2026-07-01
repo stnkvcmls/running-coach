@@ -38,6 +38,8 @@ import type {
   ThresholdEstimateResponse,
   ThresholdApplyRequest,
   AerobicTrendsResponse,
+  CustomChartMetricsResponse,
+  CustomChartDataResponse,
 } from './types'
 
 export function useMe() {
@@ -369,6 +371,22 @@ export function useAerobicTrends(days = 90) {
   return useQuery({
     queryKey: ['aerobic-trends', days],
     queryFn: () => apiGet<AerobicTrendsResponse>(`/aerobic-trends?days=${days}`),
+  })
+}
+
+export function useCustomChartMetrics() {
+  return useQuery({
+    queryKey: ['custom-chart-metrics'],
+    queryFn: () => apiGet<CustomChartMetricsResponse>('/custom-charts/metrics'),
+    staleTime: Infinity,
+  })
+}
+
+export function useCustomChartData(metricIds: string[], days: number) {
+  return useQuery({
+    queryKey: ['custom-chart-data', metricIds, days],
+    queryFn: () => apiGet<CustomChartDataResponse>(`/custom-charts/data?metrics=${metricIds.join(',')}&days=${days}`),
+    enabled: metricIds.length > 0,
   })
 }
 

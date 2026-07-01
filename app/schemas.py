@@ -589,6 +589,27 @@ class AerobicTrendsResponse(BaseModel):
     days: int
 
 
+class CustomChartMetric(BaseModel):
+    id: str
+    label: str
+    unit: str
+    group: str  # "activity" | "wellness" | "load"
+
+
+class CustomChartMetricsResponse(BaseModel):
+    metrics: list[CustomChartMetric] = []
+
+
+class CustomChartPoint(BaseModel):
+    date: str
+    values: dict[str, float | None] = {}
+
+
+class CustomChartDataResponse(BaseModel):
+    points: list[CustomChartPoint] = []
+    days: int
+
+
 class StrengthExercise(BaseModel):
     name: str
     sets: int

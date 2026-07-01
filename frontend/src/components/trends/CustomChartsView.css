@@ -1,0 +1,154 @@
+.custom-chart-view {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 24px;
+}
+
+.custom-chart-view .trends-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.custom-chart-view .trends-range-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.custom-chart-view .range-tab {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.custom-chart-view .range-tab.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.custom-chart-view .range-tab:hover:not(.active) {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.custom-chart-metric-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+
+.custom-chart-metric-group {
+  min-width: 140px;
+}
+
+.custom-chart-group-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+
+.custom-chart-checkbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.custom-chart-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.custom-chart-checkbox.disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.custom-chart-presets {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.custom-chart-save-btn {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.custom-chart-save-btn:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.custom-chart-save-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.custom-chart-preset-chip {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  font-size: 0.75rem;
+}
+
+.custom-chart-preset-chip button {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  padding: 4px 8px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.75rem;
+}
+
+.custom-chart-preset-remove {
+  color: var(--text-muted);
+  border-left: 1px solid var(--border) !important;
+  padding: 4px 6px !important;
+}
+
+.custom-chart-preset-remove:hover {
+  color: var(--text);
+}
+
+.custom-chart-card {
+  padding: 16px;
+}
+
+.custom-chart-empty {
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}

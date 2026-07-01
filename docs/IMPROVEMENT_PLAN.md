@@ -290,9 +290,21 @@ badges replace the old client-side duplicate banding, plus a recommendation line
   TrainingPeaks are adding progressive load and demo videos. Add per-week progression
   and optional exercise demo links. **S–M.** Files: `app/strength_routines.py`,
   `frontend/src/components/workout-detail/*`.
-- **P3-3 · User-defined custom charts.** Carryover from v3 — an Intervals.icu-style
-  custom chart/metric builder over the stored series. **L.** Files: `app/api.py`,
-  `frontend/src/components/trends/*` + hooks/types.
+- **P3-3 · User-defined custom charts** ✅ DONE (2026-07-01). Carryover from v3 — an
+  Intervals.icu-style custom chart/metric builder over the stored series. A registry
+  of ~20 chartable metrics spans the three stored time-series sources (per-run
+  `Activity` rows aggregated to one point per day, `DailySummary` wellness rows, and
+  the cached CTL/ATL/TSB/ACWR series), merged into a unified daily series by two new
+  endpoints. A new "Custom" tab in Trends lets the athlete pick up to 4 metrics across
+  groups, choose a date range, and plot them on a multi-axis Recharts line chart;
+  selection and named presets persist client-side (`localStorage`), so no new backend
+  model/migration was needed. **L.** Files: `app/schemas.py` (`CustomChartMetric`,
+  `CustomChartMetricsResponse`, `CustomChartPoint`, `CustomChartDataResponse`),
+  `app/api.py` (`_CUSTOM_CHART_METRICS` registry, `GET /custom-charts/metrics`,
+  `GET /custom-charts/data`), `frontend/src/api/types.ts`, `frontend/src/api/hooks.ts`
+  (`useCustomChartMetrics`, `useCustomChartData`),
+  `frontend/src/components/trends/CustomChartsView.tsx` + `.css` (new), `TrendsView.tsx`
+  (new "Custom" tab), `tests/test_custom_charts.py` (new, 9 tests).
 - **P3-4 · Security default hardening.** The startup guard *warns* on an
   unauthenticated non-loopback bind but still starts; consider **refusing** to start in
   that configuration (opt-out env for trusted private networks). **S.** Files:
