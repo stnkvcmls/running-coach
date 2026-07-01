@@ -723,6 +723,7 @@ def test_strength_routines_returns_catalog(client):
             assert "name" in ex
             assert "sets" in ex
             assert "reps" in ex
+            assert ex["demo_url"].startswith("https://www.youtube.com/results?search_query=")
 
 
 def test_training_plan_day_includes_routine(client, db):
@@ -754,6 +755,40 @@ def test_training_plan_day_includes_routine(client, db):
     assert strength_day["routine"] is not None
     assert strength_day["routine"]["id"] == "running-base"
     assert len(strength_day["routine"]["exercises"]) > 0
+
+
+def test_training_plan_day_routine_reflects_week_progression(client, db):
+    """A week-3 strength day gets progressively loaded sets via get_routine_for_week."""
+    from datetime import timezone
+    plan = TrainingPlan(
+        generated_at=datetime(2026, 6, 1, 0, 0, tzinfo=timezone.utc),
+        week_start=date(2026, 6, 16),
+        plan_weeks=3,
+    )
+    db.add(plan)
+    db.flush()
+    db.add(TrainingPlanDay(
+        plan_id=plan.id,
+        day_date=date(2026, 6, 30),
+        day_of_week="Tuesday",
+        week_number=3,
+        workout_type="strength",
+        description="Strength session",
+        routine_id="running-base",
+    ))
+    db.commit()
+
+    from app.strength_routines import get_routine
+    base_sets = get_routine("running-base")["exercises"][0]["sets"]
+
+    resp = client.get("/api/v1/training-plan")
+    assert resp.status_code == 200
+    body = resp.json()
+    days = body["weeks"][0]["days"]
+    strength_day = next(d for d in days if d["workout_type"] == "strength")
+    ex = strength_day["routine"]["exercises"][0]
+    assert ex["sets"] == base_sets + 1
+    assert "Progression" in ex["note"]
 
 
 def test_training_plan_day_no_routine_when_id_missing(client, db):

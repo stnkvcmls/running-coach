@@ -615,6 +615,7 @@ class StrengthExercise(BaseModel):
     sets: int
     reps: str
     note: str | None = None
+    demo_url: str | None = None
 
 
 class StrengthRoutine(BaseModel):

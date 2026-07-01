@@ -449,6 +449,7 @@ export interface StrengthExercise {
   sets: number
   reps: string
   note: string | null
+  demo_url: string | null
 }
 
 export interface StrengthRoutine {

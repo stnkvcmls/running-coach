@@ -94,7 +94,7 @@ from app.schemas import (
     CustomChartMetricsResponse,
     CustomChartPoint,
 )
-from app.strength_routines import ROUTINE_LIBRARY, get_routine
+from app.strength_routines import ROUTINE_LIBRARY, get_routine, get_routine_for_week
 from app import training_load
 from app import plan_adaptation as plan_adaptation_mod
 from app import threshold as threshold_mod
@@ -1290,7 +1290,7 @@ def _day_to_response(
     """Convert a TrainingPlanDay ORM row to its response schema, hydrating routine."""
     resp = TrainingPlanDayResponse.model_validate(d)
     if d.routine_id:
-        raw = get_routine(d.routine_id)
+        raw = get_routine_for_week(d.routine_id, d.week_number)
         if raw:
             resp.routine = StrengthRoutine.model_validate(raw)
     if d.workout_type == "long" and d.target_distance_m and d.target_pace_min_km:
@@ -1355,7 +1355,7 @@ def _build_plan_response(plan: TrainingPlan, db: Session) -> TrainingPlanRespons
 @api_router.get("/strength-routines", response_model=list[StrengthRoutine])
 def api_get_strength_routines():
     """Return the full catalog of strength & mobility routines."""
-    return [StrengthRoutine.model_validate(r) for r in ROUTINE_LIBRARY.values()]
+    return [StrengthRoutine.model_validate(get_routine(rid)) for rid in ROUTINE_LIBRARY]
 
 
 @api_router.get("/training-plan", response_model=TrainingPlanResponse | None)
