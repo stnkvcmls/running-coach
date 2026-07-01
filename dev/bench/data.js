@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1782882373814,
+  "lastUpdate": 1782884026307,
   "repoUrl": "https://github.com/stnkvcmls/running-coach",
   "entries": {
     "API Endpoint Benchmarks": [
@@ -13089,6 +13089,268 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.00010789029846772872",
             "extra": "mean: 4.791327250013448 msec\nrounds: 12"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "stnkvcmls@gmail.com",
+            "name": "stnkvcmls",
+            "username": "stnkvcmls"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "ba31231cf38d301a87ea0534deba05ef80e41a13",
+          "message": "Merge pull request #116 from stnkvcmls/claude/p2-1-implementation-llwy22\n\nAdd fuelling/hydration guidance for long runs and races (P2-1)",
+          "timestamp": "2026-07-01T07:32:51+02:00",
+          "tree_id": "cbcdb066b155298c6e9e12318813ba32f15795a4",
+          "url": "https://github.com/stnkvcmls/running-coach/commit/ba31231cf38d301a87ea0534deba05ef80e41a13"
+        },
+        "date": 1782884025996,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "perf/test_perf_endpoints.py::test_me",
+            "value": 380.46206463378934,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00017648300744169725",
+            "extra": "mean: 2.628382939998346 msec\nrounds: 50"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_today",
+            "value": 89.11684899647454,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0005354241354671483",
+            "extra": "mean: 11.221222599999692 msec\nrounds: 5"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_training_load",
+            "value": 69.29588264047925,
+            "unit": "iter/sec",
+            "range": "stddev: 0.011318613909609058",
+            "extra": "mean: 14.430871819444135 msec\nrounds: 72"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_wellness_trends",
+            "value": 92.13647863316342,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00010410190409867921",
+            "extra": "mean: 10.85346449999948 msec\nrounds: 84"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_activities_list",
+            "value": 82.26113184987294,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0001749684499176737",
+            "extra": "mean: 12.156409442858214 msec\nrounds: 70"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_activity_detail",
+            "value": 165.74483456565204,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00007667664462154865",
+            "extra": "mean: 6.033370527778932 msec\nrounds: 72"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_daily_summaries_list",
+            "value": 163.60268978828293,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0079017154168611",
+            "extra": "mean: 6.112368942675044 msec\nrounds: 157"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_daily_summary_detail",
+            "value": 199.05272766332362,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00009663076965343917",
+            "extra": "mean: 5.023794507811985 msec\nrounds: 128"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_calendar_month",
+            "value": 141.64903647028962,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00017899878885880072",
+            "extra": "mean: 7.059702098360171 msec\nrounds: 122"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_calendar_week",
+            "value": 190.13283049173626,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00009904257642384535",
+            "extra": "mean: 5.259480950311015 msec\nrounds: 161"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_calendar_event_detail",
+            "value": 287.1673852831815,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00009888733050575952",
+            "extra": "mean: 3.4822896026785215 msec\nrounds: 224"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_insights",
+            "value": 136.18101842533883,
+            "unit": "iter/sec",
+            "range": "stddev: 0.009101957903088376",
+            "extra": "mean: 7.343167289854346 msec\nrounds: 138"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_settings",
+            "value": 218.59071806696673,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00011861187313605732",
+            "extra": "mean: 4.574759664285669 msec\nrounds: 140"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_get_ai_config",
+            "value": 263.20058543627596,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00011086720462553877",
+            "extra": "mean: 3.7993836462879456 msec\nrounds: 229"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_get_athlete_profile",
+            "value": 277.1406242234575,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00008754196749894631",
+            "extra": "mean: 3.6082764942959193 msec\nrounds: 263"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_get_zones",
+            "value": 235.7229335236426,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0001129689945439429",
+            "extra": "mean: 4.242268603447961 msec\nrounds: 174"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_threshold_estimate",
+            "value": 121.29082898381597,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00009138864266359907",
+            "extra": "mean: 8.244646428572366 msec\nrounds: 14"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_performance_curve",
+            "value": 29.095913806988005,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0003145500053486073",
+            "extra": "mean: 34.3690872413785 msec\nrounds: 29"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_intensity_trends",
+            "value": 170.19034259209693,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0004059780695808681",
+            "extra": "mean: 5.875774058442001 msec\nrounds: 154"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_get_training_plan",
+            "value": 146.95970115163175,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00023942466439511606",
+            "extra": "mean: 6.804586510203969 msec\nrounds: 98"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_get_realignment_status",
+            "value": 57.620711025676265,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0006839366948799521",
+            "extra": "mean: 17.35487088235325 msec\nrounds: 51"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_export_activities_csv",
+            "value": 7.170246482047389,
+            "unit": "iter/sec",
+            "range": "stddev: 0.004098334933622079",
+            "extra": "mean: 139.46521957142824 msec\nrounds: 7"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_export_activities_json",
+            "value": 20.80058132958149,
+            "unit": "iter/sec",
+            "range": "stddev: 0.02989388922554971",
+            "extra": "mean: 48.07557943478496 msec\nrounds: 23"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_export_insights_csv",
+            "value": 33.31306035078611,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0010928479672379916",
+            "extra": "mean: 30.018256787878766 msec\nrounds: 33"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_export_insights_json",
+            "value": 129.2421422459407,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00010008231303878704",
+            "extra": "mean: 7.737414303277757 msec\nrounds: 122"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_set_ai_config",
+            "value": 213.74183528765704,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0001130277328629673",
+            "extra": "mean: 4.678541281608182 msec\nrounds: 174"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_set_athlete_profile",
+            "value": 211.41152972900343,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00012179236886727208",
+            "extra": "mean: 4.730110989130271 msec\nrounds: 92"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_update_zones",
+            "value": 177.1564929674174,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0001151447719869871",
+            "extra": "mean: 5.644726779412595 msec\nrounds: 136"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_apply_threshold_estimate",
+            "value": 105.92415269954294,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00017322185635922175",
+            "extra": "mean: 9.440717480521464 msec\nrounds: 77"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_generate_training_plan",
+            "value": 181.9663814113068,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00069521152322377",
+            "extra": "mean: 5.495520613445925 msec\nrounds: 119"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_trigger_realignment_dismiss",
+            "value": 227.39736658321348,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00024803885020740997",
+            "extra": "mean: 4.397588305553492 msec\nrounds: 144"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_trigger_analysis",
+            "value": 180.6873682194589,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00033397642809542347",
+            "extra": "mean: 5.534421193104224 msec\nrounds: 145"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_submit_feedback",
+            "value": 155.50527318312862,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00019289528618279095",
+            "extra": "mean: 6.430650096491351 msec\nrounds: 114"
+          },
+          {
+            "name": "perf/test_perf_endpoints.py::test_trigger_sync",
+            "value": 193.35933334995025,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00046588863592437324",
+            "extra": "mean: 5.171718285717069 msec\nrounds: 7"
           }
         ]
       }
