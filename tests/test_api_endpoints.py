@@ -442,6 +442,183 @@ def test_realign_invalid_action(client):
     assert resp.status_code == 422
 
 
+# --- Daily readiness-driven plan adaptation (P1-1) ---
+
+def _seed_low_readiness_daily(db, day):
+    """Seed a DailySummary that scores readiness ~0 (Low band)."""
+    db.add(DailySummary(
+        date=day,
+        sleep_score=0,
+        sleep_seconds=5 * 3600,
+        stress_avg=100,
+        body_battery_high=0,
+    ))
+    db.commit()
+
+
+def _seed_fair_readiness_daily(db, day):
+    """Seed a DailySummary that scores readiness ~40 (Fair band)."""
+    db.add(DailySummary(
+        date=day,
+        sleep_score=40,
+        stress_avg=60,
+        body_battery_high=40,
+    ))
+    db.commit()
+
+
+def _seed_excellent_readiness_daily(db, day):
+    """Seed a DailySummary that scores readiness ~100 (Excellent band)."""
+    db.add(DailySummary(
+        date=day,
+        sleep_score=100,
+        sleep_seconds=8 * 3600,
+        stress_avg=0,
+        body_battery_high=100,
+    ))
+    db.commit()
+
+
+def test_today_includes_plan_adaptation_downgrade_suggestion(client, db):
+    day = date(2026, 6, 17)
+    _seed_low_readiness_daily(db, day)
+    plan = _seed_plan_and_days(db, [
+        {"date": day, "workout_type": "tempo", "dist_m": 10000},
+    ])
+    resp = client.get(f"/api/v1/today?date={day.isoformat()}")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["plan_adaptation"] is not None
+    assert body["plan_adaptation"]["direction"] == "downgrade"
+    assert body["plan_adaptation"]["suggested_workout_type"] == "rest"
+
+
+def test_today_no_plan_adaptation_when_readiness_good(client, db):
+    day = date(2026, 6, 17)
+    db.add(DailySummary(date=day, sleep_score=80, stress_avg=20, body_battery_high=80))
+    db.commit()
+    _seed_plan_and_days(db, [
+        {"date": day, "workout_type": "tempo", "dist_m": 10000},
+    ])
+    resp = client.get(f"/api/v1/today?date={day.isoformat()}")
+    assert resp.status_code == 200
+    assert resp.json()["plan_adaptation"] is None
+
+
+def test_today_plan_adaptation_suppressed_when_dismissed(client, db):
+    day = date(2026, 6, 17)
+    _seed_low_readiness_daily(db, day)
+    _seed_plan_and_days(db, [
+        {"date": day, "workout_type": "tempo", "dist_m": 10000},
+    ])
+    plan_day = db.query(TrainingPlanDay).filter(TrainingPlanDay.day_date == day).first()
+    db.add(SyncStatus(key=f"plan_adaptation_dismissed:{plan_day.id}", value="1"))
+    db.commit()
+    resp = client.get(f"/api/v1/today?date={day.isoformat()}")
+    assert resp.status_code == 200
+    assert resp.json()["plan_adaptation"] is None
+
+
+def test_adapt_day_accept_downgrade_to_rest(client, db):
+    day = date(2026, 6, 17)
+    _seed_low_readiness_daily(db, day)
+    _seed_plan_and_days(db, [
+        {"date": day, "workout_type": "long", "dist_m": 20000},
+    ])
+    plan_day = db.query(TrainingPlanDay).filter(TrainingPlanDay.day_date == day).first()
+
+    resp = client.post("/api/v1/training-plan/adapt-day", json={
+        "plan_day_id": plan_day.id, "action": "accept",
+    })
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["workout_type"] == "rest"
+    assert body["target_distance_m"] is None
+
+    db.expire_all()
+    updated = db.query(TrainingPlanDay).filter(TrainingPlanDay.id == plan_day.id).first()
+    assert updated.workout_type == "rest"
+    assert updated.target_distance_m is None
+    assert "Low" in updated.notes
+
+    # The now-rest day no longer triggers a suggestion.
+    resp2 = client.get(f"/api/v1/today?date={day.isoformat()}")
+    assert resp2.json()["plan_adaptation"] is None
+
+
+def test_adapt_day_accept_downgrade_to_easy_reduces_distance(client, db):
+    day = date(2026, 6, 17)
+    _seed_fair_readiness_daily(db, day)
+    _seed_plan_and_days(db, [
+        {"date": day, "workout_type": "tempo", "dist_m": 10000},
+    ])
+    plan_day = db.query(TrainingPlanDay).filter(TrainingPlanDay.day_date == day).first()
+
+    resp = client.post("/api/v1/training-plan/adapt-day", json={
+        "plan_day_id": plan_day.id, "action": "accept",
+    })
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["workout_type"] == "easy"
+    assert body["target_distance_m"] == pytest.approx(6000.0)
+
+
+def test_adapt_day_dismiss(client, db):
+    day = date(2026, 6, 17)
+    _seed_fair_readiness_daily(db, day)
+    _seed_plan_and_days(db, [
+        {"date": day, "workout_type": "tempo", "dist_m": 10000},
+    ])
+    plan_day = db.query(TrainingPlanDay).filter(TrainingPlanDay.day_date == day).first()
+
+    resp = client.post("/api/v1/training-plan/adapt-day", json={
+        "plan_day_id": plan_day.id, "action": "dismiss",
+    })
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "dismissed"
+
+    row = db.query(SyncStatus).filter(
+        SyncStatus.key == f"plan_adaptation_dismissed:{plan_day.id}"
+    ).first()
+    assert row is not None
+
+    resp2 = client.get(f"/api/v1/today?date={day.isoformat()}")
+    assert resp2.json()["plan_adaptation"] is None
+
+
+def test_adapt_day_accept_no_suggestion_conflict(client, db):
+    day = date(2026, 6, 17)
+    db.add(DailySummary(date=day, sleep_score=80, stress_avg=20, body_battery_high=80))
+    db.commit()
+    _seed_plan_and_days(db, [
+        {"date": day, "workout_type": "tempo", "dist_m": 10000},
+    ])
+    plan_day = db.query(TrainingPlanDay).filter(TrainingPlanDay.day_date == day).first()
+
+    resp = client.post("/api/v1/training-plan/adapt-day", json={
+        "plan_day_id": plan_day.id, "action": "accept",
+    })
+    assert resp.status_code == 409
+
+
+def test_adapt_day_not_found(client):
+    resp = client.post("/api/v1/training-plan/adapt-day", json={
+        "plan_day_id": 999999, "action": "dismiss",
+    })
+    assert resp.status_code == 404
+
+
+def test_adapt_day_invalid_action(client, db):
+    _seed_plan_and_days(db, [
+        {"date": date(2026, 6, 17), "workout_type": "tempo", "dist_m": 10000},
+    ])
+    plan_day = db.query(TrainingPlanDay).first()
+    resp = client.post("/api/v1/training-plan/adapt-day", json={
+        "plan_day_id": plan_day.id, "action": "bogus",
+    })
+    assert resp.status_code == 422
+
+
 # --- P2-2: /strength-routines ---
 
 def test_strength_routines_returns_catalog(client):

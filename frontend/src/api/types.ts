@@ -272,6 +272,17 @@ export interface TrainingLoadResponse {
   current: TrainingLoadPoint | null
 }
 
+export interface PlanAdaptationSuggestion {
+  plan_day_id: number
+  direction: 'downgrade' | 'upgrade'
+  current_workout_type: string
+  suggested_workout_type: string
+  current_target_distance_m: number | null
+  suggested_target_distance_m: number | null
+  reason: string
+  readiness_score: number
+}
+
 export interface TodayResponse {
   selected_date: string
   activities: ActivitySummary[]
@@ -282,6 +293,7 @@ export interface TodayResponse {
   scheduled_events: CalendarEvent[]
   training_load: TrainingLoadPoint | null
   readiness: TrainingReadiness | null
+  plan_adaptation: PlanAdaptationSuggestion | null
 }
 
 export interface SettingsResponse {

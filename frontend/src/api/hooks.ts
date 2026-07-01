@@ -30,6 +30,7 @@ import type {
   CoachMemoryRequest,
   CoachMemoryUpdateRequest,
   TrainingLoadResponse,
+  TrainingPlanDay,
   TrainingPlanResponse,
   UserResponse,
   ZoneConfigBulkUpdate,
@@ -395,6 +396,21 @@ export function useRealignPlan() {
         qc.invalidateQueries({ queryKey: ['realignment-status'] })
       }
       // For 'regenerate', the caller polls via useJobStatus and invalidates on done
+    },
+  })
+}
+
+export function useAdaptPlanDay() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ planDayId, action }: { planDayId: number; action: 'accept' | 'dismiss' }) =>
+      apiPost<TrainingPlanDay | { status: string }>('/training-plan/adapt-day', {
+        plan_day_id: planDayId,
+        action,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['today'] })
+      qc.invalidateQueries({ queryKey: ['training-plan'] })
     },
   })
 }
