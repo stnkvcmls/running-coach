@@ -139,22 +139,29 @@ round-trips them), `app/schemas.py` (`ChatAction`), `frontend/src/api/types.ts`,
 
 ### P1 — Execution depth & daily adaptation
 
-#### P1-1 · Daily readiness-driven workout adaptation
+#### P1-1 · Daily readiness-driven workout adaptation ✅ DONE (2026-07-01)
 **What:** Close the loop between the **readiness score we already compute** and the
-**static plan day**. Each morning (or on Today load), if today's prescribed
-`TrainingPlanDay` is hard and readiness is low, propose a down-regulated swap (hard →
-easy/recovery, or shift the session); if readiness is high on an easy day before a
-key block, allow a nudge up. Surface as an accept/dismiss suggestion on Today, and
-fold the decision into adherence/plan context. Start rule-based (readiness bands ×
-workout type) before involving the AI.
+**static plan day**. On Today load, if the selected day's prescribed `TrainingPlanDay`
+is hard (tempo/interval/long) and readiness is low, propose a down-regulated swap
+(Low readiness → rest, Fair readiness → easy at ~60% distance); if readiness is
+Excellent on an easy day, offer a small upgrade nudge (+15% distance, capped at
++2 km). Surfaced as an accept/dismiss card on Today; accepting mutates the
+`TrainingPlanDay` in place (so adherence/plan context automatically reflects the
+swap), dismissing snoozes it via the existing `SyncStatus` key/value store. Purely
+rule-based (readiness bands × workout type) — no AI involved.
 **Rationale:** Garmin DSW's core loop. We have the inputs (readiness, the plan, the
 calendar) but never act on them day-to-day — the plan is regenerated weekly and
 otherwise frozen. High-signal, mostly deterministic, and it makes readiness
 *actionable* instead of merely displayed.
 **Effort:** M.
-**Files:** new adaptation helper (over `app/training_load.py` readiness +
-`TrainingPlanDay`), `app/api.py` (Today suggestion + accept endpoint), `app/ai_coach.py`
-(optional narrative), `frontend/src/components/today/*` + hooks/types.
+**Files:** `app/plan_adaptation.py` (new, `suggest_adaptation`), `app/schemas.py`
+(`PlanAdaptationSuggestion`, `PlanAdaptationRequest`, `TodayResponse.plan_adaptation`),
+`app/api.py` (`GET /today` attaches the suggestion; new
+`POST /training-plan/adapt-day` accept/dismiss endpoint, reusing `SyncStatus` — no
+migration needed), `frontend/src/api/types.ts`, `frontend/src/api/hooks.ts`
+(`useAdaptPlanDay`), `frontend/src/components/today/PlanAdaptationCard.tsx` + `.css`,
+`TodayView.tsx`, `tests/test_plan_adaptation.py` (new, 11 tests),
+`tests/test_api_endpoints.py` (9 new tests).
 
 #### P1-2 · Terrain / GAP-aware race pacing (+ optional course import)
 **What:** Extend `app/pacing.py` beyond flat even/negative splits to allocate pace by

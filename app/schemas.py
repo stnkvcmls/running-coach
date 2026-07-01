@@ -369,6 +369,17 @@ class TrainingLoadResponse(BaseModel):
     current: TrainingLoadPoint | None = None
 
 
+class PlanAdaptationSuggestion(BaseModel):
+    plan_day_id: int
+    direction: Literal["downgrade", "upgrade"]
+    current_workout_type: str
+    suggested_workout_type: str
+    current_target_distance_m: float | None = None
+    suggested_target_distance_m: float | None = None
+    reason: str
+    readiness_score: int
+
+
 class TodayResponse(BaseModel):
     selected_date: date
     activities: list[ActivitySummary] = []
@@ -379,6 +390,7 @@ class TodayResponse(BaseModel):
     scheduled_events: list[CalendarEventResponse] = []
     training_load: TrainingLoadPoint | None = None
     readiness: TrainingReadiness | None = None
+    plan_adaptation: PlanAdaptationSuggestion | None = None
 
 
 class SettingsResponse(BaseModel):
@@ -637,6 +649,11 @@ class PlanRealignmentStatus(BaseModel):
 
 class PlanRealignmentRequest(BaseModel):
     action: Literal["regenerate", "dismiss"]
+
+
+class PlanAdaptationRequest(BaseModel):
+    plan_day_id: int
+    action: Literal["accept", "dismiss"]
 
 
 class IntensityWeek(BaseModel):

@@ -7,6 +7,7 @@ import ScheduledWorkoutCard from './ScheduledWorkoutCard'
 import WeekOverview from './WeekOverview'
 import TrainingLoadChart from './TrainingLoadChart'
 import ReadinessCard from './ReadinessCard'
+import PlanAdaptationCard from './PlanAdaptationCard'
 import InsightsList from './InsightsList'
 import RacePacingCard from './RacePacingCard'
 import StatHelpButton from '../info/StatHelpButton'
@@ -127,6 +128,13 @@ export default function TodayView() {
       {data?.readiness && (
         <section className="today-section">
           <ReadinessCard readiness={data.readiness} />
+        </section>
+      )}
+
+      {/* Readiness-driven plan adaptation suggestion */}
+      {data?.plan_adaptation && (
+        <section className="today-section">
+          <PlanAdaptationCard suggestion={data.plan_adaptation} />
         </section>
       )}
 

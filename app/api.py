@@ -66,6 +66,7 @@ from app.schemas import (
     TodayResponse,
     TrainingLoadResponse,
     MissedPlanSession,
+    PlanAdaptationRequest,
     PlanRealignmentRequest,
     PlanRealignmentStatus,
     TrainingPlanDayResponse,
@@ -90,6 +91,7 @@ from app.schemas import (
 )
 from app.strength_routines import ROUTINE_LIBRARY, get_routine
 from app import training_load
+from app import plan_adaptation as plan_adaptation_mod
 from app import threshold as threshold_mod
 from app import adherence as adherence_mod
 from app import intensity as intensity_mod
@@ -277,6 +279,25 @@ def api_today(
     recent_rhr = [row[0] for row in recent_rhr_rows]
     readiness = training_load.compute_readiness(daily_summary, current_load, recent_rhr)
 
+    # Readiness-driven plan adaptation suggestion for the selected day's plan day
+    plan_day = (
+        db.query(TrainingPlanDay)
+        .filter(TrainingPlanDay.user_id == uid, TrainingPlanDay.day_date == selected)
+        .first()
+    )
+    plan_adaptation = plan_adaptation_mod.suggest_adaptation(plan_day, readiness)
+    if plan_adaptation is not None:
+        dismissed = (
+            db.query(SyncStatus)
+            .filter(
+                SyncStatus.user_id == uid,
+                SyncStatus.key == f"plan_adaptation_dismissed:{plan_day.id}",
+            )
+            .first()
+        )
+        if dismissed:
+            plan_adaptation = None
+
     return TodayResponse(
         selected_date=selected,
         activities=[ActivitySummary.model_validate(a) for a in activities],
@@ -287,6 +308,7 @@ def api_today(
         scheduled_events=scheduled_events,
         training_load=current_load,
         readiness=readiness,
+        plan_adaptation=plan_adaptation,
     )
 
 
@@ -1195,6 +1217,69 @@ def api_generate_training_plan(current_user: User = Depends(get_current_user)):
     from app.ai_coach import enqueue_job
     job_id = enqueue_job("generate_plan", {}, current_user.id)
     return AIJobEnqueuedResponse(status="queued", job_id=job_id)
+
+
+@api_router.post("/training-plan/adapt-day")
+def api_adapt_plan_day(
+    body: PlanAdaptationRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Accept or dismiss a readiness-driven adaptation suggestion for a plan day."""
+    uid = current_user.id
+    plan_day = (
+        db.query(TrainingPlanDay)
+        .filter(TrainingPlanDay.id == body.plan_day_id, TrainingPlanDay.user_id == uid)
+        .first()
+    )
+    if plan_day is None:
+        raise HTTPException(status_code=404, detail="Plan day not found")
+
+    if body.action == "dismiss":
+        db.add(SyncStatus(
+            user_id=uid,
+            key=f"plan_adaptation_dismissed:{plan_day.id}",
+            value="1",
+        ))
+        db.commit()
+        return {"status": "dismissed"}
+
+    # action == "accept" — re-derive the suggestion server-side and apply it
+    daily_summary = (
+        db.query(DailySummary)
+        .filter(DailySummary.user_id == uid, DailySummary.date == plan_day.day_date)
+        .first()
+    )
+    current_load = training_load.current_load(db, as_of=plan_day.day_date, user_id=uid)
+    rhr_cutoff = plan_day.day_date - timedelta(days=7)
+    recent_rhr_rows = (
+        db.query(DailySummary.resting_hr)
+        .filter(
+            DailySummary.user_id == uid,
+            DailySummary.date >= rhr_cutoff,
+            DailySummary.date < plan_day.day_date,
+            DailySummary.resting_hr.isnot(None),
+        )
+        .all()
+    )
+    recent_rhr = [row[0] for row in recent_rhr_rows]
+    readiness = training_load.compute_readiness(daily_summary, current_load, recent_rhr)
+    suggestion = plan_adaptation_mod.suggest_adaptation(plan_day, readiness)
+    if suggestion is None:
+        raise HTTPException(status_code=409, detail="No adaptation suggestion applies to this plan day")
+
+    plan_day.notes = (
+        f"{suggestion.reason}"
+        + (f"\n{plan_day.notes}" if plan_day.notes else "")
+    )
+    plan_day.workout_type = suggestion.suggested_workout_type
+    plan_day.target_distance_m = suggestion.suggested_target_distance_m
+    if suggestion.direction == "downgrade":
+        plan_day.target_pace_min_km = None
+        plan_day.target_pace_display = None
+    db.commit()
+    db.refresh(plan_day)
+    return _day_to_response(plan_day)
 
 
 @api_router.get("/training-plan/realignment-status", response_model=PlanRealignmentStatus)

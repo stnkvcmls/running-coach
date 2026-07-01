@@ -1,0 +1,101 @@
+.plan-adaptation-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.plan-adaptation-downgrade {
+  border: 1px solid color-mix(in srgb, var(--color-tempo) 40%, transparent);
+  background: color-mix(in srgb, var(--color-tempo) 8%, var(--bg-card));
+}
+
+.plan-adaptation-upgrade {
+  border: 1px solid color-mix(in srgb, var(--color-easy) 40%, transparent);
+  background: color-mix(in srgb, var(--color-easy) 8%, var(--bg-card));
+}
+
+.plan-adaptation-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.plan-adaptation-downgrade .plan-adaptation-header {
+  color: var(--color-tempo);
+}
+
+.plan-adaptation-upgrade .plan-adaptation-header {
+  color: var(--color-easy);
+}
+
+.plan-adaptation-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.plan-adaptation-reason {
+  font-size: 0.85rem;
+  color: var(--text);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.plan-adaptation-swap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  text-transform: capitalize;
+}
+
+.plan-adaptation-to {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.plan-adaptation-arrow {
+  color: var(--text-muted);
+}
+
+.plan-adaptation-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 2px;
+}
+
+.plan-adaptation-accept {
+  font-size: 0.8rem;
+  padding: 6px 14px;
+}
+
+.plan-adaptation-dismiss {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s;
+}
+
+.plan-adaptation-dismiss:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.plan-adaptation-dismiss:disabled,
+.plan-adaptation-accept:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.plan-adaptation-accept .spin {
+  animation: plan-adaptation-spin 1s linear infinite;
+}
+
+@keyframes plan-adaptation-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
