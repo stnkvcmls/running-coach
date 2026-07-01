@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { ClipboardList, RefreshCw, ChevronLeft, ChevronRight, AlertTriangle, Settings2, Watch, CheckCircle, ChevronDown, ChevronUp, Dumbbell, Droplet } from 'lucide-react'
+import { ClipboardList, RefreshCw, ChevronLeft, ChevronRight, AlertTriangle, Settings2, Watch, CheckCircle, ChevronDown, ChevronUp, Dumbbell, Droplet, PlayCircle } from 'lucide-react'
 import { useTrainingPlan, useGenerateTrainingPlan, useRealignmentStatus, useRealignPlan, usePushWorkoutToGarmin, useJobStatus } from '../../api/hooks'
 import type { StrengthRoutine, FuellingGuidance, TrainingPlanDay, TrainingPlanWeek } from '../../api/types'
 import './PlanView.css'
@@ -96,7 +96,21 @@ function RoutinePanel({ routine }: { routine: StrengthRoutine }) {
           <ol className="plan-routine-exercises">
             {routine.exercises.map((ex, i) => (
               <li key={i} className="plan-routine-exercise">
-                <span className="plan-routine-ex-name">{ex.name}</span>
+                <span className="plan-routine-ex-name">
+                  {ex.name}
+                  {ex.demo_url && (
+                    <a
+                      className="plan-routine-ex-demo"
+                      href={ex.demo_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Watch a form demo"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <PlayCircle size={12} />
+                    </a>
+                  )}
+                </span>
                 <span className="plan-routine-ex-sets">{ex.sets}×{ex.reps}</span>
                 {ex.note && <span className="plan-routine-ex-note">{ex.note}</span>}
               </li>

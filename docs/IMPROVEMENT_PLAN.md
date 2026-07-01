@@ -286,10 +286,19 @@ badges replace the old client-side duplicate banding, plus a recommendation line
   targets. Add a longer-horizon plan skeleton (phase blocks to the goal race) that the
   4-week generator fills in. **L.** Files: `app/ai_coach.py`, `app/models.py` + Alembic,
   `frontend/src/components/plan/*`.
-- **P3-2 · Strength progression & demos.** The routine library is static; Garmin/
-  TrainingPeaks are adding progressive load and demo videos. Add per-week progression
-  and optional exercise demo links. **S–M.** Files: `app/strength_routines.py`,
-  `frontend/src/components/workout-detail/*`.
+- **P3-2 · Strength progression & demos** ✅ DONE (2026-07-01). The routine library
+  was static; Garmin/TrainingPeaks are adding progressive load and demo videos. Each
+  routine now scales with the plan day's `week_number` — `get_routine_for_week` adds
+  +1 set per exercise every 2 weeks from week 3, capped at +2, with a "Progression:
+  +N set(s) this week" note appended — and every exercise carries a `demo_url` (a
+  YouTube search link built from the exercise name, not a guessed specific video) for
+  a form demo. **S–M.** Files: `app/strength_routines.py` (`exercise_demo_url`,
+  `get_routine_for_week`, `_apply_progression`), `app/schemas.py`
+  (`StrengthExercise.demo_url`), `app/api.py` (`_day_to_response` and
+  `/strength-routines` hydrate via `get_routine`/`get_routine_for_week`),
+  `frontend/src/api/types.ts`, `frontend/src/components/plan/PlanView.tsx` + `.css`
+  (demo-link icon per exercise), `tests/test_strength_routines.py` (new, 11 tests),
+  `tests/test_api_endpoints.py` (2 new/updated tests).
 - **P3-3 · User-defined custom charts** ✅ DONE (2026-07-01). Carryover from v3 — an
   Intervals.icu-style custom chart/metric builder over the stored series. A registry
   of ~20 chartable metrics spans the three stored time-series sources (per-run

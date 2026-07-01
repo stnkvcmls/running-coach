@@ -504,6 +504,19 @@
   grid-row: 1;
   color: var(--text);
   font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.plan-routine-ex-demo {
+  display: inline-flex;
+  color: var(--text-muted);
+  line-height: 0;
+}
+
+.plan-routine-ex-demo:hover {
+  color: var(--accent-light);
 }
 
 .plan-routine-ex-sets {

@@ -5,7 +5,8 @@ the ID is stored on TrainingPlanDay.routine_id and hydrated at response time.
 """
 
 from __future__ import annotations
-from typing import TypedDict
+from typing import NotRequired, TypedDict
+from urllib.parse import quote_plus
 
 
 class Exercise(TypedDict):
@@ -13,6 +14,7 @@ class Exercise(TypedDict):
     sets: int
     reps: str          # e.g. "12", "45 sec", "10 each side"
     note: str | None   # optional cue / substitution
+    demo_url: NotRequired[str]  # hydrated on lookup, not part of the static literal
 
 
 class Routine(TypedDict):
@@ -113,8 +115,60 @@ ROUTINE_LIBRARY: dict[str, Routine] = {
 ROUTINE_IDS = list(ROUTINE_LIBRARY.keys())
 
 
+def exercise_demo_url(name: str) -> str:
+    """YouTube search link for a form demonstration of this exercise.
+
+    A search URL (not a specific guessed video) so it's always valid.
+    """
+    return f"https://www.youtube.com/results?search_query={quote_plus(name + ' exercise proper form')}"
+
+
+def _hydrate(routine: Routine) -> Routine:
+    return {
+        **routine,
+        "exercises": [
+            {**ex, "demo_url": exercise_demo_url(ex["name"])}
+            for ex in routine["exercises"]
+        ],
+    }
+
+
 def get_routine(routine_id: str) -> Routine | None:
-    return ROUTINE_LIBRARY.get(routine_id)
+    raw = ROUTINE_LIBRARY.get(routine_id)
+    return _hydrate(raw) if raw else None
+
+
+def _progression_sets(week_number: int) -> int:
+    """Extra sets per exercise: +1 every 2 weeks from week 3, capped at +2."""
+    if week_number < 3:
+        return 0
+    return min((week_number - 1) // 2, 2)
+
+
+def _apply_progression(routine: Routine, week_number: int) -> Routine:
+    added = _progression_sets(week_number)
+    if added == 0:
+        return routine
+    suffix = f"Progression: +{added} set{'s' if added != 1 else ''} this week"
+    return {
+        **routine,
+        "exercises": [
+            {
+                **ex,
+                "sets": ex["sets"] + added,
+                "note": f"{ex['note']}; {suffix}" if ex["note"] else suffix,
+            }
+            for ex in routine["exercises"]
+        ],
+    }
+
+
+def get_routine_for_week(routine_id: str, week_number: int) -> Routine | None:
+    """Look up a routine hydrated with demo links and scaled for progressive load."""
+    routine = get_routine(routine_id)
+    if routine is None:
+        return None
+    return _apply_progression(routine, week_number)
 
 
 def catalog_summary() -> str:
