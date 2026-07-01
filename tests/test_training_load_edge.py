@@ -1,5 +1,6 @@
 from app import training_load
 from app.models import Activity, AthleteProfile
+from app.schemas import classify_acwr, classify_tsb
 
 
 # --- _interpret_tsb thresholds ---
@@ -10,6 +11,52 @@ def test_interpret_tsb_bands():
     assert training_load._interpret_tsb(0) == "neutral / race-ready range"
     assert training_load._interpret_tsb(-20) == "productive training fatigue"
     assert training_load._interpret_tsb(-40) == "high fatigue — overreaching risk"
+
+
+# --- classify_tsb / classify_acwr (P2-3 explicit RSB zones) ---
+
+def test_classify_tsb_bands():
+    assert classify_tsb(20) == ("very_fresh", "Very fresh — detraining risk")
+    assert classify_tsb(10) == ("fresh", "Fresh, tapered")
+    assert classify_tsb(0) == ("neutral", "Neutral — race-ready range")
+    assert classify_tsb(-20) == ("productive_fatigue", "Productive training fatigue")
+    assert classify_tsb(-40) == ("high_fatigue", "High fatigue — overreaching risk")
+
+
+def test_classify_tsb_boundaries():
+    # >= -10 stays neutral; just below it flips to productive_fatigue.
+    assert classify_tsb(-10)[0] == "neutral"
+    assert classify_tsb(-10.1)[0] == "productive_fatigue"
+    # >= -30 stays productive_fatigue; just below it flips to high_fatigue.
+    assert classify_tsb(-30)[0] == "productive_fatigue"
+    assert classify_tsb(-30.1)[0] == "high_fatigue"
+
+
+def test_classify_acwr_bands():
+    zone, label, recommendation = classify_acwr(1.6)
+    assert zone == "overreaching"
+    assert "high risk" in label.lower()
+    assert recommendation
+
+    zone, label, recommendation = classify_acwr(1.4)
+    assert zone == "overreaching"
+    assert "moderate risk" in label.lower()
+    assert recommendation
+
+    zone, label, recommendation = classify_acwr(1.0)
+    assert zone == "productive"
+    assert "sweet spot" in label.lower()
+    assert recommendation
+
+    zone, label, recommendation = classify_acwr(0.5)
+    assert zone == "detraining"
+    assert recommendation
+
+
+def test_classify_acwr_boundaries():
+    # >= 0.8 is the inclusive sweet-spot floor.
+    assert classify_acwr(0.8)[0] == "productive"
+    assert classify_acwr(0.799)[0] == "detraining"
 
 
 # --- intensity factor cap ---

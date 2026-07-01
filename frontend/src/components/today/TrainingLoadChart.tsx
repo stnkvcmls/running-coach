@@ -24,30 +24,20 @@ const ATL_COLOR = '#e17055' // Fatigue — orange
 const TSB_COLOR = '#00b894' // Form — green
 const ACWR_COLOR = '#fdcb6e' // ACWR — amber
 
-function formTone(tsb: number): string {
-  if (tsb > 5) return 'fresh'
-  if (tsb >= -10) return 'neutral'
-  if (tsb >= -30) return 'building'
+// Form (TSB) and RSB (ACWR) zones/labels are computed server-side (see
+// classify_tsb/classify_acwr in app/schemas.py) so this badge and the AI
+// context never drift out of sync with each other.
+function formTone(zone: string | null): string {
+  if (zone === 'very_fresh' || zone === 'fresh') return 'fresh'
+  if (zone === 'neutral') return 'neutral'
+  if (zone === 'productive_fatigue') return 'building'
   return 'fatigued'
 }
 
-function formLabel(tsb: number): string {
-  if (tsb > 5) return 'Fresh'
-  if (tsb >= -10) return 'Neutral'
-  if (tsb >= -30) return 'Building'
-  return 'High fatigue'
-}
-
-function riskTone(risk: string | null): string {
-  if (risk === 'high') return 'high'
-  if (risk === 'moderate') return 'moderate'
+function rsbTone(zone: string | null): string {
+  if (zone === 'overreaching') return 'high'
+  if (zone === 'detraining') return 'moderate'
   return 'low'
-}
-
-function riskLabel(risk: string | null): string {
-  if (risk === 'high') return 'High risk'
-  if (risk === 'moderate') return 'Moderate risk'
-  return 'Low risk'
 }
 
 export default function TrainingLoadChart({ current }: Props) {
@@ -112,18 +102,24 @@ export default function TrainingLoadChart({ current }: Props) {
           <span className="tl-stat-value" style={{ color: TSB_COLOR }}>
             {current.tsb >= 0 ? '+' : ''}{current.tsb.toFixed(0)}
           </span>
-          <span className={`tl-form-badge tl-form-${formTone(current.tsb)}`}>{formLabel(current.tsb)}</span>
+          <span className={`tl-form-badge tl-form-${formTone(current.form_zone)}`}>
+            {current.form_zone_label ?? ''}
+          </span>
         </div>
         {hasAcwr && (
           <div className="tl-stat">
             <span className="tl-stat-label">ACWR</span>
             <span className="tl-stat-value" style={{ color: ACWR_COLOR }}>{current.acwr!.toFixed(2)}</span>
-            <span className={`tl-form-badge tl-risk-${riskTone(current.injury_risk)}`}>
-              {riskLabel(current.injury_risk)}
+            <span className={`tl-form-badge tl-risk-${rsbTone(current.rsb_zone)}`}>
+              {current.rsb_zone_label ?? ''}
             </span>
           </div>
         )}
       </div>
+
+      {hasAcwr && current.rsb_recommendation && (
+        <p className="tl-rsb-recommendation">{current.rsb_recommendation}</p>
+      )}
 
       {chartData.length > 1 && (
         <div className="tl-chart">

@@ -51,6 +51,13 @@
 .tl-risk-moderate { background: rgba(253, 203, 110, 0.25); color: #e6a817; }
 .tl-risk-high { background: rgba(231, 76, 60, 0.2); color: #e74c3c; }
 
+.tl-rsb-recommendation {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 12px;
+  line-height: 1.4;
+}
+
 .tl-chart {
   width: 100%;
 }
