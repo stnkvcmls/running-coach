@@ -1,22 +1,24 @@
-# Running Coach — Improvement Plan (v4)
+# Running Coach — Improvement Plan (v5)
 
-_Last updated: 2026-06-30_
+_Last updated: 2026-07-01_
 
-The v3 plan (2026-06-25) has been **fully delivered**. Benchmarked against
-[`CURRENT_STATE.md`](./CURRENT_STATE.md), every v3 item now ships: the
-**conversational AI coach** (SSE chat), **aerobic decoupling / efficiency factor**
-(surfaced as the aerobic-efficiency trend that replaced the originally-specced
-durability score), **race-day pacing strategy**, **structured-output plan
-generation**, the **durable AI task queue**, the **strength/mobility routine
-library**, **incremental load/threshold compute**, the **startup security guard**,
-the **config-driven model catalog**, the **Garmin schema-drift canary**, and
-**infinite-scroll history**.
+The v4 plan (2026-06-30) has been **fully delivered**. Benchmarked against
+[`CURRENT_STATE.md`](./CURRENT_STATE.md), every v4 item now ships:
+**weather-adjusted pace & heat coaching**, **chat tool-use** (the coach acts on
+the conversation), **persistent coach memory**, **daily readiness-driven plan
+adaptation**, **terrain/GAP-aware race pacing**, **fuelling & hydration
+guidance**, **race-aware taper/recovery**, **explicit RSB guidance**,
+**season-long periodization**, **strength progression + demos**, **user-defined
+custom charts**, and **security hardening** (startup refusal on unauthenticated
+public binds).
 
-So the app now computes the higher-order metrics, surfaces them, *and* talks. This
-v4 plan benchmarks the app **as it exists today** against a refreshed mid-2026
-competitive set and targets the frontier that conversational + analytical parity
-has exposed: **context the coach doesn't yet use (weather/terrain/life), a coach
-that talks but can't yet act, and daily adaptation.**
+So the coach now sees context, adapts the day, and acts on conversation. This v5
+plan benchmarks the app **as it exists today** against a refreshed mid-2026
+competitive set and targets what that parity has exposed: **a coach that only
+speaks when spoken to, an athlete who is measured but never asked, milestones
+that pass uncelebrated, and race plans that ignore race-day conditions** — plus
+the architecture debt that three delivered plan cycles have accumulated in two
+monolith modules.
 
 It is a **plan only** — no code has been changed.
 
@@ -26,37 +28,48 @@ It is a **plan only** — no code has been changed.
 
 | App | Paradigm | What it does that we don't (yet) |
 |---|---|---|
-| **Runna** | Adaptive prescriptive plans | **Weather-aware sessions** (heat/humidity pace adjustment), in-run **audio guidance** with **fuelling/hydration reminders**, **post-race recovery** setup, a holistic strength/nutrition coaching hub |
-| **Stryd** | Power-based execution | **Course/terrain-aware race power & splits** (Event Planner over a GPX course profile), explicit **Running Stress Balance** overtraining/undertraining zones |
-| **Garmin Coach / DSW** | Readiness-driven daily adaptation | **Daily Suggested Workouts** that down/up-regulate *today's* prescription from Training Readiness; **Endurance Score** + **Hill Score** (terrain-specific ability) |
-| **TrainingPeaks** | Analytical + structured | **Annual Training Plan** (season-long periodization to an A-race) with weekly TSS targets; progressive **strength builder** with demo videos |
-| **Coach Leo / HumanGO ("Hugo") / Trenara** | AI-native conversational | A coach with **persistent memory** (how you felt, what hurt, life context) that **acts on the conversation** — "I'm travelling next week, rework it" actually reworks the plan; daily feel-based adaptation |
-| **MeteoPace / RunWeather** | Conditions modelling | Single **conditions score** + concrete pace adjustment (sec/km) from temperature, dew point, wind, and course gradient |
+| **Garmin Connect+ (Active Intelligence)** | Proactive AI companion | **Push-notification insights** — the coach initiates: timely nudges from health/activity data without opening the app; a 140+ chart performance dashboard; food logging with dynamic macro targets |
+| **Runna (2026)** | Adaptive prescriptive plans | **Workout Briefings** — personalized, motivating pre-workout guidance before every session; plan continuity ("build on previous training, don't reset"); schedule-ahead plans |
+| **TrainingPeaks Premium** | Analytical + structured | **Peak Performances** — automatic detection & celebration of new personal bests across durations/distances; athlete-visible advanced analytics and HRV charts |
+| **Stryd** | Power-based execution | **Event Planner conditions modelling** — race predictions and target splits adjusted for race-day **temperature, humidity, altitude**, and a personal fatigue factor, refined continuously from the last 90 days |
+| **Intervals.icu** | Analytics platform | **Subjective wellness logging** (fatigue, soreness, mood, motivation scales) feeding the load model; **season-over-season power-curve comparison**; multi-sport load tracked per discipline |
+| **Coach Leo / HumanGO ("Hugo")** | AI-native conversational | Daily **feel-based** adaptation ("adapts to how you actually feel"); injury-pattern early warning (ramp/10%-rule flags acted on, not just shown); genuinely multi-sport plans |
 
-**Central finding (v4):** parity on *computing* and *conversing* is done. The
-remaining gaps cluster into three themes, and — as in prior cycles — most
-high-leverage items **reuse data and infrastructure already in the codebase**:
+**Central finding (v5):** the app now computes, converses, and adapts — but it is
+**reactive, sensor-only, and mute outside the app**. The remaining gaps cluster
+into four themes, and — as in every prior cycle — most high-leverage items
+**reuse data and infrastructure already in the codebase**:
 
-1. **The coach ignores context it already has (or could cheaply get).** We store
-   `Activity.weather_json` on every run but **never use it** — not in analysis, not
-   in readiness, not in pacing (`grep` confirms weather is touched only in sync /
-   API / schema layers). Heat and dew point are the single biggest day-to-day
-   confounder of pace, and Runna/MeteoPace/RunWeather have made weather-adjusted
-   pace table stakes. Likewise we compute **GAP** but pace races on **flat even/
-   negative splits** (`app/pacing.py` has no elevation term) while Stryd/Garmin pace
-   the actual course.
-2. **The coach can talk but can't act.** `chat_stream` reuses `_build_context` and
-   streams beautifully, but it's **read-only** — tool-use is wired for plan
-   generation (`_PLAN_TOOL_SCHEMA`) yet not exposed to chat. So "rework next week,
-   I'm travelling" produces *advice*, not a *changed plan*. And every chat starts
-   cold: there's no **persistent athlete memory** (injuries, preferences, life
-   events, how efforts felt) that Coach Leo/Hugo treat as the whole point.
-3. **The plan is weekly and static; the day isn't adapted.** We compute a 0–100
-   **readiness** score every morning but the prescribed `TrainingPlanDay` never
-   moves — Garmin DSW's core loop (swap today's hard session for easy when you're
-   shot, nudge up when you're primed) is absent. Plus there's no
-   **fuelling/hydration** guidance and no **post-race recovery** automation around
-   the races we already track.
+1. **The coach only speaks when spoken to.** Insights, readiness, plan-adaptation
+   suggestions, weekly reviews, and re-auth flags are all generated server-side on
+   schedules — then sit invisible until the athlete opens the PWA. There is **no
+   outbound channel at all**: `static/sw.js` is cache-only (no `push` handler),
+   and nothing in the backend can send a notification. Garmin's Active
+   Intelligence has made proactive, bite-sized push insights the ambient-coach
+   baseline. Everything worth pushing already exists as a row in `Insight`,
+   `PlanAdaptationSuggestion`, or `SyncStatus`.
+2. **The athlete is measured but never asked.** Readiness is 100% device-derived
+   (sleep, stress, body battery, RHR, HRV — `compute_readiness` has no subjective
+   term), and activity feedback is a good/bad toggle with tags. There is **no RPE
+   anywhere** (grep confirms), so a run with no HR/power falls to a duration-only
+   TSS floor when Foster's sRPE (RPE × minutes) is the standard fallback, and the
+   coach can't distinguish "legs felt dead" from a clean easy day. Intervals.icu
+   treats subjective scales as first-class wellness inputs; Coach Leo's pitch is
+   literally "adapts to how you actually feel."
+3. **Milestones pass silently and races ignore conditions.** We compute
+   mean-maximal curves on every sync but never notice a **new all-time best**
+   (`threshold.py` uses "new best" only for cache invalidation) — TrainingPeaks
+   celebrates Peak Performances automatically. And race pacing is terrain-aware
+   (v4) but **conditions-blind**: we adjust *past* pace for heat
+   (`app/weather.py`) yet hand the athlete flat-weather target splits for a July
+   marathon, while Stryd's Event Planner folds temperature/humidity into every
+   race target.
+4. **Three delivered plan cycles have piled features into two monoliths.**
+   `app/ai_coach.py` (2,586 lines: context, providers, chat, tools, plans, jobs)
+   and `app/api.py` (2,206 lines, ~53 routes) are where every new feature lands,
+   and the AI job worker executes jobs **serially in the scheduler thread**. None
+   of this blocks today's single-tenant deployment, but each future item pays a
+   growing tax.
 
 ---
 
@@ -64,24 +77,27 @@ high-leverage items **reuse data and infrastructure already in the codebase**:
 
 Legend: ✓ full · ◑ partial · ✗ absent
 
-| Capability | Running Coach (today) | Runna | TrainingPeaks | Garmin | Stryd | Coach Leo/Hugo |
-|---|---|---|---|---|---|---|
-| Conversational coach (chat) | ✓ (SSE, multi-turn) | ◑ | ✗ | ✗ | ✗ | ✓ |
-| Coach **acts on** the conversation (adapts plan) | ✗ (read-only) | ◑ | ✗ | ✗ | ✗ | ✓ |
-| Persistent athlete memory (feel / life context) | ✗ | ◑ | ✗ | ✗ | ✗ | ✓ |
-| Weather-adjusted pace / analysis | ✗ (weather stored, unused) | ✓ | ◑ | ◑ | ◑ | ◑ |
-| Terrain / GAP-aware race pacing | ✗ (flat splits only) | ◑ | ◑ | ✓ (PacePro) | ✓ | ✗ |
-| Daily readiness-driven workout adaptation | ✗ (readiness computed, plan static) | ◑ | ✗ | ✓ (DSW) | ◑ | ✓ |
-| Fuelling / hydration guidance | ✗ | ✓ | ✗ | ◑ | ✗ | ◑ |
-| Post-race recovery automation | ✗ | ✓ | ◑ | ◑ | ✗ | ◑ |
-| Race-day pacing strategy (splits) | ✓ (even / negative) | ✓ | ◑ | ✓ | ✓ | ◑ |
-| Aerobic decoupling / efficiency trend | ✓ | ◑ | ✓ | ◑ | ✓ | ✗ |
-| Closed-loop / adaptive plan | ✓ | ✓ | ◑ | ✓ | ◑ | ✓ |
-| Push structured workout to device | ✓ | ✓ | ✓ | ✓ | ◑ | ✗ |
-| Performance/power curve + race predictions | ✓ | ◑ | ◑ | ✓ | ✓ | ✗ |
-| Season-long / annual periodization | ◑ (rolling 4-week) | ◑ | ✓ (ATP) | ◑ | ◑ | ◑ |
-| Running Stress Balance / explicit over-under zones | ◑ (TSB+ACWR) | ◑ | ✓ | ✓ | ✓ | ◑ |
-| User-defined custom charts | ✗ | ✗ | ◑ | ✗ | ✗ | ✗ |
+| Capability | Running Coach (today) | Garmin | Runna | TrainingPeaks | Stryd | Intervals.icu | Coach Leo/Hugo |
+|---|---|---|---|---|---|---|---|
+| Proactive push notifications / ambient insights | ✗ (all in-app) | ✓ (Active Intelligence) | ◑ | ◑ | ◑ | ◑ | ◑ |
+| PR / peak-performance detection & celebration | ✗ (curves computed, bests unnoticed) | ✓ | ◑ | ✓ | ✓ | ✓ | ✗ |
+| Subjective RPE / soreness / mood input | ✗ | ◑ | ◑ | ◑ (feel/RPE) | ✗ | ✓ | ✓ |
+| sRPE load fallback (no-sensor sessions) | ✗ (duration floor) | ✗ | ✗ | ✓ | ✗ | ✓ | ◑ |
+| Conditions-aware race pacing (temp/humidity) | ✗ (terrain only) | ◑ (PacePro: terrain) | ◑ | ✗ | ✓ (Event Planner) | ✗ | ✗ |
+| Pre-workout briefing | ✗ (insights are post-hoc) | ◑ | ✓ (Workout Briefings) | ✗ | ◑ | ✗ | ✓ |
+| Injury-risk early warning that *acts* | ◑ (ACWR/ramp shown; RSB advice) | ◑ | ◑ | ◑ | ◑ | ◑ | ✓ |
+| Season-over-season curve/progress comparison | ✗ (single fitted curve) | ◑ | ◑ | ✓ | ✓ | ✓ | ✗ |
+| Multi-sport load accounting | ◑ (all types synced; TSS chain sport-agnostic but unaudited; thresholds run-only) | ✓ | ✗ | ✓ | ✗ | ✓ | ✓ |
+| Food logging / macro tracking | ✗ (fuelling targets only) | ✓ (Connect+ 2026) | ◑ | ✗ | ✗ | ◑ | ✗ |
+| Conversational coach that acts + remembers | ✓ (v4) | ◑ | ◑ | ✗ | ✗ | ✗ | ✓ |
+| Daily readiness-driven adaptation | ✓ (v4) | ✓ (DSW) | ◑ | ✗ | ◑ | ✗ | ✓ |
+| Terrain-aware race pacing | ✓ (v4) | ✓ | ◑ | ◑ | ✓ | ✗ | ✗ |
+| Season periodization + custom charts | ✓ (v4) | ◑ | ◑ | ✓ | ◑ | ✓ | ◑ |
+
+Deliberately **out of scope**: food logging / macro tracking (Garmin Connect+'s
+2026 flagship). It needs a food database, barcode/image recognition, and daily
+logging UX — an app-sized effort orthogonal to coaching. Our fuelling *targets*
+(v4) cover the coaching-relevant slice.
 
 ---
 
@@ -90,297 +106,282 @@ Legend: ✓ full · ◑ partial · ✗ absent
 Ordered by **impact ÷ effort**, favoring reuse of data and infrastructure already
 present. Effort key: **S** ≈ <1 day · **M** ≈ 1–3 days · **L** ≈ several days.
 
-### P0 — Highest leverage, data/infra already present
+### P0 — The coach speaks first
 
-#### P0-1 · Weather-adjusted pace & heat-aware coaching ✅ DONE (2026-06-30)
-**What:** Use the `Activity.weather_json` we already store. Add a small helper that
-derives a **heat/dew-point pace adjustment** (sec/km) and an effort-normalized
-"weather-adjusted pace" per run, then (a) show it on Activity Detail next to raw
-pace, (b) fold a one-line "23°C / dew point 18°C — ~12 s/km heat penalty, effort
-was stronger than the clock" into the AI activity context, and (c) factor recent
-heat stress into the readiness/recovery narrative. Optionally surface a "today's
-conditions" note on Today from the latest daily/weather data.
-**Rationale:** The clearest "context we own but ignore" gap — weather is stored on
-every activity and used **nowhere** analytically (confirmed by grep). Heat/dew point
-is the biggest day-to-day pace confounder, and Runna, MeteoPace, and RunWeather have
-made weather-adjusted pace an expectation. Pure analytic add over stored data; no
-new sync.
+#### P0-1 · Web Push notifications (proactive coach delivery)
+**What:** Add an outbound channel: standard **Web Push** (VAPID + `pywebpush`) on
+the PWA we already ship. A `PushSubscription` model stores per-user browser
+subscriptions; a new `app/notifications.py` exposes `notify(user_id, category,
+title, body, url)` with per-category opt-outs persisted in `SyncStatus`. Wire it
+into the events that already exist: new AI insight after an activity syncs, a
+plan-adaptation suggestion on a low-readiness morning, the weekly review landing,
+`garmin_needs_reauth` flips (today this fails silently until the user visits
+Settings), race-week reminders, and PR events (P0-2). `static/sw.js` gains
+`push` + `notificationclick` handlers that deep-link into the SPA route; Settings
+gains a "Notifications" section (permission request, category toggles).
+**Rationale:** The single biggest paradigm gap in the matrix. Every competitor's
+2026 direction is the coach *initiating* — Garmin's Active Intelligence is
+exactly this. We already generate everything worth pushing on schedules; it just
+sits unread. This also multiplies the value of v4 features: a readiness-driven
+downgrade suggestion is far more useful at 6:45am on your phone than discovered
+at lunch. No polling, no native apps — the PWA + service worker are already
+installed on the athlete's phone.
+**Effort:** M–L.
+**Files:** `app/notifications.py` (new), `app/models.py` (`PushSubscription`) +
+`alembic/versions/` (migration), `app/config.py` (`vapid_private_key`,
+`vapid_subject`), `app/api.py` (`POST/DELETE /push-subscriptions`,
+`GET/PUT /notification-preferences`), `app/schemas.py`, call sites:
+`app/ai_coach.py` (after insight save / weekly review / plan generation),
+`app/garmin_sync.py` (`mark_garmin_needs_reauth`), `app/main.py` (daily job:
+adaptation-suggestion + race-week pushes), `static/sw.js` (push handlers),
+`frontend/src/components/settings/NotificationsSection.tsx` + `.css` (new),
+`frontend/src/api/{types,hooks,client}.ts`, `requirements.txt` (`pywebpush`),
+`tests/test_notifications.py` (new), `tests/test_api_endpoints.py`.
+
+#### P0-2 · Personal records & peak performances
+**What:** Detect and celebrate bests from data we already compute. After
+`compute_curves_from_details` stores an activity's mean-max curve, compare each
+standard duration against the athlete's historical frontier (and race-distance
+efforts against fastest-known 5K/10K/half/marathon times); persist any new best
+as a `PersonalRecord` row (duration/distance, value, activity_id, previous
+value, date). Surface: a "New PB" badge on Activity Detail and the activity
+list, a Peak Performances panel (all-time + last-90-days bests) on Trends, a
+one-line entry in the AI activity context ("set a new 20-min GAP-speed best —
+clear fitness signal"), and a push via P0-1.
+**Rationale:** TrainingPeaks' Peak Performances and Strava's PR machinery show
+this is core motivation mechanics, and we are unusually well-positioned: the
+mean-max frontier already exists per-activity and in aggregate
+(`Activity.mean_max_json`, `threshold.py`'s frontier assembly) — today it's used
+for CP fitting and then discarded from the athlete's view. Pure detection +
+presentation over stored data; no new sync.
 **Effort:** S–M.
-**Files:** `app/weather.py` (new), `app/ai_coach.py` (`_format_activity_context`,
-`_recent_heat_stress_note`, `_build_context`), `app/api.py` (activity detail),
-`app/schemas.py`, `frontend/src/api/types.ts`,
-`frontend/src/components/activity-detail/ActivityDetailView.tsx` + `.css`,
-`tests/test_weather.py` (new, 19 tests).
+**Files:** `app/records.py` (new — frontier comparison, distance-PR extraction),
+`app/models.py` (`PersonalRecord`) + migration, `app/garmin_sync.py` (hook after
+curve computation), `app/ai_coach.py` (`_format_activity_context` PR line),
+`app/api.py` (`GET /personal-records`; PR flags on `ActivityDetail`),
+`app/schemas.py`, `frontend/src/components/trends/PeakPerformancesView.tsx` +
+`.css` (new), `frontend/src/components/activity-detail/ActivityDetailView.tsx`
+(badge), `frontend/src/api/{types,hooks}.ts`, `tests/test_records.py` (new).
 
-#### P0-2 · Let the coach act on the conversation (chat tool-use) ✅ DONE (2026-06-30)
-**What:** Give `chat_stream` the same tool-use treatment plan generation already
-has. Define a small set of coach tools — `regenerate_plan`,
-`adjust_upcoming_week(reason)`, `mark_setback(tag, note)`, `explain_workout(date)`
-— and let the model call them mid-conversation. Tool calls **enqueue `AIJob`s**
-(the durable queue already exists) rather than mutating inline, and the chat streams
-back a confirmation ("Reworked next week around your travel — easy runs Tue/Thu, long
-run moved to Sunday"). Keep plain Q&A as the default path.
-**Rationale:** Today the coach talks but is **read-only** — `_PLAN_TOOL_SCHEMA` is
-wired for plan generation but not exposed to chat, so "I'm travelling next week,
-rework it" yields advice, not a changed plan. This is the 2026 differentiator that
-Coach Leo / HumanGO ("Hugo") / Trenara are built on, and we already own every hard
-part: provider dispatch with tool-use, the context builder, the realignment /
-generation entry points, and the `AIJob` ledger to run them durably.
+### P1 — Ask the athlete, plan the real race
+
+#### P1-1 · Subjective feedback: per-run RPE + daily check-in
+**What:** Two small subjective inputs, both feeding existing models. (a)
+**Per-activity RPE (1–10)** added to the existing feedback prompt (rating/tags/
+text already flow through `POST /activities/{id}/feedback`); stored on
+`Activity.rpe`. Insert **sRPE TSS** (Foster: RPE × duration-minutes, normalized)
+into the TSS fallback chain in `training_load.py` between hrTSS and the
+duration-only floor, so sensor-less runs carry honest load. (b) A **daily
+check-in** (soreness, energy, mood — three 1–5 taps on Today, skippable) stored
+in a `DailyCheckin` row; when present, readiness gains a subjective component
+(reweighting the existing composite) and the AI context gets a "how the athlete
+says they feel" line. Persistent soreness in one area auto-suggests a
+`CoachMemory` niggle via the existing chat-tool path.
+**Rationale:** The coach knows the athlete's HRV to the millisecond but has never
+asked how they feel. Intervals.icu treats subjective scales as first-class
+wellness; Coach Leo/Hugo's differentiator is feel-based adaptation; TrainingPeaks
+collects post-workout feel/RPE. Closes the loop with v4's readiness-driven
+adaptation — a "legs dead" check-in should downgrade today just like a bad HRV.
+All plumbing (feedback endpoint, readiness composite, context builder, memory)
+already exists.
 **Effort:** M.
-**Files:** `app/ai_coach.py` (`_CHAT_TOOL_SCHEMAS`/`_CHAT_GEMINI_TOOLS`,
-`_dispatch_chat_tool`, streaming tool-use loop in `_stream_claude`/`_stream_gemini`,
-optional `note` threaded through `generate_training_plan`/`execute_job`, reusing
-`enqueue_job`), `app/models.py` (`ChatMessage.actions_json`), `alembic/versions/`
-(migration), `app/api.py` (`POST /chat` relays `action` SSE events, `GET /chat`
-round-trips them), `app/schemas.py` (`ChatAction`), `frontend/src/api/types.ts`,
-`frontend/src/components/chat/ChatView.tsx` + `.css` (action chips),
-`tests/test_ai_coach.py`, `tests/test_job_queue.py`, `tests/test_api_endpoints.py`
-(17 new tests).
+**Files:** `app/models.py` (`Activity.rpe`, `DailyCheckin`) + migration,
+`app/training_load.py` (sRPE in `_activity_tss`, subjective readiness component),
+`app/api.py` (feedback endpoint accepts `rpe`; `POST /daily-checkin`; Today
+response carries today's check-in), `app/schemas.py`, `app/ai_coach.py` (context
+lines), `app/plan_adaptation.py` (soreness folds into bands),
+`frontend/src/components/activity-detail/FeedbackPrompt.tsx` (RPE selector),
+`frontend/src/components/today/DailyCheckinCard.tsx` + `.css` (new),
+`frontend/src/api/{types,hooks}.ts`, `tests/test_training_load.py`,
+`tests/test_readiness.py`, `tests/test_api_endpoints.py`.
 
-### P1 — Execution depth & daily adaptation
-
-#### P1-1 · Daily readiness-driven workout adaptation ✅ DONE (2026-07-01)
-**What:** Close the loop between the **readiness score we already compute** and the
-**static plan day**. On Today load, if the selected day's prescribed `TrainingPlanDay`
-is hard (tempo/interval/long) and readiness is low, propose a down-regulated swap
-(Low readiness → rest, Fair readiness → easy at ~60% distance); if readiness is
-Excellent on an easy day, offer a small upgrade nudge (+15% distance, capped at
-+2 km). Surfaced as an accept/dismiss card on Today; accepting mutates the
-`TrainingPlanDay` in place (so adherence/plan context automatically reflects the
-swap), dismissing snoozes it via the existing `SyncStatus` key/value store. Purely
-rule-based (readiness bands × workout type) — no AI involved.
-**Rationale:** Garmin DSW's core loop. We have the inputs (readiness, the plan, the
-calendar) but never act on them day-to-day — the plan is regenerated weekly and
-otherwise frozen. High-signal, mostly deterministic, and it makes readiness
-*actionable* instead of merely displayed.
-**Effort:** M.
-**Files:** `app/plan_adaptation.py` (new, `suggest_adaptation`), `app/schemas.py`
-(`PlanAdaptationSuggestion`, `PlanAdaptationRequest`, `TodayResponse.plan_adaptation`),
-`app/api.py` (`GET /today` attaches the suggestion; new
-`POST /training-plan/adapt-day` accept/dismiss endpoint, reusing `SyncStatus` — no
-migration needed), `frontend/src/api/types.ts`, `frontend/src/api/hooks.ts`
-(`useAdaptPlanDay`), `frontend/src/components/today/PlanAdaptationCard.tsx` + `.css`,
-`TodayView.tsx`, `tests/test_plan_adaptation.py` (new, 11 tests),
-`tests/test_api_endpoints.py` (9 new tests).
-
-#### P1-2 · Terrain / GAP-aware race pacing ✅ DONE (2026-07-01)
-**What:** Extend `app/pacing.py` beyond flat even/negative splits to allocate pace by
-**gradient** using the Minetti grade-cost model already in `app/streams.py`: given a
-course elevation profile, hold *effort* (GAP-equivalent pace) constant so uphill
-splits are slower and downhill splits faster while still hitting the target time.
-The profile is sourced from the athlete's own closest-distance past run (its stored
-elevation/distance stream) — no new upload path. Renders an elevation-aware split
-table (grade % per split) and keeps the existing push-to-watch path unchanged.
-**Rationale:** We compute GAP everywhere but pace races as if every course were flat —
-Stryd's Event Planner and Garmin PacePro pace the *actual course*. The natural
-"execute the real race" upgrade to the pacing feature shipped in v3; reuses the
-Minetti model, race prediction, and the workout translator.
-**Effort:** M. (GPX/course-upload import remains a future L-effort follow-up, not
-implemented here.)
-**Files:** `app/pacing.py` (`"terrain"` strategy, gradient-aware split allocation,
-`grade_pct` on `PacingSplit`), `app/streams.py` (`minetti_factor` made public and
-reused), `app/api.py` (`_matched_course_profile` helper; `strategy=terrain` on
-`GET /races/{id}/pacing` and `POST /races/{id}/pacing/push`), `app/schemas.py`
-(`PacingSplit.grade_pct`, `PacingStrategyResponse.course_activity_id/name`),
-`frontend/src/api/types.ts`, `frontend/src/components/today/RacePacingCard.tsx` +
-`.css` (Terrain strategy button, grade column, course-source note),
-`tests/test_pacing.py` (new terrain-strategy unit tests),
-`tests/test_api_endpoints.py` (new terrain-pacing endpoint tests).
-
-#### P1-3 · Persistent athlete memory for the coach ✅ DONE (2026-07-01)
-**What:** A durable, user-scoped **coach memory** the AI reads on every analysis and
-chat turn: structured facts the athlete (or the coach, via P0-2 tool-use) records —
-current niggles, life constraints ("marathon training around shift work"),
-preferences ("hates treadmills"), and salient how-it-felt notes distilled from chat /
-feedback. Inject a compact "what the coach remembers" block into `_build_context` and
-`_build_chat_context`.
-**Rationale:** Coach Leo / Hugo's headline is *memory* — "remembers what hurt, what
-worked, how you felt." We persist chat turns but never distill them into durable
-context, so every session re-derives the athlete from metrics alone. Turns the
-conversational coach from stateless Q&A into a relationship.
-**Effort:** M.
-**Files:** `app/models.py` (`CoachMemory`: category/tag/note/active) + Alembic
-(`l5m6n7o8p9q0_add_coach_memory`), `app/ai_coach.py`
-(`_format_coach_memory_context` injected into `_build_context`, which
-`_build_chat_context` already delegates to; the `mark_setback` chat tool now also
-writes a durable `CoachMemory` row alongside its existing `Insight`), `app/api.py`
-(`GET/POST /coach-memory`, `PUT/DELETE /coach-memory/{id}`), `app/schemas.py`
-(`CoachMemoryRequest`/`CoachMemoryUpdateRequest`/`CoachMemoryResponse`),
-`frontend/src/components/settings/CoachMemorySection.tsx` + `.css`,
-`frontend/src/api/types.ts`, `frontend/src/api/hooks.ts`,
-`tests/test_coach_memory.py` (new, 9 tests), `tests/test_ai_coach.py` (5 new/updated
-tests).
-
-### P2 — Breadth & coaching completeness
-
-#### P2-1 · Fuelling & hydration guidance ✅ DONE (2026-07-01)
-**What:** Generate simple, personalized **fuelling/hydration** guidance for long runs
-and races — carb-per-hour and fluid targets scaled by duration, intensity, body weight
-(in `AthleteProfile`), and recent **heat** (reuses P0-1) — rendered on the long-run /
-race workout detail, and optionally as in-plan reminders.
-**Rationale:** Runna's 2026 push (hydration/nutrition checklists, fuelling audio
-reminders) and a recurring holistic-coaching differentiator; we cover strength now but
-not fuel. Builds on profile + weather data already present.
-**Effort:** M.
-**Files:** `app/nutrition.py` (new, `compute_fuelling_guidance` — duration-gated at 60
-min, carb tiers by duration/intensity, fluid scaled by body weight + heat stress),
-`app/ai_coach.py` (`_recent_hot_runs` extracted from `_recent_heat_stress_note`; new
-public `recent_heat_stress` reused for fuelling's heat signal on future/undated
-efforts), `app/schemas.py` (`FuellingGuidance`, added to `TrainingPlanDayResponse` and
-`CalendarEventResponse`), `app/api.py` (`_day_to_response` attaches guidance to `long`
-plan days with a known duration; `GET /calendar-events/{id}` attaches guidance to
-`race` events using `goal_time_sec`/projected/predicted finish time — both reuse a
-single profile + heat-stress lookup per response, no per-day queries),
-`frontend/src/api/types.ts`, `frontend/src/components/plan/PlanView.tsx` + `.css`
-(collapsible fuelling panel on long-run day cards, alongside the existing routine
-panel), `frontend/src/components/workout-detail/WorkoutDetailView.tsx` + `.css`
-(fuelling card on race detail), `tests/test_nutrition.py` (new, 14 tests),
-`tests/test_ai_coach.py` (5 new tests), `tests/test_api_endpoints.py` (6 new tests).
-
-#### P2-2 · Post-race recovery & race-aware taper automation ✅ DONE (2026-07-01)
-**What:** Use the Garmin race calendar we already track (`GarminCalendarEvent`,
-`event_type="race"`, with `priority`/`distance_m`) to auto-shape the plan around key
-races: a **taper** ramp into a race and a structured **recovery block** after it
-(reduced volume, easy/cross days), folded into plan generation and realignment rather
-than left to the athlete.
-**Rationale:** Runna is adding post-race recovery setup; tapering/recovery is core
-periodization we don't automate despite knowing every race date and priority. Sharpens
-the closed-loop plan around the moments that matter most.
-**Effort:** M.
-**Files:** `app/ai_coach.py` (`_build_race_periodization_context` computes
-deterministic, distance-scaled RACE WEEK / TAPER (1-3 wks out) / RECOVERY (1-2 wks
-post-race) directives, injected into `_build_plan_context` as a mandatory
-"Race Periodization Directives" section that `generate_training_plan` picks up on
-every regeneration — both the weekly cron and the realignment "Regenerate" path;
-`detect_plan_realignment` also flags `should_prompt`/`race_note` when a tracked race
-completed after the active plan was generated and is still within its recovery
-window, even with zero missed sessions), `app/schemas.py`
-(`PlanRealignmentStatus.race_note`), `app/api.py` (realignment-status endpoint),
-`frontend/src/api/types.ts`, `frontend/src/components/plan/PlanView.tsx`,
-`frontend/src/components/today/TodayView.tsx` (both realignment banners surface
-`race_note`), `tests/test_ai_coach.py` (10 new tests), `tests/test_api_endpoints.py`
-(2 new tests).
-
-#### P2-3 · Explicit Running Stress Balance guidance ✅ DONE (2026-07-01)
-**What:** Promote the TSB/ACWR we already compute into an explicit
-**over-/under-training "sweet-spot" read** — a labelled zone (detraining / productive /
-overreaching) with a plain-language recommendation, on Today and in the AI context,
-rather than a raw Form number.
-**Rationale:** Stryd's Running Stress Balance and TrainingPeaks' performance-management
-guidance make this an at-a-glance decision aid; we have the inputs but present them as
-numbers. Cheap interpretation layer over existing series.
+#### P1-2 · Conditions-aware race pacing
+**What:** Fold expected race-day conditions into the pacing plans from v3/v4.
+`GET /races/{id}/pacing` accepts optional `expected_temp_c` / `expected_dew_point_c`
+(UI inputs on the pacing card, pre-filled from the median conditions of the
+athlete's recent weathered runs via the existing `recent_heat_stress` machinery);
+reuse `heat_pace_adjustment` to scale every split's target and annotate the
+response: "at 24°C / dew point 18°C your 3:30 goal costs ~+6 min — adjusted
+splits below, or retarget." Composes with the terrain strategy (grade and heat
+multiply). The push-to-watch path is unchanged — it just receives the adjusted
+splits.
+**Rationale:** Stryd's Event Planner treats temperature/humidity as core inputs
+to race targets; we built the exact heat model in v4 (`app/weather.py`) and apply
+it only retrospectively. This is the same formula pointed forward — no forecast
+API dependency (user-entered/estimated conditions keep it self-hosted-friendly),
+and it prevents the classic blow-up the entire pacing feature exists to avoid.
 **Effort:** S–M.
-**Files:** `app/schemas.py` (`classify_tsb`/`classify_acwr`, `TrainingLoadPoint`
-zone/label/recommendation fields, auto-derived via a model validator),
-`app/training_load.py` (`_interpret_tsb`/`_interpret_acwr` now reuse the same
-classifiers; `format_training_load_context` renders the RSB recommendation),
-`frontend/src/components/today/TrainingLoadChart.tsx` + `.css` (server-derived zone
-badges replace the old client-side duplicate banding, plus a recommendation line),
-`frontend/src/api/types.ts`, `tests/test_training_load.py`,
-`tests/test_training_load_edge.py` (10 new tests).
+**Files:** `app/pacing.py` (conditions factor on split targets),
+`app/api.py` (pacing endpoints accept conditions; default-estimate helper),
+`app/schemas.py` (`PacingStrategyResponse.conditions_*` fields),
+`frontend/src/components/today/RacePacingCard.tsx` + `.css` (temp/dew-point
+inputs, cost line), `frontend/src/api/types.ts`, `tests/test_pacing.py`,
+`tests/test_api_endpoints.py`.
 
-### P3 — Hygiene, scale & carryover (largely independent)
+#### P1-3 · Pre-workout briefing (Runna-style)
+**What:** A short, personalized **briefing for today's session**, generated as an
+`AIJob` after the morning daily sync (and on demand from the workout card):
+why this session matters in the current season phase, concrete execution targets
+(paces/zones from the plan day), a readiness/adaptation note ("readiness 78 —
+run it as written"), fuelling if long (P2-1 data from v4), and a conditions
+one-liner. Stored as a new `Insight` type (`briefing`) so history/dismissal come
+free; rendered as a card on Today above the workout; pushed via P0-1 for
+athletes who opt in.
+**Rationale:** Runna's 2026 headline feature. All our AI output is *post-hoc*
+(analysis after the run, review after the week) — the one moment a coach is most
+valuable, right before the session, is silent. Every ingredient exists:
+`_build_context`, the plan day, readiness, the season skeleton, fuelling,
+weather, the job queue, and the insight store. This is a prompt + a hook + a
+card.
+**Effort:** M.
+**Files:** `app/ai_coach.py` (`generate_briefing` + prompt, new job type in
+`execute_job`, hook in daily-sync path), `app/main.py`
+(`run_daily_sync_for_user` enqueues briefing when a plan day exists),
+`app/api.py` (`POST /training-plan/days/{id}/briefing`; Today response includes
+latest briefing insight), `app/schemas.py`,
+`frontend/src/components/today/BriefingCard.tsx` + `.css` (new), `TodayView.tsx`,
+`frontend/src/api/{types,hooks}.ts`, `tests/test_ai_coach.py`,
+`tests/test_job_queue.py`.
 
-- **P3-1 · Season-long / annual periodization** ✅ DONE (2026-07-01). Today's plan was a
-  rolling 4-week window; TrainingPeaks' ATP periodizes a whole season to an A-race.
-  Added a deterministic (no AI call) season-long skeleton — `base → build → peak →
-  taper → race → recovery` phase blocks with a target weekly km per week — spanning
-  from next Monday to the athlete's goal race, that the 4-week AI generator now reads
-  as guidance alongside the existing (and still authoritative) Race Periodization
-  Directives. The goal race is the nearest upcoming Garmin-calendar A-priority race,
-  falling back to the nearest race of any priority, then to `AthleteProfile.goal_race_date`,
-  else no skeleton is generated. Regenerates automatically whenever the resolved goal
-  race changes. **L.** Files: `app/models.py` (`SeasonPlan`, `SeasonPlanWeek`) +
-  Alembic (`m6n7o8p9q0r1_add_season_plan`), `app/season_plan.py` (new —
-  `select_goal_race`, `generate_season_plan`, `ensure_season_plan`,
-  `build_season_plan_context`), `app/ai_coach.py` (`_build_plan_context` appends the
-  "Season Plan Skeleton" section; new system-prompt rule bullet), `app/schemas.py`
-  (`SeasonPlanWeekResponse`, `SeasonPlanResponse`), `app/api.py` (`GET
-  /season-plan`), `frontend/src/api/types.ts`, `frontend/src/api/hooks.ts`
-  (`useSeasonPlan`), `frontend/src/components/plan/SeasonTimeline.tsx` + `.css` (new —
-  phase-colored week strip + legend on the Plan page), `PlanView.tsx`,
-  `tests/test_season_plan.py` (new, 30 tests), `tests/test_ai_coach.py` (2 new tests),
-  `tests/test_api_endpoints.py` (3 new tests).
-- **P3-2 · Strength progression & demos** ✅ DONE (2026-07-01). The routine library
-  was static; Garmin/TrainingPeaks are adding progressive load and demo videos. Each
-  routine now scales with the plan day's `week_number` — `get_routine_for_week` adds
-  +1 set per exercise every 2 weeks from week 3, capped at +2, with a "Progression:
-  +N set(s) this week" note appended — and every exercise carries a `demo_url` (a
-  YouTube search link built from the exercise name, not a guessed specific video) for
-  a form demo. **S–M.** Files: `app/strength_routines.py` (`exercise_demo_url`,
-  `get_routine_for_week`, `_apply_progression`), `app/schemas.py`
-  (`StrengthExercise.demo_url`), `app/api.py` (`_day_to_response` and
-  `/strength-routines` hydrate via `get_routine`/`get_routine_for_week`),
-  `frontend/src/api/types.ts`, `frontend/src/components/plan/PlanView.tsx` + `.css`
-  (demo-link icon per exercise), `tests/test_strength_routines.py` (new, 11 tests),
-  `tests/test_api_endpoints.py` (2 new/updated tests).
-- **P3-3 · User-defined custom charts** ✅ DONE (2026-07-01). Carryover from v3 — an
-  Intervals.icu-style custom chart/metric builder over the stored series. A registry
-  of ~20 chartable metrics spans the three stored time-series sources (per-run
-  `Activity` rows aggregated to one point per day, `DailySummary` wellness rows, and
-  the cached CTL/ATL/TSB/ACWR series), merged into a unified daily series by two new
-  endpoints. A new "Custom" tab in Trends lets the athlete pick up to 4 metrics across
-  groups, choose a date range, and plot them on a multi-axis Recharts line chart;
-  selection and named presets persist client-side (`localStorage`), so no new backend
-  model/migration was needed. **L.** Files: `app/schemas.py` (`CustomChartMetric`,
-  `CustomChartMetricsResponse`, `CustomChartPoint`, `CustomChartDataResponse`),
-  `app/api.py` (`_CUSTOM_CHART_METRICS` registry, `GET /custom-charts/metrics`,
-  `GET /custom-charts/data`), `frontend/src/api/types.ts`, `frontend/src/api/hooks.ts`
-  (`useCustomChartMetrics`, `useCustomChartData`),
-  `frontend/src/components/trends/CustomChartsView.tsx` + `.css` (new), `TrendsView.tsx`
-  (new "Custom" tab), `tests/test_custom_charts.py` (new, 9 tests).
-- **P3-4 · Security default hardening** ✅ DONE (2026-07-01). The startup guard
-  *warned* on an unauthenticated non-loopback bind but still started; it now
-  **refuses to start** in that configuration (`RuntimeError` raised from
-  `_check_security_config`, surfaced through the FastAPI `lifespan` before any
-  request is served), with a new `ALLOW_INSECURE_BIND` opt-out env var for
-  trusted private networks that still logs the `CRITICAL` warning but lets the
-  app continue. **S.** Files: `app/config.py` (`Settings.allow_insecure_bind`),
-  `app/main.py` (`_check_security_config` raises unless overridden),
-  `tests/test_main.py` (refusal + opt-out coverage), `README.md`,
-  `docs/CURRENT_STATE.md`.
-- **P3-5 · Keep the suite green.** ✅ DONE (2026-07-01). Audited coverage across the
-  newer surfaces and closed the real contract/edge gaps: `app/weather.py` edge cases
-  (a weather payload with neither a temp nor dew-point key; non-numeric temp/dew-point
-  values), the weather-adjusted-pace line's wiring into `_format_activity_context`
-  (previously only `weather.py` itself was tested in isolation, not its integration
-  into the AI activity context), `_recent_hot_runs`' malformed-weather handling,
-  `_build_context`'s heat-stress note being folded into a non-empty readiness section,
-  `_build_chat_context`'s until-now-untested `activity_id` branch (chat about a
-  specific activity, plus the not-found/other-user fallback), and
-  `_format_upcoming_plan_context`'s "plan exists but no days in the next 7"
-  branch. Daily-adaptation (`app/plan_adaptation.py`, already 100%) and GPX/terrain
-  pacing (`/races/{id}/pacing?strategy=terrain`) already had solid contract coverage
-  and needed no changes. **Throughout.** Files: `tests/test_weather.py` (3 new tests),
-  `tests/test_ai_coach.py` (9 new tests). Suite: 795 backend tests, all green;
-  coverage 84.4% → 84.6% (gate: 80%).
+### P2 — Sharper analysis, honest load
+
+#### P2-1 · Injury-risk early warning that acts
+**What:** Promote the ACWR / ramp-rate / `injury_risk` flags (computed daily in
+`DailyLoadSeries`) plus active `CoachMemory` niggles into a proactive loop: when
+risk crosses into "high" — even on a good-readiness day — surface a caution card
+on Today, generate a rule-based cutback suggestion through the existing
+`plan_adaptation` accept/dismiss path (extended with a `risk` trigger alongside
+readiness bands), inject a mandatory "load caution" directive into the plan/chat
+context, and push via P0-1.
+**Rationale:** We already compute exactly what the AI-coach crowd markets as
+injury prevention (10%-rule ramp flags, ACWR bands) — but it's displayed, not
+acted on. HumanGO adjusts plans when athletes report injuries; our v4 adaptation
+loop reacts to readiness but not to load trajectory. Cheap: detection exists,
+the suggestion/accept mechanism exists; this connects them.
+**Effort:** S–M.
+**Files:** `app/plan_adaptation.py` (risk-triggered suggestions),
+`app/api.py` (Today attaches risk caution), `app/ai_coach.py` (context
+directive), `app/schemas.py`,
+`frontend/src/components/today/PlanAdaptationCard.tsx` (risk variant),
+`tests/test_plan_adaptation.py`, `tests/test_api_endpoints.py`.
+
+#### P2-2 · Season-over-season performance comparison
+**What:** Add a comparison overlay to the Performance Curve view: the fitted
+power/GAP-pace curve and mean-max frontier for the **current window vs a prior
+period** (previous 90 days, same period last year, or a custom range), plus
+delta callouts ("threshold pace 8 s/km faster than March"). Backend: parameterize
+the existing frontier/fit assembly by date range (the incremental cache covers
+"current"; comparison windows are computed on demand and cached in `SyncStatus`
+by range fingerprint). Custom charts gain an optional comparison series.
+**Rationale:** Intervals.icu's "compare your power curve across seasons" and
+TrainingPeaks' progress views make longitudinal comparison the payoff of all this
+data collection; we fit one curve and show only *now*. Reuses `threshold.py`
+wholesale — this is a windowing parameter and a second line on an existing chart.
+**Effort:** M.
+**Files:** `app/threshold.py` (windowed frontier/fit), `app/api.py`
+(`GET /performance-curve?compare=...`; custom-chart comparison param),
+`app/schemas.py`,
+`frontend/src/components/trends/PerformanceCurveView.tsx` + `.css`,
+`frontend/src/components/trends/CustomChartsView.tsx`,
+`frontend/src/api/{types,hooks}.ts`, `tests/test_threshold.py`,
+`tests/test_custom_charts.py`.
+
+#### P2-3 · Multi-sport load audit & explicit handling
+**What:** Make non-running load honest and visible. Today the sync stores **all**
+activity types and the TSS chain is nominally sport-agnostic, but it was designed
+for runs (rTSS assumes running pace; thresholds filter to `_is_run`). Audit and
+formalize: hrTSS for rides/other HR-bearing sessions, duration-floor (or sRPE
+via P1-1) for strength/yoga, never rTSS for non-runs; tag `DailyLoadSeries`
+contributions by sport; show a per-sport split on the training-load chart; note
+cross-training load in the AI context ("Tuesday's 90-min ride added ~55 TSS").
+**Rationale:** The plan prescribes cross/strength days, and readiness/ACWR feed
+adaptation — if a hard ride contributes wrong (or accidental) load, the whole
+adaptive loop is skewed. Intervals.icu/TrainingPeaks/Garmin all account
+multi-sport load; ours is currently *implicit and unaudited*. Mostly verification
++ small fixes + presentation.
+**Effort:** S–M.
+**Files:** `app/training_load.py` (sport-aware TSS dispatch, per-sport
+aggregation), `app/api.py` (training-load response sport split),
+`app/schemas.py`, `app/ai_coach.py` (context line),
+`frontend/src/components/today/TrainingLoadChart.tsx`,
+`tests/test_training_load.py` (ride/strength fixtures).
+
+### P3 — Architecture & hygiene (pay down before the next cycle)
+
+- **P3-1 · Split the two monoliths.** `app/ai_coach.py` (2,586 lines) →
+  an `app/coach/` package: `context.py` (context builders), `providers.py`
+  (Anthropic/Gemini dispatch + retry), `chat.py` (streaming + chat tools),
+  `plans.py` (generation/realignment/periodization), `jobs.py` (AIJob ledger),
+  with `app/ai_coach.py` kept as a thin re-export shim so nothing breaks.
+  `app/api.py` (2,206 lines, ~53 routes) → `app/routers/` split by domain
+  (activities, daily, calendar, plan, races, chat, settings, trends/charts,
+  export) mounted on the same `/api/v1` router. **Mechanical, zero behavior
+  change, do it before P0/P1 add more weight.** The 745-test suite is the safety
+  net. **M–L.** Files: `app/coach/*` (new), `app/routers/*` (new),
+  `app/ai_coach.py` / `app/api.py` (shims), test imports.
+- **P3-2 · AI-job worker concurrency & sync isolation.** The worker claims up to
+  5 jobs but runs them **serially in the APScheduler thread**, so one slow plan
+  generation delays every user's analysis (and the next scheduler tick).
+  Execute claimed jobs on a small `ThreadPoolExecutor` (SQLite WAL tolerates
+  this; sessions are per-thread already), keep claiming atomic, and add a
+  per-job timeout. Similarly, per-user Garmin sync fan-out is serial — a
+  worthwhile follow-up only if multi-tenant use grows; note it, don't build it.
+  **S–M.** Files: `app/main.py` (`_worker_run_pending_jobs`),
+  `app/ai_coach.py`/`app/coach/jobs.py` (`execute_job` timeout),
+  `tests/test_job_queue.py`.
+- **P3-3 · Frontend component tests.** Vitest covers only pure utils (57 cases);
+  the adaptive-coaching UI (PlanAdaptationCard, RacePacingCard, ChatView action
+  chips, FeedbackPrompt, and the new P0/P1 cards) has zero render coverage. Add
+  React Testing Library + a few focused interaction tests for the cards that
+  encode coaching decisions. **M.** Files: `frontend/package.json`,
+  `frontend/src/components/**/*.test.tsx` (new), `vite.config.ts`.
+- **P3-4 · Ops observability surface.** The schema-drift canary and AIJob
+  failures live in logs and `SyncStatus` — invisible in the UI. Add a compact
+  health panel in Settings (last sync per job, canary status, recent failed
+  jobs with retry buttons) over data that already exists, and route canary
+  alarms + repeated job failures through P0-1 notifications. **S–M.** Files:
+  `app/api.py`/`app/routers/settings.py` (`GET /health-detail`),
+  `frontend/src/components/settings/SystemHealthSection.tsx` + `.css` (new),
+  `tests/test_api_endpoints.py`.
+
+### Architecture assessment (no change recommended)
+
+- **FastAPI + SQLite (WAL) + APScheduler remains right-sized** for the
+  self-hosted single/few-tenant reality. Incremental compute (v3/v4) removed the
+  read-path hot spots; nothing in v5 needs Postgres, Redis, or an external queue.
+  The `AIJob` table-as-queue is the correct durability layer at this scale —
+  P3-2's thread pool is the only concurrency change warranted.
+- **Web Push (P0-1) is the one genuinely new infrastructure piece** in this plan,
+  and it's deliberately the standards-based, dependency-light option (VAPID +
+  `pywebpush`, no Firebase/APNs accounts) matching the self-hosted ethos.
+- **No forecast-API dependency**: P1-2 uses athlete-entered/estimated conditions
+  rather than a weather-service key, keeping zero-config deployments intact.
 
 ---
 
 ## 4. Suggested sequencing
 
-- **Phase A — use the context we already own:** P0-1 (weather-adjusted pace) + P2-3
-  (RSB guidance). Both are cheap interpretation layers over stored data and make the
-  coach visibly smarter immediately; P0-1 also feeds P2-1.
-- **Phase B — make the conversational coach act:** P0-2 (chat tool-use) → P1-3
-  (persistent memory). P0-2 turns chat from advice into action; P1-3 gives it
-  continuity. Together they are the 2026 conversational frontier and reuse the AIJob
-  queue and context builder.
-- **Phase C — daily adaptation & real-course execution:** P1-1 (readiness-driven daily
-  adaptation) → P1-2 (terrain-aware pacing) → P2-2 (race-aware taper/recovery). This is
-  the "adapt the day, pace the real race" loop.
-- **Phase D — breadth:** P2-1 (fuelling/hydration), then P3 items as capacity allows.
-- **Throughout:** P3-5 tests in parallel; land **P3-4 (security hardening)** whenever
-  touched — it's the only item with real downside risk.
+- **Phase A — pay down, then speak up:** P3-1 (monolith split — everything after
+  lands in cleaner homes) → P0-1 (push notifications) → P0-2 (PRs, which
+  immediately gives the push channel something delightful to say).
+- **Phase B — ask the athlete:** P1-1 (RPE + check-in) → P2-1 (risk-triggered
+  adaptation, which benefits from subjective inputs) — together these make the
+  adaptive loop feel-aware, not just sensor-aware.
+- **Phase C — race realism & the morning coach:** P1-2 (conditions-aware pacing)
+  → P1-3 (pre-workout briefing, which can then cite conditions, readiness, and
+  fuelling in one card).
+- **Phase D — analysis depth:** P2-2 (season comparison) + P2-3 (multi-sport
+  audit) as capacity allows.
+- **Throughout:** P3-2 whenever the worker is touched; P3-3 alongside each new
+  card; P3-4 with P0-1 (shared notification plumbing).
 
 ---
 
 ## 5. Sources
 
-- Runna — [2026 app updates: smarter/adaptive plans, weather adjustments, strength, fuelling](https://www.runningwestwardho.co.uk/post/runna-app-updates-2026-smarter-training-plans-adaptive-coaching-new-features-explained), [Training plans](https://www.runna.com/training/training-plans), [Garmin integration](https://www.runna.com/integrations/garmin)
-- Stryd — [Race Power Calculator](https://help.stryd.com/en/articles/6879547-race-power-calculator), [Race Calculations FAQ](https://help.stryd.com/en/articles/8955821-stryd-race-calculations-faq), [Features (Running Stress Balance, Power Duration Curve)](https://www.stryd.com/features)
-- Garmin — [Training Readiness (six factors)](https://the5krunner.com/garmin-features/training/training-readiness/), [Garmin Coach expands to adaptive running/cycling/strength](https://garminrumors.com/garmin-expands-garmin-coach-with-adaptive-running-cycling-and-strength-training-plans/), [Daily Suggested Workouts & training features](https://the5krunner.com/garmin-features/training/), [Advanced strength feature](https://the5krunner.com/2026/04/02/garmin-strength-training-features-survey/)
-- TrainingPeaks — [Creating a training plan (2026)](https://www.trainingpeaks.com/coach-blog/how-to-create-a-trainingpeaks-training-plan/), [Annual Training Plan methodologies](https://help.trainingpeaks.com/hc/en-us/articles/224662768-Annual-Training-Plan-Methodologies), [Workout Builder & Strength Builder](https://www.trainingpeaks.com/learn/articles/introducing-trainingpeaks-workout-builder/)
-- AI-native coaches — [Coach Leo (conversational, persistent memory)](https://coachleo.ai/best-ai-running-coach), [HumanGO / "Hugo"](https://humango.ai/), [Best AI running coach apps 2026 comparison](https://therunninggenie.com/blog/best-ai-running-coach-apps)
-- Conditions modelling — [MeteoPace (weather + course-profile pace)](https://www.meteopace.com/), [RunWeather (conditions score + pace adjustment)](https://runweather.app/), [Heat/humidity pace research](https://apps.runningwritings.com/heat-adjusted-pace/)
-- Tooling — [python-garminconnect](https://github.com/cyberjunky/python-garminconnect)
+- Garmin — [Active Intelligence with Garmin Connect+](https://support.garmin.com/en-US/?faq=kWi5DoaMPZ4VCJBA0lFWP7), [Connect+ one-year review (feature timeline)](https://the5krunner.com/2026/04/20/garmin-connect-plus-review/), [Connect+ Performance Dashboard (140+ charts)](https://www.garmin.com/en-US/blog/fitness/what-is-the-garmin-connect-performance-dashboard/), [Nutrition tracking in Garmin Connect (CES 2026)](https://www.garmin.com/en-US/newsroom/press-release/sports-fitness/stay-on-top-of-nutrition-goals-in-garmin-connect/)
+- Runna — [2026 app updates: Workout Briefings, adaptive plans, plan continuity](https://www.runningwestwardho.co.uk/post/runna-app-updates-2026-smarter-training-plans-adaptive-coaching-new-features-explained), [Adapting your training](https://support.runna.com/en/collections/16289012-adapting-your-training), [Training plans](https://www.runna.com/training/training-plans)
+- TrainingPeaks — [Is Premium worth it? (Peak Performances, athlete analytics, HRV)](https://www.trainingpeaks.com/blog/is-trainingpeaks-premium-worth-it/), [Pricing 2026](https://www.trainingpeaks.com/blog/trainingpeaks-pricing/)
+- Stryd — [Race Power Calculator](https://help.stryd.com/en/articles/6879547-race-power-calculator), [Race Calculations FAQ (fatigue factor, 90-day model)](https://help.stryd.com/en/articles/8955821-stryd-race-calculations-faq), [Event Planner (conditions: elevation, temperature, humidity, altitude)](https://support.stryd.com/hc/en-us/articles/360049511054-Race-Power-Calculator-and-Event-Planner)
+- Intervals.icu — [Wellness integration (subjective scales)](https://www.intervals.icu/features/wellness/), [Power curve (season comparison)](https://www.intervals.icu/features/power-curve/), [Fitness/Fatigue/Form chart](https://www.intervals.icu/features/fitness-chart/)
+- AI-native coaches — [Best AI running coach apps 2026 (Coach Leo, HumanGO, injury-pattern flags)](https://therunninggenie.com/blog/best-ai-running-coach-apps), [Coach Leo](https://coachleo.ai/best-ai-running-coach), [HumanGO / "Hugo"](https://humango.ai/)
