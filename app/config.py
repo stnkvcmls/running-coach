@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     # Network binding — used by the startup security guard to detect public exposure
     # without auth.  Must match the --host value passed to uvicorn.
     bind_host: str = "127.0.0.1"
+    # Explicit opt-out for the startup security guard below — set this only if
+    # you understand the risk (e.g. a trusted, firewalled private network) and
+    # still want to run with auth disabled on a non-loopback bind.
+    allow_insecure_bind: bool = False
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

@@ -176,12 +176,15 @@ All settings come from environment variables (see `app/config.py`):
 | `CF_ACCESS_TEAM_DOMAIN` / `CF_ACCESS_AUD` | — | Required when auth is enabled |
 | `ENCRYPTION_KEY` | — | Fernet key for per-user Garmin passwords |
 | `BIND_HOST` | `127.0.0.1` | Interface uvicorn listens on (must match `--host`); used by the security guard |
+| `ALLOW_INSECURE_BIND` | `false` | Opt out of the startup refusal below (e.g. trusted, firewalled private network) |
 
 > **Safe-default rule:** `AUTH_ENABLED=false` is fine for local development
 > (`BIND_HOST=127.0.0.1`, the default).  If you expose the app on any
 > non-loopback interface — including Docker's `0.0.0.0` — you **must** set
 > `AUTH_ENABLED=true` and configure Cloudflare Access.  The app logs a
-> `CRITICAL` warning at startup when it detects the unsafe combination.
+> `CRITICAL` warning and **refuses to start** when it detects the unsafe
+> combination; set `ALLOW_INSECURE_BIND=true` only if you understand the risk
+> and still want to run that way (e.g. a trusted, firewalled private network).
 
 Generate an encryption key once and keep it stable:
 

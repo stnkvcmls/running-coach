@@ -329,10 +329,16 @@ badges replace the old client-side duplicate banding, plus a recommendation line
   (`useCustomChartMetrics`, `useCustomChartData`),
   `frontend/src/components/trends/CustomChartsView.tsx` + `.css` (new), `TrendsView.tsx`
   (new "Custom" tab), `tests/test_custom_charts.py` (new, 9 tests).
-- **P3-4 · Security default hardening.** The startup guard *warns* on an
-  unauthenticated non-loopback bind but still starts; consider **refusing** to start in
-  that configuration (opt-out env for trusted private networks). **S.** Files:
-  `app/main.py`, `app/config.py`, docs.
+- **P3-4 · Security default hardening** ✅ DONE (2026-07-01). The startup guard
+  *warned* on an unauthenticated non-loopback bind but still started; it now
+  **refuses to start** in that configuration (`RuntimeError` raised from
+  `_check_security_config`, surfaced through the FastAPI `lifespan` before any
+  request is served), with a new `ALLOW_INSECURE_BIND` opt-out env var for
+  trusted private networks that still logs the `CRITICAL` warning but lets the
+  app continue. **S.** Files: `app/config.py` (`Settings.allow_insecure_bind`),
+  `app/main.py` (`_check_security_config` raises unless overridden),
+  `tests/test_main.py` (refusal + opt-out coverage), `README.md`,
+  `docs/CURRENT_STATE.md`.
 - **P3-5 · Keep the suite green.** New surfaces (chat tool-use, weather, daily
   adaptation, GPX) need contract/edge tests; preserve the 80% coverage gate (~551
   backend tests today). **Throughout.** Files: `tests/`.
