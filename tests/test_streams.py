@@ -284,3 +284,21 @@ def test_backfill_missing_distance_efforts_also_covers_fully_missing_curves(db):
     assert streams.backfill_missing_distance_efforts(db) == 1
     act = db.query(Activity).first()
     assert "distance_efforts" in json.loads(act.mean_max_json)
+
+
+def test_backfill_missing_distance_efforts_bounded_by_limit(db):
+    """A whole-history rollout matches every existing activity at once; this
+    must stay bounded per call rather than loading/parsing everything (each
+    row's laps_json can run multiple MB) in a single request."""
+    samples = [{"t": t, "power": 250, "speed": 3.5, "hr": 150} for t in range(120)]
+    details = _make_details(samples, with_elev=False)
+    for i in range(5):
+        db.add(Activity(
+            garmin_id=i, activity_type="running", name="Run",
+            laps_json=json.dumps(details), mean_max_json=None,
+        ))
+    db.commit()
+
+    assert streams.backfill_missing_distance_efforts(db, limit=3) == 3
+    remaining = db.query(Activity).filter(Activity.mean_max_json.is_(None)).count()
+    assert remaining == 2

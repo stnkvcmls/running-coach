@@ -23,7 +23,7 @@ import json
 import logging
 
 from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
 
 logger = logging.getLogger(__name__)
 
@@ -656,8 +656,14 @@ def backfill_missing_curves(db: Session, limit: int = 500, user_id: int | None =
     """
     from app.models import Activity
 
-    query = db.query(Activity).filter(
-        Activity.mean_max_json.is_(None), Activity.laps_json.isnot(None)
+    query = (
+        db.query(Activity)
+        # Defer every other column: raw_json/splits_json/weather_json/etc. can
+        # each be substantial, and loading them for rows we only need
+        # activity_type + laps_json + mean_max_json from multiplies memory use
+        # across a whole-history scan for nothing.
+        .options(load_only(Activity.activity_type, Activity.laps_json, Activity.mean_max_json))
+        .filter(Activity.mean_max_json.is_(None), Activity.laps_json.isnot(None))
     )
     if user_id is not None:
         query = query.filter(Activity.user_id == user_id)
@@ -682,23 +688,42 @@ def backfill_missing_curves(db: Session, limit: int = 500, user_id: int | None =
     return updated
 
 
-def backfill_missing_distance_efforts(db: Session, limit: int = 100_000, user_id: int | None = None) -> int:
+# Kept small on purpose: unlike backfill_missing_curves (whose target set is
+# normally a handful of stragglers from before curve computation existed),
+# the first rollout of distance efforts matches an account's *entire* activity
+# history at once, and each recompute re-parses that activity's full detail
+# stream (laps_json, which can run multiple MB for a long run with dense
+# chart/GPS sampling). A large batch of those loaded and parsed at once is
+# exactly what spiked memory into the GBs and hung a request in production —
+# this bounds peak memory per call; ensure_records_backfilled spreads the
+# remaining work across subsequent requests instead of forcing it into one.
+DISTANCE_EFFORTS_BACKFILL_CHUNK = 200
+
+
+def backfill_missing_distance_efforts(
+    db: Session, limit: int = DISTANCE_EFFORTS_BACKFILL_CHUNK, user_id: int | None = None
+) -> int:
     """Recompute ``mean_max_json`` for activities whose curves predate distance efforts.
 
     Self-heals databases whose curves were computed before Strava-style
     rolling-window race-distance bests existed (``distance_efforts`` wasn't a
     key in ``compute_curves_from_details``'s output yet). Detected by a cheap
     substring check rather than parsing every row up front. When ``user_id`` is
-    given, only that user's activities are processed.
+    given, only that user's activities are processed. Bounded by ``limit`` per
+    call — see ``DISTANCE_EFFORTS_BACKFILL_CHUNK``.
     """
     from app.models import Activity
 
-    query = db.query(Activity).filter(
-        Activity.laps_json.isnot(None),
-        or_(
-            Activity.mean_max_json.is_(None),
-            ~Activity.mean_max_json.like("%distance_efforts%"),
-        ),
+    query = (
+        db.query(Activity)
+        .options(load_only(Activity.activity_type, Activity.laps_json, Activity.mean_max_json))
+        .filter(
+            Activity.laps_json.isnot(None),
+            or_(
+                Activity.mean_max_json.is_(None),
+                ~Activity.mean_max_json.like("%distance_efforts%"),
+            ),
+        )
     )
     if user_id is not None:
         query = query.filter(Activity.user_id == user_id)

@@ -280,6 +280,33 @@ def test_ensure_records_backfilled_records_version_and_is_a_noop_after(db, monke
     assert called == []
 
 
+def test_ensure_records_backfilled_defers_rebuild_when_more_curves_remain(db, monkeypatch):
+    """Reproduces the production hang: with a large activity history, curve
+    recomputation must happen in bounded chunks, not all at once in a single
+    request. If backfill_missing_distance_efforts reports a full chunk
+    processed, rebuild_personal_records must NOT run yet (there's likely more
+    left), and the version must NOT be recorded (so the next request retries
+    and makes further progress instead of getting stuck)."""
+    _add_activity(db, days_ago=1, mean_max=_curve_json(power={"300": 300}))
+
+    monkeypatch.setattr(
+        records.streams, "backfill_missing_distance_efforts",
+        lambda *a, **k: records.streams.DISTANCE_EFFORTS_BACKFILL_CHUNK,
+    )
+    rebuild_called = []
+    monkeypatch.setattr(records, "rebuild_personal_records", lambda *a, **k: rebuild_called.append(1))
+
+    records.ensure_records_backfilled(db)
+
+    assert rebuild_called == []
+    status = (
+        db.query(SyncStatus)
+        .filter(SyncStatus.user_id == DEFAULT_USER_ID, SyncStatus.key == "personal_records_backfill_version")
+        .first()
+    )
+    assert status is None  # not yet recorded -> next request will retry
+
+
 def test_ensure_records_backfilled_is_a_noop_with_no_history(db, monkeypatch):
     called = []
     monkeypatch.setattr(records, "rebuild_personal_records", lambda *a, **k: called.append(1))

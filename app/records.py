@@ -29,7 +29,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
 
 from app import streams
 from app.models import DEFAULT_USER_ID, Activity, PersonalRecord, SyncStatus
@@ -45,6 +45,19 @@ RACE_DISTANCE_LABELS = [label for label, _ in streams.RACE_DISTANCES_M]
 # re-mining existing history (see ensure_records_backfilled).
 _BACKFILL_STATUS_KEY = "personal_records_backfill_version"
 _BACKFILL_VERSION = 2  # v2: Strava-style rolling-window distance-effort bests
+
+
+def _essentials_only():
+    """Column-defer everything a record-detection scan doesn't need.
+
+    Detection only ever reads ``activity_type``, ``started_at``, and
+    ``mean_max_json``. A plain ``db.query(Activity)`` loads the *entire* row —
+    including ``laps_json``/``raw_json``/etc., each of which can run multiple
+    MB per activity — so a full-history scan (``rebuild_personal_records``, or
+    the prior-activities lookup below) would multiply that cost across
+    thousands of rows for no reason.
+    """
+    return load_only(Activity.activity_type, Activity.started_at, Activity.mean_max_json)
 
 
 def _is_run(activity_type: str | None) -> bool:
@@ -164,6 +177,7 @@ def detect_new_records_for_activity(
         return []
     prior = (
         db.query(Activity)
+        .options(_essentials_only())
         .filter(
             Activity.user_id == user_id,
             Activity.id != activity.id,
@@ -197,6 +211,7 @@ def rebuild_personal_records(db: Session, user_id: int = DEFAULT_USER_ID) -> int
 
     activities = (
         db.query(Activity)
+        .options(_essentials_only())
         .filter(Activity.user_id == user_id, Activity.started_at.isnot(None))
         .order_by(Activity.started_at.asc())
         .all()
@@ -225,10 +240,20 @@ def ensure_records_backfilled(db: Session, user_id: int = DEFAULT_USER_ID) -> No
     otherwise never be (re)checked. A ``SyncStatus`` row tracks the backfill
     version this user's records were last built with; a mismatch triggers a
     one-time re-mine: recompute any activity curves missing distance-effort
-    data, then replay full history in chronological order. Mirrors the
-    self-healing pattern used elsewhere (e.g. ``streams.backfill_missing_curves``)
-    — the first request after a version bump pays the one-time cost; every
-    request after that is a single indexed lookup.
+    data, then replay full history in chronological order.
+
+    The curve recompute is done in bounded chunks
+    (``streams.DISTANCE_EFFORTS_BACKFILL_CHUNK``), not all at once: unlike most
+    self-healing backfills in this codebase, this one's target set on first
+    rollout is an account's *entire* history, and each recompute re-parses
+    that activity's full detail stream — doing that for thousands of
+    activities in a single request is what spiked memory and hung a request
+    in production. So each call processes one chunk; if a full chunk was
+    processed there's likely more left, and this returns without advancing
+    the version, so the next request (e.g. reloading the page) picks up where
+    this one left off. Only once a call catches up (processes less than a
+    full chunk) does the chronological replay run and the version get
+    recorded — from then on this is a single indexed lookup.
     """
     status = (
         db.query(SyncStatus)
@@ -245,7 +270,9 @@ def ensure_records_backfilled(db: Session, user_id: int = DEFAULT_USER_ID) -> No
     )
     if has_history is not None:
         try:
-            streams.backfill_missing_distance_efforts(db, user_id=user_id)
+            updated = streams.backfill_missing_distance_efforts(db, user_id=user_id)
+            if updated >= streams.DISTANCE_EFFORTS_BACKFILL_CHUNK:
+                return  # more activities likely still need recomputing
             rebuild_personal_records(db, user_id=user_id)
         except Exception:
             logger.exception("Lazy personal-record backfill failed for user %s", user_id)
