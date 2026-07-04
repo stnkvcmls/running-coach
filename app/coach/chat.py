@@ -1,4 +1,11 @@
-"""Conversational coach — streaming chat with tool-use (P0-2)."""
+"""Conversational coach — streaming chat with tool-use (P0-2).
+
+Like providers.py/jobs.py/plans.py, the provider/job-dispatch call sites here
+route through the ``app.ai_coach`` shim (``from app import ai_coach as
+_shim``) rather than the locally-imported names, so tests that monkeypatch
+``app.ai_coach._get_ai_config`` / ``._stream_claude`` / ``._stream_gemini`` /
+``.enqueue_job`` keep taking effect after the split.
+"""
 import json
 from datetime import datetime, date, timedelta, timezone
 
@@ -19,8 +26,7 @@ from app.models import (
     TrainingPlanDay,
 )
 from app.coach.context import SYSTEM_PROMPT, _build_context, _format_activity_context, _load_zones, _load_zone_configs
-from app.coach.providers import AITransientError, AIFatalError, _get_ai_config
-from app.coach.jobs import enqueue_job
+from app.coach.providers import AITransientError, AIFatalError
 
 CHAT_SYSTEM_PROMPT = SYSTEM_PROMPT + """
 
@@ -205,8 +211,10 @@ def _dispatch_chat_tool(
     not None) is a small public dict streamed to the client as an SSE 'action'
     event and persisted alongside the chat message.
     """
+    from app import ai_coach as _shim
+
     if tool_name == "regenerate_plan":
-        job_id = enqueue_job("generate_plan", {}, user_id)
+        job_id = _shim.enqueue_job("generate_plan", {}, user_id)
         return (
             {"status": "queued", "job_id": job_id},
             {
@@ -219,7 +227,7 @@ def _dispatch_chat_tool(
 
     if tool_name == "adjust_upcoming_week":
         reason = tool_input.get("reason", "")
-        job_id = enqueue_job("generate_plan", {"note": reason}, user_id)
+        job_id = _shim.enqueue_job("generate_plan", {"note": reason}, user_id)
         return (
             {"status": "queued", "job_id": job_id},
             {
@@ -447,10 +455,12 @@ def chat_stream(
     Yields dicts of shape {"type": "token", "text": ...} or
     {"type": "action", "action": {...}} when the model invokes a coach tool.
     """
-    provider, model = _get_ai_config(db, user_id)
+    from app import ai_coach as _shim
+
+    provider, model = _shim._get_ai_config(db, user_id)
     context = _build_chat_context(db, user_id, activity_id)
     system = CHAT_SYSTEM_PROMPT + "\n\n---\n\n" + context
 
     messages = list(history) + [{"role": "user", "content": new_message}]
-    stream_fn = _stream_gemini if provider == "gemini" else _stream_claude
+    stream_fn = _shim._stream_gemini if provider == "gemini" else _shim._stream_claude
     return stream_fn(messages, system, model, db, user_id)
