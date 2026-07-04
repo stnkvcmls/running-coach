@@ -211,6 +211,36 @@ def rebuild_personal_records(db: Session, user_id: int = DEFAULT_USER_ID) -> int
     return created
 
 
+def ensure_records_backfilled(db: Session, user_id: int = DEFAULT_USER_ID) -> None:
+    """Lazily mine full history the first time records are requested.
+
+    ``rebuild_personal_records`` normally runs once, right after a historical
+    Garmin backfill completes. Accounts that finished their backfill before
+    this feature existed never got that call, so their pre-existing activities
+    would otherwise never be checked. Mirrors the self-healing pattern used
+    elsewhere in this module (e.g. ``streams.backfill_missing_curves``): the
+    first request pays the one-time cost of a full chronological pass; every
+    request after that sees records already exist and is a single indexed
+    lookup.
+    """
+    has_records = (
+        db.query(PersonalRecord.id).filter(PersonalRecord.user_id == user_id).first()
+    )
+    if has_records is not None:
+        return
+    has_history = (
+        db.query(Activity.id)
+        .filter(Activity.user_id == user_id, Activity.started_at.isnot(None))
+        .first()
+    )
+    if has_history is None:
+        return
+    try:
+        rebuild_personal_records(db, user_id=user_id)
+    except Exception:
+        logger.exception("Lazy personal-record backfill failed for user %s", user_id)
+
+
 # ---------------------------------------------------------------------------
 # Queries
 # ---------------------------------------------------------------------------

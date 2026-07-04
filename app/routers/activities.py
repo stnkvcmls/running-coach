@@ -17,6 +17,7 @@ from app.schemas import (
     MetricZoneResponse,
 )
 from app import adherence as adherence_mod
+from app import records as records_mod
 from app import streams as streams_mod
 from app import weather as weather_mod
 from app.utils import safe_json_loads, parse_activity_charts, parse_activity_route
@@ -148,6 +149,7 @@ def api_activity_detail(
         weather, activity.avg_pace_min_km
     )
 
+    records_mod.ensure_records_backfilled(db, user_id=current_user.id)
     personal_records = (
         db.query(PersonalRecord)
         .filter(PersonalRecord.user_id == current_user.id, PersonalRecord.activity_id == activity.id)

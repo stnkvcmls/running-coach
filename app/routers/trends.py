@@ -141,6 +141,7 @@ def api_personal_records(
     current_user: User = Depends(get_current_user),
 ):
     """All-time bests plus a recent-history feed, for the Peak Performances panel."""
+    records_mod.ensure_records_backfilled(db, user_id=current_user.id)
     current_bests = records_mod.get_current_bests(db, user_id=current_user.id)
     recent = records_mod.get_recent_records(db, user_id=current_user.id, days=days)
     return PersonalRecordsResponse(

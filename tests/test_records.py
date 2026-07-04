@@ -206,6 +206,59 @@ def test_get_recent_records_filters_by_window(db):
     assert recent[0].activity_id == recent_act.id
 
 
+# --- lazy backfill (pre-existing history synced before this feature shipped) ---
+
+def test_ensure_records_backfilled_mines_pre_existing_history(db):
+    """Simulates an account whose Garmin backfill completed long before this
+    feature existed: activities exist, but no PersonalRecord rows do, and
+    rebuild_personal_records was never triggered (only fires at the end of a
+    fresh backfill). The lazy check should mine that history on first call."""
+    _add_activity(db, days_ago=20, mean_max=_curve_json(power={"300": 260}))
+    newer = _add_activity(db, days_ago=1, mean_max=_curve_json(power={"300": 300}))
+
+    assert db.query(PersonalRecord).count() == 0
+    records.ensure_records_backfilled(db)
+
+    bests = records.get_current_bests(db)
+    assert len(bests) == 1
+    assert bests[0].activity_id == newer.id
+    assert bests[0].value == 300
+
+
+def test_ensure_records_backfilled_is_a_noop_once_records_exist(db, monkeypatch):
+    _add_activity(db, days_ago=1, mean_max=_curve_json(power={"300": 300}))
+    records.rebuild_personal_records(db)
+    assert db.query(PersonalRecord).count() == 1
+
+    called = []
+    monkeypatch.setattr(records, "rebuild_personal_records", lambda *a, **k: called.append(1))
+    records.ensure_records_backfilled(db)
+    assert called == []
+
+
+def test_ensure_records_backfilled_is_a_noop_with_no_history(db, monkeypatch):
+    called = []
+    monkeypatch.setattr(records, "rebuild_personal_records", lambda *a, **k: called.append(1))
+    records.ensure_records_backfilled(db)
+    assert called == []
+
+
+def test_personal_records_endpoint_backfills_pre_existing_activities(client, session_factory):
+    """Reproduces the reported bug: activities synced before this feature
+    existed should still surface on the Peak Performances panel, not just
+    activities synced after it."""
+    db = session_factory()
+    _add_activity(db, days_ago=200, mean_max=_curve_json(power={"300": 260}))
+    _add_activity(db, days_ago=100, mean_max=_curve_json(power={"300": 310}))
+    db.close()
+
+    resp = client.get("/api/v1/personal-records")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["current_bests"]) == 1
+    assert body["current_bests"][0]["value"] == 310
+
+
 # --- formatting ---
 
 def test_format_activity_pr_context_includes_new_and_previous_values(db):
