@@ -123,6 +123,7 @@ def analyze_activity(activity: Activity):
                 activity, zones_by_metric,
                 hr_zone_configs=zc["hr"], pace_zone_configs=zc["pace"],
                 threshold_hr=zc["threshold_hr"], threshold_pace=zc["threshold_pace"],
+                db=db,
             )
 
             # Append workout adherence section if a workout was scheduled for this date
@@ -227,6 +228,7 @@ def analyze_activity_force(activity_id: int):
                 activity, zones_by_metric,
                 hr_zone_configs=zc["hr"], pace_zone_configs=zc["pace"],
                 threshold_hr=zc["threshold_hr"], threshold_pace=zc["threshold_pace"],
+                db=db,
             )
             full_context = _build_context(
                 db, "activity", activity_context, reference_date=activity_date, user_id=user_id

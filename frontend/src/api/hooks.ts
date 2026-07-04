@@ -19,6 +19,7 @@ import type {
   PacingStrategyResponse,
   PacingPushRequest,
   PerformanceCurveResponse,
+  PersonalRecordsResponse,
   PlanRealignmentStatus,
   PushWorkoutResponse,
   SettingsResponse,
@@ -372,6 +373,13 @@ export function usePerformanceCurve(days = 90) {
   return useQuery({
     queryKey: ['performance-curve', days],
     queryFn: () => apiGet<PerformanceCurveResponse>(`/performance-curve?days=${days}`),
+  })
+}
+
+export function usePersonalRecords(days = 90) {
+  return useQuery({
+    queryKey: ['personal-records', days],
+    queryFn: () => apiGet<PersonalRecordsResponse>(`/personal-records?days=${days}`),
   })
 }
 

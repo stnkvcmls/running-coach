@@ -104,6 +104,7 @@ def _build_chat_context(
                 zc["pace"],
                 zc["threshold_hr"],
                 zc["threshold_pace"],
+                db=db,
             )
             trigger_data = (
                 f"The athlete is asking about a specific activity:\n\n{activity_context}"

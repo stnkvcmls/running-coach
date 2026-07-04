@@ -13,6 +13,7 @@ from sqlalchemy import func
 from app import training_load
 from app import threshold as threshold_mod
 from app import intensity as intensity_mod
+from app import records as records_mod
 from app import weather as weather_mod
 from app.models import (
     DEFAULT_USER_ID,
@@ -97,6 +98,7 @@ def _format_activity_context(
     pace_zone_configs: list[ZoneConfig] | None = None,
     threshold_hr: int | None = None,
     threshold_pace: float | None = None,
+    db: Session | None = None,
 ) -> str:
     parts = [
         f"**{activity.name}** ({activity.activity_type})",
@@ -269,6 +271,17 @@ def _format_activity_context(
             )
             if wx_desc:
                 parts.append(f"Weather: {wx_desc}")
+        except Exception:
+            pass
+
+    # Personal records set by this activity (app.records)
+    if db is not None and activity.id:
+        try:
+            pr_context = records_mod.format_activity_pr_context(
+                db, activity.id, user_id=activity.user_id or DEFAULT_USER_ID
+            )
+            if pr_context:
+                parts.append(pr_context)
         except Exception:
             pass
 

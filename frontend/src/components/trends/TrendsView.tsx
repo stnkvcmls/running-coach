@@ -4,13 +4,15 @@ import PerformanceCurveView from './PerformanceCurveView'
 import IntensityTrendsView from './IntensityTrendsView'
 import AerobicTrendsView from './AerobicTrendsView'
 import CustomChartsView from './CustomChartsView'
+import PeakPerformancesView from './PeakPerformancesView'
 
-type Tab = 'wellness' | 'intensity' | 'performance' | 'aerobic' | 'custom'
+type Tab = 'wellness' | 'intensity' | 'performance' | 'records' | 'aerobic' | 'custom'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'wellness', label: 'Wellness' },
   { id: 'intensity', label: 'Intensity' },
   { id: 'performance', label: 'Performance' },
+  { id: 'records', label: 'Records' },
   { id: 'aerobic', label: 'Aerobic' },
   { id: 'custom', label: 'Custom' },
 ]
@@ -52,6 +54,7 @@ export default function TrendsView() {
       {tab === 'wellness' && <WellnessTrendsView />}
       {tab === 'intensity' && <IntensityTrendsView />}
       {tab === 'performance' && <PerformanceCurveView />}
+      {tab === 'records' && <PeakPerformancesView />}
       {tab === 'aerobic' && <AerobicTrendsView />}
       {tab === 'custom' && <CustomChartsView />}
     </div>

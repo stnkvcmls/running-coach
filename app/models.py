@@ -458,6 +458,32 @@ class DailyLoadSeries(Base):
     computed_at = Column(DateTime, default=_utcnow)
 
 
+class PersonalRecord(Base):
+    """A detected all-time best, appended whenever an activity beats prior history.
+
+    Two kinds share the table: duration-based bests (power/gap_speed mean-max at
+    a standard duration, e.g. "5-min power") and distance-based race bests (best
+    time over a standard race distance, e.g. "5K"). Append-only — each broken
+    record is a new row referencing the value it beat — so both "current bests"
+    (latest row per key) and a recent-history feed ("last 90 days") come from the
+    same table.
+    """
+
+    __tablename__ = "personal_records"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = _user_id_column()
+    record_type = Column(String(20), nullable=False, index=True)   # "duration" | "distance"
+    metric = Column(String(20), nullable=True)                      # "power" | "gap_speed" (duration only)
+    duration_sec = Column(Integer, nullable=True)                   # duration key (duration records only)
+    distance_label = Column(Text, nullable=True)                    # "5K" etc. (distance records only)
+    value = Column(Float, nullable=False)                           # W, m/s, or seconds (distance records)
+    previous_value = Column(Float, nullable=True)
+    activity_id = Column(Integer, nullable=False, index=True)       # → Activity.id
+    achieved_at = Column(DateTime, nullable=False, index=True)      # activity.started_at
+    created_at = Column(DateTime, default=_utcnow, index=True)
+
+
 class TrainingPlanDay(Base):
     """One scheduled day within a TrainingPlan."""
 

@@ -139,6 +139,7 @@ export interface ActivityDetail extends ActivitySummary {
   insight: InsightResponse | null
   scheduled_workout: CalendarEvent | null
   adherence: WorkoutAdherence | null
+  personal_records: PersonalRecordResponse[] | null
 }
 
 export interface ChartSeries {
@@ -551,6 +552,26 @@ export interface PerformanceCurveResponse {
   race_predictions: RacePrediction[]
   lookback_days: number
   activities_analyzed: number
+}
+
+export interface PersonalRecordResponse {
+  id: number
+  record_type: 'duration' | 'distance'
+  metric: 'power' | 'gap_speed' | null
+  duration_sec: number | null
+  distance_label: string | null
+  value: number
+  previous_value: number | null
+  activity_id: number
+  achieved_at: string
+  label: string
+  display_value: string
+}
+
+export interface PersonalRecordsResponse {
+  current_bests: PersonalRecordResponse[]
+  recent: PersonalRecordResponse[]
+  recent_days: number
 }
 
 export interface IntensityWeek {
