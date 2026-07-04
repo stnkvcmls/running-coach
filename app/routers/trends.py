@@ -144,6 +144,7 @@ def api_personal_records(
     records_mod.ensure_records_backfilled(db, user_id=current_user.id)
     current_bests = records_mod.get_current_bests(db, user_id=current_user.id)
     recent = records_mod.get_recent_records(db, user_id=current_user.id, days=days)
+    distance_top_n = records_mod.get_distance_top_n(db, user_id=current_user.id)
     return PersonalRecordsResponse(
         current_bests=sorted(
             [_to_pr_response(r) for r in current_bests],
@@ -151,6 +152,11 @@ def api_personal_records(
         ),
         recent=[_to_pr_response(r) for r in recent],
         recent_days=days,
+        distance_bests={
+            label: [_to_pr_response(r) for r in recs]
+            for label, recs in distance_top_n.items()
+        },
+        distance_labels=records_mod.RACE_DISTANCE_LABELS,
     )
 
 

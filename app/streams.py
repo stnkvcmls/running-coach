@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import logging
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,27 @@ logger = logging.getLogger(__name__)
 STANDARD_DURATIONS: list[int] = [
     5, 15, 30, 60, 120, 180, 300, 480, 600, 720,
     1200, 1800, 2400, 3000, 3600, 5400,
+]
+
+# Standard race distances (meters) at which we look for the fastest contiguous
+# effort anywhere within an activity — Strava's "Best Efforts" set. Unlike the
+# duration-keyed mean-max curve above, this is windowed by *distance*: a half
+# marathon race yields a 5K and 10K best effort too, from whichever contiguous
+# stretch of it was fastest, not just the whole-activity time.
+RACE_DISTANCES_M: list[tuple[str, float]] = [
+    ("400m", 400.0),
+    ("1/2 mile", 804.672),
+    ("1K", 1000.0),
+    ("1 mile", 1609.344),
+    ("2 mile", 3218.688),
+    ("5K", 5000.0),
+    ("10K", 10000.0),
+    ("15K", 15000.0),
+    ("10 mile", 16093.44),
+    ("20K", 20000.0),
+    ("Half Marathon", 21097.5),
+    ("30K", 30000.0),
+    ("Marathon", 42195.0),
 ]
 
 # Spike-rejection caps — anything beyond these is a sensor/GPS glitch for running.
@@ -315,14 +337,94 @@ def _is_treadmill(activity_type: str | None) -> bool:
     return bool(activity_type) and "treadmill" in activity_type.lower()
 
 
+def _best_time_for_distance(
+    time: list[float | None], distance: list[float | None], target_m: float
+) -> float | None:
+    """Minimum elapsed time to cover any contiguous window of ``target_m`` meters.
+
+    Mirrors ``_best_mean``'s two-pointer sweep but keyed on distance instead of
+    duration: as the window start advances, both the cumulative distance and
+    the target end-distance only increase, so the end pointer never needs to
+    move backwards. The exact crossing time is linearly interpolated between
+    the two samples that bracket it, so the result isn't quantized to sample
+    spacing. Returns ``None`` if the stream never covers ``target_m``.
+    """
+    pts = [
+        (t, d)
+        for t, d in zip(time, distance)
+        if isinstance(t, (int, float)) and isinstance(d, (int, float))
+    ]
+    pts.sort(key=lambda p: p[0])
+    # Enforce non-decreasing distance, dropping samples where GPS/footpod noise
+    # made cumulative distance regress (a real reset — e.g. a paused/restarted
+    # recording — would show up as a large gap rather than a small regression).
+    cleaned: list[tuple[float, float]] = []
+    running_max = None
+    for t, d in pts:
+        if running_max is None or d >= running_max:
+            running_max = d
+            cleaned.append((t, d))
+    n = len(cleaned)
+    if n < 2:
+        return None
+    times = [p[0] for p in cleaned]
+    dists = [p[1] for p in cleaned]
+    if dists[-1] - dists[0] < target_m:
+        return None
+
+    best: float | None = None
+    j = 0
+    for i in range(n):
+        if j < i:
+            j = i
+        target_dist = dists[i] + target_m
+        while j < n and dists[j] < target_dist:
+            j += 1
+        if j >= n:
+            break
+        if j == i:
+            continue
+        d0, d1 = dists[j - 1], dists[j]
+        t0, t1 = times[j - 1], times[j]
+        t_at_target = t1 if d1 == d0 else t0 + (target_dist - d0) / (d1 - d0) * (t1 - t0)
+        elapsed = t_at_target - times[i]
+        if elapsed > 0 and (best is None or elapsed < best):
+            best = elapsed
+    return best
+
+
+def compute_distance_efforts(
+    streams: dict[str, list[float | None]], activity_type: str | None = None
+) -> dict[str, float]:
+    """Best (fastest) time to cover each standard race distance, anywhere in the activity.
+
+    Skipped for treadmill activities: footpod/treadmill-belt cumulative distance
+    isn't reliable enough for a race-distance best effort (the same reason
+    GAP-pace frontiers exclude treadmill runs in app.threshold).
+    """
+    if _is_treadmill(activity_type):
+        return {}
+    time = streams.get("time", [])
+    distance = streams.get("distance", [])
+    out: dict[str, float] = {}
+    for label, target_m in RACE_DISTANCES_M:
+        best = _best_time_for_distance(time, distance, target_m)
+        if best is not None:
+            out[label] = round(best, 1)
+    return out
+
+
 def compute_curves_from_details(
     details: dict | None, activity_type: str | None = None
 ) -> dict | None:
     """Compute the mean-maximal curves for one activity from its detail streams.
 
     Returns ``{"power": {dur: w}, "gap_speed": {dur: m/s}, "speed": {...},
-    "hr": {dur: bpm}, "is_treadmill": bool, "duration": seconds}`` or ``None``
-    when streams can't be parsed.
+    "hr": {dur: bpm}, "is_treadmill": bool, "duration": seconds,
+    "distance_efforts": {label: seconds}}`` or ``None`` when streams can't be
+    parsed. ``distance_efforts`` is the fastest time anywhere in the activity
+    covering each standard race distance (Strava's "Best Efforts"), independent
+    of the activity's total distance.
     """
     streams = parse_streams(details)
     if streams is None:
@@ -336,6 +438,7 @@ def compute_curves_from_details(
         "gap_speed": {str(k): v for k, v in mean_max_curve(time, gap).items()},
         "hr": {str(k): v for k, v in mean_max_curve(time, streams["hr"]).items()},
         "is_treadmill": _is_treadmill(activity_type),
+        "distance_efforts": compute_distance_efforts(streams, activity_type),
     }
     valid_times = [t for t in time if isinstance(t, (int, float))]
     result["duration"] = round(max(valid_times) - min(valid_times), 1) if valid_times else 0.0
@@ -576,4 +679,42 @@ def backfill_missing_curves(db: Session, limit: int = 500, user_id: int | None =
     if updated:
         db.commit()
         logger.info("Backfilled mean-max curves for %d activities", updated)
+    return updated
+
+
+def backfill_missing_distance_efforts(db: Session, limit: int = 100_000, user_id: int | None = None) -> int:
+    """Recompute ``mean_max_json`` for activities whose curves predate distance efforts.
+
+    Self-heals databases whose curves were computed before Strava-style
+    rolling-window race-distance bests existed (``distance_efforts`` wasn't a
+    key in ``compute_curves_from_details``'s output yet). Detected by a cheap
+    substring check rather than parsing every row up front. When ``user_id`` is
+    given, only that user's activities are processed.
+    """
+    from app.models import Activity
+
+    query = db.query(Activity).filter(
+        Activity.laps_json.isnot(None),
+        or_(
+            Activity.mean_max_json.is_(None),
+            ~Activity.mean_max_json.like("%distance_efforts%"),
+        ),
+    )
+    if user_id is not None:
+        query = query.filter(Activity.user_id == user_id)
+    rows = query.order_by(Activity.started_at.desc()).limit(limit).all()
+
+    updated = 0
+    for act in rows:
+        try:
+            details = json.loads(act.laps_json)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        curves = compute_curves_from_details(details, act.activity_type)
+        if curves:
+            act.mean_max_json = json.dumps(curves)
+            updated += 1
+    if updated:
+        db.commit()
+        logger.info("Backfilled distance efforts for %d activities", updated)
     return updated

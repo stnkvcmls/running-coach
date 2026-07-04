@@ -172,3 +172,135 @@
   color: var(--text-muted);
   font-size: 0.82rem;
 }
+
+/* Best Efforts (Strava-style distance chips) */
+
+.pr-chip-row {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-bottom: 12px;
+  scrollbar-width: thin;
+}
+
+.pr-chip {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.pr-chip.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.pr-chip.empty:not(.active) {
+  color: var(--text-muted);
+  opacity: 0.55;
+}
+
+.pr-chip:hover:not(.active) {
+  border-color: var(--text-muted);
+}
+
+.pr-effort-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.pr-effort-row {
+  border-bottom: 1px solid var(--border);
+}
+
+.pr-effort-row:last-child {
+  border-bottom: none;
+}
+
+.pr-effort-row-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text-muted);
+}
+
+.pr-effort-medal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  font-size: 0.78rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  color: #fff;
+}
+
+.pr-effort-medal-1 { background: #f0a500; }
+.pr-effort-medal-2 { background: #9aa1ac; }
+.pr-effort-medal-3 { background: #c17a4a; }
+
+.pr-effort-values {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  text-align: left;
+}
+
+.pr-effort-time {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.pr-effort-rank-1 .pr-effort-time {
+  font-size: 1.3rem;
+}
+
+.pr-effort-pace {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pr-effort-detail {
+  display: block;
+  padding: 0 0 12px 38px;
+  text-decoration: none;
+}
+
+.pr-effort-detail-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.pr-effort-detail-stats {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.pr-effort-detail-date {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}

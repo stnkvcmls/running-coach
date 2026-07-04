@@ -4,9 +4,11 @@ Detects when a synced activity sets a new all-time best against the athlete's
 own history, using data already computed elsewhere: the per-activity
 mean-maximal curve (see :mod:`app.streams`, stored on ``Activity.mean_max_json``)
 for duration-based bests (best sustained power / grade-adjusted pace at each
-standard duration), and ``Activity.distance_m``/``duration_sec`` for
-race-distance bests (best time over a standard race distance). Pure detection
-over stored data — no new sync.
+standard duration) and Strava-style "Best Efforts" (fastest time to cover each
+standard race distance anywhere within the activity, also in ``mean_max_json``
+as ``distance_efforts`` — so a half marathon race yields a 5K and 10K best
+effort too, not just a Half Marathon one). Pure detection over stored data —
+no new sync.
 
 Two entry points:
 
@@ -25,26 +27,24 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
-from app.models import DEFAULT_USER_ID, Activity, PersonalRecord
+from app import streams
+from app.models import DEFAULT_USER_ID, Activity, PersonalRecord, SyncStatus
 
 logger = logging.getLogger(__name__)
 
 DURATION_METRICS = ("power", "gap_speed")
 
-RACE_DISTANCES = [
-    ("5K", 5000.0),
-    ("10K", 10000.0),
-    ("Half Marathon", 21097.5),
-    ("Marathon", 42195.0),
-]
-# An activity's distance within +/-2% of a standard race distance counts as an
-# effort at that distance (GPS/course measurement noise), same tolerance style
-# used elsewhere in the codebase for matching against nominal distances.
-RACE_DISTANCE_TOLERANCE = 0.02
+# Canonical chip order for the UI — Strava's "Best Efforts" distance set.
+RACE_DISTANCE_LABELS = [label for label, _ in streams.RACE_DISTANCES_M]
+
+# Bumped whenever the record-detection logic changes in a way that requires
+# re-mining existing history (see ensure_records_backfilled).
+_BACKFILL_STATUS_KEY = "personal_records_backfill_version"
+_BACKFILL_VERSION = 2  # v2: Strava-style rolling-window distance-effort bests
 
 
 def _is_run(activity_type: str | None) -> bool:
@@ -71,14 +71,20 @@ def _duration_curve(activity: Activity, metric: str) -> dict[int, float]:
     return out
 
 
-def _race_distance_match(distance_m: float | None) -> str | None:
-    """Standard race-distance label this activity's distance matches, if any."""
-    if not distance_m:
-        return None
-    for label, dist_m in RACE_DISTANCES:
-        if abs(distance_m - dist_m) <= dist_m * RACE_DISTANCE_TOLERANCE:
-            return label
-    return None
+def _distance_efforts(activity: Activity) -> dict[str, float]:
+    """This activity's fastest time at each standard race distance, if any."""
+    if not activity.mean_max_json:
+        return {}
+    try:
+        curve = json.loads(activity.mean_max_json)
+    except (json.JSONDecodeError, TypeError):
+        return {}
+    efforts = curve.get("distance_efforts") or {}
+    return {
+        label: float(seconds)
+        for label, seconds in efforts.items()
+        if isinstance(seconds, (int, float))
+    }
 
 
 @dataclass
@@ -98,10 +104,9 @@ def _accumulate(state: _BestState, activity: Activity) -> None:
             key = (metric, duration)
             if value > state.duration_best.get(key, float("-inf")):
                 state.duration_best[key] = value
-    label = _race_distance_match(activity.distance_m)
-    if label and activity.duration_sec:
-        if activity.duration_sec < state.distance_best.get(label, float("inf")):
-            state.distance_best[label] = activity.duration_sec
+    for label, seconds in _distance_efforts(activity).items():
+        if seconds < state.distance_best.get(label, float("inf")):
+            state.distance_best[label] = seconds
 
 
 def _check_and_record(
@@ -130,20 +135,19 @@ def _check_and_record(
                 ))
                 state.duration_best[key] = value
 
-    label = _race_distance_match(activity.distance_m)
-    if label and activity.duration_sec:
+    for label, seconds in _distance_efforts(activity).items():
         prior_best = state.distance_best.get(label)
-        if prior_best is None or activity.duration_sec < prior_best:
+        if prior_best is None or seconds < prior_best:
             records.append(PersonalRecord(
                 user_id=user_id,
                 record_type="distance",
                 distance_label=label,
-                value=activity.duration_sec,
+                value=seconds,
                 previous_value=prior_best,
                 activity_id=activity.id,
                 achieved_at=activity.started_at,
             ))
-            state.distance_best[label] = activity.duration_sec
+            state.distance_best[label] = seconds
 
     return records
 
@@ -212,33 +216,50 @@ def rebuild_personal_records(db: Session, user_id: int = DEFAULT_USER_ID) -> int
 
 
 def ensure_records_backfilled(db: Session, user_id: int = DEFAULT_USER_ID) -> None:
-    """Lazily mine full history the first time records are requested.
+    """Lazily (re)mine full history when the detection logic version advances.
 
     ``rebuild_personal_records`` normally runs once, right after a historical
     Garmin backfill completes. Accounts that finished their backfill before
-    this feature existed never got that call, so their pre-existing activities
-    would otherwise never be checked. Mirrors the self-healing pattern used
-    elsewhere in this module (e.g. ``streams.backfill_missing_curves``): the
-    first request pays the one-time cost of a full chronological pass; every
-    request after that sees records already exist and is a single indexed
-    lookup.
+    this feature existed (or before a later change to how records are
+    detected) never got that call, so their pre-existing activities would
+    otherwise never be (re)checked. A ``SyncStatus`` row tracks the backfill
+    version this user's records were last built with; a mismatch triggers a
+    one-time re-mine: recompute any activity curves missing distance-effort
+    data, then replay full history in chronological order. Mirrors the
+    self-healing pattern used elsewhere (e.g. ``streams.backfill_missing_curves``)
+    — the first request after a version bump pays the one-time cost; every
+    request after that is a single indexed lookup.
     """
-    has_records = (
-        db.query(PersonalRecord.id).filter(PersonalRecord.user_id == user_id).first()
+    status = (
+        db.query(SyncStatus)
+        .filter(SyncStatus.user_id == user_id, SyncStatus.key == _BACKFILL_STATUS_KEY)
+        .first()
     )
-    if has_records is not None:
+    current_version = int(status.value) if status and status.value else 0
+    if current_version >= _BACKFILL_VERSION:
         return
     has_history = (
         db.query(Activity.id)
         .filter(Activity.user_id == user_id, Activity.started_at.isnot(None))
         .first()
     )
-    if has_history is None:
-        return
-    try:
-        rebuild_personal_records(db, user_id=user_id)
-    except Exception:
-        logger.exception("Lazy personal-record backfill failed for user %s", user_id)
+    if has_history is not None:
+        try:
+            streams.backfill_missing_distance_efforts(db, user_id=user_id)
+            rebuild_personal_records(db, user_id=user_id)
+        except Exception:
+            logger.exception("Lazy personal-record backfill failed for user %s", user_id)
+            return  # leave the version stale so the next request retries
+
+    if status:
+        status.value = str(_BACKFILL_VERSION)
+        status.updated_at = datetime.now(timezone.utc)
+    else:
+        db.add(SyncStatus(
+            user_id=user_id, key=_BACKFILL_STATUS_KEY, value=str(_BACKFILL_VERSION),
+            updated_at=datetime.now(timezone.utc),
+        ))
+    db.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -271,6 +292,32 @@ def get_recent_records(
         .order_by(PersonalRecord.achieved_at.desc())
         .all()
     )
+
+
+def get_distance_top_n(
+    db: Session, user_id: int = DEFAULT_USER_ID, top_n: int = 3
+) -> dict[str, list[PersonalRecord]]:
+    """Top-``top_n`` historical bests per race distance, fastest first.
+
+    ``PersonalRecord`` is append-only and a row is only created when a time
+    actually beats the prior best for that distance, so the sequence of rows
+    for a given distance label is already strictly improving over time — the
+    most-recently-achieved row is the fastest, the one before it is the
+    second-fastest, and so on. Sorting by ``achieved_at`` descending therefore
+    gives the fastest-first rank directly, with no separate ranking query.
+    """
+    all_records = (
+        db.query(PersonalRecord)
+        .filter(PersonalRecord.user_id == user_id, PersonalRecord.record_type == "distance")
+        .order_by(PersonalRecord.achieved_at.desc())
+        .all()
+    )
+    out: dict[str, list[PersonalRecord]] = {}
+    for r in all_records:
+        bucket = out.setdefault(r.distance_label, [])
+        if len(bucket) < top_n:
+            bucket.append(r)
+    return out
 
 
 # ---------------------------------------------------------------------------

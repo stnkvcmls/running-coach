@@ -600,6 +600,10 @@ class PersonalRecordsResponse(BaseModel):
     current_bests: list[PersonalRecordResponse] = []
     recent: list[PersonalRecordResponse] = []
     recent_days: int
+    # Race-distance "Best Efforts": label -> top-3 historical bests, fastest first.
+    distance_bests: dict[str, list[PersonalRecordResponse]] = {}
+    # Canonical distance chip order (Strava's set), including labels with no data yet.
+    distance_labels: list[str] = []
 
 
 class AerobicTrendPoint(BaseModel):

@@ -2,19 +2,20 @@ import json
 from datetime import datetime, timedelta
 
 from app import records
-from app.models import Activity, PersonalRecord
+from app.models import Activity, PersonalRecord, SyncStatus
 
 DEFAULT_USER_ID = 1
 
 
-def _curve_json(*, power=None, gap_speed=None):
+def _curve_json(*, power=None, gap_speed=None, distance_efforts=None, is_treadmill=False):
     return json.dumps({
         "power": power or {},
         "speed": {},
         "gap_speed": gap_speed or {},
         "hr": {},
-        "is_treadmill": False,
+        "is_treadmill": is_treadmill,
         "duration": 1800.0,
+        "distance_efforts": distance_efforts or {},
     })
 
 
@@ -87,27 +88,32 @@ def test_non_running_activity_produces_no_records(db):
     assert created == []
 
 
-# --- distance-based race bests ---
+# --- distance-based "Best Efforts" (rolling-window, not whole-activity) ---
 
-def test_race_distance_within_tolerance_creates_distance_record(db):
-    # 5000m nominal; 5080m is within +2%
-    act = _add_activity(db, days_ago=1, distance_m=5080, duration_sec=1200)
+def test_distance_effort_creates_record_with_no_previous(db):
+    act = _add_activity(db, days_ago=1, mean_max=_curve_json(distance_efforts={"10K": 3000}))
     created = records.detect_new_records_for_activity(db, act)
     assert len(created) == 1
     assert created[0].record_type == "distance"
-    assert created[0].distance_label == "5K"
-    assert created[0].value == 1200
+    assert created[0].distance_label == "10K"
+    assert created[0].value == 3000
+    assert created[0].previous_value is None
 
 
-def test_race_distance_outside_tolerance_is_not_matched(db):
-    act = _add_activity(db, days_ago=1, distance_m=5500, duration_sec=1200)
+def test_half_marathon_activity_also_yields_a_10k_and_5k_effort(db):
+    """The whole point of Strava-style Best Efforts: a half marathon race
+    contains a 5K and 10K sub-effort, not just a Half Marathon one."""
+    act = _add_activity(db, days_ago=1, mean_max=_curve_json(distance_efforts={
+        "5K": 1450, "10K": 2950, "Half Marathon": 6480,
+    }))
     created = records.detect_new_records_for_activity(db, act)
-    assert created == []
+    labels = {r.distance_label for r in created}
+    assert labels == {"5K", "10K", "Half Marathon"}
 
 
-def test_faster_time_at_same_distance_beats_prior(db):
-    _add_activity(db, days_ago=10, distance_m=5000, duration_sec=1300)
-    newer = _add_activity(db, days_ago=1, distance_m=5000, duration_sec=1200)
+def test_faster_effort_beats_prior_at_same_distance(db):
+    _add_activity(db, days_ago=10, mean_max=_curve_json(distance_efforts={"5K": 1300}))
+    newer = _add_activity(db, days_ago=1, mean_max=_curve_json(distance_efforts={"5K": 1200}))
 
     created = records.detect_new_records_for_activity(db, newer)
     assert len(created) == 1
@@ -116,12 +122,23 @@ def test_faster_time_at_same_distance_beats_prior(db):
     assert created[0].previous_value == 1300
 
 
-def test_slower_time_at_same_distance_creates_no_record(db):
-    _add_activity(db, days_ago=10, distance_m=5000, duration_sec=1200)
-    newer = _add_activity(db, days_ago=1, distance_m=5000, duration_sec=1300)
+def test_slower_effort_at_same_distance_creates_no_record(db):
+    _add_activity(db, days_ago=10, mean_max=_curve_json(distance_efforts={"5K": 1200}))
+    newer = _add_activity(db, days_ago=1, mean_max=_curve_json(distance_efforts={"5K": 1300}))
 
     created = records.detect_new_records_for_activity(db, newer)
     assert created == []
+
+
+def test_distance_labels_are_tracked_independently(db):
+    _add_activity(db, days_ago=10, mean_max=_curve_json(distance_efforts={"5K": 1300, "10K": 2700}))
+    newer = _add_activity(
+        db, days_ago=1,
+        mean_max=_curve_json(distance_efforts={"5K": 1250, "10K": 2800}),  # 5K PR, 10K not
+    )
+    created = records.detect_new_records_for_activity(db, newer)
+    assert len(created) == 1
+    assert created[0].distance_label == "5K"
 
 
 # --- chronological correctness (backfill ordering) ---
@@ -130,12 +147,12 @@ def test_incremental_detection_is_order_sensitive_by_insertion(db):
     """Out-of-order insertion (as in backfill's newest-first pages) can produce a
     stale PR for a later-inserted-but-earlier activity — this is exactly why
     rebuild_personal_records exists."""
-    newer = _add_activity(db, days_ago=2, distance_m=5000, duration_sec=1200)  # 20:00 5K
+    newer = _add_activity(db, days_ago=2, mean_max=_curve_json(distance_efforts={"5K": 1200}))
     created_newer = records.detect_new_records_for_activity(db, newer)
     assert len(created_newer) == 1 and created_newer[0].previous_value is None
 
     # A faster, older run inserted afterwards (simulating backfill order).
-    older = _add_activity(db, days_ago=10, distance_m=5000, duration_sec=1100)  # 18:20 5K
+    older = _add_activity(db, days_ago=10, mean_max=_curve_json(distance_efforts={"5K": 1100}))
     created_older = records.detect_new_records_for_activity(db, older)
     # Nothing precedes `older` chronologically yet (in the DB), so it also looks
     # like a fresh PR from the incremental function's point of view.
@@ -147,9 +164,9 @@ def test_incremental_detection_is_order_sensitive_by_insertion(db):
 
 
 def test_rebuild_fixes_chronological_ordering(db):
-    newer = _add_activity(db, days_ago=2, distance_m=5000, duration_sec=1200)
+    newer = _add_activity(db, days_ago=2, mean_max=_curve_json(distance_efforts={"5K": 1200}))
     records.detect_new_records_for_activity(db, newer)
-    older = _add_activity(db, days_ago=10, distance_m=5000, duration_sec=1100)
+    older = _add_activity(db, days_ago=10, mean_max=_curve_json(distance_efforts={"5K": 1100}))
     records.detect_new_records_for_activity(db, older)
 
     created = records.rebuild_personal_records(db)
@@ -206,6 +223,26 @@ def test_get_recent_records_filters_by_window(db):
     assert recent[0].activity_id == recent_act.id
 
 
+def test_get_distance_top_n_ranks_fastest_first(db):
+    _add_activity(db, days_ago=30, mean_max=_curve_json(distance_efforts={"5K": 1400}))
+    _add_activity(db, days_ago=20, mean_max=_curve_json(distance_efforts={"5K": 1300}))
+    _add_activity(db, days_ago=10, mean_max=_curve_json(distance_efforts={"5K": 1250}))
+    _add_activity(db, days_ago=5, mean_max=_curve_json(distance_efforts={"5K": 1230}))
+    records.rebuild_personal_records(db)
+
+    top_n = records.get_distance_top_n(db, top_n=3)
+    values = [r.value for r in top_n["5K"]]
+    assert values == [1230, 1250, 1300]  # fastest first, only top 3
+
+
+def test_get_distance_top_n_scoped_to_distance_type(db):
+    _add_activity(db, days_ago=1, mean_max=_curve_json(power={"300": 300}, distance_efforts={"5K": 1200}))
+    records.rebuild_personal_records(db)
+
+    top_n = records.get_distance_top_n(db)
+    assert list(top_n.keys()) == ["5K"]
+
+
 # --- lazy backfill (pre-existing history synced before this feature shipped) ---
 
 def test_ensure_records_backfilled_mines_pre_existing_history(db):
@@ -225,10 +262,17 @@ def test_ensure_records_backfilled_mines_pre_existing_history(db):
     assert bests[0].value == 300
 
 
-def test_ensure_records_backfilled_is_a_noop_once_records_exist(db, monkeypatch):
+def test_ensure_records_backfilled_records_version_and_is_a_noop_after(db, monkeypatch):
     _add_activity(db, days_ago=1, mean_max=_curve_json(power={"300": 300}))
-    records.rebuild_personal_records(db)
-    assert db.query(PersonalRecord).count() == 1
+    records.ensure_records_backfilled(db)
+
+    status = (
+        db.query(SyncStatus)
+        .filter(SyncStatus.user_id == DEFAULT_USER_ID, SyncStatus.key == "personal_records_backfill_version")
+        .first()
+    )
+    assert status is not None
+    assert int(status.value) == records._BACKFILL_VERSION
 
     called = []
     monkeypatch.setattr(records, "rebuild_personal_records", lambda *a, **k: called.append(1))
@@ -239,6 +283,10 @@ def test_ensure_records_backfilled_is_a_noop_once_records_exist(db, monkeypatch)
 def test_ensure_records_backfilled_is_a_noop_with_no_history(db, monkeypatch):
     called = []
     monkeypatch.setattr(records, "rebuild_personal_records", lambda *a, **k: called.append(1))
+    records.ensure_records_backfilled(db)
+    assert called == []
+    # No history to version either way, but should not raise or loop forever
+    # on a second call.
     records.ensure_records_backfilled(db)
     assert called == []
 
@@ -319,12 +367,31 @@ def test_personal_records_endpoint_returns_current_and_recent(client, session_fa
     assert len(body["recent"]) == 1  # only the day-5 activity falls in the 90-day window
 
 
+def test_personal_records_endpoint_returns_distance_bests_and_labels(client, session_factory):
+    db = session_factory()
+    _add_activity(db, days_ago=10, mean_max=_curve_json(distance_efforts={"5K": 1300}))
+    _add_activity(db, days_ago=1, mean_max=_curve_json(distance_efforts={"5K": 1200}))
+    records.rebuild_personal_records(db)
+    db.close()
+
+    resp = client.get("/api/v1/personal-records")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["distance_labels"][:3] == ["400m", "1/2 mile", "1K"]
+    assert "Marathon" in body["distance_labels"]
+    assert len(body["distance_bests"]["5K"]) == 2
+    assert body["distance_bests"]["5K"][0]["value"] == 1200  # fastest first
+    assert body["distance_bests"]["5K"][1]["value"] == 1300
+
+
 def test_activity_detail_includes_personal_records(client, session_factory):
     db = session_factory()
-    older = _add_activity(db, days_ago=10, mean_max=_curve_json(power={"300": 280}))
+    # Oldest activity establishes the initial baseline PR (nothing preceded it).
+    baseline = _add_activity(db, days_ago=20, mean_max=_curve_json(power={"300": 280}))
+    # A weaker effort in between never beats the baseline, so it sets no record.
+    slower = _add_activity(db, days_ago=10, mean_max=_curve_json(power={"300": 260}))
     newer = _add_activity(db, days_ago=1, mean_max=_curve_json(power={"300": 300}))
-    records.detect_new_records_for_activity(db, newer)
-    newer_id, older_id = newer.id, older.id
+    slower_id, newer_id = slower.id, newer.id
     db.close()
 
     resp = client.get(f"/api/v1/activities/{newer_id}")
@@ -335,5 +402,5 @@ def test_activity_detail_includes_personal_records(client, session_factory):
     assert body["personal_records"][0]["value"] == 300
     assert body["personal_records"][0]["previous_value"] == 280
 
-    resp2 = client.get(f"/api/v1/activities/{older_id}")
+    resp2 = client.get(f"/api/v1/activities/{slower_id}")
     assert resp2.json()["personal_records"] is None

@@ -572,6 +572,8 @@ export interface PersonalRecordsResponse {
   current_bests: PersonalRecordResponse[]
   recent: PersonalRecordResponse[]
   recent_days: number
+  distance_bests: Record<string, PersonalRecordResponse[]>  // label -> top 3, fastest first
+  distance_labels: string[]  // canonical chip order (Strava's distance set)
 }
 
 export interface IntensityWeek {

@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Trophy } from 'lucide-react'
-import { usePersonalRecords } from '../../api/hooks'
+import { ChevronDown, ChevronUp, Trophy } from 'lucide-react'
+import { usePersonalRecords, useActivity } from '../../api/hooks'
+import { formatDistance, formatDuration } from '../../utils/formatting'
+import { format, parseISO } from '../../utils/date'
 import type { PersonalRecordResponse } from '../../api/types'
 import './PeakPerformancesView.css'
 
@@ -13,6 +15,24 @@ const DAY_OPTIONS: { label: string; value: Days }[] = [
   { label: '1y', value: 365 },
 ]
 
+// Mirrors app.streams.RACE_DISTANCES_M — the API returns effort *time* only,
+// so pace is derived client-side from each label's known nominal distance.
+const DISTANCE_METERS: Record<string, number> = {
+  '400m': 400,
+  '1/2 mile': 804.672,
+  '1K': 1000,
+  '1 mile': 1609.344,
+  '2 mile': 3218.688,
+  '5K': 5000,
+  '10K': 10000,
+  '15K': 15000,
+  '10 mile': 16093.44,
+  '20K': 20000,
+  'Half Marathon': 21097.5,
+  '30K': 30000,
+  Marathon: 42195,
+}
+
 function formatRaceTime(seconds: number): string {
   const s = Math.round(seconds)
   const h = Math.floor(s / 3600)
@@ -23,32 +43,81 @@ function formatRaceTime(seconds: number): string {
     : `${m}:${String(sec).padStart(2, '0')}`
 }
 
-function formatPreviousValue(r: PersonalRecordResponse): string | null {
-  if (r.previous_value == null) return null
-  if (r.record_type === 'distance') return formatRaceTime(r.previous_value)
-  if (r.metric === 'power') return `${r.previous_value.toFixed(0)} W`
-  const paceMinKm = (1000 / r.previous_value) / 60
+function formatPaceForLabel(label: string, seconds: number): string | null {
+  const meters = DISTANCE_METERS[label]
+  if (!meters) return null
+  const paceMinKm = seconds / (meters / 1000) / 60
   const m = Math.floor(paceMinKm)
-  const sec = Math.round((paceMinKm - m) * 60)
-  return `${m}:${String(sec).padStart(2, '0')}/km`
+  const s = Math.round((paceMinKm - m) * 60)
+  return `${m}:${String(s).padStart(2, '0')} /km`
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+  return format(parseISO(iso), 'MMMM d, yyyy')
+}
+
+function BestEffortDetail({ record }: { record: PersonalRecordResponse }) {
+  const { data: activity, isLoading } = useActivity(record.activity_id)
+  return (
+    <Link to={`/activities/${record.activity_id}`} className="pr-effort-detail">
+      <div className="pr-effort-detail-name">
+        {isLoading ? 'Loading…' : activity?.name || `Activity #${record.activity_id}`}
+      </div>
+      {activity && (
+        <div className="pr-effort-detail-stats">
+          {formatDistance(activity.distance_m)} km · {formatDuration(activity.duration_sec)}
+        </div>
+      )}
+      <div className="pr-effort-detail-date">{formatDate(record.achieved_at)}</div>
+    </Link>
+  )
+}
+
+function BestEffortRow({ record, rank }: { record: PersonalRecordResponse; rank: number }) {
+  const [open, setOpen] = useState(rank === 1)
+  const pace = formatPaceForLabel(record.distance_label ?? '', record.value)
+
+  return (
+    <div className="pr-effort-row">
+      <button
+        type="button"
+        className={`pr-effort-row-header pr-effort-rank-${rank}`}
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+      >
+        <span className={`pr-effort-medal pr-effort-medal-${rank}`}>
+          {rank === 1 ? <Trophy size={15} /> : rank}
+        </span>
+        <span className="pr-effort-values">
+          <span className="pr-effort-time">{formatRaceTime(record.value)}</span>
+          {pace && <span className="pr-effort-pace">{pace}</span>}
+        </span>
+        {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+      </button>
+      {open && <BestEffortDetail record={record} />}
+    </div>
+  )
 }
 
 export default function PeakPerformancesView() {
-  const [days, setDays] = useState<Days>(90)
-  const { data, isLoading } = usePersonalRecords(days)
+  const [recentDays, setRecentDays] = useState<Days>(90)
+  const { data, isLoading } = usePersonalRecords(recentDays)
+  const [selectedLabel, setSelectedLabel] = useState<string | null>(null)
 
   if (isLoading) return <div className="pr-loading">Loading personal records…</div>
 
+  const labels = data?.distance_labels ?? []
+  const distanceBests = data?.distance_bests ?? {}
   const currentBests = data?.current_bests ?? []
   const recent = data?.recent ?? []
-  const distanceBests = currentBests.filter(r => r.record_type === 'distance')
   const durationBests = currentBests.filter(r => r.record_type === 'duration')
 
-  if (currentBests.length === 0) {
+  const hasAnyDistanceData = labels.some(l => (distanceBests[l]?.length ?? 0) > 0)
+  const effectiveSelected =
+    selectedLabel ?? labels.find(l => (distanceBests[l]?.length ?? 0) > 0) ?? labels[0]
+  const selectedRecords = distanceBests[effectiveSelected] ?? []
+
+  if (currentBests.length === 0 && !hasAnyDistanceData) {
     return (
       <div className="pr-view">
         <div className="pr-header">
@@ -68,20 +137,33 @@ export default function PeakPerformancesView() {
         <span className="pr-title">Peak Performances</span>
       </div>
 
-      {distanceBests.length > 0 && (
-        <div className="pr-card">
-          <div className="pr-card-title">Race Distance Bests</div>
-          <div className="pr-grid">
-            {distanceBests.map(r => (
-              <Link key={r.id} to={`/activities/${r.activity_id}`} className="pr-tile">
-                <div className="pr-tile-label">{r.label}</div>
-                <div className="pr-tile-value">{r.display_value}</div>
-                <div className="pr-tile-date">{formatDate(r.achieved_at)}</div>
-              </Link>
+      <div className="pr-card">
+        <div className="pr-card-title">Best Efforts</div>
+        <div className="pr-chip-row">
+          {labels.map(label => (
+            <button
+              key={label}
+              className={[
+                'pr-chip',
+                effectiveSelected === label ? 'active' : '',
+                (distanceBests[label]?.length ?? 0) === 0 ? 'empty' : '',
+              ].join(' ').trim()}
+              onClick={() => setSelectedLabel(label)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {selectedRecords.length === 0 ? (
+          <div className="pr-empty-inline">No {effectiveSelected} effort recorded yet.</div>
+        ) : (
+          <div className="pr-effort-list">
+            {selectedRecords.map((r, i) => (
+              <BestEffortRow key={r.id} record={r} rank={i + 1} />
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {durationBests.length > 0 && (
         <div className="pr-card">
@@ -105,32 +187,27 @@ export default function PeakPerformancesView() {
             {DAY_OPTIONS.map(o => (
               <button
                 key={o.value}
-                className={`pr-tab ${days === o.value ? 'active' : ''}`}
-                onClick={() => setDays(o.value)}
+                className={`pr-tab ${recentDays === o.value ? 'active' : ''}`}
+                onClick={() => setRecentDays(o.value)}
               >{o.label}</button>
             ))}
           </div>
         </div>
         {recent.length === 0 ? (
-          <div className="pr-empty-inline">No new records in the last {days} days.</div>
+          <div className="pr-empty-inline">No new records in the last {recentDays} days.</div>
         ) : (
           <ul className="pr-recent-list">
-            {recent.map(r => {
-              const prev = formatPreviousValue(r)
-              return (
-                <li key={r.id}>
-                  <Link to={`/activities/${r.activity_id}`} className="pr-recent-row">
-                    <Trophy size={14} className="pr-recent-icon" />
-                    <div className="pr-recent-text">
-                      <div className="pr-recent-label">New {r.label} best: {r.display_value}</div>
-                      <div className="pr-recent-meta">
-                        {formatDate(r.achieved_at)}{prev ? ` · previous: ${prev}` : ''}
-                      </div>
-                    </div>
-                  </Link>
-                </li>
-              )
-            })}
+            {recent.map(r => (
+              <li key={r.id}>
+                <Link to={`/activities/${r.activity_id}`} className="pr-recent-row">
+                  <Trophy size={14} className="pr-recent-icon" />
+                  <div className="pr-recent-text">
+                    <div className="pr-recent-label">New {r.label} best: {r.display_value}</div>
+                    <div className="pr-recent-meta">{formatDate(r.achieved_at)}</div>
+                  </div>
+                </Link>
+              </li>
+            ))}
           </ul>
         )}
       </div>
