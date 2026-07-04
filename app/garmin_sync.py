@@ -9,7 +9,7 @@ from datetime import datetime, date, timedelta, timezone
 from garminconnect import Garmin
 from sqlalchemy.orm import Session
 
-from app import crypto, streams
+from app import crypto, records, streams
 from app.config import settings
 from app.database import db_session
 from app.models import (
@@ -627,6 +627,10 @@ def sync_activities(user: User | None = None) -> list[Activity]:
                 )
                 if activity:
                     new_activities.append(activity)
+                    try:
+                        records.detect_new_records_for_activity(db, activity, user_id=uid)
+                    except Exception:
+                        logger.exception("Personal-record detection failed for activity %s", activity.id)
 
             _set_sync_status(
                 db, "last_activity_sync", datetime.now(timezone.utc).isoformat(), user_id=uid
@@ -936,6 +940,15 @@ def backfill_activities():
 
             _set_sync_status(db, "backfill_activities", "complete", user_id=uid)
             logger.info("Activity backfill complete")
+
+            # Backfill pages arrive newest-first, so per-activity PR detection
+            # during the loop above would compare each activity against an
+            # incomplete history. Rebuild the full record history in one
+            # chronological pass now that every activity is stored.
+            try:
+                records.rebuild_personal_records(db, user_id=uid)
+            except Exception:
+                logger.exception("Personal-record rebuild failed after backfill")
 
         except Exception:
             logger.exception("Activity backfill failed")

@@ -899,6 +899,7 @@ def weekly_review(user_id: int = DEFAULT_USER_ID):
                     a, zones_by_metric,
                     hr_zone_configs=zc["hr"], pace_zone_configs=zc["pace"],
                     threshold_hr=zc["threshold_hr"], threshold_pace=zc["threshold_pace"],
+                    db=db,
                 )
                 for a in week_activities
             )

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, RotateCcw, Loader } from 'lucide-react'
+import { ArrowLeft, RotateCcw, Loader, Trophy } from 'lucide-react'
 import { useActivity, useTriggerAnalysis, useJobStatus } from '../../api/hooks'
 import { getActivityColor, colorMap } from '../../utils/colors'
 import { formatDistance, formatDuration, formatPace } from '../../utils/formatting'
@@ -108,6 +108,14 @@ export default function ActivityDetailView() {
         </button>
         <div className="detail-header-info">
           <span className="badge" style={{ background: `${color}22`, color }}>{typeLabel}</span>
+          {activity.personal_records && activity.personal_records.length > 0 && (
+            <span
+              className="badge pr-badge"
+              title={activity.personal_records.map(r => `${r.label}: ${r.display_value}`).join(', ')}
+            >
+              <Trophy size={11} /> New PB
+            </span>
+          )}
           <h1 className="detail-title">{activity.name || 'Workout'}</h1>
           {activity.started_at && (
             <span className="detail-date">{format(parseISO(activity.started_at), 'EEEE, d MMMM yyyy, HH:mm')}</span>

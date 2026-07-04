@@ -139,6 +139,93 @@ def test_compute_curves_none_when_unparseable():
     assert streams.compute_curves_from_details({}, "running") is None
 
 
+# --- distance-window "Best Efforts" (Strava-style, not whole-activity) ---
+
+def test_best_time_for_distance_constant_pace():
+    # 5 m/s for 200 s -> 1000 m covered; 500 m should take exactly 100 s.
+    time = list(range(201))
+    distance = [5.0 * t for t in time]
+    assert streams._best_time_for_distance(time, distance, 500.0) == 100.0
+
+
+def test_best_time_for_distance_finds_fastest_window_not_just_from_start():
+    # Slow (2 m/s) for 100 s, then fast (10 m/s) for 50 s, then slow again.
+    # The fastest 400 m window should be entirely within the fast segment.
+    time = list(range(0, 200))
+    distance = []
+    d = 0.0
+    for t in time:
+        if t < 100:
+            speed = 2.0
+        elif t < 150:
+            speed = 10.0
+        else:
+            speed = 2.0
+        d += speed
+        distance.append(d)
+    best = streams._best_time_for_distance(time, distance, 400.0)
+    assert best is not None
+    assert round(best) == 40  # 400 m at 10 m/s
+
+
+def test_best_time_for_distance_none_when_never_covered():
+    time = list(range(10))
+    distance = [1.0 * t for t in time]
+    assert streams._best_time_for_distance(time, distance, 5000.0) is None
+
+
+def test_best_time_for_distance_clips_gps_regression():
+    # A GPS glitch briefly reports distance going backwards; should be ignored
+    # rather than corrupting the window search.
+    time = [0, 1, 2, 3, 4, 5]
+    distance = [0.0, 10.0, 8.0, 20.0, 30.0, 40.0]  # dip at t=2
+    best = streams._best_time_for_distance(time, distance, 30.0)
+    assert best is not None
+
+
+def test_compute_distance_efforts_reachable_distances_only():
+    # Constant 4 m/s for 1300 s -> 5200 m covered: reaches 1K/1mile/2mile/5K but not 10K.
+    time = list(range(0, 1301))
+    distance = [4.0 * t for t in time]
+    s = {"time": time, "distance": distance}
+    efforts = streams.compute_distance_efforts(s, "running")
+    assert "1K" in efforts
+    assert "5K" in efforts
+    assert "10K" not in efforts
+    assert round(efforts["1K"]) == 250  # 1000 m at 4 m/s = 250 s
+
+
+def test_compute_distance_efforts_skipped_for_treadmill():
+    time = list(range(0, 1301))
+    distance = [4.0 * t for t in time]
+    s = {"time": time, "distance": distance}
+    assert streams.compute_distance_efforts(s, "treadmill_running") == {}
+
+
+def test_compute_curves_from_details_includes_distance_efforts():
+    samples = [
+        {"t": t, "power": 250, "speed": 4.0, "hr": 150, "elev": 0, "dist": 4.0 * t}
+        for t in range(1301)
+    ]
+    curves = streams.compute_curves_from_details(_make_details(samples), "running")
+    assert "1K" in curves["distance_efforts"]
+    assert "10K" not in curves["distance_efforts"]
+
+
+def test_compute_curves_from_details_half_marathon_yields_5k_and_10k():
+    """A half-marathon-length run should also report 5K/10K best efforts, not
+    just a Half Marathon one — the point of the rolling-window approach."""
+    samples = [
+        {"t": t, "power": 250, "speed": 4.0, "hr": 150, "elev": 0, "dist": 4.0 * t}
+        for t in range(5300)  # 21200 m at 4 m/s
+    ]
+    curves = streams.compute_curves_from_details(_make_details(samples), "running")
+    efforts = curves["distance_efforts"]
+    assert "5K" in efforts
+    assert "10K" in efforts
+    assert "Half Marathon" in efforts
+
+
 # --- backfill ---
 
 def test_backfill_missing_curves(db):
@@ -158,3 +245,60 @@ def test_backfill_missing_curves(db):
 
     # Second run is a no-op (already populated).
     assert streams.backfill_missing_curves(db) == 0
+
+
+def test_backfill_missing_distance_efforts_recomputes_old_format_blob(db):
+    samples = [
+        {"t": t, "power": 250, "speed": 4.0, "hr": 150, "elev": 0, "dist": 4.0 * t}
+        for t in range(1301)
+    ]
+    details = _make_details(samples)
+    # Simulate a curve computed before distance_efforts existed: no such key.
+    old_blob = json.dumps({"power": {"60": 250}, "speed": {}, "gap_speed": {}, "hr": {},
+                          "is_treadmill": False, "duration": 1300.0})
+    db.add(Activity(
+        garmin_id=1, activity_type="running", name="Run",
+        laps_json=json.dumps(details), mean_max_json=old_blob,
+    ))
+    db.commit()
+
+    updated = streams.backfill_missing_distance_efforts(db)
+    assert updated == 1
+    act = db.query(Activity).first()
+    curve = json.loads(act.mean_max_json)
+    assert "1K" in curve["distance_efforts"]
+
+    # Second run is a no-op (already has distance_efforts).
+    assert streams.backfill_missing_distance_efforts(db) == 0
+
+
+def test_backfill_missing_distance_efforts_also_covers_fully_missing_curves(db):
+    samples = [{"t": t, "power": 250, "speed": 3.5, "hr": 150} for t in range(120)]
+    details = _make_details(samples, with_elev=False)
+    db.add(Activity(
+        garmin_id=1, activity_type="running", name="Run",
+        laps_json=json.dumps(details), mean_max_json=None,
+    ))
+    db.commit()
+
+    assert streams.backfill_missing_distance_efforts(db) == 1
+    act = db.query(Activity).first()
+    assert "distance_efforts" in json.loads(act.mean_max_json)
+
+
+def test_backfill_missing_distance_efforts_bounded_by_limit(db):
+    """A whole-history rollout matches every existing activity at once; this
+    must stay bounded per call rather than loading/parsing everything (each
+    row's laps_json can run multiple MB) in a single request."""
+    samples = [{"t": t, "power": 250, "speed": 3.5, "hr": 150} for t in range(120)]
+    details = _make_details(samples, with_elev=False)
+    for i in range(5):
+        db.add(Activity(
+            garmin_id=i, activity_type="running", name="Run",
+            laps_json=json.dumps(details), mean_max_json=None,
+        ))
+    db.commit()
+
+    assert streams.backfill_missing_distance_efforts(db, limit=3) == 3
+    remaining = db.query(Activity).filter(Activity.mean_max_json.is_(None)).count()
+    assert remaining == 2

@@ -138,7 +138,7 @@ adaptation-suggestion + race-week pushes), `static/sw.js` (push handlers),
 `frontend/src/api/{types,hooks,client}.ts`, `requirements.txt` (`pywebpush`),
 `tests/test_notifications.py` (new), `tests/test_api_endpoints.py`.
 
-#### P0-2 · Personal records & peak performances
+#### P0-2 · Personal records & peak performances ✅ Done.
 **What:** Detect and celebrate bests from data we already compute. After
 `compute_curves_from_details` stores an activity's mean-max curve, compare each
 standard duration against the athlete's historical frontier (and race-distance
@@ -162,6 +162,29 @@ curve computation), `app/ai_coach.py` (`_format_activity_context` PR line),
 `app/schemas.py`, `frontend/src/components/trends/PeakPerformancesView.tsx` +
 `.css` (new), `frontend/src/components/activity-detail/ActivityDetailView.tsx`
 (badge), `frontend/src/api/{types,hooks}.ts`, `tests/test_records.py` (new).
+_Implemented as described, scoped to P0-2 only (no push — that's P0-1, not yet
+built). Duration-based bests (power/GAP-speed per standard mean-max duration)
+and race-distance "Best Efforts" (Strava's 400m/1-2mi/5K.../Marathon set) are
+both append-only `PersonalRecord` rows, detected incrementally after each
+live-synced activity (`garmin_sync.sync_activities`) by comparing only against
+activities with an earlier `started_at` — order-independent by date, not by
+sync order. Because `backfill_activities` imports pages newest-first,
+per-activity detection is skipped there and a single chronological
+`rebuild_personal_records` pass runs once backfill completes; a versioned
+`SyncStatus` flag (`ensure_records_backfilled`) also lazily re-mines full
+history on the first request after any detection-logic change, so accounts
+whose backfill predates this feature (or a later revision of it) aren't stuck
+with an empty panel. Race-distance bests are **rolling-window best efforts**,
+not whole-activity distance matching: `app.streams.compute_distance_efforts`
+finds the fastest contiguous stretch of each standard distance anywhere within
+an activity's distance/time stream (two-pointer sweep, linearly interpolated
+crossing time), so a half marathon race correctly yields a 5K and 10K best
+effort too, exactly like Strava. Surfaced via `GET /personal-records`
+(Trends → Records tab: a Strava-style distance-chip picker showing the top-3
+historical bests per distance, a Duration Bests grid, and a recent-window
+feed) and a `personal_records` field on `ActivityDetail` (New PB badge); the
+AI activity-analysis context gets a one-line PR mention when applicable. All
+new/existing tests pass (backend + frontend)._
 
 ### P1 — Ask the athlete, plan the real race
 

@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from app import garmin_sync
-from app.models import Activity, AthleteProfile, DailySummary, GarminCalendarEvent, SyncStatus, User
+from app.models import Activity, AthleteProfile, DailySummary, GarminCalendarEvent, PersonalRecord, SyncStatus, User
 
 
 # --- _parse_garmin_ts ---
@@ -489,6 +489,58 @@ def test_backfill_activities_walks_pages(db, patch_db_session, monkeypatch):
     garmin_sync.backfill_activities()
     assert db.query(Activity).filter(Activity.garmin_id == 3001).count() == 1
     assert garmin_sync._get_sync_status(db, "backfill_activities") == "complete"
+
+
+def test_sync_activities_detects_personal_record(db, patch_db_session, monkeypatch):
+    """A newly-synced activity with a mean-max curve triggers PR detection."""
+    patch_db_session(garmin_sync)
+    monkeypatch.setattr(garmin_sync.time, "sleep", lambda *a, **k: None)
+
+    fake_client = MagicMock()
+    fake_client.get_activities.return_value = [
+        {"activityId": 4001, "activityType": {"typeKey": "running"},
+         "activityName": "Run", "startTimeLocal": "2026-06-10 07:00:00",
+         "duration": 1800, "distance": 5000},
+    ]
+    fake_client.get_activity_details.return_value = {"metricDescriptors": [], "activityDetailMetrics": [1]}
+    monkeypatch.setattr(garmin_sync, "get_garmin_client", lambda *a, **k: fake_client)
+    monkeypatch.setattr(garmin_sync, "_fetch_activity_details", lambda c, gid: {})
+    monkeypatch.setattr(
+        garmin_sync.streams, "compute_curves_from_details",
+        lambda details, activity_type: {"power": {"300": 300}, "gap_speed": {}, "speed": {}, "hr": {}, "is_treadmill": False},
+    )
+
+    new = garmin_sync.sync_activities()
+    assert len(new) == 1
+    stored = db.query(Activity).filter(Activity.garmin_id == 4001).first()
+    pr = db.query(PersonalRecord).filter(PersonalRecord.activity_id == stored.id).first()
+    assert pr is not None
+    assert pr.record_type == "duration"
+    assert pr.value == 300
+
+
+def test_backfill_activities_rebuilds_personal_records_once_complete(db, patch_db_session, monkeypatch):
+    patch_db_session(garmin_sync)
+    monkeypatch.setattr(garmin_sync.time, "sleep", lambda *a, **k: None)
+    monkeypatch.setattr(garmin_sync, "_fetch_activity_details", lambda c, gid: {})
+
+    fake_client = MagicMock()
+    fake_client.get_activities.side_effect = [
+        [{"activityId": 5001, "activityType": {"typeKey": "running"},
+          "activityName": "Run", "startTimeLocal": "2026-06-10 07:00:00",
+          "duration": 1800, "distance": 5000}],
+    ]
+    fake_client.get_activity_details.return_value = {"metricDescriptors": []}
+    monkeypatch.setattr(garmin_sync, "get_garmin_client", lambda *a, **k: fake_client)
+
+    rebuild_calls = []
+    monkeypatch.setattr(
+        garmin_sync.records, "rebuild_personal_records",
+        lambda db_, user_id=1: rebuild_calls.append(user_id),
+    )
+
+    garmin_sync.backfill_activities()
+    assert rebuild_calls == [garmin_sync.DEFAULT_USER_ID]
 
 
 def test_backfill_activities_skips_when_complete(db, patch_db_session, monkeypatch):

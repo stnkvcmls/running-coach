@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import Activity, GarminCalendarEvent, Insight, MetricZone, User
+from app.models import Activity, GarminCalendarEvent, Insight, MetricZone, PersonalRecord, User
 from app.schemas import (
     AIJobEnqueuedResponse,
     ActivityDetail,
@@ -17,10 +17,11 @@ from app.schemas import (
     MetricZoneResponse,
 )
 from app import adherence as adherence_mod
+from app import records as records_mod
 from app import streams as streams_mod
 from app import weather as weather_mod
 from app.utils import safe_json_loads, parse_activity_charts, parse_activity_route
-from app.routers._shared import _enrich_event_with_steps
+from app.routers._shared import _enrich_event_with_steps, _to_pr_response
 
 import logging
 
@@ -148,6 +149,13 @@ def api_activity_detail(
         weather, activity.avg_pace_min_km
     )
 
+    records_mod.ensure_records_backfilled(db, user_id=current_user.id)
+    personal_records = (
+        db.query(PersonalRecord)
+        .filter(PersonalRecord.user_id == current_user.id, PersonalRecord.activity_id == activity.id)
+        .all()
+    )
+
     result = ActivityDetail.model_validate(activity)
     result.splits = splits
     result.hr_zones = hr_zones
@@ -163,6 +171,7 @@ def api_activity_detail(
     result.weather_adjusted_pace_min_km = wx_adjusted_pace
     result.weather_penalty_sec_per_km = wx_penalty_sec
     result.weather_description = wx_description
+    result.personal_records = [_to_pr_response(r) for r in personal_records] or None
     return result
 
 

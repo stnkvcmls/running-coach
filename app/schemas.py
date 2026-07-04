@@ -188,6 +188,9 @@ class ActivityDetail(BaseModel):
     # Workout adherence comparison (planned vs actual)
     adherence: "WorkoutAdherence | None" = None
 
+    # Personal records set by this specific activity, if any
+    personal_records: list["PersonalRecordResponse"] | None = None
+
     @field_validator('feedback_tags', mode='before')
     @classmethod
     def parse_feedback_tags(cls, v: Any) -> list[str] | None:
@@ -574,6 +577,33 @@ class PerformanceCurveResponse(BaseModel):
     race_predictions: list[RacePrediction] = []
     lookback_days: int
     activities_analyzed: int
+
+
+class PersonalRecordResponse(BaseModel):
+    id: int
+    record_type: str                        # "duration" | "distance"
+    metric: str | None = None               # "power" | "gap_speed" (duration records only)
+    duration_sec: int | None = None
+    distance_label: str | None = None       # "5K" etc. (distance records only)
+    value: float                            # W, m/s, or seconds (distance records)
+    previous_value: float | None = None
+    activity_id: int
+    achieved_at: datetime
+    label: str                              # human-readable, e.g. "20-min power" or "Half Marathon"
+    display_value: str                      # formatted value, e.g. "320 W" or "1:32:10"
+
+    class Config:
+        from_attributes = True
+
+
+class PersonalRecordsResponse(BaseModel):
+    current_bests: list[PersonalRecordResponse] = []
+    recent: list[PersonalRecordResponse] = []
+    recent_days: int
+    # Race-distance "Best Efforts": label -> top-3 historical bests, fastest first.
+    distance_bests: dict[str, list[PersonalRecordResponse]] = {}
+    # Canonical distance chip order (Strava's set), including labels with no data yet.
+    distance_labels: list[str] = []
 
 
 class AerobicTrendPoint(BaseModel):

@@ -20,6 +20,8 @@ from app.schemas import (
     IntensityWeek,
     PerformanceCurvePoint,
     PerformanceCurveResponse,
+    PersonalRecordResponse,
+    PersonalRecordsResponse,
     RacePrediction,
     TrainingLoadResponse,
 )
@@ -27,7 +29,8 @@ from app import training_load
 from app import threshold as threshold_mod
 from app import intensity as intensity_mod
 from app import streams as streams_mod
-from app.routers._shared import _parse_date
+from app import records as records_mod
+from app.routers._shared import _parse_date, _to_pr_response
 
 router = APIRouter()
 
@@ -126,6 +129,34 @@ def api_get_performance_curve(
         ],
         lookback_days=data.lookback_days,
         activities_analyzed=data.activities_analyzed,
+    )
+
+
+# --- Personal Records / Peak Performances ---
+
+@router.get("/personal-records", response_model=PersonalRecordsResponse)
+def api_personal_records(
+    days: int = Query(90, ge=1, le=3650),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """All-time bests plus a recent-history feed, for the Peak Performances panel."""
+    records_mod.ensure_records_backfilled(db, user_id=current_user.id)
+    current_bests = records_mod.get_current_bests(db, user_id=current_user.id)
+    recent = records_mod.get_recent_records(db, user_id=current_user.id, days=days)
+    distance_top_n = records_mod.get_distance_top_n(db, user_id=current_user.id)
+    return PersonalRecordsResponse(
+        current_bests=sorted(
+            [_to_pr_response(r) for r in current_bests],
+            key=lambda r: (r.record_type, r.duration_sec or 0, r.distance_label or ""),
+        ),
+        recent=[_to_pr_response(r) for r in recent],
+        recent_days=days,
+        distance_bests={
+            label: [_to_pr_response(r) for r in recs]
+            for label, recs in distance_top_n.items()
+        },
+        distance_labels=records_mod.RACE_DISTANCE_LABELS,
     )
 
 
