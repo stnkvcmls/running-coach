@@ -47,6 +47,13 @@ class Settings(BaseSettings):
     # still want to run with auth disabled on a non-loopback bind.
     allow_insecure_bind: bool = False
 
+    # Web Push (P0-1). Generate a VAPID keypair once (e.g. `vapid --gen`) and set
+    # both keys + a contact subject; leave blank to disable push entirely (the
+    # notify() call becomes a no-op so zero-config deployments are unaffected).
+    vapid_public_key: str = ""
+    vapid_private_key: str = ""
+    vapid_subject: str = "mailto:admin@example.com"
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

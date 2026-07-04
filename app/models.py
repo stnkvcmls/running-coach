@@ -484,6 +484,28 @@ class PersonalRecord(Base):
     created_at = Column(DateTime, default=_utcnow, index=True)
 
 
+class PushSubscription(Base):
+    """A browser's Web Push subscription (P0-1), one row per subscribed device.
+
+    ``endpoint`` is the push service URL the browser handed us via
+    ``PushManager.subscribe()``; ``p256dh``/``auth`` are the keys required to
+    encrypt payloads to that endpoint (see ``app/notifications.py``).
+    """
+
+    __tablename__ = "push_subscriptions"
+    __table_args__ = (
+        UniqueConstraint("endpoint", name="uq_push_subscriptions_endpoint"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = _user_id_column()
+    endpoint = Column(Text, nullable=False)
+    p256dh = Column(Text, nullable=False)
+    auth = Column(Text, nullable=False)
+    user_agent = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=_utcnow)
+
+
 class TrainingPlanDay(Base):
     """One scheduled day within a TrainingPlan."""
 

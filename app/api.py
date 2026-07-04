@@ -10,7 +10,7 @@ that tests reach for directly via ``app.api``.
 from fastapi import APIRouter, Depends
 
 from app.auth import get_current_user
-from app.routers import activities, calendar, chat, daily, export, plan, races, settings, trends
+from app.routers import activities, calendar, chat, daily, export, notifications, plan, races, settings, trends
 from app.routers._shared import _enrich_event_with_steps, _parse_date
 
 api_router = APIRouter(
@@ -29,6 +29,7 @@ for _router in (
     races.router,
     export.router,
     chat.router,
+    notifications.router,
 ):
     api_router.include_router(_router)
 

@@ -1076,3 +1076,54 @@ def test_race_pacing_even_strategy_has_no_course_activity(client, db):
     body = resp.json()
     assert body["course_activity_id"] is None
     assert all(s["grade_pct"] is None for s in body["splits"])
+
+
+# --- Push notifications (P0-1) ---
+
+def test_vapid_public_key_not_configured_by_default(client):
+    resp = client.get("/api/v1/push/vapid-public-key")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["configured"] is False
+    assert body["public_key"] == ""
+
+
+def test_push_subscription_create_and_delete(client, db):
+    from app.models import PushSubscription
+
+    payload = {
+        "endpoint": "https://push.example/device-1",
+        "keys": {"p256dh": "p256dh-value", "auth": "auth-value"},
+        "user_agent": "pytest",
+    }
+    resp = client.post("/api/v1/push-subscriptions", json=payload)
+    assert resp.status_code == 200
+    assert db.query(PushSubscription).count() == 1
+
+    # Re-subscribing the same endpoint updates rather than duplicates.
+    resp = client.post("/api/v1/push-subscriptions", json=payload)
+    assert resp.status_code == 200
+    assert db.query(PushSubscription).count() == 1
+
+    resp = client.request(
+        "DELETE", "/api/v1/push-subscriptions",
+        json={"endpoint": "https://push.example/device-1"},
+    )
+    assert resp.status_code == 200
+    assert db.query(PushSubscription).count() == 0
+
+
+def test_notification_preferences_default_and_update(client):
+    resp = client.get("/api/v1/notification-preferences")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["categories"]["insight"] is True
+    assert "insight" in body["labels"]
+
+    resp = client.put("/api/v1/notification-preferences", json={"categories": {"insight": False}})
+    assert resp.status_code == 200
+    assert resp.json()["categories"]["insight"] is False
+
+    resp = client.get("/api/v1/notification-preferences")
+    assert resp.json()["categories"]["insight"] is False
+    assert resp.json()["categories"]["weekly_review"] is True

@@ -42,6 +42,10 @@ import type {
   AerobicTrendsResponse,
   CustomChartMetricsResponse,
   CustomChartDataResponse,
+  VapidPublicKeyResponse,
+  PushSubscriptionRequest,
+  NotificationPreferencesResponse,
+  NotificationPreferencesRequest,
 } from './types'
 
 export function useMe() {
@@ -307,6 +311,45 @@ export function useDeleteCoachMemory() {
     mutationFn: (id: number) => apiDelete<{ deleted: boolean }>(`/coach-memory/${id}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['coach-memory'] })
+    },
+  })
+}
+
+export function useVapidPublicKey() {
+  return useQuery({
+    queryKey: ['vapid-public-key'],
+    queryFn: () => apiGet<VapidPublicKeyResponse>('/push/vapid-public-key'),
+  })
+}
+
+export function useCreatePushSubscription() {
+  return useMutation({
+    mutationFn: (sub: PushSubscriptionRequest) =>
+      apiPost<{ status: string }>('/push-subscriptions', sub),
+  })
+}
+
+export function useDeletePushSubscription() {
+  return useMutation({
+    mutationFn: (endpoint: string) =>
+      apiDelete<{ status: string }>('/push-subscriptions', { endpoint }),
+  })
+}
+
+export function useNotificationPreferences() {
+  return useQuery({
+    queryKey: ['notification-preferences'],
+    queryFn: () => apiGet<NotificationPreferencesResponse>('/notification-preferences'),
+  })
+}
+
+export function useSetNotificationPreferences() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: NotificationPreferencesRequest) =>
+      apiPut<NotificationPreferencesResponse>('/notification-preferences', body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['notification-preferences'] })
     },
   })
 }

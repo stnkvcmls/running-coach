@@ -871,3 +871,32 @@ class AIJobResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class VapidPublicKeyResponse(BaseModel):
+    public_key: str
+    configured: bool
+
+
+class PushSubscriptionKeys(BaseModel):
+    p256dh: str
+    auth: str
+
+
+class PushSubscriptionRequest(BaseModel):
+    endpoint: str
+    keys: PushSubscriptionKeys
+    user_agent: str | None = None
+
+
+class PushSubscriptionDeleteRequest(BaseModel):
+    endpoint: str
+
+
+class NotificationPreferencesResponse(BaseModel):
+    categories: dict[str, bool]
+    labels: dict[str, str]
+
+
+class NotificationPreferencesRequest(BaseModel):
+    categories: dict[str, bool]

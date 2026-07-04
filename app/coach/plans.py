@@ -919,5 +919,12 @@ def weekly_review(user_id: int = DEFAULT_USER_ID):
             db.add(insight)
             db.commit()
             logger.info("Weekly review complete: %s", summary[:80])
+            from app import notifications as notifications_mod
+            notifications_mod.notify(
+                db, user_id, "weekly_review",
+                title="Your weekly review is ready",
+                body=summary,
+                url="/",
+            )
         except Exception:
             logger.exception("Weekly review failed")
