@@ -308,7 +308,7 @@ aggregation), `app/api.py` (training-load response sport split),
 
 ### P3 — Architecture & hygiene (pay down before the next cycle)
 
-- **P3-1 · Split the two monoliths.** `app/ai_coach.py` (2,586 lines) →
+- **P3-1 · Split the two monoliths. ✅ Done.** `app/ai_coach.py` (2,586 lines) →
   an `app/coach/` package: `context.py` (context builders), `providers.py`
   (Anthropic/Gemini dispatch + retry), `chat.py` (streaming + chat tools),
   `plans.py` (generation/realignment/periodization), `jobs.py` (AIJob ledger),
@@ -319,6 +319,10 @@ aggregation), `app/api.py` (training-load response sport split),
   change, do it before P0/P1 add more weight.** The 745-test suite is the safety
   net. **M–L.** Files: `app/coach/*` (new), `app/routers/*` (new),
   `app/ai_coach.py` / `app/api.py` (shims), test imports.
+  _Implemented as described: both shims re-export the full prior surface, and a
+  handful of call sites inside `app/coach/*` (db_session opens, provider/job
+  dispatch) route through the `app.ai_coach` shim at call time so the existing
+  monkeypatch-based tests keep working unchanged. All 795 tests pass._
 - **P3-2 · AI-job worker concurrency & sync isolation.** The worker claims up to
   5 jobs but runs them **serially in the APScheduler thread**, so one slow plan
   generation delays every user's analysis (and the next scheduler tick).
