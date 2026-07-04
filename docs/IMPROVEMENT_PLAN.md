@@ -108,7 +108,7 @@ present. Effort key: **S** ≈ <1 day · **M** ≈ 1–3 days · **L** ≈ sever
 
 ### P0 — The coach speaks first
 
-#### P0-1 · Web Push notifications (proactive coach delivery)
+#### P0-1 · Web Push notifications (proactive coach delivery) ✅ Done.
 **What:** Add an outbound channel: standard **Web Push** (VAPID + `pywebpush`) on
 the PWA we already ship. A `PushSubscription` model stores per-user browser
 subscriptions; a new `app/notifications.py` exposes `notify(user_id, category,
@@ -137,6 +137,26 @@ adaptation-suggestion + race-week pushes), `static/sw.js` (push handlers),
 `frontend/src/components/settings/NotificationsSection.tsx` + `.css` (new),
 `frontend/src/api/{types,hooks,client}.ts`, `requirements.txt` (`pywebpush`),
 `tests/test_notifications.py` (new), `tests/test_api_endpoints.py`.
+_Implemented as described, with two adjustments the post-P3-1 codebase and
+correctness required. First, file locations: routes and AI-coach logic now
+live in `app/routers/*` and `app/coach/*` (P3-1), not the pre-split
+`app/api.py`/`app/ai_coach.py` monoliths the plan predates — the new
+`app/routers/notifications.py` is mounted alongside the other per-domain
+routers, and call sites were added in `app/coach/jobs.py` (`analyze_activity`),
+`app/coach/plans.py` (`weekly_review`), `app/garmin_sync.py`
+(`mark_garmin_needs_reauth`'s False→True flip and personal-record detection
+in `sync_activities`). Second, config: subscribing a browser via
+`PushManager.subscribe()` needs the VAPID **public** key on the client, so
+`app/config.py` also gained `vapid_public_key` alongside `vapid_private_key`/
+`vapid_subject` (exposed read-only via `GET /push/vapid-public-key`).
+`notify()` no-ops quietly when VAPID keys aren't set, so unconfigured
+deployments and the test suite are unaffected. The readiness-driven
+plan-adaptation suggestion and race-week reminder are computed once per
+morning sync in two new `app/main.py` helpers
+(`_push_plan_adaptation_if_needed`, `_push_race_week_reminders`), each
+deduped through a `SyncStatus` row so a re-run of the daily sync never
+double-pushes. All new and existing tests pass (859 backend, 57 frontend);
+`npm run build` and `tsc -b` are clean._
 
 #### P0-2 · Personal records & peak performances ✅ Done.
 **What:** Detect and celebrate bests from data we already compute. After

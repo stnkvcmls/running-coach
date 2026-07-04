@@ -21,6 +21,7 @@ from app.models import (
     Insight,
 )
 from app import adherence as adherence_mod
+from app import notifications as notifications_mod
 from app.coach.context import (
     _build_context,
     _format_activity_context,
@@ -164,6 +165,12 @@ def analyze_activity(activity: Activity):
 
             db.commit()
             logger.info("AI analysis complete for activity %s: %s", activity.id, summary[:80])
+            notifications_mod.notify(
+                db, user_id, "insight",
+                title="New coaching insight",
+                body=summary,
+                url=f"/activities/{activity.id}",
+            )
         except Exception:
             logger.exception("AI analysis failed for activity %s", activity.id)
 

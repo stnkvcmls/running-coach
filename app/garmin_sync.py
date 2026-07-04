@@ -240,6 +240,14 @@ def mark_garmin_needs_reauth(user_id: int, value: bool = True) -> None:
         if user is not None and bool(user.garmin_needs_reauth) != value:
             user.garmin_needs_reauth = value
             db.commit()
+            if value:
+                from app import notifications as notifications_mod
+                notifications_mod.notify(
+                    db, user_id, "reauth",
+                    title="Garmin connection needs attention",
+                    body="Your Garmin session expired. Reconnect in Settings to resume syncing.",
+                    url="/settings",
+                )
 
 
 # --- Bootstrap (env account → user #1) + token-dir migration ---------------
@@ -628,7 +636,17 @@ def sync_activities(user: User | None = None) -> list[Activity]:
                 if activity:
                     new_activities.append(activity)
                     try:
-                        records.detect_new_records_for_activity(db, activity, user_id=uid)
+                        new_records = records.detect_new_records_for_activity(db, activity, user_id=uid)
+                        if new_records:
+                            from app import notifications as notifications_mod
+                            lines = [records.format_record_line(r) for r in new_records]
+                            title = "New personal record!" if len(lines) == 1 else f"{len(lines)} new personal records!"
+                            notifications_mod.notify(
+                                db, uid, "personal_record",
+                                title=title,
+                                body="; ".join(lines),
+                                url=f"/activities/{activity.id}",
+                            )
                     except Exception:
                         logger.exception("Personal-record detection failed for activity %s", activity.id)
 

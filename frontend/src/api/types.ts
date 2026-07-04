@@ -715,3 +715,23 @@ export interface PacingPushRequest {
   split_unit: string
   target_time_sec?: number | null
 }
+
+export interface VapidPublicKeyResponse {
+  public_key: string
+  configured: boolean
+}
+
+export interface PushSubscriptionRequest {
+  endpoint: string
+  keys: { p256dh: string; auth: string }
+  user_agent?: string | null
+}
+
+export interface NotificationPreferencesResponse {
+  categories: Record<string, boolean>
+  labels: Record<string, string>
+}
+
+export interface NotificationPreferencesRequest {
+  categories: Record<string, boolean>
+}

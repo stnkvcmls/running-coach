@@ -16,7 +16,7 @@ import pytz
 
 from app.config import settings
 from app.database import db_session, init_db
-from app.models import User
+from app.models import DailySummary, GarminCalendarEvent, SyncStatus, TrainingPlanDay, User
 
 logging.basicConfig(
     level=logging.INFO,
@@ -183,6 +183,118 @@ def run_daily_sync_for_user(user_id: int) -> None:
             analyze_daily_summary(today_summary)
         except Exception:
             logger.exception("AI analysis failed for daily summary %s", today_summary.id)
+
+    try:
+        _push_plan_adaptation_if_needed(user_id, today_summary)
+    except Exception:
+        logger.exception("Plan-adaptation push check failed for user %s", user_id)
+
+    try:
+        _push_race_week_reminders(user_id)
+    except Exception:
+        logger.exception("Race-week reminder push check failed for user %s", user_id)
+
+
+def _push_plan_adaptation_if_needed(user_id: int, today_summary: DailySummary | None) -> None:
+    """Push a readiness-driven plan-adaptation suggestion once per plan day.
+
+    Mirrors the same computation ``GET /today`` does live (readiness x today's
+    ``TrainingPlanDay``), but runs once during the morning sync so a downgrade
+    suggestion reaches the athlete's phone before they open the app. Dedupes
+    per plan day via ``SyncStatus`` so a later re-run of the daily sync (or a
+    manual trigger) doesn't push the same suggestion twice.
+    """
+    from app import plan_adaptation as plan_adaptation_mod
+    from app import training_load
+    from app import notifications as notifications_mod
+
+    if today_summary is None:
+        return
+    today = date.today()
+
+    with db_session() as db:
+        plan_day = (
+            db.query(TrainingPlanDay)
+            .filter(TrainingPlanDay.user_id == user_id, TrainingPlanDay.day_date == today)
+            .first()
+        )
+        if plan_day is None:
+            return
+
+        dedup_key = f"push_sent:plan_adaptation:{plan_day.id}"
+        already_sent = (
+            db.query(SyncStatus)
+            .filter(SyncStatus.user_id == user_id, SyncStatus.key == dedup_key)
+            .first()
+        )
+        if already_sent:
+            return
+
+        current_load = training_load.current_load(db, as_of=today, user_id=user_id)
+        rhr_cutoff = today - timedelta(days=7)
+        recent_rhr = [
+            row[0] for row in db.query(DailySummary.resting_hr)
+            .filter(
+                DailySummary.user_id == user_id,
+                DailySummary.date >= rhr_cutoff,
+                DailySummary.date < today,
+                DailySummary.resting_hr.isnot(None),
+            )
+            .all()
+        ]
+        readiness = training_load.compute_readiness(today_summary, current_load, recent_rhr)
+        suggestion = plan_adaptation_mod.suggest_adaptation(plan_day, readiness)
+        if suggestion is None:
+            return
+
+        title = (
+            "Consider easing off today" if suggestion.direction == "downgrade"
+            else "You're primed for more today"
+        )
+        notifications_mod.notify(
+            db, user_id, "plan_adaptation", title=title, body=suggestion.reason, url="/",
+        )
+        db.add(SyncStatus(user_id=user_id, key=dedup_key, value=today.isoformat()))
+        db.commit()
+
+
+def _push_race_week_reminders(user_id: int, days_out: int = 7) -> None:
+    """Push a one-time reminder when a race lands exactly ``days_out`` days away.
+
+    Reuses the same "next race" source as the Today dashboard (Garmin calendar
+    race events); dedupes per calendar event via ``SyncStatus`` so a race only
+    ever gets one reminder.
+    """
+    from app import notifications as notifications_mod
+
+    target_date = date.today() + timedelta(days=days_out)
+    with db_session() as db:
+        races = (
+            db.query(GarminCalendarEvent)
+            .filter(
+                GarminCalendarEvent.user_id == user_id,
+                GarminCalendarEvent.event_type == "race",
+                GarminCalendarEvent.date == target_date,
+            )
+            .all()
+        )
+        for race in races:
+            dedup_key = f"push_sent:race_reminder:{race.id}"
+            already_sent = (
+                db.query(SyncStatus)
+                .filter(SyncStatus.user_id == user_id, SyncStatus.key == dedup_key)
+                .first()
+            )
+            if already_sent:
+                continue
+            notifications_mod.notify(
+                db, user_id, "race_reminder",
+                title="Race week!",
+                body=f"{race.title or 'Your race'} is one week away ({race.date}).",
+                url="/",
+            )
+            db.add(SyncStatus(user_id=user_id, key=dedup_key, value=date.today().isoformat()))
+        db.commit()
 
 
 def _scheduled_activity_sync():

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'running-coach-v3';
+const CACHE_NAME = 'running-coach-v4';
 const SHELL_URLS = [
     '/static/style.css',
     '/static/manifest.json',
@@ -45,4 +45,44 @@ self.addEventListener('fetch', event => {
 
     // Network-first for everything else
     event.respondWith(fetch(event.request));
+});
+
+// Web Push (P0-1): payload is JSON { category, title, body, url } — see
+// app/notifications.py's PushPayload.
+self.addEventListener('push', event => {
+    let payload = { title: 'Running Coach', body: '' };
+    if (event.data) {
+        try {
+            payload = event.data.json();
+        } catch {
+            payload.body = event.data.text();
+        }
+    }
+    event.waitUntil(
+        self.registration.showNotification(payload.title || 'Running Coach', {
+            body: payload.body || '',
+            icon: '/static/icon-192.png',
+            badge: '/static/icon-192.png',
+            data: { url: payload.url || '/' },
+            tag: payload.category,
+        })
+    );
+});
+
+self.addEventListener('notificationclick', event => {
+    event.notification.close();
+    const url = event.notification.data?.url || '/';
+    event.waitUntil(
+        self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+            for (const client of clientList) {
+                if ('focus' in client) {
+                    client.navigate(url);
+                    return client.focus();
+                }
+            }
+            if (self.clients.openWindow) {
+                return self.clients.openWindow(url);
+            }
+        })
+    );
 });

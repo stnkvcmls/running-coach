@@ -130,6 +130,122 @@ def test_run_daily_sync_no_summary_skips_ai(monkeypatch):
     analyze.assert_not_called()
 
 
+# --- push notifications: plan adaptation + race-week reminders (P0-1) ------
+
+def test_push_plan_adaptation_sends_once_then_dedupes(db, patch_db_session, monkeypatch):
+    from datetime import date
+
+    from app import notifications as notifications_mod
+    from app import plan_adaptation as plan_adaptation_mod
+    from app.models import DailySummary, TrainingPlanDay
+    from app.schemas import PlanAdaptationSuggestion
+
+    patch_db_session(main)
+
+    plan_day = TrainingPlanDay(
+        user_id=1, plan_id=1, day_date=date.today(), day_of_week="Monday",
+        workout_type="tempo",
+    )
+    db.add(plan_day)
+    db.commit()
+    today_summary = DailySummary(user_id=1, date=date.today())
+    db.add(today_summary)
+    db.commit()
+    db.refresh(plan_day)
+    db.refresh(today_summary)
+
+    suggestion = PlanAdaptationSuggestion(
+        plan_day_id=plan_day.id, direction="downgrade", current_workout_type="tempo",
+        suggested_workout_type="rest", reason="Readiness is low today.", readiness_score=20,
+    )
+    monkeypatch.setattr(plan_adaptation_mod, "suggest_adaptation", lambda *a, **k: suggestion)
+    notify = MagicMock()
+    monkeypatch.setattr(notifications_mod, "notify", notify)
+
+    main._push_plan_adaptation_if_needed(1, today_summary)
+    notify.assert_called_once()
+    assert notify.call_args.args[2] == "plan_adaptation"
+
+    # A second call the same day must not push again.
+    notify.reset_mock()
+    main._push_plan_adaptation_if_needed(1, today_summary)
+    notify.assert_not_called()
+
+
+def test_push_plan_adaptation_skips_without_plan_day(db, patch_db_session, monkeypatch):
+    from datetime import date
+    from app import notifications as notifications_mod
+    from app.models import DailySummary
+
+    patch_db_session(main)
+    today_summary = DailySummary(user_id=1, date=date.today())
+    db.add(today_summary)
+    db.commit()
+
+    notify = MagicMock()
+    monkeypatch.setattr(notifications_mod, "notify", notify)
+
+    main._push_plan_adaptation_if_needed(1, today_summary)
+    notify.assert_not_called()
+
+
+def test_push_plan_adaptation_skips_when_no_today_summary(db, patch_db_session, monkeypatch):
+    from app import notifications as notifications_mod
+
+    patch_db_session(main)
+    notify = MagicMock()
+    monkeypatch.setattr(notifications_mod, "notify", notify)
+
+    main._push_plan_adaptation_if_needed(1, None)
+    notify.assert_not_called()
+
+
+def test_push_race_week_reminders_sends_once_then_dedupes(db, patch_db_session, monkeypatch):
+    from datetime import date, timedelta
+    from app import notifications as notifications_mod
+    from app.models import GarminCalendarEvent
+
+    patch_db_session(main)
+    race = GarminCalendarEvent(
+        user_id=1, garmin_id="race-1", event_type="race",
+        date=date.today() + timedelta(days=7), title="City Marathon",
+    )
+    db.add(race)
+    db.commit()
+
+    notify = MagicMock()
+    monkeypatch.setattr(notifications_mod, "notify", notify)
+
+    main._push_race_week_reminders(1)
+    notify.assert_called_once()
+    assert notify.call_args.args[2] == "race_reminder"
+    assert "City Marathon" in notify.call_args.kwargs["body"]
+
+    notify.reset_mock()
+    main._push_race_week_reminders(1)
+    notify.assert_not_called()
+
+
+def test_push_race_week_reminders_ignores_other_dates(db, patch_db_session, monkeypatch):
+    from datetime import date, timedelta
+    from app import notifications as notifications_mod
+    from app.models import GarminCalendarEvent
+
+    patch_db_session(main)
+    race = GarminCalendarEvent(
+        user_id=1, garmin_id="race-1", event_type="race",
+        date=date.today() + timedelta(days=3), title="City Marathon",
+    )
+    db.add(race)
+    db.commit()
+
+    notify = MagicMock()
+    monkeypatch.setattr(notifications_mod, "notify", notify)
+
+    main._push_race_week_reminders(1)
+    notify.assert_not_called()
+
+
 # --- weekly review / plan generation fan out -------------------------------
 
 def test_scheduled_weekly_review_delegates_per_user(monkeypatch):

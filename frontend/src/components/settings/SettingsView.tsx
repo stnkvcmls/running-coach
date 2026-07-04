@@ -13,6 +13,7 @@ import {
 } from '../../api/hooks'
 import AthleteProfileSection from './AthleteProfileSection'
 import CoachMemorySection from './CoachMemorySection'
+import NotificationsSection from './NotificationsSection'
 import ThresholdEstimateSection from './ThresholdEstimateSection'
 import ZoneConfigSection from './ZoneConfigSection'
 import './SettingsView.css'
@@ -265,6 +266,9 @@ export default function SettingsView() {
 
       {/* Coach memory */}
       <CoachMemorySection />
+
+      {/* Push notifications */}
+      <NotificationsSection />
 
       {/* Auto-estimated thresholds */}
       <ThresholdEstimateSection />
