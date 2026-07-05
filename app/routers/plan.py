@@ -9,6 +9,7 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.models import (
     AthleteProfile,
+    DailyCheckin,
     DailySummary,
     SeasonPlanWeek,
     SyncStatus,
@@ -222,8 +223,13 @@ def api_adapt_plan_day(
         .all()
     )
     recent_rhr = [row[0] for row in recent_rhr_rows]
-    readiness = training_load.compute_readiness(daily_summary, current_load, recent_rhr)
-    suggestion = plan_adaptation_mod.suggest_adaptation(plan_day, readiness)
+    checkin = (
+        db.query(DailyCheckin)
+        .filter(DailyCheckin.user_id == uid, DailyCheckin.date == plan_day.day_date)
+        .first()
+    )
+    readiness = training_load.compute_readiness(daily_summary, current_load, recent_rhr, checkin)
+    suggestion = plan_adaptation_mod.suggest_adaptation(plan_day, readiness, checkin)
     if suggestion is None:
         raise HTTPException(status_code=409, detail="No adaptation suggestion applies to this plan day")
 

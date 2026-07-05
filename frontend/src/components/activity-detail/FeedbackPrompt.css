@@ -51,6 +51,42 @@
   color: #e74c3c;
 }
 
+.feedback-prompt__rpe-question {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 20px 0 8px;
+}
+
+.feedback-prompt__rpe-scale {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.feedback-prompt__rpe-chip {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.feedback-prompt__rpe-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.feedback-prompt__rpe-chip--selected {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 .feedback-prompt__loading {
   display: flex;
   align-items: center;

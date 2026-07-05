@@ -49,6 +49,7 @@ export interface FeedbackRequest {
   rating: 'good' | 'bad'
   tags?: string[]
   text?: string
+  rpe?: number | null
 }
 
 export interface GarminCredentialsRequest {
@@ -136,6 +137,7 @@ export interface ActivityDetail extends ActivitySummary {
   feedback_rating: string | null
   feedback_tags: string[] | null
   feedback_text: string | null
+  rpe: number | null
   insight: InsightResponse | null
   scheduled_workout: CalendarEvent | null
   adherence: WorkoutAdherence | null
@@ -276,6 +278,22 @@ export interface TrainingReadiness {
   fatigue_component: number | null
   rhr_component: number | null
   hrv_component: number | null
+  subjective_component: number | null
+}
+
+export interface DailyCheckinRequest {
+  soreness?: number | null
+  energy?: number | null
+  mood?: number | null
+  soreness_note?: string | null
+}
+
+export interface DailyCheckin {
+  date: string
+  soreness: number | null
+  energy: number | null
+  mood: number | null
+  soreness_note: string | null
 }
 
 export interface TrainingLoadResponse {
@@ -305,6 +323,7 @@ export interface TodayResponse {
   training_load: TrainingLoadPoint | null
   readiness: TrainingReadiness | null
   plan_adaptation: PlanAdaptationSuggestion | null
+  daily_checkin: DailyCheckin | null
 }
 
 export interface SettingsResponse {

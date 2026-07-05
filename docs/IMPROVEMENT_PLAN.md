@@ -208,7 +208,7 @@ new/existing tests pass (backend + frontend)._
 
 ### P1 — Ask the athlete, plan the real race
 
-#### P1-1 · Subjective feedback: per-run RPE + daily check-in
+#### P1-1 · Subjective feedback: per-run RPE + daily check-in ✅ Done.
 **What:** Two small subjective inputs, both feeding existing models. (a)
 **Per-activity RPE (1–10)** added to the existing feedback prompt (rating/tags/
 text already flow through `POST /activities/{id}/feedback`); stored on
@@ -237,6 +237,29 @@ lines), `app/plan_adaptation.py` (soreness folds into bands),
 `frontend/src/components/today/DailyCheckinCard.tsx` + `.css` (new),
 `frontend/src/api/{types,hooks}.ts`, `tests/test_training_load.py`,
 `tests/test_readiness.py`, `tests/test_api_endpoints.py`.
+_Implemented as described, scoped to P1-1 only. File locations follow the
+post-P3-1 split: routes landed in `app/routers/daily.py` (`/today`,
+`POST /daily-checkin`), `app/routers/activities.py` (feedback `rpe`), and
+`app/routers/plan.py` (adapt-day re-derivation now also reads the day's
+check-in); context lines landed in `app/coach/context.py`. The sRPE branch
+reuses the existing `_intensity_to_tss` helper with `intensity = rpe / 10`,
+so it sits on the same 100-TSS-per-threshold-hour scale as the pace/HR
+branches instead of introducing a separate arbitrary-units metric. The
+subjective readiness component is a new `"subjective": 0.20` entry in the
+existing weights dict — averaging whichever of soreness/energy/mood were
+tapped (1=worst, 5=best) onto 0–100 — and folds in for free via the
+composite's existing "exclude missing components" normalization.
+`plan_adaptation.suggest_adaptation` gained a direct check-in override
+(severe soreness or low energy/mood forces a downgrade on a hard day even
+when the composite score alone is "Good", the same way a bad HRV night
+would), rather than relying solely on the diluted composite score to move
+the reading across a band. "Persistent soreness in one area" is detected
+from an optional free-text `soreness_note` on the check-in (no per-body-part
+UI): three consecutive check-ins reporting soreness ≤2/5 with a matching
+note auto-record a `CoachMemory` niggle directly (same shape as the
+chat `mark_setback` tool), deduplicated so it's written once per area. All
+new and existing tests pass (893 backend); `npm run build`, `tsc -b`, and
+the Vitest suite (57 cases) are clean._
 
 #### P1-2 · Conditions-aware race pacing
 **What:** Fold expected race-day conditions into the pacing plans from v3/v4.

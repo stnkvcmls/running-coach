@@ -46,6 +46,37 @@ def test_estimate_tss_hr_based_when_no_pace_threshold():
     assert round(tss) == 100
 
 
+def test_estimate_tss_srpe_used_when_no_pace_or_hr_reference():
+    # RPE 7/10 for 1 hour -> intensity 0.7 -> TSS = 1 * 0.7^2 * 100 = 49
+    act = Activity(duration_sec=3600, rpe=7)
+    tss, source = training_load.estimate_tss(act, None)
+    assert source == "srpe"
+    assert round(tss) == 49
+
+
+def test_estimate_tss_srpe_max_effort():
+    # RPE 10/10 for 30 min -> intensity 1.0 -> TSS = 0.5 * 1.0^2 * 100 = 50
+    act = Activity(duration_sec=1800, rpe=10)
+    tss, source = training_load.estimate_tss(act, None)
+    assert source == "srpe"
+    assert round(tss) == 50
+
+
+def test_estimate_tss_srpe_takes_priority_over_duration_floor():
+    act = Activity(duration_sec=3600, rpe=3)
+    tss, source = training_load.estimate_tss(act, None)
+    assert source == "srpe"
+    # RPE 3/10 is a much lighter intensity than the default 0.70 duration-floor guess.
+    assert tss < training_load._intensity_to_tss(1.0, training_load._DEFAULT_IF)
+
+
+def test_estimate_tss_pace_reference_takes_priority_over_srpe():
+    profile = AthleteProfile(threshold_pace_min_km=5.0)
+    act = Activity(duration_sec=3600, avg_pace_min_km=5.0, rpe=2)
+    tss, source = training_load.estimate_tss(act, profile)
+    assert source == "pace"
+
+
 def test_estimate_tss_duration_floor_without_references():
     act = Activity(duration_sec=3600)
     tss, source = training_load.estimate_tss(act, None)

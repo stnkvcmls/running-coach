@@ -1,6 +1,6 @@
 """Tests for readiness-driven plan day adaptation (P1-1)."""
 
-from app.models import TrainingPlanDay
+from app.models import DailyCheckin, TrainingPlanDay
 from app.plan_adaptation import suggest_adaptation
 from app.schemas import TrainingReadiness
 
@@ -19,6 +19,10 @@ def _day(workout_type="tempo", target_distance_m=10000.0, day_id=1):
 
 def _readiness(score, label="Fair"):
     return TrainingReadiness(score=score, label=label)
+
+
+def _checkin(*, soreness=None, energy=None, mood=None):
+    return DailyCheckin(soreness=soreness, energy=energy, mood=mood)
 
 
 def test_no_suggestion_without_plan_day():
@@ -93,3 +97,48 @@ def test_rest_day_never_suggests():
 def test_strength_and_cross_days_never_suggest():
     assert suggest_adaptation(_day(workout_type="strength"), _readiness(95)) is None
     assert suggest_adaptation(_day(workout_type="cross"), _readiness(95)) is None
+
+
+# --- Check-in override ---
+
+def test_checkin_feels_bad_overrides_good_readiness_on_hard_day():
+    day = _day(workout_type="tempo", target_distance_m=10000.0)
+    # Readiness alone ("Good", 70) would not trigger any suggestion.
+    assert suggest_adaptation(day, _readiness(70, "Good")) is None
+    suggestion = suggest_adaptation(day, _readiness(70, "Good"), _checkin(soreness=1))
+    assert suggestion is not None
+    assert suggestion.direction == "downgrade"
+    assert suggestion.suggested_workout_type == "easy"
+    assert suggestion.suggested_target_distance_m == 6000.0
+
+
+def test_checkin_low_energy_also_overrides():
+    day = _day(workout_type="interval")
+    suggestion = suggest_adaptation(day, _readiness(80, "Very Good"), _checkin(energy=2))
+    assert suggestion is not None
+    assert suggestion.direction == "downgrade"
+
+
+def test_checkin_low_mood_also_overrides():
+    day = _day(workout_type="long")
+    suggestion = suggest_adaptation(day, _readiness(80, "Very Good"), _checkin(mood=1))
+    assert suggestion is not None
+    assert suggestion.direction == "downgrade"
+
+
+def test_checkin_feeling_fine_does_not_override_good_readiness():
+    day = _day(workout_type="tempo")
+    assert suggest_adaptation(day, _readiness(70, "Good"), _checkin(soreness=5, energy=5, mood=5)) is None
+
+
+def test_checkin_override_does_not_apply_to_easy_days():
+    day = _day(workout_type="easy", target_distance_m=8000.0)
+    assert suggest_adaptation(day, _readiness(70, "Good"), _checkin(soreness=1)) is None
+
+
+def test_checkin_does_not_downgrade_already_low_readiness_twice():
+    # Low readiness already downgrades to rest; the check-in doesn't change that outcome.
+    day = _day(workout_type="tempo")
+    suggestion = suggest_adaptation(day, _readiness(25, "Low"), _checkin(soreness=1))
+    assert suggestion is not None
+    assert suggestion.suggested_workout_type == "rest"

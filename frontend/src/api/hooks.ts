@@ -10,6 +10,8 @@ import type {
   DailySummaryDetail,
   CalendarDay,
   CalendarEvent,
+  DailyCheckin,
+  DailyCheckinRequest,
   FeedbackRequest,
   GarminConnectResult,
   GarminConnectionStatus,
@@ -59,6 +61,17 @@ export function useToday(date: string) {
   return useQuery({
     queryKey: ['today', date],
     queryFn: () => apiGet<TodayResponse>(`/today?date=${date}`),
+  })
+}
+
+export function useSubmitDailyCheckin() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ date, checkin }: { date: string; checkin: DailyCheckinRequest }) =>
+      apiPost<DailyCheckin>(`/daily-checkin?date=${date}`, checkin),
+    onSuccess: (_, { date }) => {
+      qc.invalidateQueries({ queryKey: ['today', date] })
+    },
   })
 }
 

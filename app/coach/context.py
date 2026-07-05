@@ -20,6 +20,7 @@ from app.models import (
     Activity,
     AthleteProfile,
     CoachMemory,
+    DailyCheckin,
     DailySummary,
     GarminCalendarEvent,
     Insight,
@@ -467,6 +468,25 @@ def _recent_hot_runs(
     return hot_runs
 
 
+def _format_checkin_note(checkin: DailyCheckin | None) -> str:
+    """Return a one-line "how the athlete says they feel" note for the readiness section."""
+    if checkin is None:
+        return ""
+    taps = []
+    if checkin.soreness is not None:
+        taps.append(f"Soreness {checkin.soreness}/5 (5=none)")
+    if checkin.energy is not None:
+        taps.append(f"Energy {checkin.energy}/5")
+    if checkin.mood is not None:
+        taps.append(f"Mood {checkin.mood}/5")
+    if not taps:
+        return ""
+    note = f"- How the athlete says they feel today: {', '.join(taps)}"
+    if checkin.soreness_note:
+        note += f" (sore area noted: {checkin.soreness_note})"
+    return note
+
+
 def _recent_heat_stress_note(
     db: Session,
     reference_date: date,
@@ -564,7 +584,12 @@ def _build_context(
         .all()
     )
     recent_rhr = [row[0] for row in recent_rhr_rows]
-    readiness = training_load.compute_readiness(today_summary, load_point, recent_rhr)
+    checkin = (
+        db.query(DailyCheckin)
+        .filter(DailyCheckin.user_id == user_id, DailyCheckin.date == reference_date)
+        .first()
+    )
+    readiness = training_load.compute_readiness(today_summary, load_point, recent_rhr, checkin)
     readiness_context = training_load.format_readiness_context(readiness)
 
     # Append a heat-stress note to readiness when recent runs were hot/humid.
@@ -572,6 +597,11 @@ def _build_context(
     heat_penalty_note = _recent_heat_stress_note(db, reference_date, user_id)
     if heat_penalty_note:
         readiness_context = (readiness_context + "\n" + heat_penalty_note).strip()
+
+    # Append the athlete's own daily check-in, if logged today.
+    checkin_note = _format_checkin_note(checkin)
+    if checkin_note:
+        readiness_context = (readiness_context + "\n" + checkin_note).strip()
 
     if readiness_context:
         insert_pos = min(3, len(sections))

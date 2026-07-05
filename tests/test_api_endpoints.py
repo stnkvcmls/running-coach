@@ -341,6 +341,26 @@ def test_feedback_rejects_invalid_rating(client, db, no_threads):
     assert resp.status_code == 422
 
 
+def test_submit_feedback_stores_rpe(client, db, patch_db_session):
+    import app.ai_coach as ai_coach
+    patch_db_session(ai_coach)
+    act = _add_activity(db, datetime(2026, 6, 1, 7, 0))
+    resp = client.post(
+        f"/api/v1/activities/{act.id}/feedback",
+        json={"rating": "good", "rpe": 6},
+    )
+    assert resp.status_code == 200
+    db.expire_all()
+    refreshed = db.get(Activity, act.id)
+    assert refreshed.rpe == 6
+
+
+def test_feedback_rejects_rpe_out_of_range(client, db, no_threads):
+    act = _add_activity(db, datetime(2026, 6, 1, 7, 0))
+    resp = client.post(f"/api/v1/activities/{act.id}/feedback", json={"rating": "good", "rpe": 11})
+    assert resp.status_code == 422
+
+
 @pytest.mark.parametrize("sync_type", ["activities", "daily", "calendar"])
 def test_trigger_sync_accepted(client, no_threads, sync_type):
     resp = client.post(f"/api/v1/sync/{sync_type}")
