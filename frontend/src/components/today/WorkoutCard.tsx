@@ -3,6 +3,7 @@ import type { ActivitySummary } from '../../api/types'
 import { getActivityColor, colorMap } from '../../utils/colors'
 import { formatDistance, formatDuration, formatPace } from '../../utils/formatting'
 import { format, parseISO } from '../../utils/date'
+import { CheckCircle } from 'lucide-react'
 import './WorkoutCard.css'
 
 interface Props {
@@ -25,7 +26,15 @@ export default function WorkoutCard({ activity }: Props) {
       onClick={() => navigate(`/activities/${activity.id}`)}
     >
       <div className="workout-header">
-        <span className="badge" style={{ background: `${color}22`, color }}>{typeLabel}</span>
+        <div className="workout-header-left">
+          <span className="badge" style={{ background: `${color}22`, color }}>{typeLabel}</span>
+          {activity.workout_tag && (
+            <span className="workout-tag" title={activity.workout_tag}>
+              <CheckCircle size={12} />
+              Workout
+            </span>
+          )}
+        </div>
         {activity.started_at && (
           <span className="workout-time">{format(parseISO(activity.started_at), 'HH:mm')}</span>
         )}

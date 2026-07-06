@@ -19,6 +19,24 @@
   margin-bottom: 6px;
 }
 
+.workout-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.workout-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: var(--success);
+  background: rgba(46, 204, 113, 0.14);
+}
+
 .workout-time {
   font-size: 0.75rem;
   color: var(--text-muted);

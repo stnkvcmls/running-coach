@@ -59,3 +59,26 @@ flag. The manual `/sync` endpoint is scoped to the calling user.
 
 **Models, not FKs.** Following the existing convention (`TrainingPlanDay.plan_id`
 is a plain indexed int, not a `ForeignKey`), `user_id` is a plain indexed integer.
+
+---
+
+# Today view: matched workout tagging
+
+Goal: when an activity fulfils a scheduled workout on the same day, the
+scheduled card disappears from Today and the activity is tagged as a workout.
+
+## Tasks
+- [x] schemas.py: add `workout_tag` to `ActivitySummary`.
+- [x] routers/daily.py `/today`: match activities to scheduled workouts by
+      same-day + sport category; drop matched workouts from `scheduled_events`,
+      set `workout_tag` on the matched activity summary.
+- [x] frontend types + WorkoutCard: render a "Workout" badge when tagged.
+- [x] tests: matched run consumes the scheduled card + tags the activity;
+      non-matching sport leaves the scheduled card and no tag.
+
+## Review
+- Matching reuses the existing `_categorize_activity_type` grouping so a run
+  fulfils a running workout while a ride/walk does not; each workout claims at
+  most one activity (1:1), and workouts with no matching activity stay scheduled.
+- Backend change is confined to `/today`; the activity-detail page still shows
+  the planned workout + adherence unchanged.

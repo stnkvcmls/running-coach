@@ -180,7 +180,32 @@ def api_today(
         .order_by(GarminCalendarEvent.id.asc())
         .all()
     )
-    scheduled_events = [_enrich_event_with_steps(e) for e in scheduled_events_rows]
+    # Match completed activities to scheduled workouts. When an activity fulfils
+    # a scheduled workout (same day, same sport category), drop that workout from
+    # the "Scheduled" list and tag the activity so the UI shows a "workout" badge.
+    activity_summaries = [ActivitySummary.model_validate(a) for a in activities]
+    summary_by_id = {s.id: s for s in activity_summaries}
+    claimed_activity_ids: set[int] = set()
+    remaining_events = []
+    for event in scheduled_events_rows:
+        workout_category = (
+            _categorize_activity_type(event.workout_type) if event.workout_type else "run"
+        )
+        matched = next(
+            (
+                a
+                for a in activities
+                if a.id not in claimed_activity_ids
+                and _categorize_activity_type(a.activity_type) == workout_category
+            ),
+            None,
+        )
+        if matched is not None:
+            claimed_activity_ids.add(matched.id)
+            summary_by_id[matched.id].workout_tag = event.title or event.workout_type or "Workout"
+        else:
+            remaining_events.append(event)
+    scheduled_events = [_enrich_event_with_steps(e) for e in remaining_events]
 
     # Current training load snapshot (Fitness/Fatigue/Form) as of the selected date
     current_load = training_load.current_load(db, as_of=selected, user_id=uid)
@@ -221,7 +246,7 @@ def api_today(
 
     return TodayResponse(
         selected_date=selected,
-        activities=[ActivitySummary.model_validate(a) for a in activities],
+        activities=activity_summaries,
         daily_summary=DailySummaryResponse.model_validate(daily_summary) if daily_summary else None,
         weekly_data=weekly_data,
         insights=[InsightResponse.model_validate(i) for i in latest_insights],
