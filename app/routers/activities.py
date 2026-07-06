@@ -213,6 +213,7 @@ def api_submit_feedback(
     activity.feedback_rating = feedback.rating
     activity.feedback_tags = json.dumps(feedback.tags) if feedback.tags else None
     activity.feedback_text = feedback.text
+    activity.rpe = feedback.rpe
     activity.ai_analyzed = False
 
     # Delete existing insight

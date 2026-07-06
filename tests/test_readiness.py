@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 import pytest
 
 from app import training_load
-from app.models import Activity, DailySummary
+from app.models import Activity, DailyCheckin, DailySummary
 from app.schemas import TrainingLoadPoint
 
 
@@ -40,6 +40,10 @@ def _daily(
 
 def _load(atl: float) -> TrainingLoadPoint:
     return TrainingLoadPoint(date=date.today(), tss=0, ctl=0, atl=atl, tsb=0)
+
+
+def _checkin(*, soreness=None, energy=None, mood=None):
+    return DailyCheckin(date=date.today(), soreness=soreness, energy=energy, mood=mood)
 
 
 # ---------------------------------------------------------------------------
@@ -246,6 +250,52 @@ def test_hrv_component_folds_into_composite():
 
 
 # ---------------------------------------------------------------------------
+# Subjective component (daily check-in)
+# ---------------------------------------------------------------------------
+
+def test_subjective_component_none_without_checkin():
+    result = training_load.compute_readiness(_daily(sleep_score=80), None, [])
+    assert result is not None
+    assert result.subjective_component is None
+
+
+def test_subjective_component_none_when_checkin_has_no_taps():
+    result = training_load.compute_readiness(None, None, [], _checkin())
+    assert result is None
+
+
+def test_subjective_component_best_case_gives_100():
+    result = training_load.compute_readiness(None, None, [], _checkin(soreness=5, energy=5, mood=5))
+    assert result is not None
+    assert result.subjective_component == 100
+
+
+def test_subjective_component_worst_case_gives_0():
+    result = training_load.compute_readiness(None, None, [], _checkin(soreness=1, energy=1, mood=1))
+    assert result is not None
+    assert result.subjective_component == 0
+
+
+def test_subjective_component_averages_present_taps():
+    # soreness=3 -> 50, energy=5 -> 100 -> avg 75
+    result = training_load.compute_readiness(None, None, [], _checkin(soreness=3, energy=5))
+    assert result is not None
+    assert result.subjective_component == 75
+
+
+def test_subjective_component_folds_into_composite():
+    # Strong check-in should lift the composite versus a bad one, all else equal.
+    good = training_load.compute_readiness(
+        _daily(sleep_score=70), None, [], _checkin(soreness=5, energy=5, mood=5)
+    )
+    bad = training_load.compute_readiness(
+        _daily(sleep_score=70), None, [], _checkin(soreness=1, energy=1, mood=1)
+    )
+    assert good is not None and bad is not None
+    assert good.score > bad.score
+
+
+# ---------------------------------------------------------------------------
 # Labels
 # ---------------------------------------------------------------------------
 
@@ -335,6 +385,12 @@ def test_format_readiness_context_includes_components():
     assert "Resting HR" in text
 
 
+def test_format_readiness_context_includes_subjective_component():
+    result = training_load.compute_readiness(None, None, [], _checkin(soreness=4, energy=4, mood=4))
+    text = training_load.format_readiness_context(result)
+    assert "check-in" in text.lower()
+
+
 # ---------------------------------------------------------------------------
 # API endpoint — /today includes readiness
 # ---------------------------------------------------------------------------
@@ -364,6 +420,18 @@ def test_today_endpoint_includes_readiness_when_data_available(client, db):
     r = body["readiness"]
     assert 0 <= r["score"] <= 100
     assert r["label"] in ("Low", "Fair", "Good", "Very Good", "Excellent")
+
+
+def test_today_endpoint_folds_in_daily_checkin(client, db):
+    db.add(DailyCheckin(date=date(2026, 6, 17), soreness=5, energy=5, mood=5))
+    db.commit()
+    resp = client.get("/api/v1/today?date=2026-06-17")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["readiness"] is not None
+    assert body["readiness"]["subjective_component"] == 100
+    assert body["daily_checkin"] is not None
+    assert body["daily_checkin"]["soreness"] == 5
 
 
 def test_today_endpoint_readiness_null_without_any_data(client, db):

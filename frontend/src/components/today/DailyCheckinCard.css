@@ -1,0 +1,114 @@
+.daily-checkin-card {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.checkin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.checkin-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.checkin-edit-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.checkin-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.checkin-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.checkin-row-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.checkin-row-hint {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.checkin-row-taps {
+  display: flex;
+  gap: 8px;
+}
+
+.checkin-tap {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.checkin-tap:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.checkin-tap--selected {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.checkin-note-input {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.85rem;
+  box-sizing: border-box;
+}
+
+.checkin-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.checkin-skip {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 8px 4px;
+}
+
+.checkin-submit {
+  font-size: 0.85rem;
+  padding: 8px 16px;
+}

@@ -28,6 +28,7 @@ from app.models import (
     DEFAULT_USER_ID,
     Activity,
     AthleteProfile,
+    DailyCheckin,
     DailyLoadSeries,
     DailySummary,
     SyncStatus,
@@ -63,8 +64,8 @@ def _intensity_to_tss(duration_hr: float, intensity: float) -> float:
 def estimate_tss(activity: Activity, profile: AthleteProfile | None) -> tuple[float, str]:
     """Return ``(tss, source)`` for one activity.
 
-    Source is one of ``power`` (stored), ``pace``, ``hr``, ``duration``, or
-    ``none`` (no usable duration).
+    Source is one of ``power`` (stored), ``pace``, ``hr``, ``srpe``, ``duration``,
+    or ``none`` (no usable duration).
     """
     if activity.training_stress_score and activity.training_stress_score > 0:
         return float(activity.training_stress_score), "power"
@@ -88,6 +89,13 @@ def estimate_tss(activity: Activity, profile: AthleteProfile | None) -> tuple[fl
     if thr_hr and activity.avg_hr and activity.avg_hr > 0:
         intensity = activity.avg_hr / thr_hr
         return _intensity_to_tss(duration_hr, intensity), "hr"
+
+    # sRPE-based load (Foster): the athlete's own effort rating stands in for
+    # an intensity factor (RPE 10/10 ~= max effort ~= IF 1.0), the same scale
+    # the duration floor below assumes a fixed RPE-7-equivalent for.
+    if activity.rpe and activity.rpe > 0:
+        intensity = activity.rpe / 10.0
+        return _intensity_to_tss(duration_hr, intensity), "srpe"
 
     # Duration-only floor so the session still registers some load.
     return _intensity_to_tss(duration_hr, _DEFAULT_IF), "duration"
@@ -475,10 +483,26 @@ def _hrv_component(daily: DailySummary | None) -> int | None:
     return None
 
 
+def _subjective_component(checkin: DailyCheckin | None) -> int | None:
+    """Score the athlete's daily check-in 0–100 (average of soreness/energy/mood).
+
+    Each tap is 1 (worst) - 5 (best), so higher is always better; a 1-5 scale
+    maps onto 0-100 as ``(value - 1) / 4 * 100``.
+    """
+    if checkin is None:
+        return None
+    taps = [v for v in (checkin.soreness, checkin.energy, checkin.mood) if v is not None]
+    if not taps:
+        return None
+    avg = sum(taps) / len(taps)
+    return int(round((avg - 1) / 4 * 100))
+
+
 def compute_readiness(
     daily: DailySummary | None,
     load_point: TrainingLoadPoint | None,
     recent_rhr: list[int],
+    checkin: DailyCheckin | None = None,
 ) -> TrainingReadiness | None:
     """Compute a composite 0–100 readiness score from wellness and load inputs.
 
@@ -488,17 +512,20 @@ def compute_readiness(
     - fatigue_component: 100 − ATL (capped 0–100); higher = less fatigued
     - rhr_component: resting HR today vs 7-day average; lower today = better
     - hrv_component: overnight HRV vs personal baseline; higher = better recovered
+    - subjective_component: the athlete's own daily check-in (soreness/energy/mood)
 
     Any missing component is excluded from the weighted average so a partial
     data day still yields a meaningful score.
     """
-    # Weights — must sum to 1.0
+    # Weights — sum to 1.0 when every component is present; missing components
+    # are excluded and the remainder is renormalized (see total_weight below).
     WEIGHTS = {
         "sleep": 0.25,
         "recovery": 0.25,
         "fatigue": 0.20,
         "rhr": 0.10,
         "hrv": 0.20,
+        "subjective": 0.20,
     }
 
     # Sleep component
@@ -538,6 +565,9 @@ def compute_readiness(
     # HRV component — last-night HRV vs personal baseline (Garmin's status factor)
     hrv_component = _hrv_component(daily)
 
+    # Subjective component — the athlete's own daily check-in
+    subjective_component = _subjective_component(checkin)
+
     # Weighted composite
     weighted_sum = 0.0
     total_weight = 0.0
@@ -547,6 +577,7 @@ def compute_readiness(
         (fatigue_component, WEIGHTS["fatigue"]),
         (rhr_component, WEIGHTS["rhr"]),
         (hrv_component, WEIGHTS["hrv"]),
+        (subjective_component, WEIGHTS["subjective"]),
     ):
         if comp_val is not None:
             weighted_sum += comp_val * weight
@@ -564,6 +595,7 @@ def compute_readiness(
         fatigue_component=fatigue_component,
         rhr_component=rhr_component,
         hrv_component=hrv_component,
+        subjective_component=subjective_component,
     )
 
 
@@ -620,4 +652,6 @@ def format_readiness_context(readiness: TrainingReadiness | None) -> str:
         lines.append(f"- Resting HR trend: {readiness.rhr_component}/100")
     if readiness.hrv_component is not None:
         lines.append(f"- HRV (vs baseline): {readiness.hrv_component}/100")
+    if readiness.subjective_component is not None:
+        lines.append(f"- How the athlete says they feel (check-in): {readiness.subjective_component}/100")
     return "## Training Readiness\n" + "\n".join(lines)

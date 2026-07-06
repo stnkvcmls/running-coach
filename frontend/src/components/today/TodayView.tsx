@@ -7,6 +7,7 @@ import ScheduledWorkoutCard from './ScheduledWorkoutCard'
 import WeekOverview from './WeekOverview'
 import TrainingLoadChart from './TrainingLoadChart'
 import ReadinessCard from './ReadinessCard'
+import DailyCheckinCard from './DailyCheckinCard'
 import PlanAdaptationCard from './PlanAdaptationCard'
 import InsightsList from './InsightsList'
 import RacePacingCard from './RacePacingCard'
@@ -134,6 +135,11 @@ export default function TodayView() {
           <ReadinessCard readiness={data.readiness} />
         </section>
       )}
+
+      {/* Daily check-in: soreness / energy / mood */}
+      <section className="today-section">
+        <DailyCheckinCard date={dateKey} checkin={data?.daily_checkin ?? null} />
+      </section>
 
       {/* Readiness-driven plan adaptation suggestion */}
       {data?.plan_adaptation && (

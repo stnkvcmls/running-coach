@@ -4,7 +4,7 @@ import json
 from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class ActivitySummary(BaseModel):
@@ -62,6 +62,7 @@ class FeedbackRequest(BaseModel):
     rating: Literal["good", "bad"]
     tags: list[str] | None = None
     text: str | None = None
+    rpe: int | None = Field(default=None, ge=1, le=10)
 
 
 class GarminCredentialsRequest(BaseModel):
@@ -178,6 +179,7 @@ class ActivityDetail(BaseModel):
     feedback_rating: str | None = None
     feedback_tags: list[str] | None = None
     feedback_text: str | None = None
+    rpe: int | None = None
 
     # Related insight
     insight: InsightResponse | None = None
@@ -375,6 +377,25 @@ class TrainingReadiness(BaseModel):
     fatigue_component: int | None = None    # 0-100, ATL-based (higher = less fatigued)
     rhr_component: int | None = None        # 0-100, resting HR trend vs 7d avg
     hrv_component: int | None = None        # 0-100, overnight HRV vs personal baseline
+    subjective_component: int | None = None  # 0-100, from the athlete's daily check-in
+
+
+class DailyCheckinRequest(BaseModel):
+    soreness: int | None = Field(default=None, ge=1, le=5)
+    energy: int | None = Field(default=None, ge=1, le=5)
+    mood: int | None = Field(default=None, ge=1, le=5)
+    soreness_note: str | None = None
+
+
+class DailyCheckinResponse(BaseModel):
+    date: date
+    soreness: int | None = None
+    energy: int | None = None
+    mood: int | None = None
+    soreness_note: str | None = None
+
+    class Config:
+        from_attributes = True
 
 
 class TrainingLoadResponse(BaseModel):
@@ -404,6 +425,7 @@ class TodayResponse(BaseModel):
     training_load: TrainingLoadPoint | None = None
     readiness: TrainingReadiness | None = None
     plan_adaptation: PlanAdaptationSuggestion | None = None
+    daily_checkin: DailyCheckinResponse | None = None
 
 
 class SettingsResponse(BaseModel):

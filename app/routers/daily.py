@@ -3,6 +3,7 @@ import threading
 from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
@@ -11,6 +12,8 @@ from app.models import (
     AIJob,
     Activity,
     AthleteProfile,
+    CoachMemory,
+    DailyCheckin,
     DailySummary,
     GarminCalendarEvent,
     Insight,
@@ -22,6 +25,8 @@ from app.schemas import (
     AIJobEnqueuedResponse,
     AIJobResponse,
     ActivitySummary,
+    DailyCheckinRequest,
+    DailyCheckinResponse,
     DailySummaryDetail,
     DailySummaryResponse,
     InsightResponse,
@@ -198,7 +203,14 @@ def api_today(
         .all()
     )
     recent_rhr = [row[0] for row in recent_rhr_rows]
-    readiness = training_load.compute_readiness(daily_summary, current_load, recent_rhr)
+
+    # The athlete's own check-in for the selected day, if logged
+    checkin = (
+        db.query(DailyCheckin)
+        .filter(DailyCheckin.user_id == uid, DailyCheckin.date == selected)
+        .first()
+    )
+    readiness = training_load.compute_readiness(daily_summary, current_load, recent_rhr, checkin)
 
     # Readiness-driven plan adaptation suggestion for the selected day's plan day
     plan_day = (
@@ -206,7 +218,7 @@ def api_today(
         .filter(TrainingPlanDay.user_id == uid, TrainingPlanDay.day_date == selected)
         .first()
     )
-    plan_adaptation = plan_adaptation_mod.suggest_adaptation(plan_day, readiness)
+    plan_adaptation = plan_adaptation_mod.suggest_adaptation(plan_day, readiness, checkin)
     if plan_adaptation is not None:
         dismissed = (
             db.query(SyncStatus)
@@ -230,7 +242,97 @@ def api_today(
         training_load=current_load,
         readiness=readiness,
         plan_adaptation=plan_adaptation,
+        daily_checkin=DailyCheckinResponse.model_validate(checkin) if checkin else None,
     )
+
+
+# --- Daily Check-in ---
+
+# Soreness tap (1=very sore - 5=none) at/below this, with a matching note across
+# the last few check-ins, is "persistent soreness in one area" worth remembering.
+_SORENESS_NIGGLE_THRESHOLD = 2
+_SORENESS_NIGGLE_STREAK = 3
+
+
+def _maybe_record_soreness_niggle(db: Session, uid: int, checkin: DailyCheckin) -> None:
+    """Auto-record a CoachMemory niggle when the same area has been reported
+    sore for ``_SORENESS_NIGGLE_STREAK`` consecutive check-ins."""
+    note = (checkin.soreness_note or "").strip()
+    if not note or checkin.soreness is None or checkin.soreness > _SORENESS_NIGGLE_THRESHOLD:
+        return
+
+    recent = (
+        db.query(DailyCheckin)
+        .filter(DailyCheckin.user_id == uid, DailyCheckin.date <= checkin.date)
+        .order_by(DailyCheckin.date.desc())
+        .limit(_SORENESS_NIGGLE_STREAK)
+        .all()
+    )
+    if len(recent) < _SORENESS_NIGGLE_STREAK:
+        return
+    if not all(
+        r.soreness is not None
+        and r.soreness <= _SORENESS_NIGGLE_THRESHOLD
+        and (r.soreness_note or "").strip().lower() == note.lower()
+        for r in recent
+    ):
+        return
+
+    already_remembered = (
+        db.query(CoachMemory)
+        .filter(
+            CoachMemory.user_id == uid,
+            CoachMemory.category == "niggle",
+            CoachMemory.active.is_(True),
+            func.lower(CoachMemory.tag) == note.lower(),
+        )
+        .first()
+    )
+    if already_remembered:
+        return
+
+    db.add(CoachMemory(
+        user_id=uid,
+        category="niggle",
+        tag=note,
+        note=(
+            f"Reported sore ({note}) on {_SORENESS_NIGGLE_STREAK} consecutive "
+            "daily check-ins."
+        ),
+    ))
+    db.commit()
+
+
+@router.post("/daily-checkin", response_model=DailyCheckinResponse)
+def api_submit_daily_checkin(
+    body: DailyCheckinRequest,
+    date_str: str = Query(None, alias="date"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Upsert the athlete's soreness/energy/mood check-in for a day (default today)."""
+    uid = current_user.id
+    selected = _parse_date(date_str) if date_str else date.today()
+
+    checkin = (
+        db.query(DailyCheckin)
+        .filter(DailyCheckin.user_id == uid, DailyCheckin.date == selected)
+        .first()
+    )
+    if checkin is None:
+        checkin = DailyCheckin(user_id=uid, date=selected)
+        db.add(checkin)
+
+    checkin.soreness = body.soreness
+    checkin.energy = body.energy
+    checkin.mood = body.mood
+    checkin.soreness_note = body.soreness_note
+    db.commit()
+    db.refresh(checkin)
+
+    _maybe_record_soreness_niggle(db, uid, checkin)
+
+    return DailyCheckinResponse.model_validate(checkin)
 
 
 # --- Daily Summaries ---

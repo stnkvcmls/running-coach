@@ -140,6 +140,7 @@ class Activity(Base):
     feedback_rating = Column(String(10), nullable=True)   # "good" or "bad"
     feedback_tags = Column(Text, nullable=True)            # JSON array of setback tags
     feedback_text = Column(Text, nullable=True)            # optional custom text
+    rpe = Column(Integer, nullable=True)                   # Borg CR10 session RPE, 1-10
 
 
 class DailySummary(Base):
@@ -170,6 +171,32 @@ class DailySummary(Base):
     raw_json = Column(Text)
     synced_at = Column(DateTime, default=_utcnow)
     ai_analyzed = Column(Boolean, default=False)
+
+
+class DailyCheckin(Base):
+    """The athlete's self-reported feel for a day (P1-1) — soreness, energy, mood.
+
+    Unlike ``DailySummary`` (device-derived), these three 1-5 taps are entered
+    directly by the athlete on Today and are optional/skippable. Higher is
+    always "better": low soreness, high energy, good mood. ``soreness_note``
+    is an optional free-text location (e.g. "left knee") so persistent
+    soreness in the same area can be detected and remembered as a niggle.
+    """
+
+    __tablename__ = "daily_checkins"
+    __table_args__ = (
+        UniqueConstraint("user_id", "date", name="uq_daily_checkins_user_date"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = _user_id_column()
+    date = Column(Date, nullable=False, index=True)
+    soreness = Column(Integer, nullable=True)   # 1 (very sore) - 5 (no soreness)
+    energy = Column(Integer, nullable=True)     # 1 (depleted) - 5 (energized)
+    mood = Column(Integer, nullable=True)       # 1 (low) - 5 (great)
+    soreness_note = Column(Text, nullable=True)  # optional location, e.g. "left knee"
+    created_at = Column(DateTime, default=_utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
 class Insight(Base):

@@ -8,12 +8,15 @@ interface Props {
   activityId: number
 }
 
+const RPE_SCALE = Array.from({ length: 10 }, (_, i) => i + 1)
+
 export default function FeedbackPrompt({ activityId }: Props) {
   const [showModal, setShowModal] = useState(false)
+  const [rpe, setRpe] = useState<number | null>(null)
   const submitFeedback = useSubmitFeedback()
 
   const handleThumbsUp = () => {
-    submitFeedback.mutate({ id: activityId, feedback: { rating: 'good' } })
+    submitFeedback.mutate({ id: activityId, feedback: { rating: 'good', rpe } })
   }
 
   const handleThumbsDown = () => {
@@ -22,12 +25,12 @@ export default function FeedbackPrompt({ activityId }: Props) {
 
   const handleSetbackSubmit = (tags: string[], text?: string) => {
     setShowModal(false)
-    submitFeedback.mutate({ id: activityId, feedback: { rating: 'bad', tags, text } })
+    submitFeedback.mutate({ id: activityId, feedback: { rating: 'bad', tags, text, rpe } })
   }
 
   const handleSetbackSkip = () => {
     setShowModal(false)
-    submitFeedback.mutate({ id: activityId, feedback: { rating: 'bad' } })
+    submitFeedback.mutate({ id: activityId, feedback: { rating: 'bad', rpe } })
   }
 
   if (submitFeedback.isPending) {
@@ -66,6 +69,22 @@ export default function FeedbackPrompt({ activityId }: Props) {
             >
               <ThumbsDown size={22} />
             </button>
+          </div>
+
+          <p className="feedback-prompt__rpe-question">
+            How hard did it feel? (optional)
+          </p>
+          <div className="feedback-prompt__rpe-scale">
+            {RPE_SCALE.map(value => (
+              <button
+                key={value}
+                type="button"
+                className={`feedback-prompt__rpe-chip ${rpe === value ? 'feedback-prompt__rpe-chip--selected' : ''}`}
+                onClick={() => setRpe(rpe === value ? null : value)}
+              >
+                {value}
+              </button>
+            ))}
           </div>
         </div>
       </section>
