@@ -33,6 +33,7 @@ export interface ActivitySummary {
   avg_pace_min_km: number | null
   calories: number | null
   elevation_gain: number | null
+  workout_tag?: string | null
 }
 
 export interface InsightResponse {

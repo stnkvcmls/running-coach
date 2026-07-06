@@ -20,6 +20,9 @@ class ActivitySummary(BaseModel):
     avg_pace_min_km: float | None = None
     calories: float | None = None
     elevation_gain: float | None = None
+    # Set when this activity fulfils a scheduled workout on the same day. Carries
+    # the matched workout's label so the UI can show a "workout" tag.
+    workout_tag: str | None = None
 
     class Config:
         from_attributes = True

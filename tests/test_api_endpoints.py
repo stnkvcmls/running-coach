@@ -615,6 +615,45 @@ def test_today_plan_adaptation_suppressed_when_dismissed(client, db):
     assert resp.json()["plan_adaptation"] is None
 
 
+def test_today_matched_workout_drops_scheduled_and_tags_activity(client, db):
+    """A completed run on the day of a scheduled running workout consumes the
+    scheduled card and tags the activity as fulfilling that workout."""
+    day = date(2026, 6, 17)
+    db.add(GarminCalendarEvent(
+        garmin_id="wk_ep", event_type="workout", date=day,
+        title="Tempo 8K", workout_type="running",
+    ))
+    _add_activity(db, datetime(2026, 6, 17, 8, 0), name="Tempo Run")
+    db.commit()
+
+    resp = client.get(f"/api/v1/today?date={day.isoformat()}")
+    assert resp.status_code == 200
+    body = resp.json()
+    # Scheduled workout is consumed by the matching activity.
+    assert body["scheduled_events"] == []
+    # The activity carries the workout tag.
+    assert len(body["activities"]) == 1
+    assert body["activities"][0]["workout_tag"] == "Tempo 8K"
+
+
+def test_today_unmatched_workout_stays_scheduled(client, db):
+    """A cycling activity does not fulfil a scheduled running workout; the
+    scheduled card remains and the activity is not tagged."""
+    day = date(2026, 6, 17)
+    db.add(GarminCalendarEvent(
+        garmin_id="wk_ep2", event_type="workout", date=day,
+        title="Tempo 8K", workout_type="running",
+    ))
+    _add_activity(db, datetime(2026, 6, 17, 8, 0), activity_type="cycling", name="Ride")
+    db.commit()
+
+    resp = client.get(f"/api/v1/today?date={day.isoformat()}")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["scheduled_events"]) == 1
+    assert body["activities"][0]["workout_tag"] is None
+
+
 def test_adapt_day_accept_downgrade_to_rest(client, db):
     day = date(2026, 6, 17)
     _seed_low_readiness_daily(db, day)
