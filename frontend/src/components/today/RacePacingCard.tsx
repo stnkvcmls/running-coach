@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Watch, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react'
 import { useRacePacing, usePushRacePacing } from '../../api/hooks'
 import { formatDuration } from '../../utils/formatting'
@@ -32,20 +32,50 @@ export default function RacePacingCard({ race }: Props) {
   const [strategy, setStrategy] = useState<'even' | 'negative_split' | 'terrain'>('even')
   const [splitUnit] = useState<'km' | 'mile'>('km')
   const [pushed, setPushed] = useState(false)
+  const [tempC, setTempC] = useState('')
+  const [dewPointC, setDewPointC] = useState('')
+  const estimatePrefilled = useRef(false)
+
+  const expectedTempC = tempC === '' ? null : Number(tempC)
+  const expectedDewPointC = dewPointC === '' ? null : Number(dewPointC)
 
   const { data: plan, isLoading, isError, error } = useRacePacing(race.id, {
     strategy,
     splitUnit,
+    expectedTempC,
+    expectedDewPointC,
   })
+
+  // Pre-fill the conditions inputs once from the median of the athlete's recent
+  // weathered runs, so the pacing card opens with a realistic estimate already
+  // applied rather than a neutral (unadjusted) plan.
+  useEffect(() => {
+    if (estimatePrefilled.current || !plan) return
+    if (plan.estimated_temp_c == null && plan.estimated_dew_point_c == null) return
+    estimatePrefilled.current = true
+    if (plan.estimated_temp_c != null) setTempC(String(Math.round(plan.estimated_temp_c)))
+    if (plan.estimated_dew_point_c != null) setDewPointC(String(Math.round(plan.estimated_dew_point_c)))
+  }, [plan])
 
   const { mutate: pushToGarmin, isPending: isPushing } = usePushRacePacing()
 
   const handlePush = () => {
     pushToGarmin(
-      { raceId: race.id, body: { strategy, split_unit: splitUnit } },
+      {
+        raceId: race.id,
+        body: {
+          strategy,
+          split_unit: splitUnit,
+          expected_temp_c: expectedTempC,
+          expected_dew_point_c: expectedDewPointC,
+        },
+      },
       { onSuccess: () => setPushed(true) },
     )
   }
+
+  const conditionsCostSec =
+    plan?.adjusted_target_time_sec != null ? plan.adjusted_target_time_sec - plan.target_time_sec : null
 
   return (
     <div className="race-pacing-card">
@@ -81,6 +111,29 @@ export default function RacePacingCard({ race }: Props) {
                 Terrain
               </button>
             </div>
+          </div>
+
+          <div className="race-pacing-conditions">
+            <label className="race-pacing-conditions-field">
+              <span>Temp °C</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                placeholder="—"
+                value={tempC}
+                onChange={e => setTempC(e.target.value)}
+              />
+            </label>
+            <label className="race-pacing-conditions-field">
+              <span>Dew point °C</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                placeholder="—"
+                value={dewPointC}
+                onChange={e => setDewPointC(e.target.value)}
+              />
+            </label>
           </div>
 
           {isLoading && <div className="race-pacing-loading">Loading splits…</div>}
@@ -120,6 +173,14 @@ export default function RacePacingCard({ race }: Props) {
               {strategy === 'terrain' && plan.course_activity_name && (
                 <div className="race-pacing-course-note">
                   Course profile from "{plan.course_activity_name}" — effort held constant over the grade.
+                </div>
+              )}
+
+              {conditionsCostSec != null && conditionsCostSec > 0 && plan.conditions_temp_c != null && (
+                <div className="race-pacing-conditions-note">
+                  At {plan.conditions_temp_c.toFixed(0)}°C
+                  {plan.conditions_dew_point_c != null && ` / dew point ${plan.conditions_dew_point_c.toFixed(0)}°C`}
+                  {' '}your {formatDuration(plan.target_time_sec)} goal costs ~+{formatDuration(conditionsCostSec)} — adjusted splits below.
                 </div>
               )}
 

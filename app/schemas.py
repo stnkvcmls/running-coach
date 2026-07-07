@@ -874,12 +874,20 @@ class PacingStrategyResponse(BaseModel):
     source: str                 # "goal" | "predicted" | "custom"
     course_activity_id: int | None = None    # activity the terrain profile was sourced from
     course_activity_name: str | None = None
+    conditions_temp_c: float | None = None       # expected race-day temp, if applied (°C)
+    conditions_dew_point_c: float | None = None  # expected race-day dew point, if applied (°C)
+    conditions_penalty_pct: float | None = None  # heat penalty %, if conditions applied
+    adjusted_target_time_sec: float | None = None  # target_time_sec scaled by the heat factor
+    estimated_temp_c: float | None = None        # median temp from recent weathered runs (UI prefill)
+    estimated_dew_point_c: float | None = None   # median dew point from recent weathered runs
 
 
 class PacingPushRequest(BaseModel):
     strategy: str = "even"
     split_unit: str = "km"
     target_time_sec: int | None = None
+    expected_temp_c: float | None = None
+    expected_dew_point_c: float | None = None
 
 
 class AIJobEnqueuedResponse(BaseModel):

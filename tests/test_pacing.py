@@ -364,3 +364,77 @@ def test_translate_race_pacing_estimated_duration():
 
     assert payload["estimatedDurationInSecs"] == pytest.approx(2400, abs=2)
     assert payload["estimatedDistanceInMeters"] == pytest.approx(10000.0, abs=1)
+
+
+# ---------------------------------------------------------------------------
+# Conditions-aware pacing (P1-2) — expected_temp_c / expected_dew_point_c
+# ---------------------------------------------------------------------------
+
+def test_no_conditions_leaves_plan_unchanged():
+    plan = generate_pacing_strategy(10000, 2400)
+    assert plan.conditions_temp_c is None
+    assert plan.conditions_dew_point_c is None
+    assert plan.conditions_penalty_pct is None
+    assert plan.adjusted_target_time_sec is None
+    assert plan.splits[0].target_pace_min_km == pytest.approx(4.0, abs=0.001)
+
+
+def test_neutral_conditions_do_not_change_splits():
+    # 10C / 5C dew point are the heat model's own neutral defaults -> factor 1.0
+    plan = generate_pacing_strategy(10000, 2400, expected_temp_c=10.0, expected_dew_point_c=5.0)
+    assert plan.conditions_penalty_pct == pytest.approx(0.0)
+    assert plan.adjusted_target_time_sec == pytest.approx(2400.0, abs=0.1)
+    assert plan.splits[0].target_pace_min_km == pytest.approx(4.0, abs=0.001)
+
+
+def test_hot_conditions_slow_every_split():
+    baseline = generate_pacing_strategy(10000, 2400)
+    hot = generate_pacing_strategy(10000, 2400, expected_temp_c=30.0, expected_dew_point_c=20.0)
+
+    assert hot.conditions_temp_c == 30.0
+    assert hot.conditions_dew_point_c == 20.0
+    assert hot.conditions_penalty_pct > 0
+    assert hot.adjusted_target_time_sec > 2400.0
+
+    for base_split, hot_split in zip(baseline.splits, hot.splits):
+        assert hot_split.target_pace_min_km > base_split.target_pace_min_km
+        assert hot_split.split_time_sec > base_split.split_time_sec
+
+
+def test_conditions_cumulative_time_matches_adjusted_target():
+    plan = generate_pacing_strategy(10000, 2400, expected_temp_c=30.0, expected_dew_point_c=20.0)
+    assert plan.splits[-1].cumulative_time_sec == pytest.approx(plan.adjusted_target_time_sec, abs=1.0)
+
+
+def test_conditions_only_temp_supplied_still_applies():
+    plan = generate_pacing_strategy(10000, 2400, expected_temp_c=30.0)
+    assert plan.conditions_penalty_pct > 0
+    assert plan.conditions_dew_point_c is None
+
+
+def test_conditions_compose_with_negative_split():
+    baseline = generate_pacing_strategy(10000, 2400, strategy="negative_split")
+    hot = generate_pacing_strategy(
+        10000, 2400, strategy="negative_split", expected_temp_c=30.0, expected_dew_point_c=20.0,
+    )
+    # Negative-split shape (first half slower than second half) is preserved...
+    assert hot.splits[0].target_pace_min_km > hot.splits[-1].target_pace_min_km
+    # ...while every split is slowed relative to the unadjusted plan.
+    for base_split, hot_split in zip(baseline.splits, hot.splits):
+        assert hot_split.target_pace_min_km > base_split.target_pace_min_km
+
+
+def test_conditions_compose_with_terrain():
+    profile = [(0.0, 0.0), (5000.0, 250.0), (10000.0, 0.0)]
+    baseline = generate_pacing_strategy(10000, 2400, strategy="terrain", elevation_profile=profile)
+    hot = generate_pacing_strategy(
+        10000, 2400, strategy="terrain", elevation_profile=profile,
+        expected_temp_c=30.0, expected_dew_point_c=20.0,
+    )
+    # Uphill-vs-downhill shape from terrain is preserved...
+    assert hot.splits[0].target_pace_min_km > hot.splits[-1].target_pace_min_km
+    # ...and grade info survives the conditions scaling.
+    assert hot.splits[0].grade_pct == baseline.splits[0].grade_pct
+    # ...while heat further slows every split on top of the terrain adjustment.
+    for base_split, hot_split in zip(baseline.splits, hot.splits):
+        assert hot_split.target_pace_min_km > base_split.target_pace_min_km

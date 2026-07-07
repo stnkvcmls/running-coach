@@ -1175,6 +1175,88 @@ def test_race_pacing_even_strategy_has_no_course_activity(client, db):
     assert all(s["grade_pct"] is None for s in body["splits"])
 
 
+# --- /races/{id}/pacing conditions-aware pacing (P1-2) ---
+
+def test_race_pacing_with_expected_conditions_scales_splits(client, db):
+    race = _add_race(db)
+    baseline = client.get(f"/api/v1/races/{race.id}/pacing?strategy=even").json()
+    resp = client.get(
+        f"/api/v1/races/{race.id}/pacing"
+        "?strategy=even&expected_temp_c=30&expected_dew_point_c=20"
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["conditions_temp_c"] == 30.0
+    assert body["conditions_dew_point_c"] == 20.0
+    assert body["conditions_penalty_pct"] > 0
+    assert body["adjusted_target_time_sec"] > body["target_time_sec"]
+    # Original goal time/pace stay put — only the splits and the adjusted total move.
+    assert body["target_time_sec"] == baseline["target_time_sec"]
+    assert body["splits"][0]["target_pace_min_km"] > baseline["splits"][0]["target_pace_min_km"]
+
+
+def test_race_pacing_without_conditions_has_no_adjustment(client, db):
+    race = _add_race(db)
+    resp = client.get(f"/api/v1/races/{race.id}/pacing?strategy=even")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["conditions_temp_c"] is None
+    assert body["conditions_penalty_pct"] is None
+    assert body["adjusted_target_time_sec"] is None
+
+
+def test_race_pacing_estimated_conditions_from_recent_weathered_runs(client, db):
+    race = _add_race(db)
+    _add_activity(
+        db, datetime.combine(date.today() - timedelta(days=2), datetime.min.time()),
+        weather_json=json.dumps({"temperature": 86, "dewPoint": 68}),  # 30C / 20C
+    )
+    _add_activity(
+        db, datetime.combine(date.today() - timedelta(days=4), datetime.min.time()),
+        weather_json=json.dumps({"temperature": 68, "dewPoint": 50}),  # ~20C / 10C
+    )
+    resp = client.get(f"/api/v1/races/{race.id}/pacing?strategy=even")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["estimated_temp_c"] == pytest.approx(25.0, abs=0.5)
+    assert body["estimated_dew_point_c"] == pytest.approx(15.0, abs=0.5)
+
+
+def test_race_pacing_estimated_conditions_none_without_recent_weather(client, db):
+    race = _add_race(db)
+    resp = client.get(f"/api/v1/races/{race.id}/pacing?strategy=even")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["estimated_temp_c"] is None
+    assert body["estimated_dew_point_c"] is None
+
+
+def test_race_pacing_push_applies_expected_conditions(client, db):
+    """Pushed splits reflect the heat-adjusted plan, not the unadjusted goal."""
+    from unittest.mock import patch
+    from app.models import User
+
+    dev = User(email="dev@localhost", garmin_email="g@garmin.com")
+    db.add(dev)
+    db.commit()
+
+    race = _add_race(db)
+    captured = {}
+
+    def fake_push(user, race_name, race_date, splits):
+        captured["splits"] = splits
+        return {"workout_name": "Race Pacing", "garmin_workout_id": 1, "scheduled_date": race_date.isoformat()}
+
+    with patch("app.garmin_sync.push_race_pacing_to_garmin", side_effect=fake_push):
+        resp = client.post(
+            f"/api/v1/races/{race.id}/pacing/push",
+            json={"strategy": "even", "split_unit": "km", "expected_temp_c": 30, "expected_dew_point_c": 20},
+        )
+
+    assert resp.status_code == 200, resp.text
+    assert captured["splits"][0].target_pace_min_km > 4.0  # baseline even pace at 2400s/10k is 4:00/km
+
+
 # --- Push notifications (P0-1) ---
 
 def test_vapid_public_key_not_configured_by_default(client):

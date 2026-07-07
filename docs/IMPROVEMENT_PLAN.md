@@ -261,7 +261,7 @@ chat `mark_setback` tool), deduplicated so it's written once per area. All
 new and existing tests pass (893 backend); `npm run build`, `tsc -b`, and
 the Vitest suite (57 cases) are clean._
 
-#### P1-2 · Conditions-aware race pacing
+#### P1-2 · Conditions-aware race pacing ✅ Done.
 **What:** Fold expected race-day conditions into the pacing plans from v3/v4.
 `GET /races/{id}/pacing` accepts optional `expected_temp_c` / `expected_dew_point_c`
 (UI inputs on the pacing card, pre-filled from the median conditions of the
