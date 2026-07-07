@@ -243,7 +243,14 @@ def api_today(
         .filter(TrainingPlanDay.user_id == uid, TrainingPlanDay.day_date == selected)
         .first()
     )
-    plan_adaptation = plan_adaptation_mod.suggest_adaptation(plan_day, readiness, checkin)
+    active_niggle = plan_adaptation_mod.get_active_niggle(db, uid)
+    plan_adaptation = plan_adaptation_mod.suggest_adaptation(
+        plan_day,
+        readiness,
+        checkin,
+        injury_risk=current_load.injury_risk if current_load else None,
+        active_niggle=active_niggle,
+    )
     if plan_adaptation is not None:
         dismissed = (
             db.query(SyncStatus)

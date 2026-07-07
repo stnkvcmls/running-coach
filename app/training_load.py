@@ -632,6 +632,12 @@ def format_training_load_context(point: TrainingLoadPoint | None) -> str:
         lines.append(f"- Ramp rate (28d CTL change): {point.ramp_rate_28d:+.1f}")
     if point.injury_risk:
         lines.append(f"- Injury risk: {point.injury_risk}")
+    if point.injury_risk == "high":
+        lines.append(
+            "- **Load caution (mandatory)**: injury risk is HIGH — do not prescribe "
+            "or encourage hard/interval/tempo/long efforts until ACWR falls back "
+            "under 1.3; prioritize easy running and recovery."
+        )
     if point.rsb_zone_label and point.rsb_recommendation:
         lines.append(f"- Running Stress Balance: {point.rsb_zone_label}. {point.rsb_recommendation}")
     return "\n".join(lines)

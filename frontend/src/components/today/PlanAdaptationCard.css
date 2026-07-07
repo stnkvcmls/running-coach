@@ -14,6 +14,15 @@
   background: color-mix(in srgb, var(--color-easy) 8%, var(--bg-card));
 }
 
+.plan-adaptation-risk {
+  border: 1px solid rgba(231, 76, 60, 0.45);
+  background: rgba(231, 76, 60, 0.08);
+}
+
+.plan-adaptation-risk .plan-adaptation-header {
+  color: #e74c3c;
+}
+
 .plan-adaptation-header {
   display: flex;
   align-items: center;
