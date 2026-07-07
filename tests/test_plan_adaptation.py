@@ -1,6 +1,7 @@
-"""Tests for readiness-driven plan day adaptation (P1-1)."""
+"""Tests for readiness-driven plan day adaptation (P1-1) and risk-triggered
+caution (P2-1)."""
 
-from app.models import DailyCheckin, TrainingPlanDay
+from app.models import CoachMemory, DailyCheckin, TrainingPlanDay
 from app.plan_adaptation import suggest_adaptation
 from app.schemas import TrainingReadiness
 
@@ -142,3 +143,83 @@ def test_checkin_does_not_downgrade_already_low_readiness_twice():
     suggestion = suggest_adaptation(day, _readiness(25, "Low"), _checkin(soreness=1))
     assert suggestion is not None
     assert suggestion.suggested_workout_type == "rest"
+
+
+# --- Trigger field on existing branches (P2-1) ---
+
+def test_trigger_is_readiness_for_low_readiness_rest():
+    day = _day(workout_type="interval")
+    suggestion = suggest_adaptation(day, _readiness(25, "Low"))
+    assert suggestion.trigger == "readiness"
+
+
+def test_trigger_is_readiness_for_fair_readiness_downgrade():
+    day = _day(workout_type="tempo")
+    suggestion = suggest_adaptation(day, _readiness(45, "Fair"))
+    assert suggestion.trigger == "readiness"
+
+
+def test_trigger_is_checkin_for_checkin_override():
+    day = _day(workout_type="tempo")
+    suggestion = suggest_adaptation(day, _readiness(70, "Good"), _checkin(soreness=1))
+    assert suggestion.trigger == "checkin"
+
+
+def test_trigger_is_readiness_for_easy_day_upgrade():
+    day = _day(workout_type="easy", target_distance_m=8000.0)
+    suggestion = suggest_adaptation(day, _readiness(90, "Excellent"))
+    assert suggestion.trigger == "readiness"
+
+
+# --- Injury-risk / niggle trigger (P2-1) ---
+
+def test_high_injury_risk_downgrades_hard_day_despite_good_readiness():
+    day = _day(workout_type="tempo", target_distance_m=10000.0)
+    # Readiness alone ("Good", 70) would not trigger any suggestion.
+    assert suggest_adaptation(day, _readiness(70, "Good")) is None
+    suggestion = suggest_adaptation(day, _readiness(70, "Good"), injury_risk="high")
+    assert suggestion is not None
+    assert suggestion.direction == "downgrade"
+    assert suggestion.suggested_workout_type == "easy"
+    assert suggestion.suggested_target_distance_m == 6000.0
+    assert suggestion.trigger == "risk"
+    assert "ACWR" in suggestion.reason or "load risk" in suggestion.reason
+
+
+def test_moderate_injury_risk_does_not_trigger_cutback():
+    day = _day(workout_type="tempo")
+    assert suggest_adaptation(day, _readiness(70, "Good"), injury_risk="moderate") is None
+
+
+def test_active_niggle_downgrades_hard_day_despite_good_readiness():
+    day = _day(workout_type="long")
+    niggle = CoachMemory(category="niggle", tag="left knee", note="Reported sore")
+    suggestion = suggest_adaptation(day, _readiness(75, "Good"), active_niggle=niggle)
+    assert suggestion is not None
+    assert suggestion.direction == "downgrade"
+    assert suggestion.trigger == "risk"
+    assert "left knee" in suggestion.reason
+
+
+def test_low_readiness_rest_still_wins_over_risk():
+    # A rest recommendation from very low readiness is more severe than a
+    # risk-triggered easy-effort downgrade, so it takes priority.
+    day = _day(workout_type="interval")
+    suggestion = suggest_adaptation(day, _readiness(25, "Low"), injury_risk="high")
+    assert suggestion.suggested_workout_type == "rest"
+    assert suggestion.trigger == "readiness"
+
+
+def test_risk_does_not_apply_to_easy_or_rest_days():
+    assert suggest_adaptation(
+        _day(workout_type="easy"), _readiness(70, "Good"), injury_risk="high"
+    ) is None
+    assert suggest_adaptation(
+        _day(workout_type="rest"), _readiness(70, "Good"), injury_risk="high"
+    ) is None
+
+
+def test_high_injury_risk_suppresses_easy_day_upgrade():
+    day = _day(workout_type="easy", target_distance_m=8000.0)
+    assert suggest_adaptation(day, _readiness(90, "Excellent")) is not None
+    assert suggest_adaptation(day, _readiness(90, "Excellent"), injury_risk="high") is None

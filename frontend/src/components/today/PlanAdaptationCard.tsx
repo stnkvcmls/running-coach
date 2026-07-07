@@ -1,6 +1,6 @@
 import { useAdaptPlanDay } from '../../api/hooks'
 import type { PlanAdaptationSuggestion } from '../../api/types'
-import { TrendingDown, TrendingUp, RefreshCw } from 'lucide-react'
+import { TrendingDown, TrendingUp, AlertTriangle, RefreshCw } from 'lucide-react'
 import './PlanAdaptationCard.css'
 
 interface Props {
@@ -15,16 +15,19 @@ function formatDistance(m: number | null): string | null {
 export default function PlanAdaptationCard({ suggestion }: Props) {
   const { mutate: adapt, isPending } = useAdaptPlanDay()
   const isDowngrade = suggestion.direction === 'downgrade'
+  const isRisk = suggestion.trigger === 'risk'
 
   const currentDist = formatDistance(suggestion.current_target_distance_m)
   const suggestedDist = formatDistance(suggestion.suggested_target_distance_m)
 
   return (
-    <div className={`card plan-adaptation-card plan-adaptation-${suggestion.direction}`}>
+    <div
+      className={`card plan-adaptation-card plan-adaptation-${suggestion.direction}${isRisk ? ' plan-adaptation-risk' : ''}`}
+    >
       <div className="plan-adaptation-header">
-        {isDowngrade ? <TrendingDown size={16} /> : <TrendingUp size={16} />}
+        {isRisk ? <AlertTriangle size={16} /> : isDowngrade ? <TrendingDown size={16} /> : <TrendingUp size={16} />}
         <span className="plan-adaptation-title">
-          {isDowngrade ? 'Suggested: ease off today' : 'Suggested: you\'re primed'}
+          {isRisk ? 'Load caution: consider easing off' : isDowngrade ? 'Suggested: ease off today' : 'Suggested: you\'re primed'}
         </span>
       </div>
       <p className="plan-adaptation-reason">{suggestion.reason}</p>

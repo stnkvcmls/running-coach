@@ -243,12 +243,19 @@ def _push_plan_adaptation_if_needed(user_id: int, today_summary: DailySummary | 
             .all()
         ]
         readiness = training_load.compute_readiness(today_summary, current_load, recent_rhr)
-        suggestion = plan_adaptation_mod.suggest_adaptation(plan_day, readiness)
+        active_niggle = plan_adaptation_mod.get_active_niggle(db, user_id)
+        suggestion = plan_adaptation_mod.suggest_adaptation(
+            plan_day,
+            readiness,
+            injury_risk=current_load.injury_risk if current_load else None,
+            active_niggle=active_niggle,
+        )
         if suggestion is None:
             return
 
         title = (
-            "Consider easing off today" if suggestion.direction == "downgrade"
+            "Load caution: consider easing off" if suggestion.trigger == "risk"
+            else "Consider easing off today" if suggestion.direction == "downgrade"
             else "You're primed for more today"
         )
         notifications_mod.notify(

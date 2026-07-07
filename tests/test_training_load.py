@@ -266,6 +266,26 @@ def test_format_training_load_context_includes_rsb_recommendation():
     assert "Overreaching — high risk" in ctx
 
 
+def test_format_training_load_context_injects_mandatory_caution_when_risk_high():
+    """P2-1: high injury risk becomes a directive, not just a data point."""
+    from app.schemas import TrainingLoadPoint
+    high_risk_point = TrainingLoadPoint(
+        date=date(2026, 6, 10),
+        tss=80.0, ctl=40.0, atl=65.0, tsb=-25.0,
+        acwr=1.6, injury_risk="high",
+    )
+    ctx = training_load.format_training_load_context(high_risk_point)
+    assert "Load caution" in ctx
+    assert "mandatory" in ctx.lower()
+
+    moderate_risk_point = TrainingLoadPoint(
+        date=date(2026, 6, 10),
+        tss=80.0, ctl=40.0, atl=50.0, tsb=-10.0,
+        acwr=1.35, injury_risk="moderate",
+    )
+    assert "Load caution" not in training_load.format_training_load_context(moderate_risk_point)
+
+
 def test_training_load_endpoint_includes_acwr_fields(client, db):
     base = datetime(2026, 5, 1, 7, 0)
     for i in range(35):

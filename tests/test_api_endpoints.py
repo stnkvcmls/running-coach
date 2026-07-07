@@ -8,6 +8,8 @@ from app.models import (
     Activity,
     AthleteProfile,
     ChatMessage,
+    CoachMemory,
+    DailyLoadSeries,
     DailySummary,
     GarminCalendarEvent,
     Insight,
@@ -613,6 +615,42 @@ def test_today_plan_adaptation_suppressed_when_dismissed(client, db):
     resp = client.get(f"/api/v1/today?date={day.isoformat()}")
     assert resp.status_code == 200
     assert resp.json()["plan_adaptation"] is None
+
+
+def test_today_includes_risk_triggered_caution_despite_good_readiness(client, db):
+    """P2-1: a high ACWR/injury_risk reading forces a cutback suggestion even
+    when readiness alone would not trigger one."""
+    day = date(2026, 6, 17)
+    db.add(DailySummary(date=day, sleep_score=80, stress_avg=20, body_battery_high=80))
+    db.add(DailyLoadSeries(
+        date=day, tss=90.0, ctl=40.0, atl=65.0, tsb=-25.0,
+        acwr=1.62, injury_risk="high",
+    ))
+    _seed_plan_and_days(db, [
+        {"date": day, "workout_type": "tempo", "dist_m": 10000},
+    ])
+    resp = client.get(f"/api/v1/today?date={day.isoformat()}")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["plan_adaptation"] is not None
+    assert body["plan_adaptation"]["direction"] == "downgrade"
+    assert body["plan_adaptation"]["trigger"] == "risk"
+
+
+def test_today_includes_niggle_triggered_caution(client, db):
+    """P2-1: an active soreness niggle also forces a cutback on a hard day."""
+    day = date(2026, 6, 17)
+    db.add(DailySummary(date=day, sleep_score=80, stress_avg=20, body_battery_high=80))
+    db.add(CoachMemory(category="niggle", tag="left knee", note="Reported sore", active=True))
+    _seed_plan_and_days(db, [
+        {"date": day, "workout_type": "long", "dist_m": 20000},
+    ])
+    resp = client.get(f"/api/v1/today?date={day.isoformat()}")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["plan_adaptation"] is not None
+    assert body["plan_adaptation"]["trigger"] == "risk"
+    assert "left knee" in body["plan_adaptation"]["reason"]
 
 
 def test_today_matched_workout_drops_scheduled_and_tags_activity(client, db):

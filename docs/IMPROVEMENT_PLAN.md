@@ -311,7 +311,7 @@ latest briefing insight), `app/schemas.py`,
 
 ### P2 — Sharper analysis, honest load
 
-#### P2-1 · Injury-risk early warning that acts
+#### P2-1 · Injury-risk early warning that acts ✅ Done.
 **What:** Promote the ACWR / ramp-rate / `injury_risk` flags (computed daily in
 `DailyLoadSeries`) plus active `CoachMemory` niggles into a proactive loop: when
 risk crosses into "high" — even on a good-readiness day — surface a caution card
@@ -330,6 +330,28 @@ the suggestion/accept mechanism exists; this connects them.
 directive), `app/schemas.py`,
 `frontend/src/components/today/PlanAdaptationCard.tsx` (risk variant),
 `tests/test_plan_adaptation.py`, `tests/test_api_endpoints.py`.
+_Implemented as described, scoped to P2-1 only. File locations follow the
+post-P3-1 split: the three call sites that compute the readiness-driven
+suggestion — `app/routers/daily.py` (`/today`), `app/routers/plan.py`
+(`/training-plan/adapt-day`), and `app/main.py`
+(`_push_plan_adaptation_if_needed`) — now also pass the day's
+`TrainingLoadPoint.injury_risk` and the athlete's most recent active niggle
+(a new `plan_adaptation.get_active_niggle` helper) into `suggest_adaptation`.
+A `risk` branch fires a hard-day downgrade whenever `injury_risk == "high"`
+or a niggle is active, ahead of the readiness-band checks, so it applies even
+on a Good/Excellent readiness day; it does not override the more severe
+low-readiness rest recommendation. The same risk flag also suppresses the
+easy-day upgrade nudge — the coach never suggests "add more" while risk is
+elevated. `PlanAdaptationSuggestion` gained a `trigger`
+(`"readiness" | "checkin" | "risk"`) field (default `"readiness"`, so no
+existing behavior changed) that the same push path
+(`_push_plan_adaptation_if_needed`) and the same `PlanAdaptationCard` read to
+title/style the risk case distinctly — no new push category or UI component,
+reusing the P1-1/P0-1 plumbing end to end. The "mandatory" plan/chat context
+directive landed in `training_load.format_training_load_context` (shared by
+`app/coach/context.py` and `app/coach/plans.py`), appended only when
+`injury_risk == "high"`. All new and existing tests pass (backend + `tsc -b`
++ Vitest)._
 
 #### P2-2 · Season-over-season performance comparison
 **What:** Add a comparison overlay to the Performance Curve view: the fitted

@@ -229,7 +229,14 @@ def api_adapt_plan_day(
         .first()
     )
     readiness = training_load.compute_readiness(daily_summary, current_load, recent_rhr, checkin)
-    suggestion = plan_adaptation_mod.suggest_adaptation(plan_day, readiness, checkin)
+    active_niggle = plan_adaptation_mod.get_active_niggle(db, uid)
+    suggestion = plan_adaptation_mod.suggest_adaptation(
+        plan_day,
+        readiness,
+        checkin,
+        injury_risk=current_load.injury_risk if current_load else None,
+        active_niggle=active_niggle,
+    )
     if suggestion is None:
         raise HTTPException(status_code=409, detail="No adaptation suggestion applies to this plan day")
 

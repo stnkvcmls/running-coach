@@ -415,6 +415,10 @@ class PlanAdaptationSuggestion(BaseModel):
     suggested_target_distance_m: float | None = None
     reason: str
     readiness_score: int
+    # What triggered this suggestion (P2-1): a plain readiness band, the
+    # athlete's own check-in, or an ACWR/ramp-rate/niggle risk flag — lets the
+    # UI render a distinct "load caution" variant for risk-triggered rows.
+    trigger: Literal["readiness", "checkin", "risk"] = "readiness"
 
 
 class TodayResponse(BaseModel):

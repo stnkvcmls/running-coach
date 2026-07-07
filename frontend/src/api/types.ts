@@ -311,6 +311,7 @@ export interface PlanAdaptationSuggestion {
   suggested_target_distance_m: number | null
   reason: string
   readiness_score: number
+  trigger: 'readiness' | 'checkin' | 'risk'
 }
 
 export interface TodayResponse {
