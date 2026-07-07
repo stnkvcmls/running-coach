@@ -514,13 +514,29 @@ export function usePushWorkoutToGarmin() {
 
 export function useRacePacing(
   raceId: number,
-  params: { strategy?: string; splitUnit?: string; targetTimeSec?: number | null } = {},
+  params: {
+    strategy?: string
+    splitUnit?: string
+    targetTimeSec?: number | null
+    expectedTempC?: number | null
+    expectedDewPointC?: number | null
+  } = {},
 ) {
-  const { strategy = 'even', splitUnit = 'km', targetTimeSec } = params
+  const { strategy = 'even', splitUnit = 'km', targetTimeSec, expectedTempC, expectedDewPointC } = params
   const qs = new URLSearchParams({ strategy, split_unit: splitUnit })
   if (targetTimeSec != null) qs.set('target_time_sec', String(targetTimeSec))
+  if (expectedTempC != null) qs.set('expected_temp_c', String(expectedTempC))
+  if (expectedDewPointC != null) qs.set('expected_dew_point_c', String(expectedDewPointC))
   return useQuery({
-    queryKey: ['race-pacing', raceId, strategy, splitUnit, targetTimeSec ?? null],
+    queryKey: [
+      'race-pacing',
+      raceId,
+      strategy,
+      splitUnit,
+      targetTimeSec ?? null,
+      expectedTempC ?? null,
+      expectedDewPointC ?? null,
+    ],
     queryFn: () => apiGet<PacingStrategyResponse>(`/races/${raceId}/pacing?${qs}`),
     enabled: raceId > 0,
   })

@@ -72,6 +72,46 @@
   color: rgba(255, 255, 255, 0.9);
 }
 
+/* Expected conditions inputs */
+.race-pacing-conditions {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+}
+
+.race-pacing-conditions-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.race-pacing-conditions-field input {
+  width: 48px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  color: #fff;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  padding: 3px 5px;
+  text-align: center;
+}
+
+.race-pacing-conditions-field input::-webkit-outer-spin-button,
+.race-pacing-conditions-field input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.race-pacing-conditions-note {
+  font-size: 0.7rem;
+  color: rgba(255, 200, 150, 0.85);
+  text-align: center;
+  padding: 0 4px;
+}
+
 /* Summary row */
 .race-pacing-summary {
   display: flex;

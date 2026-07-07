@@ -729,12 +729,20 @@ export interface PacingStrategyResponse {
   source: string          // "goal" | "predicted" | "custom"
   course_activity_id: number | null
   course_activity_name: string | null
+  conditions_temp_c: number | null
+  conditions_dew_point_c: number | null
+  conditions_penalty_pct: number | null
+  adjusted_target_time_sec: number | null
+  estimated_temp_c: number | null
+  estimated_dew_point_c: number | null
 }
 
 export interface PacingPushRequest {
   strategy: string
   split_unit: string
   target_time_sec?: number | null
+  expected_temp_c?: number | null
+  expected_dew_point_c?: number | null
 }
 
 export interface VapidPublicKeyResponse {

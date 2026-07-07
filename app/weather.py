@@ -64,6 +64,28 @@ def heat_pace_adjustment(
     return 1.0 + total_pct / 100.0, total_pct
 
 
+def extract_temp_dewpoint_c(weather: dict | None) -> tuple[float | None, float | None]:
+    """Extract (temp_c, dew_point_c) from a parsed weather dict.
+
+    Garmin Connect's activity-weather endpoint always returns temp/dewPoint in
+    Fahrenheit, regardless of the account's display-unit setting (the app
+    converts for display) — convert here so callers get °C consistently.
+    """
+    if not weather:
+        return None, None
+
+    raw_temp = _get_field(weather, "temp", "temperature", "apparentTemperature")
+    raw_dp = _get_field(weather, "dewPoint", "dew_point")
+
+    try:
+        temp = _fahrenheit_to_celsius(float(raw_temp)) if raw_temp is not None else None
+        dp = _fahrenheit_to_celsius(float(raw_dp)) if raw_dp is not None else None
+    except (TypeError, ValueError):
+        return None, None
+
+    return temp, dp
+
+
 def weather_pace_info(
     weather: dict | None,
     avg_pace_min_km: float | None,
@@ -76,19 +98,8 @@ def weather_pace_info(
     if not weather or avg_pace_min_km is None:
         return None, None, None
 
-    raw_temp = _get_field(weather, "temp", "temperature", "apparentTemperature")
-    raw_dp = _get_field(weather, "dewPoint", "dew_point")
-
-    if raw_temp is None and raw_dp is None:
-        return None, None, None
-
-    # Garmin Connect's activity-weather endpoint always returns temp/dewPoint in
-    # Fahrenheit, regardless of the account's display-unit setting (the app
-    # converts for display) — convert here so the °C-based model is correct.
-    try:
-        temp = _fahrenheit_to_celsius(float(raw_temp)) if raw_temp is not None else None
-        dp = _fahrenheit_to_celsius(float(raw_dp)) if raw_dp is not None else None
-    except (TypeError, ValueError):
+    temp, dp = extract_temp_dewpoint_c(weather)
+    if temp is None and dp is None:
         return None, None, None
 
     factor, _ = heat_pace_adjustment(temp, dp)

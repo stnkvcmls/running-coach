@@ -1,5 +1,7 @@
 """Race pacing strategy generation and Garmin push."""
 import logging
+from datetime import date, datetime, timedelta, timezone
+from statistics import median
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
@@ -11,11 +13,47 @@ from app.models import Activity, GarminCalendarEvent, User
 from app.schemas import PacingPushRequest, PacingStrategyResponse, PushWorkoutResponse
 from app import threshold as threshold_mod
 from app import streams as streams_mod
+from app import weather as weather_mod
 from app.utils import safe_json_loads
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+_CONDITIONS_LOOKBACK_DAYS = 14
+_CONDITIONS_SAMPLE_LIMIT = 5
+
+
+def _estimated_race_conditions(user_id: int, db: Session) -> tuple[float | None, float | None]:
+    """Median (temp_c, dew_point_c) from the athlete's recent weathered runs.
+
+    Used to pre-fill the expected race-day conditions inputs — no forecast API,
+    just the same weather data already synced from Garmin for past runs.
+    """
+    cutoff = datetime.combine(
+        date.today() - timedelta(days=_CONDITIONS_LOOKBACK_DAYS), datetime.min.time(), tzinfo=timezone.utc
+    )
+    recent = (
+        db.query(Activity)
+        .filter(
+            Activity.user_id == user_id,
+            Activity.weather_json.isnot(None),
+            Activity.started_at >= cutoff,
+        )
+        .order_by(Activity.started_at.desc())
+        .limit(_CONDITIONS_SAMPLE_LIMIT)
+        .all()
+    )
+    temps: list[float] = []
+    dew_points: list[float] = []
+    for act in recent:
+        weather = weather_mod.parse_weather(act.weather_json)
+        temp, dp = weather_mod.extract_temp_dewpoint_c(weather)
+        if temp is not None:
+            temps.append(temp)
+        if dp is not None:
+            dew_points.append(dp)
+    return (median(temps) if temps else None, median(dew_points) if dew_points else None)
 
 
 def _get_race_event(race_id: int, user_id: int, db: Session) -> GarminCalendarEvent:
@@ -76,6 +114,8 @@ def api_race_pacing(
     strategy: str = Query("even", pattern="^(even|negative_split|terrain)$"),
     split_unit: str = Query("km", pattern="^(km|mile)$"),
     target_time_sec: int | None = Query(None),
+    expected_temp_c: float | None = Query(None),
+    expected_dew_point_c: float | None = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -84,6 +124,9 @@ def api_race_pacing(
     target_time_sec overrides goal_time_sec; if neither is set, falls back to
     the CV-model prediction from the performance curve. "terrain" strategy
     sources an elevation profile from the athlete's closest-distance past run.
+    expected_temp_c/expected_dew_point_c scale every split for expected race-day
+    heat/humidity (composes with the terrain strategy); the response always
+    includes a median estimate from recent weathered runs for the UI to pre-fill.
     """
     from app import pacing as pacing_mod
 
@@ -150,7 +193,10 @@ def api_race_pacing(
         predicted_time_sec=predicted_time,
         source=source,
         elevation_profile=elevation_profile,
+        expected_temp_c=expected_temp_c,
+        expected_dew_point_c=expected_dew_point_c,
     )
+    estimated_temp_c, estimated_dew_point_c = _estimated_race_conditions(current_user.id, db)
 
     return PacingStrategyResponse(
         race_id=race_id,
@@ -178,6 +224,12 @@ def api_race_pacing(
         source=plan.source,
         course_activity_id=course_activity.id if course_activity else None,
         course_activity_name=course_activity.name if course_activity else None,
+        conditions_temp_c=plan.conditions_temp_c,
+        conditions_dew_point_c=plan.conditions_dew_point_c,
+        conditions_penalty_pct=plan.conditions_penalty_pct,
+        adjusted_target_time_sec=plan.adjusted_target_time_sec,
+        estimated_temp_c=estimated_temp_c,
+        estimated_dew_point_c=estimated_dew_point_c,
     )
 
 
@@ -239,6 +291,8 @@ def api_push_race_pacing(
         strategy=body.strategy,
         elevation_profile=elevation_profile,
         split_unit=body.split_unit,
+        expected_temp_c=body.expected_temp_c,
+        expected_dew_point_c=body.expected_dew_point_c,
     )
 
     try:
