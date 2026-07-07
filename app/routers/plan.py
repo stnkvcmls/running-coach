@@ -147,6 +147,32 @@ def api_generate_training_plan(current_user: User = Depends(get_current_user)):
     return AIJobEnqueuedResponse(status="queued", job_id=job_id)
 
 
+@router.post("/training-plan/days/{day_id}/briefing", response_model=AIJobEnqueuedResponse)
+def api_generate_briefing(
+    day_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Enqueue a pre-workout briefing for a scheduled plan day and return the job id.
+
+    Clients poll GET /api/v1/jobs/{job_id} until status is 'done', then refresh
+    Today (GET /api/v1/today) to pick up the new briefing insight. Regenerates
+    (replaces) any existing briefing for the day.
+    """
+    from app.ai_coach import enqueue_job
+
+    plan_day = (
+        db.query(TrainingPlanDay)
+        .filter(TrainingPlanDay.id == day_id, TrainingPlanDay.user_id == current_user.id)
+        .first()
+    )
+    if plan_day is None:
+        raise HTTPException(status_code=404, detail="Plan day not found")
+
+    job_id = enqueue_job("generate_briefing", {"plan_day_id": plan_day.id}, current_user.id)
+    return AIJobEnqueuedResponse(status="queued", job_id=job_id)
+
+
 @router.get("/season-plan", response_model=SeasonPlanResponse | None)
 def api_get_season_plan(
     db: Session = Depends(get_db),

@@ -326,6 +326,8 @@ export interface TodayResponse {
   readiness: TrainingReadiness | null
   plan_adaptation: PlanAdaptationSuggestion | null
   daily_checkin: DailyCheckin | null
+  plan_day_id: number | null
+  briefing: InsightResponse | null
 }
 
 export interface SettingsResponse {

@@ -22,6 +22,7 @@ from sqlalchemy import func
 from app import training_load
 from app import threshold as threshold_mod
 from app import season_plan as season_plan_mod
+from app import nutrition as nutrition_mod
 from app.config import settings
 from app.models import (
     DEFAULT_USER_ID,
@@ -35,7 +36,14 @@ from app.models import (
     TrainingPlanDay,
 )
 from app.strength_routines import catalog_summary, get_routine
-from app.coach.context import _build_context, _format_activity_context, _format_athlete_profile_context, _load_zones, _load_zone_configs
+from app.coach.context import (
+    _build_context,
+    _format_activity_context,
+    _format_athlete_profile_context,
+    _load_zones,
+    _load_zone_configs,
+    recent_heat_stress,
+)
 from app.coach.providers import AITransientError, AIFatalError, _MAX_RETRIES, _BACKOFF_BASE
 
 logger = logging.getLogger(__name__)
@@ -928,3 +936,116 @@ def weekly_review(user_id: int = DEFAULT_USER_ID):
             )
         except Exception:
             logger.exception("Weekly review failed")
+
+
+_BRIEFING_SYSTEM_PROMPT = """You are an expert running coach writing a short, motivating pre-workout \
+briefing for today's scheduled training session — the one moment before the athlete heads out the door.
+
+Write 3-5 short sentences (no headers, no bullet lists) covering, in this order, whenever the
+supporting data is present:
+1. Why this session matters right now, given the current training phase/season block.
+2. The concrete execution target for today (pace/HR zone/effort, drawn from the scheduled session).
+3. A one-line readiness note: how the athlete is set up today, and whether to run the session as
+   written, ease off, or push.
+4. If a fuelling target is present (long efforts only), a one-line reminder of the carb/fluid target.
+5. If a heat-stress/conditions note is present, a one-line heads-up.
+
+Skip any point whose supporting data is not present rather than inventing detail. Keep the tone
+encouraging and direct, like a coach texting an athlete the morning of a key session. Start the
+response with "**Summary:** " followed by a single punchy sentence, then a blank line, then the
+full briefing."""
+
+
+def _build_briefing_trigger_data(
+    db: Session, plan: TrainingPlan | None, plan_day: TrainingPlanDay, user_id: int
+) -> str:
+    """Format today's scheduled session, season phase, and fuelling for the briefing prompt."""
+    parts = [f"**Scheduled session for {plan_day.day_date} ({plan_day.day_of_week})**"]
+    parts.append(f"Workout type: {plan_day.workout_type}")
+    if plan_day.target_distance_m:
+        parts.append(f"Target distance: {plan_day.target_distance_m / 1000:.1f} km")
+    if plan_day.target_pace_display:
+        parts.append(f"Target pace: {plan_day.target_pace_display}")
+    if plan_day.description:
+        parts.append(f"Description: {plan_day.description}")
+    if plan_day.notes:
+        parts.append(f"Coach notes: {plan_day.notes}")
+    if plan_day.week_theme:
+        parts.append(f"Week theme: {plan_day.week_theme}")
+
+    if plan:
+        phase_line = f"Season phase: {plan.phase}" if plan.phase else ""
+        if plan.overview:
+            phase_line += (" — " if phase_line else "") + plan.overview
+        if phase_line:
+            parts.append(phase_line)
+
+    # Fuelling guidance for long efforts (reuses the same helper as the plan-day API response).
+    if plan_day.workout_type == "long" and plan_day.target_distance_m and plan_day.target_pace_min_km:
+        profile = db.query(AthleteProfile).filter(AthleteProfile.user_id == user_id).first()
+        duration_sec = (plan_day.target_distance_m / 1000.0) * plan_day.target_pace_min_km * 60.0
+        heat_stress = recent_heat_stress(db, plan_day.day_date, user_id)
+        guidance = nutrition_mod.compute_fuelling_guidance(
+            duration_sec=duration_sec,
+            intensity="long",
+            weight_kg=profile.weight_kg if profile else None,
+            heat_stress=heat_stress,
+        )
+        if guidance:
+            parts.append(f"Fuelling target: {guidance.note}")
+
+    return "\n".join(parts)
+
+
+def generate_briefing(plan_day_id: int) -> None:
+    """Generate a short pre-workout briefing Insight for a scheduled plan day.
+
+    Called as an AIJob after the morning daily sync, or on demand. Regenerating
+    (on-demand) replaces any existing briefing for the same plan day.
+    """
+    from app import ai_coach as _shim
+    from app import notifications as notifications_mod
+
+    with _shim.db_session() as db:
+        try:
+            plan_day = db.query(TrainingPlanDay).get(plan_day_id)
+            if not plan_day:
+                logger.warning("Plan day %s not found for briefing", plan_day_id)
+                return
+            user_id = plan_day.user_id or DEFAULT_USER_ID
+
+            db.query(Insight).filter(
+                Insight.user_id == user_id,
+                Insight.trigger_type == "briefing",
+                Insight.trigger_id == plan_day.id,
+            ).delete()
+
+            plan = db.query(TrainingPlan).filter(TrainingPlan.id == plan_day.plan_id).first()
+            trigger_data = _build_briefing_trigger_data(db, plan, plan_day, user_id)
+            full_context = _build_context(
+                db, "briefing", trigger_data, reference_date=plan_day.day_date, user_id=user_id
+            )
+            content, summary, category = _shim._call_ai(
+                db, full_context, "briefing", user_id, system_prompt=_BRIEFING_SYSTEM_PROMPT
+            )
+
+            db.add(Insight(
+                user_id=user_id,
+                created_at=datetime.now(timezone.utc),
+                trigger_type="briefing",
+                trigger_id=plan_day.id,
+                content=content,
+                summary=summary,
+                category=category,
+            ))
+            db.commit()
+            logger.info("Briefing generated for plan day %s: %s", plan_day.id, summary[:80])
+
+            notifications_mod.notify(
+                db, user_id, "briefing",
+                title="Today's briefing is ready",
+                body=summary,
+                url="/",
+            )
+        except Exception:
+            logger.exception("Briefing generation failed for plan day %s", plan_day_id)

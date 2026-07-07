@@ -418,6 +418,13 @@ export function useGenerateTrainingPlan() {
   })
 }
 
+export function useGenerateBriefing() {
+  return useMutation({
+    mutationFn: (planDayId: number) =>
+      apiPost<AIJobEnqueuedResponse>(`/training-plan/days/${planDayId}/briefing`, {}),
+  })
+}
+
 export function useSeasonPlan() {
   return useQuery({
     queryKey: ['season-plan'],

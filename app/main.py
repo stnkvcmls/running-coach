@@ -194,6 +194,11 @@ def run_daily_sync_for_user(user_id: int) -> None:
     except Exception:
         logger.exception("Race-week reminder push check failed for user %s", user_id)
 
+    try:
+        _generate_briefing_if_needed(user_id)
+    except Exception:
+        logger.exception("Briefing generation check failed for user %s", user_id)
+
 
 def _push_plan_adaptation_if_needed(user_id: int, today_summary: DailySummary | None) -> None:
     """Push a readiness-driven plan-adaptation suggestion once per plan day.
@@ -263,6 +268,41 @@ def _push_plan_adaptation_if_needed(user_id: int, today_summary: DailySummary | 
         )
         db.add(SyncStatus(user_id=user_id, key=dedup_key, value=today.isoformat()))
         db.commit()
+
+
+def _generate_briefing_if_needed(user_id: int) -> None:
+    """Enqueue today's pre-workout briefing once per plan day, during the morning sync.
+
+    Dedupes per plan day via ``SyncStatus`` so a later re-run of the daily sync
+    doesn't regenerate (and re-push) the same briefing. The actual generation
+    runs on the AIJob worker, not inline, since it's an AI call.
+    """
+    from app.ai_coach import enqueue_job
+
+    today = date.today()
+    with db_session() as db:
+        plan_day = (
+            db.query(TrainingPlanDay)
+            .filter(TrainingPlanDay.user_id == user_id, TrainingPlanDay.day_date == today)
+            .first()
+        )
+        if plan_day is None:
+            return
+
+        dedup_key = f"briefing_generated:{plan_day.id}"
+        already_generated = (
+            db.query(SyncStatus)
+            .filter(SyncStatus.user_id == user_id, SyncStatus.key == dedup_key)
+            .first()
+        )
+        if already_generated:
+            return
+
+        plan_day_id = plan_day.id
+        db.add(SyncStatus(user_id=user_id, key=dedup_key, value=today.isoformat()))
+        db.commit()
+
+    enqueue_job("generate_briefing", {"plan_day_id": plan_day_id}, user_id)
 
 
 def _push_race_week_reminders(user_id: int, days_out: int = 7) -> None:

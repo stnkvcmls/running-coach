@@ -33,6 +33,7 @@ CATEGORIES: dict[str, str] = {
     "personal_record": "Personal records",
     "reauth": "Garmin connection issues",
     "race_reminder": "Race-week reminders",
+    "briefing": "Pre-workout briefings",
 }
 
 _PREFS_KEY = "notification_preferences"
