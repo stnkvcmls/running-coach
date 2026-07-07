@@ -565,6 +565,30 @@ export interface RacePrediction {
   predicted_pace_min_km: number
 }
 
+export interface PerformanceCurveComparison {
+  label: string
+  start: string
+  end: string
+  power_points: PerformanceCurvePoint[]
+  pace_points: PerformanceCurvePoint[]
+  critical_power: number | null
+  w_prime: number | null
+  critical_velocity: number | null
+  d_prime: number | null
+  activities_analyzed: number
+}
+
+export interface ComparisonDelta {
+  metric: 'critical_power' | 'threshold_pace_min_km'
+  label: string
+  current_value: number | null
+  previous_value: number | null
+  delta: number | null
+  unit: string
+}
+
+export type PerformanceCurveCompareMode = 'previous_period' | 'year_ago' | 'custom'
+
 export interface PerformanceCurveResponse {
   power_points: PerformanceCurvePoint[]
   pace_points: PerformanceCurvePoint[]
@@ -575,6 +599,8 @@ export interface PerformanceCurveResponse {
   race_predictions: RacePrediction[]
   lookback_days: number
   activities_analyzed: number
+  comparison: PerformanceCurveComparison | null
+  deltas: ComparisonDelta[]
 }
 
 export interface PersonalRecordResponse {
@@ -643,11 +669,13 @@ export interface CustomChartMetricsResponse {
 export interface CustomChartPoint {
   date: string
   values: Record<string, number | null>
+  day_index: number
 }
 
 export interface CustomChartDataResponse {
   points: CustomChartPoint[]
   days: number
+  compare_points: CustomChartPoint[] | null
 }
 
 export interface PushWorkoutResponse {

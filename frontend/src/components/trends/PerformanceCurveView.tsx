@@ -8,10 +8,10 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from 'recharts'
-import { usePerformanceCurve } from '../../api/hooks'
+import { usePerformanceCurve, type PerformanceCurveCompareParams } from '../../api/hooks'
 import { useTheme } from '../../App'
 import { getChartTickColor } from '../../utils/theme'
-import type { PerformanceCurvePoint } from '../../api/types'
+import type { PerformanceCurveCompareMode, PerformanceCurvePoint } from '../../api/types'
 import StatHelpButton from '../info/StatHelpButton'
 import './PerformanceCurveView.css'
 
@@ -24,9 +24,29 @@ const DAY_OPTIONS: { label: string; value: Days }[] = [
 ]
 
 type CurveMode = 'pace' | 'power'
+type CompareChoice = 'none' | PerformanceCurveCompareMode
+
+const COMPARE_OPTIONS: { label: string; value: CompareChoice }[] = [
+  { label: 'No comparison', value: 'none' },
+  { label: 'Vs. previous period', value: 'previous_period' },
+  { label: 'Vs. year ago', value: 'year_ago' },
+  { label: 'Vs. custom range', value: 'custom' },
+]
 
 const ACTUAL_COLOR = '#6c5ce7'
 const MODEL_COLOR = '#00b894'
+const COMPARE_COLOR = '#e17055'
+
+function isoDate(d: Date): string {
+  return d.toISOString().slice(0, 10)
+}
+
+function defaultCustomRange(): { start: string; end: string } {
+  const end = new Date()
+  const start = new Date()
+  start.setDate(start.getDate() - 90)
+  return { start: isoDate(start), end: isoDate(end) }
+}
 
 function formatDuration(sec: number): string {
   if (sec < 60) return `${sec}s`
@@ -52,30 +72,47 @@ function speedToPaceMinKm(mps: number): number {
   return (1000 / mps) / 60
 }
 
-function buildChartData(points: PerformanceCurvePoint[], mode: CurveMode) {
-  return points.map(p => {
-    if (mode === 'power') {
-      return {
-        dur: p.duration_sec,
-        label: formatDuration(p.duration_sec),
-        actual: p.actual_value,
-        model: p.model_value,
-      }
-    }
-    // Convert m/s → min/km; invert so lower (faster) is higher on chart
-    return {
+function valueForMode(v: number | null | undefined, mode: CurveMode): number | null {
+  if (v == null) return null
+  if (mode === 'power') return v
+  return v > 0 ? +speedToPaceMinKm(v).toFixed(2) : null
+}
+
+function buildChartData(
+  points: PerformanceCurvePoint[], mode: CurveMode, comparisonPoints?: PerformanceCurvePoint[]
+) {
+  const rows = new Map<number, { dur: number; label: string; actual: number | null; model: number | null; actualPrev?: number | null }>()
+  for (const p of points) {
+    rows.set(p.duration_sec, {
       dur: p.duration_sec,
       label: formatDuration(p.duration_sec),
-      actual: p.actual_value > 0 ? +speedToPaceMinKm(p.actual_value).toFixed(2) : null,
-      model: p.model_value && p.model_value > 0 ? +speedToPaceMinKm(p.model_value).toFixed(2) : null,
+      actual: valueForMode(p.actual_value, mode),
+      model: valueForMode(p.model_value, mode),
+    })
+  }
+  for (const p of comparisonPoints ?? []) {
+    const row = rows.get(p.duration_sec) ?? {
+      dur: p.duration_sec, label: formatDuration(p.duration_sec), actual: null, model: null,
     }
-  })
+    row.actualPrev = valueForMode(p.actual_value, mode)
+    rows.set(p.duration_sec, row)
+  }
+  return Array.from(rows.values()).sort((a, b) => a.dur - b.dur)
 }
 
 export default function PerformanceCurveView() {
   const [days, setDays] = useState<Days>(90)
   const [mode, setMode] = useState<CurveMode>('pace')
-  const { data, isLoading } = usePerformanceCurve(days)
+  const [compareChoice, setCompareChoice] = useState<CompareChoice>('none')
+  const [customRange, setCustomRange] = useState(defaultCustomRange)
+
+  const compareParams: PerformanceCurveCompareParams | undefined = compareChoice === 'none'
+    ? undefined
+    : compareChoice === 'custom'
+      ? { mode: 'custom', customStart: customRange.start, customEnd: customRange.end }
+      : { mode: compareChoice }
+
+  const { data, isLoading } = usePerformanceCurve(days, compareParams)
   const { theme } = useTheme()
   const tickColor = getChartTickColor(theme)
   const tooltipBg = theme === 'light' ? '#ffffff' : '#1a1a2e'
@@ -114,7 +151,11 @@ export default function PerformanceCurveView() {
   }
 
   const activePoints = mode === 'pace' ? (data?.pace_points ?? []) : (data?.power_points ?? [])
-  const chartData = buildChartData(activePoints, mode)
+  const comparisonPoints = data?.comparison
+    ? (mode === 'pace' ? data.comparison.pace_points : data.comparison.power_points)
+    : undefined
+  const chartData = buildChartData(activePoints, mode, comparisonPoints)
+  const hasComparison = !!data?.comparison
 
   function CurveTooltip({ active, payload, label }: any) {
     if (!active || !payload?.length) return null
@@ -180,6 +221,51 @@ export default function PerformanceCurveView() {
           >Power</button>
         )}
       </div>
+
+      {/* Comparison controls */}
+      <div className="perf-curve-compare-row">
+        <select
+          className="perf-curve-compare-select"
+          value={compareChoice}
+          onChange={e => setCompareChoice(e.target.value as CompareChoice)}
+        >
+          {COMPARE_OPTIONS.map(o => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        {compareChoice === 'custom' && (
+          <div className="perf-curve-compare-dates">
+            <input
+              type="date"
+              value={customRange.start}
+              max={customRange.end}
+              onChange={e => setCustomRange(r => ({ ...r, start: e.target.value }))}
+            />
+            <span>to</span>
+            <input
+              type="date"
+              value={customRange.end}
+              min={customRange.start}
+              onChange={e => setCustomRange(r => ({ ...r, end: e.target.value }))}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Delta callouts */}
+      {(data?.deltas?.length ?? 0) > 0 && (
+        <div className="perf-curve-deltas">
+          {data!.deltas.map(d => {
+            const positive = (d.delta ?? 0) > 0
+            const sign = positive ? '+' : ''
+            return (
+              <div key={d.metric} className={`perf-delta ${positive ? 'positive' : 'negative'}`}>
+                {d.label} {sign}{d.delta}{d.unit} vs {data!.comparison?.label.toLowerCase()}
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* Model parameters */}
       {(data?.critical_velocity || data?.critical_power) && (
@@ -269,6 +355,18 @@ export default function PerformanceCurveView() {
                   name="Model fit"
                   connectNulls
                 />
+                {hasComparison && (
+                  <Line
+                    type="monotone"
+                    dataKey="actualPrev"
+                    stroke={COMPARE_COLOR}
+                    strokeWidth={2}
+                    strokeDasharray="2 3"
+                    dot={false}
+                    name={data!.comparison!.label}
+                    connectNulls
+                  />
+                )}
               </ComposedChart>
             </ResponsiveContainer>
           </div>
@@ -281,6 +379,12 @@ export default function PerformanceCurveView() {
               <div className="perf-legend-dot" style={{ background: MODEL_COLOR, opacity: 0.7 }} />
               CV model fit
             </div>
+            {hasComparison && (
+              <div className="perf-legend-item">
+                <div className="perf-legend-dot" style={{ background: COMPARE_COLOR }} />
+                {data!.comparison!.label}
+              </div>
+            )}
           </div>
         </div>
       )}

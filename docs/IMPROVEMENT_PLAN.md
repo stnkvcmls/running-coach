@@ -382,7 +382,7 @@ directive landed in `training_load.format_training_load_context` (shared by
 `injury_risk == "high"`. All new and existing tests pass (backend + `tsc -b`
 + Vitest)._
 
-#### P2-2 · Season-over-season performance comparison
+#### P2-2 · Season-over-season performance comparison ✅ Done.
 **What:** Add a comparison overlay to the Performance Curve view: the fitted
 power/GAP-pace curve and mean-max frontier for the **current window vs a prior
 period** (previous 90 days, same period last year, or a custom range), plus
@@ -402,6 +402,26 @@ wholesale — this is a windowing parameter and a second line on an existing cha
 `frontend/src/components/trends/CustomChartsView.tsx`,
 `frontend/src/api/{types,hooks}.ts`, `tests/test_threshold.py`,
 `tests/test_custom_charts.py`.
+_Implemented as described, scoped to P2-2 only. `app/threshold.py` gained a
+window-parameterized `_curve_for_window`/`_fit_window_curves` pair (extracted
+from the old `get_performance_curve_data`, which is now a thin wrapper over
+the `[now-lookback_days, now)` window), `resolve_comparison_window` for the
+three modes, and a `SyncStatus`-backed range-fingerprint cache
+(`_curve_for_window_cached`) so a comparison window's CP/CV fit isn't redone
+on every request. `get_performance_curve_data` takes an optional `compare`
+plus custom bounds and attaches a `PerformanceCurveWindow` + signed
+`ComparisonDelta` list (CP, threshold pace) to its result. The endpoint (in
+`app/routers/trends.py`, the post-P3-1 split location, not `app/api.py`) adds
+`compare`/`compareStart`/`compareEnd` query params with 400s on bad custom
+ranges. Custom charts' `/custom-charts/data` gained a `compare` boolean that
+returns a second `compare_points` array for the immediately preceding period;
+since the two periods' calendar dates don't overlap, `CustomChartPoint` grew a
+`day_index` (days since that period's start) so the frontend aligns series by
+offset instead of date. `PerformanceCurveView` adds a comparison-mode
+selector (previous period / year ago / custom date range) with a second
+dashed chart line and delta callout chips; `CustomChartsView` adds a "Compare
+to previous period" checkbox that overlays a muted dashed line per selected
+metric. All new and existing tests pass (backend pytest, `tsc -b`, Vitest)._
 
 #### P2-3 · Multi-sport load audit & explicit handling
 **What:** Make non-running load honest and visible. Today the sync stores **all**

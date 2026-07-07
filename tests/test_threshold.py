@@ -538,6 +538,95 @@ def test_performance_curve_includes_model_values(db):
     assert len(points_with_model) > 0
 
 
+def test_resolve_comparison_window_previous_period():
+    now = datetime(2026, 7, 1)
+    cutoff = now - timedelta(days=90)
+    start, end, label = threshold.resolve_comparison_window(cutoff, now, "previous_period")
+    assert end == cutoff
+    assert start == cutoff - timedelta(days=90)
+    assert "Previous" in label
+
+
+def test_resolve_comparison_window_year_ago():
+    now = datetime(2026, 7, 1)
+    cutoff = now - timedelta(days=90)
+    start, end, label = threshold.resolve_comparison_window(cutoff, now, "year_ago")
+    assert start == cutoff - timedelta(days=365)
+    assert end == now - timedelta(days=365)
+    assert label == "Same period last year"
+
+
+def test_resolve_comparison_window_custom():
+    now = datetime(2026, 7, 1)
+    cutoff = now - timedelta(days=90)
+    cs, ce = datetime(2025, 1, 1), datetime(2025, 3, 1)
+    start, end, label = threshold.resolve_comparison_window(cutoff, now, "custom", cs, ce)
+    assert (start, end) == (cs, ce)
+    assert label == "Custom range"
+
+
+def test_resolve_comparison_window_custom_requires_bounds():
+    now = datetime(2026, 7, 1)
+    cutoff = now - timedelta(days=90)
+    try:
+        threshold.resolve_comparison_window(cutoff, now, "custom")
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
+
+
+def test_resolve_comparison_window_unknown_mode_raises():
+    now = datetime(2026, 7, 1)
+    cutoff = now - timedelta(days=90)
+    try:
+        threshold.resolve_comparison_window(cutoff, now, "bogus")
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
+
+
+def test_get_performance_curve_data_with_comparison_attaches_deltas(db):
+    # Current window: faster CV, higher CP.
+    _add(db, days_ago=2, mean_max=_curve_json(gap_speed=_gap_curve(4.0, 200), power=_power_curve(280, 15000)))
+    # Comparison window (previous 90d): slower CV, lower CP.
+    _add(db, days_ago=100, mean_max=_curve_json(gap_speed=_gap_curve(3.5, 200), power=_power_curve(250, 15000)))
+
+    data = threshold.get_performance_curve_data(db, lookback_days=90, compare="previous_period")
+    assert data.comparison is not None
+    assert data.comparison.activities_analyzed == 1
+    assert data.comparison.critical_velocity is not None
+    assert abs(data.comparison.critical_velocity - 3.5) < 0.1
+
+    metrics = {d.metric: d for d in data.deltas}
+    assert "critical_power" in metrics
+    assert metrics["critical_power"].delta > 0  # CP improved
+    assert "threshold_pace_min_km" in metrics
+    assert metrics["threshold_pace_min_km"].delta > 0  # pace got faster
+
+
+def test_get_performance_curve_data_without_compare_has_no_comparison(db):
+    _add(db, mean_max=_curve_json(gap_speed=_gap_curve(3.5, 200)))
+    data = threshold.get_performance_curve_data(db)
+    assert data.comparison is None
+    assert data.deltas == []
+
+
+def test_curve_for_window_cached_reuses_cached_fit(db):
+    start = datetime.utcnow() - timedelta(days=200)
+    end = datetime.utcnow() - timedelta(days=110)
+    act = _add(db, days_ago=150, mean_max=_curve_json(gap_speed=_gap_curve(3.5, 200)))
+
+    first = threshold._curve_for_window_cached(db, start, end, 1, "Comparison")
+    assert first.critical_velocity is not None
+
+    # Mutating the activity after the first computation shouldn't change the
+    # cached result, since the fingerprint (run count + max synced_at) is unchanged.
+    act.mean_max_json = _curve_json(gap_speed=_gap_curve(5.0, 200))
+    db.commit()
+    second = threshold._curve_for_window_cached(db, start, end, 1, "Comparison")
+    assert second.critical_velocity == first.critical_velocity
+
+
 def test_performance_curve_endpoint(client, session_factory):
     db = session_factory()
     started = datetime.utcnow() - timedelta(days=3)
@@ -557,3 +646,45 @@ def test_performance_curve_endpoint(client, session_factory):
     assert body["activities_analyzed"] == 1
     assert body["critical_velocity"] is not None
     assert len(body["race_predictions"]) > 0
+    assert body["comparison"] is None
+    assert body["deltas"] == []
+
+
+def test_performance_curve_endpoint_with_compare(client, session_factory):
+    db = session_factory()
+    _add(db, days_ago=3, mean_max=_curve_json(gap_speed=_gap_curve(4.0, 200)))
+    _add(db, days_ago=100, mean_max=_curve_json(gap_speed=_gap_curve(3.5, 200)))
+    db.close()
+
+    resp = client.get("/api/v1/performance-curve?days=90&compare=previous_period")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["comparison"] is not None
+    assert body["comparison"]["activities_analyzed"] == 1
+    assert any(d["metric"] == "threshold_pace_min_km" for d in body["deltas"])
+
+
+def test_performance_curve_endpoint_custom_compare_requires_dates(client, session_factory):
+    resp = client.get("/api/v1/performance-curve?days=90&compare=custom")
+    assert resp.status_code == 400
+
+
+def test_performance_curve_endpoint_custom_compare_bad_dates(client, session_factory):
+    resp = client.get(
+        "/api/v1/performance-curve?days=90&compare=custom&compareStart=not-a-date&compareEnd=2025-01-01"
+    )
+    assert resp.status_code == 400
+
+
+def test_performance_curve_endpoint_custom_compare(client, session_factory):
+    db = session_factory()
+    _add(db, days_ago=3, mean_max=_curve_json(gap_speed=_gap_curve(4.0, 200)))
+    db.close()
+
+    resp = client.get(
+        "/api/v1/performance-curve?days=90&compare=custom&compareStart=2020-01-01&compareEnd=2020-03-01"
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["comparison"]["label"] == "Custom range"
+    assert body["comparison"]["activities_analyzed"] == 0
