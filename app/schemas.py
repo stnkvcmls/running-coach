@@ -433,6 +433,8 @@ class TodayResponse(BaseModel):
     readiness: TrainingReadiness | None = None
     plan_adaptation: PlanAdaptationSuggestion | None = None
     daily_checkin: DailyCheckinResponse | None = None
+    plan_day_id: int | None = None
+    briefing: InsightResponse | None = None
 
 
 class SettingsResponse(BaseModel):

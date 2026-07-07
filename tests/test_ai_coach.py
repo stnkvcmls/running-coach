@@ -327,6 +327,11 @@ def test_extract_category_default_for_unknown_trigger():
     assert category == "recommendation"
 
 
+def test_extract_category_briefing():
+    _, category = ai_coach._extract_summary_and_category("x", "briefing")
+    assert category == "briefing"
+
+
 # --- _get_ai_config / _call_ai dispatch ---
 
 def test_get_ai_config_defaults(db):
@@ -347,8 +352,8 @@ def test_get_ai_config_from_db(db):
 def test_call_ai_dispatches_to_claude(db, monkeypatch):
     called = {}
 
-    def fake_claude(context, trigger_type, model):
-        called["claude"] = (context, trigger_type, model)
+    def fake_claude(context, trigger_type, model, system_prompt=None):
+        called["claude"] = (context, trigger_type, model, system_prompt)
         return ("content", "summary", "category")
 
     monkeypatch.setattr(ai_coach, "_call_claude", fake_claude)
@@ -361,7 +366,7 @@ def test_call_ai_dispatches_to_gemini(db, monkeypatch):
     db.add(SyncStatus(key="ai_provider", value="gemini"))
     db.add(SyncStatus(key="ai_model", value="gemini-2.5-flash"))
     db.commit()
-    monkeypatch.setattr(ai_coach, "_call_gemini", lambda c, t, m: ("g", "gs", "gc"))
+    monkeypatch.setattr(ai_coach, "_call_gemini", lambda c, t, m, system_prompt=None: ("g", "gs", "gc"))
     assert ai_coach._call_ai(db, "ctx", "activity") == ("g", "gs", "gc")
 
 
@@ -388,6 +393,32 @@ def test_call_gemini_uses_genai(monkeypatch):
     content, summary, category = ai_coach._call_gemini("ctx", "daily_summary", "gemini-x")
     assert summary == "good"
     assert category == "recovery"
+
+
+def test_call_claude_honors_custom_system_prompt(monkeypatch):
+    fake_msg = MagicMock()
+    fake_msg.content = [MagicMock(text="**Summary:** ok\nbody")]
+    fake_client = MagicMock()
+    fake_client.messages.create.return_value = fake_msg
+    monkeypatch.setattr(ai_coach.anthropic, "Anthropic", lambda *a, **k: fake_client)
+
+    ai_coach._call_claude("ctx", "briefing", "claude-x", system_prompt="Custom briefing prompt")
+
+    _, kwargs = fake_client.messages.create.call_args
+    assert kwargs["system"] == "Custom briefing prompt"
+
+
+def test_call_gemini_honors_custom_system_prompt(monkeypatch):
+    fake_response = MagicMock()
+    fake_response.text = "**Summary:** good\nrest"
+    fake_client = MagicMock()
+    fake_client.models.generate_content.return_value = fake_response
+    monkeypatch.setattr(ai_coach.genai, "Client", lambda api_key: fake_client)
+
+    ai_coach._call_gemini("ctx", "briefing", "gemini-x", system_prompt="Custom briefing prompt")
+
+    _, kwargs = fake_client.models.generate_content.call_args
+    assert kwargs["config"].system_instruction == "Custom briefing prompt"
 
 
 # --- analyze flows (DB redirected, AI mocked) ---
@@ -604,6 +635,149 @@ def test_weekly_review_no_activities_skips(db, patch_db_session, monkeypatch):
     ai_coach.weekly_review()
     called.assert_not_called()
     assert db.query(Insight).count() == 0
+
+
+# --- generate_briefing (P1-3) ---
+
+def _seed_plan_day(
+    db,
+    workout_type: str = "easy",
+    day_date: date = date(2026, 7, 7),
+    user_id: int = 1,
+    target_distance_m: float | None = None,
+    target_pace_min_km: float | None = None,
+) -> TrainingPlanDay:
+    plan = TrainingPlan(
+        user_id=user_id,
+        generated_at=datetime(2026, 7, 1, 9, 0, tzinfo=timezone.utc),
+        week_start=date(2026, 7, 6),
+        plan_weeks=4,
+        phase="build",
+        overview="Building toward the goal race.",
+    )
+    db.add(plan)
+    db.flush()
+    plan_day = TrainingPlanDay(
+        user_id=user_id,
+        plan_id=plan.id,
+        day_date=day_date,
+        day_of_week=day_date.strftime("%A"),
+        week_number=1,
+        workout_type=workout_type,
+        target_distance_m=target_distance_m,
+        target_pace_min_km=target_pace_min_km,
+        target_pace_display="5:15/km" if target_pace_min_km else None,
+        description="Test session",
+        week_theme="Aerobic Base",
+    )
+    db.add(plan_day)
+    db.commit()
+    db.refresh(plan_day)
+    return plan_day
+
+
+def test_generate_briefing_creates_insight(db, patch_db_session, monkeypatch):
+    patch_db_session(ai_coach)
+    plan_day = _seed_plan_day(db)
+    monkeypatch.setattr(
+        ai_coach, "_call_ai",
+        lambda d, c, t, user_id=1, system_prompt=None: (
+            "**Summary:** Easy aerobic day\nRun it easy.", "Easy aerobic day", "briefing",
+        ),
+    )
+
+    ai_coach.generate_briefing(plan_day.id)
+
+    insight = db.query(Insight).filter(Insight.trigger_type == "briefing").first()
+    assert insight is not None
+    assert insight.trigger_id == plan_day.id
+    assert insight.summary == "Easy aerobic day"
+    assert insight.category == "briefing"
+    assert insight.user_id == plan_day.user_id
+
+
+def test_generate_briefing_passes_briefing_system_prompt(db, patch_db_session, monkeypatch):
+    patch_db_session(ai_coach)
+    plan_day = _seed_plan_day(db)
+    captured = {}
+
+    def fake_call_ai(d, c, t, user_id=1, system_prompt=None):
+        captured["trigger_type"] = t
+        captured["system_prompt"] = system_prompt
+        return ("**Summary:** ok\nbody", "ok", "briefing")
+
+    monkeypatch.setattr(ai_coach, "_call_ai", fake_call_ai)
+    ai_coach.generate_briefing(plan_day.id)
+
+    assert captured["trigger_type"] == "briefing"
+    assert captured["system_prompt"] == ai_coach._BRIEFING_SYSTEM_PROMPT
+
+
+def test_generate_briefing_missing_plan_day_is_noop(db, patch_db_session, monkeypatch):
+    patch_db_session(ai_coach)
+    called = MagicMock()
+    monkeypatch.setattr(ai_coach, "_call_ai", called)
+
+    ai_coach.generate_briefing(99999)
+
+    called.assert_not_called()
+    assert db.query(Insight).count() == 0
+
+
+def test_generate_briefing_regenerate_replaces_existing(db, patch_db_session, monkeypatch):
+    patch_db_session(ai_coach)
+    plan_day = _seed_plan_day(db)
+    db.add(Insight(
+        user_id=plan_day.user_id,
+        trigger_type="briefing",
+        trigger_id=plan_day.id,
+        content="stale content",
+        summary="stale summary",
+        category="briefing",
+    ))
+    db.commit()
+
+    monkeypatch.setattr(
+        ai_coach, "_call_ai",
+        lambda d, c, t, user_id=1, system_prompt=None: (
+            "**Summary:** fresh\nbody", "fresh", "briefing",
+        ),
+    )
+    ai_coach.generate_briefing(plan_day.id)
+
+    briefings = db.query(Insight).filter(Insight.trigger_type == "briefing").all()
+    assert len(briefings) == 1
+    assert briefings[0].summary == "fresh"
+
+
+def test_generate_briefing_includes_fuelling_for_long_run(db, patch_db_session, monkeypatch):
+    patch_db_session(ai_coach)
+    plan_day = _seed_plan_day(
+        db, workout_type="long", target_distance_m=20000, target_pace_min_km=5.5,
+    )
+    captured = {}
+
+    def fake_call_ai(d, c, t, user_id=1, system_prompt=None):
+        captured["context"] = c
+        return ("**Summary:** long run day\nbody", "long run day", "briefing")
+
+    monkeypatch.setattr(ai_coach, "_call_ai", fake_call_ai)
+    ai_coach.generate_briefing(plan_day.id)
+
+    assert "Fuelling target" in captured["context"]
+
+
+def test_generate_briefing_ai_error_leaves_no_insight(db, patch_db_session, monkeypatch):
+    """An AI failure is swallowed (logged) rather than raised, matching weekly_review."""
+    patch_db_session(ai_coach)
+    plan_day = _seed_plan_day(db)
+    monkeypatch.setattr(
+        ai_coach, "_call_ai", MagicMock(side_effect=RuntimeError("boom")),
+    )
+
+    ai_coach.generate_briefing(plan_day.id)  # should not raise
+
+    assert db.query(Insight).filter(Insight.trigger_type == "briefing").count() == 0
 
 
 # --- _build_plan_adherence_context (P0-3) ---

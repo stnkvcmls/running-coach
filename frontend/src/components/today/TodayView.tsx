@@ -11,6 +11,7 @@ import DailyCheckinCard from './DailyCheckinCard'
 import PlanAdaptationCard from './PlanAdaptationCard'
 import InsightsList from './InsightsList'
 import RacePacingCard from './RacePacingCard'
+import BriefingCard from './BriefingCard'
 import StatHelpButton from '../info/StatHelpButton'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 import './TodayView.css'
@@ -77,6 +78,18 @@ export default function TodayView() {
   return (
     <div className="today-view">
       {isViewingToday && <TodayRealignmentBanner />}
+
+      {/* Pre-workout briefing */}
+      {data?.plan_day_id != null && (
+        <section className="today-section">
+          <BriefingCard
+            dateKey={dateKey}
+            planDayId={data.plan_day_id}
+            briefing={data.briefing ?? null}
+          />
+        </section>
+      )}
+
       {/* Today's workouts */}
       <section className="today-section">
         <h2 className="section-title">{dateLabel}'s workouts</h2>

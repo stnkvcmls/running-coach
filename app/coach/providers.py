@@ -49,19 +49,36 @@ def _extract_summary_and_category(content: str, trigger_type: str) -> tuple[str,
         "activity": "workout_analysis",
         "daily_summary": "recovery",
         "weekly_review": "training_plan",
+        "briefing": "briefing",
     }
     return summary, category_map.get(trigger_type, "recommendation")
 
 
-def _call_claude(context: str, trigger_type: str, model: str) -> tuple[str, str, str]:
+# Framing for the user-role prompt, keyed by trigger_type. Trigger types not
+# listed here get the generic "Analyze this X data" framing.
+_USER_PROMPT_INSTRUCTION = {
+    "briefing": "Write today's pre-workout briefing based on this data",
+}
+
+
+def _build_user_prompt(trigger_type: str, context: str) -> str:
+    instruction = _USER_PROMPT_INSTRUCTION.get(
+        trigger_type, f"Analyze this {trigger_type} data and provide coaching insights"
+    )
+    return f"{instruction}:\n\n{context}"
+
+
+def _call_claude(
+    context: str, trigger_type: str, model: str, system_prompt: str | None = None
+) -> tuple[str, str, str]:
     """Call Claude API and return (content, summary, category)."""
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-    user_prompt = f"Analyze this {trigger_type} data and provide coaching insights:\n\n{context}"
+    user_prompt = _build_user_prompt(trigger_type, context)
     try:
         response = client.messages.create(
             model=model,
             max_tokens=1024,
-            system=SYSTEM_PROMPT,
+            system=system_prompt or SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_prompt}],
         )
     except (
@@ -83,15 +100,17 @@ def _call_claude(context: str, trigger_type: str, model: str) -> tuple[str, str,
     return content, summary, category
 
 
-def _call_gemini(context: str, trigger_type: str, model: str) -> tuple[str, str, str]:
+def _call_gemini(
+    context: str, trigger_type: str, model: str, system_prompt: str | None = None
+) -> tuple[str, str, str]:
     """Call Gemini API and return (content, summary, category)."""
     client = genai.Client(api_key=settings.gemini_api_key)
-    user_prompt = f"Analyze this {trigger_type} data and provide coaching insights:\n\n{context}"
+    user_prompt = _build_user_prompt(trigger_type, context)
     try:
         response = client.models.generate_content(
             model=model,
             contents=user_prompt,
-            config=_genai_types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
+            config=_genai_types.GenerateContentConfig(system_instruction=system_prompt or SYSTEM_PROMPT),
         )
     except _genai_errors.ServerError as exc:
         raise AITransientError(str(exc)) from exc
@@ -131,7 +150,11 @@ def _get_ai_config(db: Session, user_id: int = DEFAULT_USER_ID) -> tuple[str, st
 
 
 def _call_ai(
-    db: Session, context: str, trigger_type: str, user_id: int = DEFAULT_USER_ID
+    db: Session,
+    context: str,
+    trigger_type: str,
+    user_id: int = DEFAULT_USER_ID,
+    system_prompt: str | None = None,
 ) -> tuple[str, str, str]:
     """Dispatch to the configured AI provider with exponential backoff on transient errors."""
     from app import ai_coach as _shim
@@ -142,7 +165,7 @@ def _call_ai(
     last_exc: Exception = RuntimeError("no attempts made")
     for attempt in range(_MAX_RETRIES):
         try:
-            return call_fn(context, trigger_type, model)
+            return call_fn(context, trigger_type, model, system_prompt)
         except AIFatalError:
             raise  # configuration errors are not retryable
         except AITransientError as exc:

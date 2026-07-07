@@ -246,6 +246,64 @@ def test_push_race_week_reminders_ignores_other_dates(db, patch_db_session, monk
     notify.assert_not_called()
 
 
+# --- pre-workout briefing enqueue (P1-3) ------------------------------------
+
+def test_generate_briefing_if_needed_enqueues_once_then_dedupes(db, patch_db_session, monkeypatch):
+    from datetime import date
+    from app.models import TrainingPlanDay
+    import app.ai_coach as ai_coach
+
+    patch_db_session(main)
+    plan_day = TrainingPlanDay(
+        user_id=1, plan_id=1, day_date=date.today(), day_of_week="Monday",
+        workout_type="tempo",
+    )
+    db.add(plan_day)
+    db.commit()
+    db.refresh(plan_day)
+
+    enqueue = MagicMock(return_value=1)
+    monkeypatch.setattr(ai_coach, "enqueue_job", enqueue)
+
+    main._generate_briefing_if_needed(1)
+    enqueue.assert_called_once_with("generate_briefing", {"plan_day_id": plan_day.id}, 1)
+
+    enqueue.reset_mock()
+    main._generate_briefing_if_needed(1)
+    enqueue.assert_not_called()
+
+
+def test_generate_briefing_if_needed_skips_without_plan_day(db, patch_db_session, monkeypatch):
+    import app.ai_coach as ai_coach
+
+    patch_db_session(main)
+    enqueue = MagicMock()
+    monkeypatch.setattr(ai_coach, "enqueue_job", enqueue)
+
+    main._generate_briefing_if_needed(1)
+    enqueue.assert_not_called()
+
+
+def test_run_daily_sync_generates_briefing_for_todays_plan_day(monkeypatch):
+    from datetime import date
+    import app.garmin_sync as garmin_sync
+    import app.ai_coach as ai_coach
+
+    user = _user(3)
+    monkeypatch.setattr(main, "db_session", _fake_db_session_returning(user))
+    monkeypatch.setattr(main, "_authenticate_or_flag", lambda u: True)
+    monkeypatch.setattr(garmin_sync, "sync_athlete_profile", MagicMock())
+    monkeypatch.setattr(garmin_sync, "sync_daily_summary", MagicMock(return_value=None))
+    monkeypatch.setattr(ai_coach, "analyze_daily_summary", MagicMock())
+
+    briefing_check = MagicMock()
+    monkeypatch.setattr(main, "_generate_briefing_if_needed", briefing_check)
+
+    main.run_daily_sync_for_user(3)
+
+    briefing_check.assert_called_once_with(3)
+
+
 # --- weekly review / plan generation fan out -------------------------------
 
 def test_scheduled_weekly_review_delegates_per_user(monkeypatch):

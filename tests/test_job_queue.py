@@ -5,7 +5,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from app.models import AIJob, Activity
+from app.models import AIJob, Activity, TrainingPlan, TrainingPlanDay
 from app.ai_coach import enqueue_job, execute_job
 
 
@@ -133,6 +133,20 @@ def test_execute_job_dispatches_weekly_review(db, patch_db_session):
         execute_job(job_id)
 
     mock_fn.assert_called_once_with(user_id=5)
+    job = db.query(AIJob).filter(AIJob.id == job_id).first()
+    assert job.status == "done"
+
+
+def test_execute_job_dispatches_generate_briefing(db, patch_db_session):
+    import app.ai_coach as ai_mod
+    patch_db_session(ai_mod)
+
+    job_id = enqueue_job("generate_briefing", {"plan_day_id": 42}, user_id=1)
+
+    with patch.object(ai_mod, "generate_briefing") as mock_fn:
+        execute_job(job_id)
+
+    mock_fn.assert_called_once_with(42)
     job = db.query(AIJob).filter(AIJob.id == job_id).first()
     assert job.status == "done"
 
@@ -283,3 +297,60 @@ def test_api_generate_plan_returns_queued_job(client, db, patch_db_session):
     job = db.query(AIJob).filter(AIJob.id == body["job_id"]).first()
     assert job is not None
     assert job.task_type == "generate_plan"
+
+
+# ---------------------------------------------------------------------------
+# API endpoint: POST /training-plan/days/{id}/briefing (P1-3)
+# ---------------------------------------------------------------------------
+
+def _make_plan_day(db, user_id=1):
+    from datetime import date as _date
+    plan = TrainingPlan(
+        user_id=user_id,
+        week_start=_date(2026, 7, 6),
+        plan_weeks=4,
+        phase="build",
+    )
+    db.add(plan)
+    db.flush()
+    plan_day = TrainingPlanDay(
+        user_id=user_id,
+        plan_id=plan.id,
+        day_date=_date(2026, 7, 7),
+        day_of_week="Tuesday",
+        week_number=1,
+        workout_type="easy",
+        description="Easy run",
+    )
+    db.add(plan_day)
+    db.commit()
+    db.refresh(plan_day)
+    return plan_day
+
+
+def test_api_generate_briefing_returns_queued_job(client, db, patch_db_session):
+    import app.ai_coach as ai_mod
+    patch_db_session(ai_mod)
+
+    plan_day = _make_plan_day(db)
+    resp = client.post(f"/api/v1/training-plan/days/{plan_day.id}/briefing")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "queued"
+    assert isinstance(body["job_id"], int)
+
+    job = db.query(AIJob).filter(AIJob.id == body["job_id"]).first()
+    assert job is not None
+    assert job.task_type == "generate_briefing"
+    assert json.loads(job.payload_json)["plan_day_id"] == plan_day.id
+
+
+def test_api_generate_briefing_404_for_unknown_day(client):
+    resp = client.post("/api/v1/training-plan/days/99999/briefing")
+    assert resp.status_code == 404
+
+
+def test_api_generate_briefing_404_for_other_users_day(client, db):
+    plan_day = _make_plan_day(db, user_id=2)
+    resp = client.post(f"/api/v1/training-plan/days/{plan_day.id}/briefing")
+    assert resp.status_code == 404

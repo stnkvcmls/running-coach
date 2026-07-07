@@ -263,6 +263,19 @@ def api_today(
         if dismissed:
             plan_adaptation = None
 
+    briefing = None
+    if plan_day is not None:
+        briefing = (
+            db.query(Insight)
+            .filter(
+                Insight.user_id == uid,
+                Insight.trigger_type == "briefing",
+                Insight.trigger_id == plan_day.id,
+            )
+            .order_by(Insight.created_at.desc())
+            .first()
+        )
+
     return TodayResponse(
         selected_date=selected,
         activities=activity_summaries,
@@ -275,6 +288,8 @@ def api_today(
         readiness=readiness,
         plan_adaptation=plan_adaptation,
         daily_checkin=DailyCheckinResponse.model_validate(checkin) if checkin else None,
+        plan_day_id=plan_day.id if plan_day is not None else None,
+        briefing=InsightResponse.model_validate(briefing) if briefing else None,
     )
 
 

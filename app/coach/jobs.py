@@ -90,6 +90,8 @@ def execute_job(job_id: int) -> None:
             _shim.generate_training_plan(user_id=user_id, note=payload.get("note"))
         elif task_type == "weekly_review":
             _shim.weekly_review(user_id=user_id)
+        elif task_type == "generate_briefing":
+            _shim.generate_briefing(payload["plan_day_id"])
         else:
             raise ValueError(f"Unknown task_type: {task_type!r}")
 

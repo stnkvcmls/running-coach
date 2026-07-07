@@ -63,6 +63,9 @@ from app.coach.plans import (
     detect_plan_realignment,
     generate_training_plan,
     weekly_review,
+    _BRIEFING_SYSTEM_PROMPT,
+    _build_briefing_trigger_data,
+    generate_briefing,
 )
 from app.coach.chat import (
     CHAT_SYSTEM_PROMPT,

@@ -617,6 +617,56 @@ def test_today_plan_adaptation_suppressed_when_dismissed(client, db):
     assert resp.json()["plan_adaptation"] is None
 
 
+def test_today_includes_plan_day_id(client, db):
+    day = date(2026, 6, 17)
+    _seed_plan_and_days(db, [
+        {"date": day, "workout_type": "easy"},
+    ])
+    plan_day = db.query(TrainingPlanDay).filter(TrainingPlanDay.day_date == day).first()
+    resp = client.get(f"/api/v1/today?date={day.isoformat()}")
+    assert resp.status_code == 200
+    assert resp.json()["plan_day_id"] == plan_day.id
+
+
+def test_today_plan_day_id_null_without_plan(client, db):
+    day = date(2026, 6, 17)
+    resp = client.get(f"/api/v1/today?date={day.isoformat()}")
+    assert resp.status_code == 200
+    assert resp.json()["plan_day_id"] is None
+
+
+def test_today_includes_latest_briefing_insight(client, db):
+    day = date(2026, 6, 17)
+    _seed_plan_and_days(db, [
+        {"date": day, "workout_type": "easy"},
+    ])
+    plan_day = db.query(TrainingPlanDay).filter(TrainingPlanDay.day_date == day).first()
+    db.add(Insight(
+        trigger_type="briefing",
+        trigger_id=plan_day.id,
+        content="**Summary:** Easy day\nRun easy.",
+        summary="Easy day",
+        category="briefing",
+    ))
+    db.commit()
+
+    resp = client.get(f"/api/v1/today?date={day.isoformat()}")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["briefing"] is not None
+    assert body["briefing"]["summary"] == "Easy day"
+
+
+def test_today_briefing_null_when_none_generated(client, db):
+    day = date(2026, 6, 17)
+    _seed_plan_and_days(db, [
+        {"date": day, "workout_type": "easy"},
+    ])
+    resp = client.get(f"/api/v1/today?date={day.isoformat()}")
+    assert resp.status_code == 200
+    assert resp.json()["briefing"] is None
+
+
 def test_today_includes_risk_triggered_caution_despite_good_readiness(client, db):
     """P2-1: a high ACWR/injury_risk reading forces a cutback suggestion even
     when readiness alone would not trigger one."""

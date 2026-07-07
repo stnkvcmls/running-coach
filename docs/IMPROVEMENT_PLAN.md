@@ -284,7 +284,7 @@ and it prevents the classic blow-up the entire pacing feature exists to avoid.
 inputs, cost line), `frontend/src/api/types.ts`, `tests/test_pacing.py`,
 `tests/test_api_endpoints.py`.
 
-#### P1-3 · Pre-workout briefing (Runna-style)
+#### P1-3 · Pre-workout briefing (Runna-style) ✅ Done.
 **What:** A short, personalized **briefing for today's session**, generated as an
 `AIJob` after the morning daily sync (and on demand from the workout card):
 why this session matters in the current season phase, concrete execution targets
@@ -308,6 +308,35 @@ latest briefing insight), `app/schemas.py`,
 `frontend/src/components/today/BriefingCard.tsx` + `.css` (new), `TodayView.tsx`,
 `frontend/src/api/{types,hooks}.ts`, `tests/test_ai_coach.py`,
 `tests/test_job_queue.py`.
+_Implemented as described, scoped to P1-3 only. File locations follow the
+post-P3-1 split: `generate_briefing` and its prompt/context helper
+(`_build_briefing_trigger_data`) landed in `app/coach/plans.py` alongside
+`generate_training_plan`/`weekly_review`, with a `"generate_briefing"` branch
+added to `execute_job` in `app/coach/jobs.py` and both re-exported through the
+`app/ai_coach.py` shim; the on-demand endpoint landed in
+`app/routers/plan.py`, and the Today wiring (`plan_day_id` + `briefing`
+fields) in `app/routers/daily.py`/`app/schemas.py`. Rather than duplicate the
+retry/backoff dispatch in `app/coach/providers.py`, `_call_claude`/
+`_call_gemini`/`_call_ai` gained an optional `system_prompt` override (default
+unchanged) so the briefing gets its own forward-looking prompt instead of the
+generic post-hoc-analysis one, and `_extract_summary_and_category` gained a
+`"briefing"` category. The trigger data is deliberately thin (today's
+scheduled session, the plan's phase/overview, and a fuelling reminder for
+long efforts via the existing `app/nutrition.py` helper) — it's handed to the
+existing `_build_context`, which already contributes readiness (including the
+heat-stress one-liner from `app/weather.py`), profile, and load, so no new
+context plumbing was needed. The daily-sync hook
+(`main._generate_briefing_if_needed`) mirrors the P0-1 push
+helpers exactly: it enqueues (rather than calls inline) so the AI call runs on
+the job worker, not the scheduler thread, deduped per plan day via
+`SyncStatus` the same way `_push_plan_adaptation_if_needed` is. On the
+frontend, `BriefingCard.tsx` shows the generated note (Markdown) with a
+regenerate affordance, or a "Generate briefing" button when a plan day exists
+for the selected date but no briefing yet — polling the job the same way
+`ActivityDetailView`'s re-analyze flow does, via the existing `useJobStatus`
+hook. All new and existing tests pass (940 backend); `npm run build`, `tsc
+-b`, and the Vitest suite (57 cases, unchanged — new React Testing Library
+component coverage is P3-3's scope, not this item's) are clean._
 
 ### P2 — Sharper analysis, honest load
 

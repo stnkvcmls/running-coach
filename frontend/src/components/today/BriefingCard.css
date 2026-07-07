@@ -1,0 +1,84 @@
+.briefing-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg-card));
+}
+
+.briefing-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent);
+}
+
+.briefing-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  flex: 1;
+}
+
+.briefing-regenerate {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s;
+}
+
+.briefing-regenerate:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.briefing-regenerate:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.briefing-content {
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.briefing-content p {
+  margin: 0 0 8px;
+}
+
+.briefing-content p:last-child {
+  margin-bottom: 0;
+}
+
+.briefing-content strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.briefing-hint {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.briefing-generate {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  padding: 6px 14px;
+}
+
+.briefing-generate:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
