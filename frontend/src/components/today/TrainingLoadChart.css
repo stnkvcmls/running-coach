@@ -85,3 +85,37 @@
   height: 10px;
   border-radius: 2px;
 }
+
+.tl-sport-split {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.tl-sport-split-label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+  text-align: center;
+}
+
+.tl-sport-bar {
+  display: flex;
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.tl-sport-bar-seg {
+  height: 100%;
+}
+
+.tl-sport-split .tl-legend {
+  border-top: none;
+  margin-top: 8px;
+  padding-top: 0;
+}

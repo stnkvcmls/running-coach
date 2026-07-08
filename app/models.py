@@ -482,6 +482,7 @@ class DailyLoadSeries(Base):
     ramp_rate_7d = Column(Float, nullable=True)
     ramp_rate_28d = Column(Float, nullable=True)
     injury_risk = Column(String(20), nullable=True)
+    sport_breakdown_json = Column(Text, nullable=True)  # JSON {"run": 62.0, "ride": 18.0, ...}
     computed_at = Column(DateTime, default=_utcnow)
 
 

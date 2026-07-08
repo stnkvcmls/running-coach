@@ -5,17 +5,19 @@ from app.models import Activity, AthleteProfile
 
 
 def _add_activity(db, started_at, *, duration_sec=3600, tss=None,
-                  avg_pace_min_km=None, avg_hr=None, distance_m=10000):
+                  avg_pace_min_km=None, avg_hr=None, distance_m=10000,
+                  activity_type="running", name="Run", rpe=None):
     db.add(Activity(
         garmin_id=int(started_at.timestamp()),
-        activity_type="running",
-        name="Run",
+        activity_type=activity_type,
+        name=name,
         started_at=started_at,
         duration_sec=duration_sec,
         distance_m=distance_m,
         avg_pace_min_km=avg_pace_min_km,
         avg_hr=avg_hr,
         training_stress_score=tss,
+        rpe=rpe,
     ))
     db.commit()
 
@@ -32,7 +34,7 @@ def test_estimate_tss_prefers_stored_power_score():
 def test_estimate_tss_pace_based():
     # Running exactly at threshold pace for one hour ≈ 100 TSS.
     profile = AthleteProfile(threshold_pace_min_km=5.0)
-    act = Activity(duration_sec=3600, avg_pace_min_km=5.0)
+    act = Activity(duration_sec=3600, avg_pace_min_km=5.0, activity_type="running")
     tss, source = training_load.estimate_tss(act, profile)
     assert source == "pace"
     assert round(tss) == 100
@@ -72,7 +74,7 @@ def test_estimate_tss_srpe_takes_priority_over_duration_floor():
 
 def test_estimate_tss_pace_reference_takes_priority_over_srpe():
     profile = AthleteProfile(threshold_pace_min_km=5.0)
-    act = Activity(duration_sec=3600, avg_pace_min_km=5.0, rpe=2)
+    act = Activity(duration_sec=3600, avg_pace_min_km=5.0, rpe=2, activity_type="running")
     tss, source = training_load.estimate_tss(act, profile)
     assert source == "pace"
 
@@ -89,6 +91,99 @@ def test_estimate_tss_zero_without_duration():
     tss, source = training_load.estimate_tss(act, None)
     assert source == "none"
     assert tss == 0.0
+
+
+# --- Multi-sport load accounting (P2-3) ---
+
+def test_sport_category_classifies_common_garmin_types():
+    assert training_load.sport_category("running") == "run"
+    assert training_load.sport_category("treadmill_running") == "run"
+    assert training_load.sport_category("road_biking") == "ride"
+    assert training_load.sport_category("indoor_cycling") == "ride"
+    assert training_load.sport_category("lap_swimming") == "swim"
+    assert training_load.sport_category("strength_training") == "strength"
+    assert training_load.sport_category("yoga") == "strength"
+    assert training_load.sport_category("hiking") == "other"
+    assert training_load.sport_category(None) == "other"
+
+
+def test_is_run_true_only_for_run_category():
+    assert training_load.is_run("running") is True
+    assert training_load.is_run("cycling") is False
+    assert training_load.is_run(None) is False
+
+
+def test_estimate_tss_never_uses_pace_for_a_ride():
+    """A ride's generic distance/duration ratio must not be read as running pace.
+
+    30km in 1h (a plausible easy ride) is 2 min/km — far faster than any
+    runner's threshold pace, so treating it as rTSS would wildly overstate
+    the ride's intensity. hrTSS (or the duration floor) must be used instead.
+    """
+    profile = AthleteProfile(threshold_pace_min_km=5.0, threshold_hr=160)
+    ride = Activity(
+        duration_sec=3600, avg_pace_min_km=2.0, avg_hr=130,
+        activity_type="road_biking",
+    )
+    tss, source = training_load.estimate_tss(ride, profile)
+    assert source == "hr"
+    assert tss < 100  # an easy aerobic ride, not a max-effort sprint
+
+
+def test_estimate_tss_ride_without_hr_falls_to_duration_floor():
+    profile = AthleteProfile(threshold_pace_min_km=5.0)
+    ride = Activity(duration_sec=3600, avg_pace_min_km=2.0, activity_type="cycling")
+    tss, source = training_load.estimate_tss(ride, profile)
+    assert source == "duration"
+
+
+def test_estimate_tss_pace_based_still_applies_to_runs():
+    profile = AthleteProfile(threshold_pace_min_km=5.0)
+    run = Activity(duration_sec=3600, avg_pace_min_km=5.0, activity_type="running")
+    tss, source = training_load.estimate_tss(run, profile)
+    assert source == "pace"
+    assert round(tss) == 100
+
+
+def test_daily_load_series_tags_sport_breakdown(db):
+    base = datetime(2026, 6, 15, 7, 0)
+    _add_activity(db, base, tss=60.0, activity_type="running", name="Run")
+    _add_activity(db, base + timedelta(hours=10), tss=25.0, activity_type="cycling", name="Ride")
+    point = training_load.current_load(db, as_of=base.date())
+    assert point is not None
+    assert point.sport_breakdown == {"run": 60.0, "ride": 25.0}
+    assert point.tss == 85.0
+
+
+def test_training_load_endpoint_includes_sport_breakdown(client, db):
+    base = datetime(2026, 6, 1, 7, 0)
+    _add_activity(db, base, tss=60.0, activity_type="running", name="Run")
+    _add_activity(db, base + timedelta(hours=10), tss=25.0, activity_type="cycling", name="Ride")
+    resp = client.get("/api/v1/training-load?days=30&date=2026-06-01")
+    assert resp.status_code == 200
+    current = resp.json()["current"]
+    assert current["sport_breakdown"] == {"run": 60.0, "ride": 25.0}
+
+
+def test_context_notes_cross_training_tss_for_non_run_activity(db):
+    """P2-3: the AI context should surface cross-training load explicitly."""
+    _add_activity(
+        db, datetime(2026, 6, 10, 7, 0), activity_type="cycling", name="Evening Ride",
+        duration_sec=5400, avg_hr=140,
+    )
+    profile = AthleteProfile(threshold_hr=160)
+    db.add(profile)
+    db.commit()
+    context = ai_coach._build_context(db, "activity", "Test trigger", reference_date=date(2026, 6, 10))
+    assert "Evening Ride" in context
+    assert "TSS" in context.split("Evening Ride")[1].split("\n")[0]
+
+
+def test_context_recent_activities_omits_tss_for_runs(db):
+    _add_activity(db, datetime(2026, 6, 10, 7, 0), activity_type="running", name="Easy Run", tss=50.0)
+    context = ai_coach._build_context(db, "activity", "Test trigger", reference_date=date(2026, 6, 10))
+    run_line = [l for l in context.split("\n") if "Easy Run" in l][0]
+    assert "TSS" not in run_line
 
 
 # --- Series / snapshot ---

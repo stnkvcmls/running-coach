@@ -354,6 +354,7 @@ class TrainingLoadPoint(BaseModel):
     ramp_rate_7d: float | None = None  # CTL change over last 7 days
     ramp_rate_28d: float | None = None # CTL change over last 28 days
     injury_risk: str | None = None     # "low" | "moderate" | "high"
+    sport_breakdown: dict[str, float] | None = None  # TSS by sport_category for the day
 
     # Explicit Running Stress Balance read, derived from tsb/acwr — see
     # classify_tsb/classify_acwr above. Always populated from the raw values,

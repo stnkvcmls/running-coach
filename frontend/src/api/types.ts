@@ -269,6 +269,7 @@ export interface TrainingLoadPoint {
   rsb_zone: string | null  // "detraining" | "productive" | "overreaching"
   rsb_zone_label: string | null
   rsb_recommendation: string | null
+  sport_breakdown: Record<string, number> | null  // TSS by sport category for the day
 }
 
 export interface TrainingReadiness {
