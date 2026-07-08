@@ -11,6 +11,7 @@ from app.models import Activity, DailySummary, User
 from app.schemas import (
     AerobicTrendPoint,
     AerobicTrendsResponse,
+    ComparisonDeltaResponse,
     CustomChartDataResponse,
     CustomChartMetric,
     CustomChartMetricsResponse,
@@ -18,6 +19,7 @@ from app.schemas import (
     DailySummaryResponse,
     IntensityTrendsResponse,
     IntensityWeek,
+    PerformanceCurveComparisonResponse,
     PerformanceCurvePoint,
     PerformanceCurveResponse,
     PersonalRecordResponse,
@@ -89,31 +91,62 @@ def api_intensity_trends(
 
 # --- Performance Curve ---
 
+def _curve_points(points) -> list[PerformanceCurvePoint]:
+    return [
+        PerformanceCurvePoint(duration_sec=p.duration_sec, actual_value=p.actual_value, model_value=p.model_value)
+        for p in points
+    ]
+
+
 @router.get("/performance-curve", response_model=PerformanceCurveResponse)
 def api_get_performance_curve(
     days: int = Query(90, ge=30, le=365),
+    compare: str | None = Query(None, description="'previous_period' | 'year_ago' | 'custom'"),
+    compare_start: str | None = Query(None, alias="compareStart", description="ISO date, required if compare=custom"),
+    compare_end: str | None = Query(None, alias="compareEnd", description="ISO date, required if compare=custom"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Power-duration and pace-duration curves with CP/CV model fit and race predictions."""
-    data = threshold_mod.get_performance_curve_data(db, lookback_days=days, user_id=current_user.id)
+    """Power-duration and pace-duration curves with CP/CV model fit and race predictions.
+
+    With ``compare`` set, also fits a second window (previous period, same period
+    last year, or a custom range) and returns it alongside delta callouts.
+    """
+    custom_start_dt = custom_end_dt = None
+    if compare == "custom":
+        if not compare_start or not compare_end:
+            raise HTTPException(status_code=400, detail="compareStart and compareEnd are required for compare=custom")
+        try:
+            custom_start_dt = datetime.strptime(compare_start, "%Y-%m-%d")
+            custom_end_dt = datetime.strptime(compare_end, "%Y-%m-%d") + timedelta(days=1)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="compareStart/compareEnd must be ISO dates (YYYY-MM-DD)")
+
+    try:
+        data = threshold_mod.get_performance_curve_data(
+            db, lookback_days=days, user_id=current_user.id,
+            compare=compare, custom_compare_start=custom_start_dt, custom_compare_end=custom_end_dt,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    comparison = None
+    if data.comparison is not None:
+        c = data.comparison
+        comparison = PerformanceCurveComparisonResponse(
+            label=c.label, start=c.start, end=c.end,
+            power_points=_curve_points(c.power_points),
+            pace_points=_curve_points(c.pace_points),
+            critical_power=c.critical_power,
+            w_prime=c.w_prime,
+            critical_velocity=c.critical_velocity,
+            d_prime=c.d_prime,
+            activities_analyzed=c.activities_analyzed,
+        )
+
     return PerformanceCurveResponse(
-        power_points=[
-            PerformanceCurvePoint(
-                duration_sec=p.duration_sec,
-                actual_value=p.actual_value,
-                model_value=p.model_value,
-            )
-            for p in data.power_points
-        ],
-        pace_points=[
-            PerformanceCurvePoint(
-                duration_sec=p.duration_sec,
-                actual_value=p.actual_value,
-                model_value=p.model_value,
-            )
-            for p in data.pace_points
-        ],
+        power_points=_curve_points(data.power_points),
+        pace_points=_curve_points(data.pace_points),
         critical_power=data.critical_power,
         w_prime=data.w_prime,
         critical_velocity=data.critical_velocity,
@@ -129,6 +162,14 @@ def api_get_performance_curve(
         ],
         lookback_days=data.lookback_days,
         activities_analyzed=data.activities_analyzed,
+        comparison=comparison,
+        deltas=[
+            ComparisonDeltaResponse(
+                metric=d.metric, label=d.label, current_value=d.current_value,
+                previous_value=d.previous_value, delta=d.delta, unit=d.unit,
+            )
+            for d in data.deltas
+        ],
     )
 
 
@@ -244,29 +285,17 @@ def api_custom_chart_metrics():
     )
 
 
-@router.get("/custom-charts/data", response_model=CustomChartDataResponse)
-def api_custom_chart_data(
-    metrics: str = Query(..., description="Comma-separated metric ids"),
-    days: int = Query(90, ge=7, le=365),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Merge one or more registered metrics into a unified daily time series."""
-    metric_ids = [m.strip() for m in metrics.split(",") if m.strip()]
-    if not metric_ids:
-        raise HTTPException(status_code=400, detail="At least one metric is required")
-    unknown = [m for m in metric_ids if m not in _CUSTOM_CHART_METRICS]
-    if unknown:
-        raise HTTPException(status_code=400, detail=f"Unknown metric id(s): {', '.join(unknown)}")
-
-    end_date = date.today()
-    start_date = end_date - timedelta(days=days - 1)
+def _custom_chart_points(
+    db: Session, current_user: User, metric_ids: list[str], start_date: date, end_date: date
+) -> list[CustomChartPoint]:
+    """Merge one or more registered metrics into a unified daily time series over ``[start_date, end_date]``."""
     by_date: dict[str, dict[str, float | None]] = {}
 
     def _set(d: date, metric_id: str, value) -> None:
         by_date.setdefault(d.isoformat(), {})[metric_id] = round(value, 4) if value is not None else None
 
     load_points_cache = None
+    days = (end_date - start_date).days + 1
 
     for metric_id in metric_ids:
         m = _CUSTOM_CHART_METRICS[metric_id]
@@ -310,8 +339,39 @@ def api_custom_chart_data(
             for p in load_points_cache:
                 _set(p.date, metric_id, getattr(p, m["attr"]))
 
-    result_points = [
-        CustomChartPoint(date=d, values={mid: by_date[d].get(mid) for mid in metric_ids})
+    return [
+        CustomChartPoint(
+            date=d, values={mid: by_date[d].get(mid) for mid in metric_ids},
+            day_index=(date.fromisoformat(d) - start_date).days,
+        )
         for d in sorted(by_date.keys())
     ]
-    return CustomChartDataResponse(points=result_points, days=days)
+
+
+@router.get("/custom-charts/data", response_model=CustomChartDataResponse)
+def api_custom_chart_data(
+    metrics: str = Query(..., description="Comma-separated metric ids"),
+    days: int = Query(90, ge=7, le=365),
+    compare: bool = Query(False, description="Also return the immediately preceding period, aligned by day_index"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Merge one or more registered metrics into a unified daily time series."""
+    metric_ids = [m.strip() for m in metrics.split(",") if m.strip()]
+    if not metric_ids:
+        raise HTTPException(status_code=400, detail="At least one metric is required")
+    unknown = [m for m in metric_ids if m not in _CUSTOM_CHART_METRICS]
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"Unknown metric id(s): {', '.join(unknown)}")
+
+    end_date = date.today()
+    start_date = end_date - timedelta(days=days - 1)
+    result_points = _custom_chart_points(db, current_user, metric_ids, start_date, end_date)
+
+    compare_points = None
+    if compare:
+        prev_end = start_date - timedelta(days=1)
+        prev_start = prev_end - timedelta(days=days - 1)
+        compare_points = _custom_chart_points(db, current_user, metric_ids, prev_start, prev_end)
+
+    return CustomChartDataResponse(points=result_points, days=days, compare_points=compare_points)

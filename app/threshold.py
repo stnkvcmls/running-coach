@@ -896,6 +896,31 @@ class RacePrediction:
 
 
 @dataclass
+class PerformanceCurveWindow:
+    """CP/CV fit + frontier points for one arbitrary date window."""
+    label: str
+    start: datetime
+    end: datetime
+    power_points: list[CurvePoint] = field(default_factory=list)
+    pace_points: list[CurvePoint] = field(default_factory=list)
+    critical_power: float | None = None
+    w_prime: float | None = None
+    critical_velocity: float | None = None   # m/s
+    d_prime: float | None = None             # m
+    activities_analyzed: int = 0
+
+
+@dataclass
+class ComparisonDelta:
+    metric: str            # "critical_power" | "threshold_pace_min_km"
+    label: str
+    current_value: float | None
+    previous_value: float | None
+    delta: float | None     # positive = improvement (higher power / faster pace)
+    unit: str
+
+
+@dataclass
 class PerformanceCurveData:
     power_points: list[CurvePoint] = field(default_factory=list)
     pace_points: list[CurvePoint] = field(default_factory=list)
@@ -906,6 +931,8 @@ class PerformanceCurveData:
     race_predictions: list[RacePrediction] = field(default_factory=list)
     lookback_days: int = DEFAULT_LOOKBACK_DAYS
     activities_analyzed: int = 0
+    comparison: PerformanceCurveWindow | None = None
+    deltas: list[ComparisonDelta] = field(default_factory=list)
 
 
 def _predict_race_times(cv: float, d_prime: float) -> list[RacePrediction]:
@@ -940,53 +967,10 @@ def _predict_race_times(cv: float, d_prime: float) -> list[RacePrediction]:
     return predictions
 
 
-def get_performance_curve_data(
-    db: Session, lookback_days: int = DEFAULT_LOOKBACK_DAYS, user_id: int = DEFAULT_USER_ID
-) -> PerformanceCurveData:
-    """Aggregate mean-max frontiers + CP/CV model fit for the performance curve UI.
-
-    Reuses the same activity queries and fitting logic as ``estimate_thresholds``
-    but returns the raw frontier points (for charting) alongside the model params
-    and race time predictions.
-    """
-    now = datetime.utcnow()
-    cutoff = now - timedelta(days=lookback_days)
-
-    activities = (
-        db.query(Activity)
-        .filter(
-            Activity.user_id == user_id,
-            Activity.started_at.isnot(None),
-            Activity.started_at >= cutoff,
-        )
-        .all()
-    )
-    runs = [a for a in activities if _is_run(a.activity_type)]
-
-    def _age(a: Activity) -> float:
-        return (now - a.started_at).total_seconds() / 86400.0 if a.started_at else 9999.0
-
-    def _curves(include_treadmill: bool) -> list[tuple[float, dict]]:
-        out: list[tuple[float, dict]] = []
-        for a in runs:
-            if not a.mean_max_json:
-                continue
-            try:
-                curve = json.loads(a.mean_max_json)
-            except (json.JSONDecodeError, TypeError):
-                continue
-            if not include_treadmill and curve.get("is_treadmill"):
-                continue
-            out.append((_age(a), curve))
-        return out
-
-    power_raw = _curves(include_treadmill=True)
-    pace_raw = _curves(include_treadmill=False)
-
-    power_frontier = _build_frontier(power_raw, "power")
-    pace_frontier = _build_frontier(pace_raw, "gap_speed")
-
-    # Fit power model
+def _fit_window_curves(
+    power_frontier: list[_FrontierPoint], pace_frontier: list[_FrontierPoint]
+) -> tuple[list[CurvePoint], list[CurvePoint], float | None, float | None, float | None, float | None]:
+    """Fit CP and CV models from a pair of frontiers; return points + rounded params."""
     cp: float | None = None
     w_prime_out: float | None = None
 
@@ -1005,7 +989,6 @@ def get_performance_curve_data(
             return None
         return cp + w_prime_out / t
 
-    # Fit pace / velocity model
     cv: float | None = None
     d_prime_out: float | None = None
 
@@ -1037,20 +1020,245 @@ def get_performance_curve_data(
         for p in pace_frontier
     ]
 
+    return (
+        power_points, pace_points,
+        round(cp, 0) if cp is not None else None,
+        round(w_prime_out, 0) if w_prime_out is not None else None,
+        round(cv, 4) if cv is not None else None,
+        round(d_prime_out, 1) if d_prime_out is not None else None,
+    )
+
+
+def _curve_for_window(
+    db: Session, start: datetime, end: datetime, user_id: int, label: str
+) -> PerformanceCurveWindow:
+    """Aggregate mean-max frontiers + CP/CV model fit for an arbitrary ``[start, end)`` window.
+
+    Reuses the same activity queries and fitting logic as ``estimate_thresholds``
+    but returns the raw frontier points (for charting) alongside the model params.
+    Recency weighting is anchored to ``end`` rather than "now", so a comparison
+    window drawn from the past still weights its own later efforts more heavily.
+    """
+    activities = (
+        db.query(Activity)
+        .filter(
+            Activity.user_id == user_id,
+            Activity.started_at.isnot(None),
+            Activity.started_at >= start,
+            Activity.started_at < end,
+        )
+        .all()
+    )
+    runs = [a for a in activities if _is_run(a.activity_type)]
+
+    def _age(a: Activity) -> float:
+        return (end - a.started_at).total_seconds() / 86400.0 if a.started_at else 9999.0
+
+    def _curves(include_treadmill: bool) -> list[tuple[float, dict]]:
+        out: list[tuple[float, dict]] = []
+        for a in runs:
+            if not a.mean_max_json:
+                continue
+            try:
+                curve = json.loads(a.mean_max_json)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if not include_treadmill and curve.get("is_treadmill"):
+                continue
+            out.append((_age(a), curve))
+        return out
+
+    power_frontier = _build_frontier(_curves(include_treadmill=True), "power")
+    pace_frontier = _build_frontier(_curves(include_treadmill=False), "gap_speed")
+
+    power_points, pace_points, cp, w_prime, cv, d_prime = _fit_window_curves(power_frontier, pace_frontier)
+
+    return PerformanceCurveWindow(
+        label=label, start=start, end=end,
+        power_points=power_points, pace_points=pace_points,
+        critical_power=cp, w_prime=w_prime, critical_velocity=cv, d_prime=d_prime,
+        activities_analyzed=len(runs),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Season-over-season comparison
+# ---------------------------------------------------------------------------
+
+_COMPARE_MODES = ("previous_period", "year_ago", "custom")
+
+
+def resolve_comparison_window(
+    current_start: datetime,
+    current_end: datetime,
+    compare: str,
+    custom_start: datetime | None = None,
+    custom_end: datetime | None = None,
+) -> tuple[datetime, datetime, str]:
+    """Resolve a comparison window given the current window and a comparison mode."""
+    if compare == "previous_period":
+        span = current_end - current_start
+        end = current_start
+        start = end - span
+        return start, end, f"Previous {span.days}d"
+    if compare == "year_ago":
+        start = current_start - timedelta(days=365)
+        end = current_end - timedelta(days=365)
+        return start, end, "Same period last year"
+    if compare == "custom":
+        if custom_start is None or custom_end is None:
+            raise ValueError("custom_start and custom_end are required for a custom comparison window")
+        if custom_end <= custom_start:
+            raise ValueError("custom_end must be after custom_start")
+        return custom_start, custom_end, "Custom range"
+    raise ValueError(f"Unknown comparison mode: {compare!r} (expected one of {_COMPARE_MODES})")
+
+
+def _range_fingerprint(db: Session, start: datetime, end: datetime, user_id: int) -> str:
+    """Cache key for a bounded window: run count + max synced_at within it."""
+    run_count = db.query(func.count(Activity.id)).filter(
+        Activity.user_id == user_id,
+        Activity.started_at >= start,
+        Activity.started_at < end,
+    ).scalar() or 0
+    max_sync = db.query(func.max(Activity.synced_at)).filter(
+        Activity.user_id == user_id,
+        Activity.started_at >= start,
+        Activity.started_at < end,
+    ).scalar()
+    return "|".join([str(run_count), max_sync.isoformat() if max_sync else ""])
+
+
+def _range_cache_key(start: datetime, end: datetime) -> str:
+    return f"perfcurve_range:{start.isoformat()}_{end.isoformat()}"
+
+
+def _window_to_dict(w: PerformanceCurveWindow) -> dict:
+    d = dataclasses.asdict(w)
+    d["start"] = w.start.isoformat()
+    d["end"] = w.end.isoformat()
+    return d
+
+
+def _window_from_dict(d: dict) -> PerformanceCurveWindow:
+    return PerformanceCurveWindow(
+        label=d["label"],
+        start=datetime.fromisoformat(d["start"]),
+        end=datetime.fromisoformat(d["end"]),
+        power_points=[CurvePoint(**p) for p in d["power_points"]],
+        pace_points=[CurvePoint(**p) for p in d["pace_points"]],
+        critical_power=d["critical_power"],
+        w_prime=d["w_prime"],
+        critical_velocity=d["critical_velocity"],
+        d_prime=d["d_prime"],
+        activities_analyzed=d["activities_analyzed"],
+    )
+
+
+def _curve_for_window_cached(
+    db: Session, start: datetime, end: datetime, user_id: int, label: str
+) -> PerformanceCurveWindow:
+    """Like ``_curve_for_window``, but memoized in ``SyncStatus`` by range fingerprint.
+
+    Comparison windows are typically in the past and their underlying activities
+    don't change once synced, so this avoids refitting the same historical window
+    on every request.
+    """
+    key = _range_cache_key(start, end)
+    fp = _range_fingerprint(db, start, end, user_id)
+    row = (
+        db.query(SyncStatus)
+        .filter(SyncStatus.user_id == user_id, SyncStatus.key == key)
+        .first()
+    )
+    if row and row.value:
+        try:
+            cached = json.loads(row.value)
+            if cached.get("fp") == fp:
+                window = _window_from_dict(cached["window"])
+                return dataclasses.replace(window, label=label)
+        except (json.JSONDecodeError, TypeError, KeyError):
+            pass
+
+    window = _curve_for_window(db, start, end, user_id, label)
+    payload = json.dumps({"fp": fp, "window": _window_to_dict(window)})
+    if row:
+        row.value = payload
+        row.updated_at = datetime.now(timezone.utc)
+    else:
+        db.add(SyncStatus(user_id=user_id, key=key, value=payload, updated_at=datetime.now(timezone.utc)))
+    db.commit()
+    return window
+
+
+def _compute_deltas(
+    current: PerformanceCurveWindow, comparison: PerformanceCurveWindow
+) -> list[ComparisonDelta]:
+    """Signed deltas between the current and comparison windows; positive = improvement."""
+    deltas: list[ComparisonDelta] = []
+    if current.critical_power is not None and comparison.critical_power is not None:
+        deltas.append(ComparisonDelta(
+            metric="critical_power", label="Critical Power",
+            current_value=current.critical_power, previous_value=comparison.critical_power,
+            delta=round(current.critical_power - comparison.critical_power, 0), unit="W",
+        ))
+    if current.critical_velocity is not None and comparison.critical_velocity is not None:
+        cur_pace = (1000.0 / current.critical_velocity) / 60.0
+        prev_pace = (1000.0 / comparison.critical_velocity) / 60.0
+        # Positive delta = faster now: pace (min/km) went down, so invert the sign.
+        delta_sec_per_km = (prev_pace - cur_pace) * 60.0
+        deltas.append(ComparisonDelta(
+            metric="threshold_pace_min_km", label="Threshold Pace",
+            current_value=round(cur_pace, 2), previous_value=round(prev_pace, 2),
+            delta=round(delta_sec_per_km, 0), unit="s/km",
+        ))
+    return deltas
+
+
+def get_performance_curve_data(
+    db: Session,
+    lookback_days: int = DEFAULT_LOOKBACK_DAYS,
+    user_id: int = DEFAULT_USER_ID,
+    compare: str | None = None,
+    custom_compare_start: datetime | None = None,
+    custom_compare_end: datetime | None = None,
+) -> PerformanceCurveData:
+    """Aggregate mean-max frontiers + CP/CV model fit for the performance curve UI.
+
+    When ``compare`` is set (``"previous_period"``, ``"year_ago"``, or ``"custom"``),
+    also fits a second window for comparison and attaches it, plus delta callouts,
+    to the returned data.
+    """
+    now = datetime.utcnow()
+    cutoff = now - timedelta(days=lookback_days)
+
+    current = _curve_for_window(db, cutoff, now, user_id, label="Current")
+
     race_predictions: list[RacePrediction] = []
-    if cv is not None and d_prime_out is not None:
-        race_predictions = _predict_race_times(cv, d_prime_out)
+    if current.critical_velocity is not None and current.d_prime is not None:
+        race_predictions = _predict_race_times(current.critical_velocity, current.d_prime)
+
+    comparison: PerformanceCurveWindow | None = None
+    deltas: list[ComparisonDelta] = []
+    if compare:
+        comp_start, comp_end, comp_label = resolve_comparison_window(
+            cutoff, now, compare, custom_compare_start, custom_compare_end
+        )
+        comparison = _curve_for_window_cached(db, comp_start, comp_end, user_id, comp_label)
+        deltas = _compute_deltas(current, comparison)
 
     return PerformanceCurveData(
-        power_points=power_points,
-        pace_points=pace_points,
-        critical_power=round(cp, 0) if cp is not None else None,
-        w_prime=round(w_prime_out, 0) if w_prime_out is not None else None,
-        critical_velocity=round(cv, 4) if cv is not None else None,
-        d_prime=round(d_prime_out, 1) if d_prime_out is not None else None,
+        power_points=current.power_points,
+        pace_points=current.pace_points,
+        critical_power=current.critical_power,
+        w_prime=current.w_prime,
+        critical_velocity=current.critical_velocity,
+        d_prime=current.d_prime,
         race_predictions=race_predictions,
         lookback_days=lookback_days,
-        activities_analyzed=len(runs),
+        activities_analyzed=current.activities_analyzed,
+        comparison=comparison,
+        deltas=deltas,
     )
 
 

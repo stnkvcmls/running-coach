@@ -47,6 +47,64 @@
   border-color: var(--text-muted);
 }
 
+.perf-curve-compare-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.perf-curve-compare-select {
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.78rem;
+  font-family: inherit;
+}
+
+.perf-curve-compare-dates {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.perf-curve-compare-dates input[type='date'] {
+  padding: 3px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.75rem;
+  font-family: inherit;
+}
+
+.perf-curve-deltas {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.perf-delta {
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.perf-delta.positive {
+  color: #00b894;
+}
+
+.perf-delta.negative {
+  color: #e17055;
+}
+
 .perf-curve-model-params {
   display: flex;
   gap: 16px;

@@ -598,6 +598,28 @@ class RacePrediction(BaseModel):
     predicted_pace_min_km: float
 
 
+class PerformanceCurveComparisonResponse(BaseModel):
+    label: str                # "Previous 90d" | "Same period last year" | "Custom range"
+    start: datetime
+    end: datetime
+    power_points: list[PerformanceCurvePoint] = []
+    pace_points: list[PerformanceCurvePoint] = []
+    critical_power: float | None = None
+    w_prime: float | None = None
+    critical_velocity: float | None = None
+    d_prime: float | None = None
+    activities_analyzed: int
+
+
+class ComparisonDeltaResponse(BaseModel):
+    metric: str                # "critical_power" | "threshold_pace_min_km"
+    label: str
+    current_value: float | None = None
+    previous_value: float | None = None
+    delta: float | None = None   # positive = improvement
+    unit: str
+
+
 class PerformanceCurveResponse(BaseModel):
     power_points: list[PerformanceCurvePoint] = []
     pace_points: list[PerformanceCurvePoint] = []
@@ -608,6 +630,8 @@ class PerformanceCurveResponse(BaseModel):
     race_predictions: list[RacePrediction] = []
     lookback_days: int
     activities_analyzed: int
+    comparison: PerformanceCurveComparisonResponse | None = None
+    deltas: list[ComparisonDeltaResponse] = []
 
 
 class PersonalRecordResponse(BaseModel):
@@ -664,11 +688,19 @@ class CustomChartMetricsResponse(BaseModel):
 class CustomChartPoint(BaseModel):
     date: str
     values: dict[str, float | None] = {}
+    # Days since the start of this point's period (0 = first day). Lets the
+    # frontend align a comparison series against the current one even though
+    # their calendar dates don't overlap.
+    day_index: int
 
 
 class CustomChartDataResponse(BaseModel):
     points: list[CustomChartPoint] = []
     days: int
+    # Present only when the request asked for a comparison series: the same
+    # metrics over the immediately preceding period of equal length, aligned by
+    # day_index (day offset from each period's start) rather than calendar date.
+    compare_points: list[CustomChartPoint] | None = None
 
 
 class StrengthExercise(BaseModel):

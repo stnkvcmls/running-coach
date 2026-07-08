@@ -21,6 +21,7 @@ import type {
   PacingStrategyResponse,
   PacingPushRequest,
   PerformanceCurveResponse,
+  PerformanceCurveCompareMode,
   PersonalRecordsResponse,
   PlanRealignmentStatus,
   PushWorkoutResponse,
@@ -432,10 +433,27 @@ export function useSeasonPlan() {
   })
 }
 
-export function usePerformanceCurve(days = 90) {
+export interface PerformanceCurveCompareParams {
+  mode: PerformanceCurveCompareMode
+  customStart?: string   // YYYY-MM-DD, required when mode === 'custom'
+  customEnd?: string     // YYYY-MM-DD, required when mode === 'custom'
+}
+
+export function usePerformanceCurve(days = 90, compare?: PerformanceCurveCompareParams) {
   return useQuery({
-    queryKey: ['performance-curve', days],
-    queryFn: () => apiGet<PerformanceCurveResponse>(`/performance-curve?days=${days}`),
+    queryKey: ['performance-curve', days, compare],
+    queryFn: () => {
+      const params = new URLSearchParams({ days: String(days) })
+      if (compare) {
+        params.set('compare', compare.mode)
+        if (compare.mode === 'custom') {
+          if (compare.customStart) params.set('compareStart', compare.customStart)
+          if (compare.customEnd) params.set('compareEnd', compare.customEnd)
+        }
+      }
+      return apiGet<PerformanceCurveResponse>(`/performance-curve?${params.toString()}`)
+    },
+    enabled: !compare || compare.mode !== 'custom' || !!(compare.customStart && compare.customEnd),
   })
 }
 
@@ -461,10 +479,12 @@ export function useCustomChartMetrics() {
   })
 }
 
-export function useCustomChartData(metricIds: string[], days: number) {
+export function useCustomChartData(metricIds: string[], days: number, compare = false) {
   return useQuery({
-    queryKey: ['custom-chart-data', metricIds, days],
-    queryFn: () => apiGet<CustomChartDataResponse>(`/custom-charts/data?metrics=${metricIds.join(',')}&days=${days}`),
+    queryKey: ['custom-chart-data', metricIds, days, compare],
+    queryFn: () => apiGet<CustomChartDataResponse>(
+      `/custom-charts/data?metrics=${metricIds.join(',')}&days=${days}&compare=${compare}`
+    ),
     enabled: metricIds.length > 0,
   })
 }

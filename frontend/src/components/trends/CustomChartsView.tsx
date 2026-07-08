@@ -40,6 +40,7 @@ const PRESETS_KEY = 'runningCoach.customChart.presets'
 interface ChartConfig {
   metricIds: string[]
   days: Days
+  compare?: boolean
 }
 
 interface ChartPreset extends ChartConfig {
@@ -87,8 +88,8 @@ export default function CustomChartsView() {
   const tickColor = getChartTickColor(theme)
   const tooltipStyle = getChartTooltipStyle(theme)
 
-  const { metricIds, days } = config
-  const { data: chartData, isLoading: dataLoading } = useCustomChartData(metricIds, days)
+  const { metricIds, days, compare = false } = config
+  const { data: chartData, isLoading: dataLoading } = useCustomChartData(metricIds, days, compare)
 
   useEffect(() => {
     localStorage.setItem(CONFIG_KEY, JSON.stringify(config))
@@ -119,6 +120,10 @@ export default function CustomChartsView() {
     setConfig(prev => ({ ...prev, days }))
   }
 
+  function toggleCompare() {
+    setConfig(prev => ({ ...prev, compare: !prev.compare }))
+  }
+
   function savePreset() {
     const name = window.prompt('Name this chart:')
     if (!name) return
@@ -138,12 +143,31 @@ export default function CustomChartsView() {
     localStorage.setItem(PRESETS_KEY, JSON.stringify(next))
   }
 
+  const isComparing = compare && !!chartData?.compare_points
+
   const rows = useMemo(() => {
-    return (chartData?.points ?? []).map(p => ({
-      label: formatDate(p.date),
-      ...p.values,
-    }))
-  }, [chartData])
+    if (!isComparing) {
+      return (chartData?.points ?? []).map(p => ({
+        label: formatDate(p.date),
+        ...p.values,
+      }))
+    }
+    // Comparison mode: the current and previous periods cover different
+    // calendar dates, so align rows by day_index (days since each period's
+    // start) instead.
+    const byIndex = new Map<number, Record<string, unknown>>()
+    for (const p of chartData!.points) {
+      byIndex.set(p.day_index, { label: `Day ${p.day_index + 1}`, dayIndex: p.day_index, ...p.values })
+    }
+    for (const p of chartData!.compare_points ?? []) {
+      const row = byIndex.get(p.day_index) ?? { label: `Day ${p.day_index + 1}`, dayIndex: p.day_index }
+      for (const [metricId, value] of Object.entries(p.values)) {
+        row[`${metricId}__prev`] = value
+      }
+      byIndex.set(p.day_index, row)
+    }
+    return Array.from(byIndex.values()).sort((a: any, b: any) => a.dayIndex - b.dayIndex)
+  }, [chartData, isComparing])
 
   if (metricsLoading) {
     return <div className="custom-chart-empty">Loading metrics…</div>
@@ -165,6 +189,11 @@ export default function CustomChartsView() {
           ))}
         </div>
       </div>
+
+      <label className="custom-chart-compare-toggle">
+        <input type="checkbox" checked={compare} onChange={toggleCompare} />
+        Compare to previous period
+      </label>
 
       <div className="custom-chart-metric-picker">
         {GROUP_ORDER.map(group => (
@@ -231,7 +260,8 @@ export default function CustomChartsView() {
               <Tooltip
                 contentStyle={tooltipStyle}
                 formatter={(value: number, name: string, item: any) => {
-                  const m = metricsById.get(item.dataKey as string)
+                  const baseId = (item.dataKey as string).replace(/__prev$/, '')
+                  const m = metricsById.get(baseId)
                   return [`${value}${m?.unit ? ' ' + m.unit : ''}`, name]
                 }}
               />
@@ -246,6 +276,20 @@ export default function CustomChartsView() {
                   dot={false}
                   connectNulls
                   name={metricsById.get(id)?.label ?? id}
+                />
+              ))}
+              {isComparing && metricIds.map((id, i) => (
+                <Line
+                  key={`${id}__prev`}
+                  dataKey={`${id}__prev`}
+                  yAxisId={id}
+                  stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
+                  strokeWidth={1.5}
+                  strokeDasharray="4 3"
+                  strokeOpacity={0.6}
+                  dot={false}
+                  connectNulls
+                  name={`${metricsById.get(id)?.label ?? id} (previous)`}
                 />
               ))}
             </ComposedChart>

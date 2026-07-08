@@ -107,3 +107,27 @@ def test_data_endpoint_scopes_to_current_user(client, db):
     assert resp.status_code == 200
     dates = [p["date"] for p in resp.json()["points"]]
     assert "2026-06-13" not in dates
+
+
+def test_data_endpoint_without_compare_omits_compare_points(client, db):
+    resp = client.get("/api/v1/custom-charts/data?metrics=avg_hr&days=30")
+    assert resp.status_code == 200
+    assert resp.json()["compare_points"] is None
+
+
+def test_data_endpoint_compare_returns_prior_period_aligned_by_day_index(client, db):
+    today = date.today()
+    current_day = datetime.combine(today - timedelta(days=1), datetime.min.time()).replace(hour=7)
+    _add_activity(db, current_day, distance_m=10000.0)
+    # Same day-index (1 day before period end) in the prior 30-day period.
+    prior_period_day = current_day - timedelta(days=30)
+    _add_activity(db, prior_period_day, distance_m=6000.0)
+
+    resp = client.get("/api/v1/custom-charts/data?metrics=distance_km&days=30&compare=true")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["compare_points"] is not None
+
+    current_point = next(p for p in body["points"] if p["values"]["distance_km"] == 10.0)
+    compare_point = next(p for p in body["compare_points"] if p["values"]["distance_km"] == 6.0)
+    assert current_point["day_index"] == compare_point["day_index"]
