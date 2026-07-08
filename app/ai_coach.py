@@ -43,6 +43,10 @@ from app.coach.providers import (
 from app.coach.jobs import (
     enqueue_job,
     execute_job,
+    _JOB_TIMEOUT_SECONDS,
+    _claim_job,
+    _claim_pending_jobs,
+    _run_claimed_job,
     _activity_user_id,
     _save_error_insight,
     analyze_activity,
