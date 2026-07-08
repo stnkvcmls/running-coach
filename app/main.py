@@ -1,3 +1,4 @@
+import concurrent.futures
 import ctypes
 import logging
 import os
@@ -25,6 +26,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 scheduler = BackgroundScheduler()
+
+# Small pool the AI job worker executes claimed jobs on (P3-2) -- sized to
+# match the worker's per-poll claim batch so a full batch always runs in
+# parallel rather than queuing behind each other on the pool itself.
+_JOB_POOL_SIZE = 5
+_job_executor = concurrent.futures.ThreadPoolExecutor(
+    max_workers=_JOB_POOL_SIZE, thread_name_prefix="ai-job-worker"
+)
 
 _LOOPBACK_HOSTS: frozenset[str] = frozenset({"127.0.0.1", "::1", "localhost"})
 
@@ -387,29 +396,35 @@ def _scheduled_plan_generation():
 def _worker_run_pending_jobs():
     """APScheduler job: claim and execute pending AIJobs.
 
-    Picks up at most 5 pending jobs per poll cycle (oldest first) and runs
-    them synchronously in the scheduler thread. Each job atomically transitions
-    pending → running → done|failed, with retries up to max_attempts.
+    Claims up to _JOB_POOL_SIZE pending jobs (oldest first) atomically --
+    the read and the pending -> running transition happen together in
+    ``app.coach.jobs._claim_pending_jobs``, so an overlapping poll can never
+    dispatch the same job twice -- then runs them concurrently on a small
+    thread pool instead of serially in the scheduler thread. A single slow
+    job (e.g. a large plan generation) no longer delays every other user's
+    jobs or the next scheduler tick.
+
+    Each claimed job gets up to _JOB_TIMEOUT_SECONDS of wait time per poll.
+    A job that runs longer keeps executing on its pool thread and records
+    its own outcome whenever it finishes -- the poll just stops waiting on
+    it, so the scheduler thread is never blocked past the cap.
     """
-    from app.ai_coach import execute_job
-    from app.models import AIJob
+    from app.ai_coach import _claim_pending_jobs, _run_claimed_job, _JOB_TIMEOUT_SECONDS
 
-    with db_session() as db:
-        pending = (
-            db.query(AIJob)
-            .filter(
-                AIJob.status == "pending",
-                AIJob.attempts < AIJob.max_attempts,
-            )
-            .order_by(AIJob.created_at)
-            .limit(5)
-            .all()
-        )
-        job_ids = [j.id for j in pending]
-
-    for job_id in job_ids:
+    claimed_jobs = _claim_pending_jobs(limit=_JOB_POOL_SIZE)
+    futures = {
+        _job_executor.submit(_run_claimed_job, claimed): claimed["job_id"]
+        for claimed in claimed_jobs
+    }
+    for future, job_id in futures.items():
         try:
-            execute_job(job_id)
+            future.result(timeout=_JOB_TIMEOUT_SECONDS)
+        except concurrent.futures.TimeoutError:
+            logger.warning(
+                "Worker: job %s still running past %ds timeout; continuing "
+                "in the background, worker moving on to the next poll",
+                job_id, _JOB_TIMEOUT_SECONDS,
+            )
         except Exception:
             logger.exception("Worker: unexpected error executing job %s", job_id)
 
@@ -517,6 +532,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     scheduler.shutdown(wait=False)
+    _job_executor.shutdown(wait=False)
     logger.info("Scheduler stopped")
 
 

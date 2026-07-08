@@ -481,16 +481,43 @@ existing tests pass (backend pytest, `tsc -b`, Vitest, `npm run build`)._
   handful of call sites inside `app/coach/*` (db_session opens, provider/job
   dispatch) route through the `app.ai_coach` shim at call time so the existing
   monkeypatch-based tests keep working unchanged. All 795 tests pass._
-- **P3-2 · AI-job worker concurrency & sync isolation.** The worker claims up to
-  5 jobs but runs them **serially in the APScheduler thread**, so one slow plan
-  generation delays every user's analysis (and the next scheduler tick).
-  Execute claimed jobs on a small `ThreadPoolExecutor` (SQLite WAL tolerates
-  this; sessions are per-thread already), keep claiming atomic, and add a
-  per-job timeout. Similarly, per-user Garmin sync fan-out is serial — a
-  worthwhile follow-up only if multi-tenant use grows; note it, don't build it.
-  **S–M.** Files: `app/main.py` (`_worker_run_pending_jobs`),
+- **P3-2 · AI-job worker concurrency & sync isolation. ✅ Done.** The worker
+  claims up to 5 jobs but runs them **serially in the APScheduler thread**, so
+  one slow plan generation delays every user's analysis (and the next
+  scheduler tick). Execute claimed jobs on a small `ThreadPoolExecutor` (SQLite
+  WAL tolerates this; sessions are per-thread already), keep claiming atomic,
+  and add a per-job timeout. Similarly, per-user Garmin sync fan-out is serial
+  — a worthwhile follow-up only if multi-tenant use grows; note it, don't build
+  it. **S–M.** Files: `app/main.py` (`_worker_run_pending_jobs`),
   `app/ai_coach.py`/`app/coach/jobs.py` (`execute_job` timeout),
   `tests/test_job_queue.py`.
+  _Implemented as described. `app/coach/jobs.py`'s `execute_job` was split into
+  reusable pieces rather than wrapped: `_claim_job`/`_claim_pending_jobs`
+  atomically transition pending → running (single job or a whole batch, one
+  transaction each) and return the dispatch fields; `_run_claimed_job` is the
+  former dispatch-and-finalize half, now runnable independently on a worker
+  thread since it no longer re-claims. `execute_job(job_id)` is now `_claim_job`
+  + `_run_claimed_job` — unchanged behavior, so it's still safe for tests and
+  any one-off manual call. `app/main.py`'s `_worker_run_pending_jobs` claims a
+  batch of up to 5 jobs atomically via `_claim_pending_jobs` *before* any
+  dispatch happens (this is what makes claiming safe across overlapping polls
+  — a job is `"running"` in the DB the instant it's selected, not whenever its
+  pool thread happens to start), then submits each to a module-level
+  `ThreadPoolExecutor(max_workers=5)` (`_job_executor`) and waits on each
+  future with `future.result(timeout=_JOB_TIMEOUT_SECONDS)` — a new 120s
+  constant in `jobs.py`. Since Python can't forcibly stop a thread, a timeout
+  doesn't cancel or touch the job's row; the worker just stops waiting and
+  moves on, and the job records its own outcome whenever its pool thread
+  actually finishes — this is what keeps a single slow call from blocking the
+  scheduler thread (and therefore every other scheduled job) past the cap,
+  without racing the in-flight thread for the same DB row. `_job_executor`
+  shuts down (`wait=False`) alongside the scheduler on app shutdown. Per-user
+  Garmin sync fan-out (`_iter_garmin_users` loops in `_scheduled_activity_sync`
+  etc.) is unchanged, as scoped. All new and existing tests pass (969
+  backend), including a concurrency proof (two jobs rendezvous on a
+  `threading.Barrier`, which only both arrive if they truly ran in parallel)
+  and a timeout test (worker returns before a deliberately slow job finishes,
+  which then completes and self-records shortly after)._
 - **P3-3 · Frontend component tests.** Vitest covers only pure utils (57 cases);
   the adaptive-coaching UI (PlanAdaptationCard, RacePacingCard, ChatView action
   chips, FeedbackPrompt, and the new P0/P1 cards) has zero render coverage. Add

@@ -58,11 +58,21 @@ def enqueue_job(task_type: str, payload: dict, user_id: int) -> int:
         return job.id
 
 
-def execute_job(job_id: int) -> None:
-    """Claim and execute a single AIJob. Called by the APScheduler worker.
+# How long app.main's worker waits on a single claimed job before moving on
+# to the next poll (P3-2). Jobs run on a thread pool, not the scheduler
+# thread, so this bounds the *poll's* patience, not the job itself: Python
+# can't forcibly stop a thread mid-call, so a job that runs past this still
+# finishes on its own pool thread and records its own outcome -- the worker
+# just stops waiting on it so a single slow call never delays every other
+# user's jobs or the next scheduler tick.
+_JOB_TIMEOUT_SECONDS = 120
 
-    Atomically marks the job running, dispatches to the appropriate AI
-    function, then records done or schedules a retry (up to max_attempts).
+
+def _claim_job(job_id: int) -> dict | None:
+    """Atomically transition one job pending -> running.
+
+    Returns its dispatch fields, or None if it wasn't claimable (missing, or
+    already running/done/failed).
     """
     from app import ai_coach as _shim
     from app.models import AIJob
@@ -70,46 +80,128 @@ def execute_job(job_id: int) -> None:
     with _shim.db_session() as db:
         job = db.query(AIJob).filter(AIJob.id == job_id).first()
         if job is None or job.status not in ("pending",):
-            return
+            return None
         job.status = "running"
         job.started_at = datetime.now(timezone.utc)
         job.attempts += 1
         db.commit()
-        task_type = job.task_type
-        payload = json.loads(job.payload_json or "{}")
-        attempts = job.attempts
-        max_attempts = job.max_attempts
-        user_id = job.user_id
+        return {
+            "job_id": job.id,
+            "task_type": job.task_type,
+            "payload": json.loads(job.payload_json or "{}"),
+            "attempts": job.attempts,
+            "max_attempts": job.max_attempts,
+            "user_id": job.user_id,
+        }
 
-    try:
-        if task_type == "analyze_activity":
-            _shim.analyze_activity_force(payload["activity_id"])
-        elif task_type == "analyze_feedback":
-            _shim.analyze_activity_with_feedback(payload["activity_id"])
-        elif task_type == "generate_plan":
-            _shim.generate_training_plan(user_id=user_id, note=payload.get("note"))
-        elif task_type == "weekly_review":
-            _shim.weekly_review(user_id=user_id)
-        elif task_type == "generate_briefing":
-            _shim.generate_briefing(payload["plan_day_id"])
+
+def _claim_pending_jobs(limit: int = 5) -> list[dict]:
+    """Atomically claim up to ``limit`` oldest pending AIJobs in one transaction.
+
+    Selecting the candidates and flipping them to "running" happen together
+    (rather than the worker reading candidates and claiming them later), so
+    an overlapping poll -- one firing while the previous batch is still
+    executing on the thread pool -- can never dispatch the same job twice.
+    """
+    from app import ai_coach as _shim
+    from app.models import AIJob
+
+    with _shim.db_session() as db:
+        pending = (
+            db.query(AIJob)
+            .filter(
+                AIJob.status == "pending",
+                AIJob.attempts < AIJob.max_attempts,
+            )
+            .order_by(AIJob.created_at)
+            .limit(limit)
+            .all()
+        )
+        now = datetime.now(timezone.utc)
+        claimed = []
+        for job in pending:
+            job.status = "running"
+            job.started_at = now
+            job.attempts += 1
+            claimed.append({
+                "job_id": job.id,
+                "task_type": job.task_type,
+                "payload": json.loads(job.payload_json or "{}"),
+                "attempts": job.attempts,
+                "max_attempts": job.max_attempts,
+                "user_id": job.user_id,
+            })
+        db.commit()
+        return claimed
+
+
+def _dispatch(task_type: str, payload: dict, user_id: int) -> None:
+    """Route a claimed job to its AI function."""
+    from app import ai_coach as _shim
+
+    if task_type == "analyze_activity":
+        _shim.analyze_activity_force(payload["activity_id"])
+    elif task_type == "analyze_feedback":
+        _shim.analyze_activity_with_feedback(payload["activity_id"])
+    elif task_type == "generate_plan":
+        _shim.generate_training_plan(user_id=user_id, note=payload.get("note"))
+    elif task_type == "weekly_review":
+        _shim.weekly_review(user_id=user_id)
+    elif task_type == "generate_briefing":
+        _shim.generate_briefing(payload["plan_day_id"])
+    else:
+        raise ValueError(f"Unknown task_type: {task_type!r}")
+
+
+def _finish_claimed_job(claimed: dict, exc: Exception | None) -> None:
+    """Record a claimed job's outcome: done, or a retry/failed on error."""
+    from app import ai_coach as _shim
+    from app.models import AIJob
+
+    with _shim.db_session() as db:
+        job = db.query(AIJob).filter(AIJob.id == claimed["job_id"]).first()
+        if not job:
+            return
+        job.completed_at = datetime.now(timezone.utc)
+        if exc is None:
+            job.status = "done"
         else:
-            raise ValueError(f"Unknown task_type: {task_type!r}")
+            job.error_message = str(exc)[:1000]
+            job.status = "failed" if claimed["attempts"] >= claimed["max_attempts"] else "pending"
+        db.commit()
 
-        with _shim.db_session() as db:
-            job = db.query(AIJob).filter(AIJob.id == job_id).first()
-            if job:
-                job.status = "done"
-                job.completed_at = datetime.now(timezone.utc)
-                db.commit()
+
+def _run_claimed_job(claimed: dict) -> None:
+    """Dispatch an already-claimed job and record its outcome.
+
+    Takes a claim dict from ``_claim_job``/``_claim_pending_jobs`` -- it does
+    not re-check or re-claim the job. Safe to run on a worker-pool thread.
+    """
+    try:
+        _dispatch(claimed["task_type"], claimed["payload"], claimed["user_id"])
+        _finish_claimed_job(claimed, None)
     except Exception as exc:
-        logger.exception("Job %s (%s) failed on attempt %s/%s", job_id, task_type, attempts, max_attempts)
-        with _shim.db_session() as db:
-            job = db.query(AIJob).filter(AIJob.id == job_id).first()
-            if job:
-                job.error_message = str(exc)[:1000]
-                job.completed_at = datetime.now(timezone.utc)
-                job.status = "failed" if attempts >= max_attempts else "pending"
-                db.commit()
+        logger.exception(
+            "Job %s (%s) failed on attempt %s/%s",
+            claimed["job_id"], claimed["task_type"], claimed["attempts"], claimed["max_attempts"],
+        )
+        _finish_claimed_job(claimed, exc)
+
+
+def execute_job(job_id: int) -> None:
+    """Claim and execute a single AIJob synchronously.
+
+    Atomically marks the job running, dispatches to the appropriate AI
+    function, then records done or schedules a retry (up to max_attempts).
+    Used directly by tests and any one-off/manual invocation. The scheduled
+    worker (``app.main._worker_run_pending_jobs``) instead claims a batch at
+    once via ``_claim_pending_jobs`` and runs each with ``_run_claimed_job``
+    on a thread pool so multiple jobs execute concurrently.
+    """
+    claimed = _claim_job(job_id)
+    if claimed is None:
+        return
+    _run_claimed_job(claimed)
 
 
 def analyze_activity(activity: Activity):

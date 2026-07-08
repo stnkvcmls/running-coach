@@ -1,5 +1,7 @@
-"""Tests for the durable AI job queue (P2-1)."""
+"""Tests for the durable AI job queue (P2-1) and worker concurrency (P3-2)."""
 import json
+import threading
+import time
 from datetime import datetime, timezone
 from unittest.mock import patch, MagicMock
 
@@ -224,6 +226,158 @@ def test_execute_job_raises_on_unknown_task_type(db, patch_db_session):
     job = db.query(AIJob).filter(AIJob.id == job_id).first()
     assert job.status == "failed"
     assert "unknown_type" in job.error_message.lower()
+
+
+# ---------------------------------------------------------------------------
+# _claim_pending_jobs — atomic batch claim (P3-2)
+# ---------------------------------------------------------------------------
+
+def test_claim_pending_jobs_marks_running_and_returns_dispatch_fields(db, patch_db_session):
+    import app.ai_coach as ai_mod
+    patch_db_session(ai_mod)
+
+    job_id = enqueue_job("generate_plan", {"note": "hi"}, user_id=7)
+
+    claimed = ai_mod._claim_pending_jobs(limit=5)
+
+    assert len(claimed) == 1
+    assert claimed[0] == {
+        "job_id": job_id,
+        "task_type": "generate_plan",
+        "payload": {"note": "hi"},
+        "attempts": 1,
+        "max_attempts": 3,
+        "user_id": 7,
+    }
+    job = db.query(AIJob).filter(AIJob.id == job_id).first()
+    assert job.status == "running"
+    assert job.started_at is not None
+
+
+def test_claim_pending_jobs_respects_limit_and_ordering(db, patch_db_session):
+    import app.ai_coach as ai_mod
+    patch_db_session(ai_mod)
+
+    ids = [enqueue_job("weekly_review", {}, user_id=1) for _ in range(4)]
+
+    claimed = ai_mod._claim_pending_jobs(limit=2)
+
+    assert [c["job_id"] for c in claimed] == ids[:2]
+    statuses = {
+        job_id: db.query(AIJob).filter(AIJob.id == job_id).first().status
+        for job_id in ids
+    }
+    assert statuses[ids[0]] == "running"
+    assert statuses[ids[1]] == "running"
+    assert statuses[ids[2]] == "pending"
+    assert statuses[ids[3]] == "pending"
+
+
+def test_claim_pending_jobs_skips_already_running_and_exhausted(db, patch_db_session):
+    import app.ai_coach as ai_mod
+    patch_db_session(ai_mod)
+
+    running_id = enqueue_job("weekly_review", {}, user_id=1)
+    running_job = db.query(AIJob).filter(AIJob.id == running_id).first()
+    running_job.status = "running"
+
+    exhausted_id = enqueue_job("weekly_review", {}, user_id=1)
+    exhausted_job = db.query(AIJob).filter(AIJob.id == exhausted_id).first()
+    exhausted_job.attempts = 3  # == max_attempts, not retry-eligible
+    db.commit()
+
+    claimed = ai_mod._claim_pending_jobs(limit=5)
+
+    assert claimed == []
+
+
+# ---------------------------------------------------------------------------
+# app.main._worker_run_pending_jobs — pool concurrency & per-job timeout (P3-2)
+# ---------------------------------------------------------------------------
+
+def test_worker_runs_claimed_jobs_concurrently(db, patch_db_session):
+    """Two claimed jobs must actually run in parallel on the pool.
+
+    Both dispatch calls rendezvous on a 2-party barrier. If the worker still
+    ran them one at a time (the pre-P3-2 behavior), the first call would
+    block on the barrier waiting for a second party that never arrives until
+    it returns -- so it would time out and fail. Passing proves concurrency.
+    """
+    import app.ai_coach as ai_mod
+    import app.main as main_mod
+    patch_db_session(ai_mod)
+
+    barrier = threading.Barrier(2, timeout=5)
+
+    def blocking_review(**kwargs):
+        barrier.wait()
+
+    job1 = enqueue_job("weekly_review", {}, user_id=1)
+    job2 = enqueue_job("weekly_review", {}, user_id=2)
+
+    with patch.object(ai_mod, "weekly_review", side_effect=blocking_review):
+        main_mod._worker_run_pending_jobs()
+
+    db.expire_all()
+    assert db.query(AIJob).filter(AIJob.id == job1).first().status == "done"
+    assert db.query(AIJob).filter(AIJob.id == job2).first().status == "done"
+
+
+def test_worker_moves_on_after_job_timeout(db, patch_db_session, monkeypatch):
+    """A job that runs past the per-job timeout doesn't block the worker.
+
+    The worker should stop waiting on it (returning promptly) rather than
+    blocking the scheduler thread for the job's full duration; the job then
+    finishes on its own pool thread shortly after and records its outcome.
+    """
+    import app.ai_coach as ai_mod
+    import app.main as main_mod
+    patch_db_session(ai_mod)
+    monkeypatch.setattr(ai_mod, "_JOB_TIMEOUT_SECONDS", 0.1)
+
+    release = threading.Event()
+
+    def slow_review(**kwargs):
+        release.wait(timeout=5)
+
+    job_id = enqueue_job("weekly_review", {}, user_id=1)
+
+    with patch.object(ai_mod, "weekly_review", side_effect=slow_review):
+        start = time.monotonic()
+        main_mod._worker_run_pending_jobs()
+        elapsed = time.monotonic() - start
+
+    assert elapsed < 2.0  # bounded by the timeout, not the job's full duration
+
+    db.expire_all()
+    job = db.query(AIJob).filter(AIJob.id == job_id).first()
+    assert job.status == "running"  # still in flight; worker didn't touch it
+
+    release.set()
+    time.sleep(0.3)  # let the pool thread finish and record its own outcome
+
+    db.expire_all()
+    job = db.query(AIJob).filter(AIJob.id == job_id).first()
+    assert job.status == "done"
+
+
+def test_worker_claims_before_dispatch_no_double_claim_across_polls(db, patch_db_session):
+    """A second poll fired while jobs are still running must not re-claim them.
+
+    Regression guard for the atomic-claim requirement: claiming happens
+    entirely up front (before any dispatch), so a job already "running"
+    can never be selected by a subsequent claim.
+    """
+    import app.ai_coach as ai_mod
+    patch_db_session(ai_mod)
+
+    job_id = enqueue_job("weekly_review", {}, user_id=1)
+
+    first_claim = ai_mod._claim_pending_jobs(limit=5)
+    assert [c["job_id"] for c in first_claim] == [job_id]
+
+    second_claim = ai_mod._claim_pending_jobs(limit=5)
+    assert second_claim == []
 
 
 # ---------------------------------------------------------------------------
