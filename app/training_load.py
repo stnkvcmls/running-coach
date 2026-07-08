@@ -16,6 +16,7 @@ the table, so a typical new-activity sync re-processes a handful of days instead
 of the full history.
 """
 
+import json
 import logging
 import math
 from collections import defaultdict
@@ -61,6 +62,35 @@ def _intensity_to_tss(duration_hr: float, intensity: float) -> float:
     return duration_hr * intensity ** 2 * 100.0
 
 
+# Sport categories for load accounting, matched against Garmin's ``typeKey``
+# substrings (e.g. "running", "treadmill_running", "road_biking", "strength_training").
+# Order matters: first matching category wins.
+_SPORT_CATEGORY_RULES: list[tuple[str, tuple[str, ...]]] = [
+    ("run", ("run", "treadmill")),
+    ("ride", ("cycling", "biking", "bike")),
+    ("swim", ("swim",)),
+    ("strength", ("strength", "yoga", "pilates")),
+]
+
+
+def sport_category(activity_type: str | None) -> str:
+    """Bucket a raw Garmin activity type into a coarse sport category.
+
+    One of ``run``, ``ride``, ``swim``, ``strength``, or ``other``.
+    """
+    if not activity_type:
+        return "other"
+    t = activity_type.lower()
+    for category, keywords in _SPORT_CATEGORY_RULES:
+        if any(k in t for k in keywords):
+            return category
+    return "other"
+
+
+def is_run(activity_type: str | None) -> bool:
+    return sport_category(activity_type) == "run"
+
+
 def estimate_tss(activity: Activity, profile: AthleteProfile | None) -> tuple[float, str]:
     """Return ``(tss, source)`` for one activity.
 
@@ -74,10 +104,18 @@ def estimate_tss(activity: Activity, profile: AthleteProfile | None) -> tuple[fl
     if duration_hr <= 0:
         return 0.0, "none"
 
-    # Pace-based rTSS: intensity = threshold_pace / actual_pace (min/km), so a
-    # faster (smaller) pace yields a higher intensity factor.
+    # Pace-based rTSS assumes a running gait: intensity = threshold_pace / actual
+    # pace (min/km). ``avg_pace_min_km`` is a generic distance/duration ratio
+    # computed for every synced activity (see garmin_sync._extract_activity_fields),
+    # so it must be gated to runs — otherwise a bike ride's much faster
+    # distance/time ratio reads as a sprint and wildly overstates its TSS.
     thr_pace = profile.threshold_pace_min_km if profile else None
-    if thr_pace and activity.avg_pace_min_km and activity.avg_pace_min_km > 0:
+    if (
+        is_run(activity.activity_type)
+        and thr_pace
+        and activity.avg_pace_min_km
+        and activity.avg_pace_min_km > 0
+    ):
         intensity = thr_pace / activity.avg_pace_min_km
         return _intensity_to_tss(duration_hr, intensity), "pace"
 
@@ -191,6 +229,7 @@ def _load_series_points(
             ramp_rate_7d=row.ramp_rate_7d,
             ramp_rate_28d=row.ramp_rate_28d,
             injury_risk=row.injury_risk or "low",
+            sport_breakdown=json.loads(row.sport_breakdown_json) if row.sport_breakdown_json else None,
         )
         for row in rows
     ]
@@ -206,8 +245,12 @@ def _daily_tss_range(
     end_date: date,
     profile: AthleteProfile | None,
     user_id: int,
-) -> dict[date, float]:
-    """Sum estimated TSS per calendar day in [start_date, end_date]."""
+) -> tuple[dict[date, float], dict[date, dict[str, float]]]:
+    """Sum estimated TSS per calendar day in [start_date, end_date].
+
+    Returns ``(totals, sport_totals)`` where ``sport_totals`` breaks each day's
+    total down by ``sport_category`` (e.g. ``{"run": 62.0, "ride": 18.0}``).
+    """
     start_dt = datetime.combine(start_date, datetime.min.time())
     end_dt = datetime.combine(end_date + timedelta(days=1), datetime.min.time())
     activities = (
@@ -221,12 +264,14 @@ def _daily_tss_range(
         .all()
     )
     totals: dict[date, float] = defaultdict(float)
+    sport_totals: dict[date, dict[str, float]] = defaultdict(lambda: defaultdict(float))
     for a in activities:
         day = a.started_at.date() if isinstance(a.started_at, datetime) else a.started_at
         tss, _ = estimate_tss(a, profile)
         if tss > 0:
             totals[day] += tss
-    return totals
+            sport_totals[day][sport_category(a.activity_type)] += tss
+    return totals, sport_totals
 
 
 # ---------------------------------------------------------------------------
@@ -327,7 +372,7 @@ def _ensure_series_current(
     db.commit()
 
     profile = db.query(AthleteProfile).filter(AthleteProfile.user_id == user_id).first()
-    daily_tss_map = _daily_tss_range(db, recompute_from, compute_to, profile, user_id)
+    daily_tss_map, daily_sport_map = _daily_tss_range(db, recompute_from, compute_to, profile, user_id)
 
     # Load the 28-day ramp-rate lookback from the persisted table.
     lookback_start = recompute_from - timedelta(days=28)
@@ -353,6 +398,10 @@ def _ensure_series_current(
             round(ctl - all_before[idx - 28].ctl, 1) if idx >= 28 else None
         )
         risk = _injury_risk(acwr, ramp_7d)
+        sport_breakdown = {
+            sport: round(val, 1) for sport, val in daily_sport_map.get(day, {}).items()
+        } or None
+        sport_breakdown_json = json.dumps(sport_breakdown) if sport_breakdown else None
 
         new_points.append(
             TrainingLoadPoint(
@@ -365,6 +414,7 @@ def _ensure_series_current(
                 ramp_rate_7d=ramp_7d,
                 ramp_rate_28d=ramp_28d,
                 injury_risk=risk,
+                sport_breakdown=sport_breakdown,
             )
         )
         new_db_rows.append(
@@ -379,6 +429,7 @@ def _ensure_series_current(
                 ramp_rate_7d=ramp_7d,
                 ramp_rate_28d=ramp_28d,
                 injury_risk=risk,
+                sport_breakdown_json=sport_breakdown_json,
                 computed_at=now_ts,
             )
         )

@@ -628,7 +628,17 @@ def _build_context(
                 p_sec = int((a.avg_pace_min_km - p_min) * 60)
                 pace = f"{p_min}:{p_sec:02d}/km"
             date_str = a.started_at.strftime("%m/%d") if a.started_at else "?"
-            act_lines.append(f"- {date_str}: {a.name} ({a.activity_type}) {dist} {dur} {pace} {hr}")
+            # Non-run sessions don't carry a pace/HR the athlete reads as
+            # "load" the way a run's does — surface the estimated TSS instead
+            # so cross-training contribution to fitness/fatigue is explicit.
+            cross_training = ""
+            if not training_load.is_run(a.activity_type):
+                tss, _ = training_load.estimate_tss(a, profile)
+                if tss > 0:
+                    cross_training = f"~{tss:.0f} TSS"
+            act_lines.append(
+                f"- {date_str}: {a.name} ({a.activity_type}) {dist} {dur} {pace} {hr} {cross_training}".rstrip()
+            )
         sections.append("## Recent Activities (14 days)\n" + "\n".join(act_lines))
 
     # Weekly volume (last 8 weeks)

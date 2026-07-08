@@ -423,7 +423,7 @@ dashed chart line and delta callout chips; `CustomChartsView` adds a "Compare
 to previous period" checkbox that overlays a muted dashed line per selected
 metric. All new and existing tests pass (backend pytest, `tsc -b`, Vitest)._
 
-#### P2-3 · Multi-sport load audit & explicit handling
+#### P2-3 · Multi-sport load audit & explicit handling ✅ Done.
 **What:** Make non-running load honest and visible. Today the sync stores **all**
 activity types and the TSS chain is nominally sport-agnostic, but it was designed
 for runs (rTSS assumes running pace; thresholds filter to `_is_run`). Audit and
@@ -442,6 +442,27 @@ aggregation), `app/api.py` (training-load response sport split),
 `app/schemas.py`, `app/ai_coach.py` (context line),
 `frontend/src/components/today/TrainingLoadChart.tsx`,
 `tests/test_training_load.py` (ride/strength fixtures).
+_Implemented as described, scoped to P2-3 only. The audit found a real bug, not
+just missing presentation: `avg_pace_min_km` is computed for **every** synced
+activity regardless of sport (`garmin_sync._extract_activity_fields`), so a
+ride's much faster generic distance/time ratio was being read as a running
+pace and fed straight into rTSS — wildly overstating a bike ride's intensity
+and, downstream, CTL/ATL/ACWR/injury-risk. `app/training_load.py` gained a
+`sport_category()` classifier (`run` / `ride` / `swim` / `strength` / `other`,
+matched against Garmin `typeKey` substrings) and its `is_run()` helper now
+gates the pace-based branch in `estimate_tss`; hrTSS and the sRPE/duration
+floor were already sport-agnostic and needed no change. `_daily_tss_range`
+now also returns a per-day `{sport: tss}` breakdown, persisted as a new
+`DailyLoadSeries.sport_breakdown_json` column (migration
+`q0r1s2t3u4v5`) and surfaced on `TrainingLoadPoint.sport_breakdown` — no new
+endpoint needed, it rides along on the existing `GET /training-load`
+response. `TrainingLoadChart.tsx` adds a "Load by sport" stacked bar +
+legend (aggregated across the visible window) below the existing CTL/ATL/TSB
+legend, shown only when more than one sport contributed. The AI context's
+"Recent Activities" line now appends `~N TSS` for any non-run session (e.g.
+"Evening Ride (cycling) ... ~48 TSS"), reusing the same `estimate_tss` call
+the load series uses, so the coach and the chart never disagree. All new and
+existing tests pass (backend pytest, `tsc -b`, Vitest, `npm run build`)._
 
 ### P3 — Architecture & hygiene (pay down before the next cycle)
 

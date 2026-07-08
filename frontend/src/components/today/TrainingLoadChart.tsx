@@ -24,6 +24,30 @@ const ATL_COLOR = '#e17055' // Fatigue — orange
 const TSB_COLOR = '#00b894' // Form — green
 const ACWR_COLOR = '#fdcb6e' // ACWR — amber
 
+const SPORT_COLORS: Record<string, string> = {
+  run: '#6c5ce7',
+  ride: '#0984e3',
+  swim: '#00cec9',
+  strength: '#e17055',
+  other: '#b2bec3',
+}
+
+const SPORT_LABELS: Record<string, string> = {
+  run: 'Run',
+  ride: 'Ride',
+  swim: 'Swim',
+  strength: 'Strength',
+  other: 'Other',
+}
+
+function sportColor(sport: string): string {
+  return SPORT_COLORS[sport] ?? SPORT_COLORS.other
+}
+
+function sportLabel(sport: string): string {
+  return SPORT_LABELS[sport] ?? sport
+}
+
 // Form (TSB) and RSB (ACWR) zones/labels are computed server-side (see
 // classify_tsb/classify_acwr in app/schemas.py) so this badge and the AI
 // context never drift out of sync with each other.
@@ -83,6 +107,21 @@ export default function TrainingLoadChart({ current }: Props) {
   }))
 
   const hasAcwr = current.acwr != null
+
+  // Aggregate each day's sport_breakdown into a window total so the athlete
+  // sees at a glance how much of their load is running vs cross-training.
+  const sportTotals: Record<string, number> = {}
+  for (const p of points) {
+    if (!p.sport_breakdown) continue
+    for (const [sport, tss] of Object.entries(p.sport_breakdown)) {
+      sportTotals[sport] = (sportTotals[sport] ?? 0) + tss
+    }
+  }
+  const sportTotalSum = Object.values(sportTotals).reduce((sum, v) => sum + v, 0)
+  const sportShares = Object.entries(sportTotals)
+    .map(([sport, tss]) => ({ sport, tss, pct: sportTotalSum > 0 ? (tss / sportTotalSum) * 100 : 0 }))
+    .sort((a, b) => b.tss - a.tss)
+  const hasCrossTraining = sportShares.length > 1
 
   return (
     <div className="card training-load">
@@ -206,6 +245,30 @@ export default function TrainingLoadChart({ current }: Props) {
           <div className="tl-legend-item"><span className="tl-dot" style={{ background: ACWR_COLOR }} />ACWR</div>
         )}
       </div>
+
+      {hasCrossTraining && (
+        <div className="tl-sport-split">
+          <span className="tl-sport-split-label">Load by sport ({points.length}d)</span>
+          <div className="tl-sport-bar">
+            {sportShares.map(({ sport, pct }) => (
+              <div
+                key={sport}
+                className="tl-sport-bar-seg"
+                style={{ width: `${pct}%`, background: sportColor(sport) }}
+                title={`${sportLabel(sport)}: ${pct.toFixed(0)}%`}
+              />
+            ))}
+          </div>
+          <div className="tl-legend">
+            {sportShares.map(({ sport, pct }) => (
+              <div className="tl-legend-item" key={sport}>
+                <span className="tl-dot" style={{ background: sportColor(sport) }} />
+                {sportLabel(sport)} {pct.toFixed(0)}%
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
