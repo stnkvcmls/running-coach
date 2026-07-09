@@ -595,9 +595,14 @@ existing tests pass (backend pytest, `tsc -b`, Vitest, `npm run build`)._
   routes push through a new `system_health` notification category
   (`app/notifications.py`) reusing all of P0-1's existing plumbing (opt-out
   preferences, VAPID no-op guard). No new tables or migrations: everything
-  reads `SyncStatus` and `AIJob` rows that already exist. All new and
-  existing tests pass (1000+ backend pytest, `tsc -b`, `npm run build`, and
-  the existing 83-case Vitest suite)._
+  reads `SyncStatus` and `AIJob` rows that already exist.
+  `SystemHealthSection.test.tsx` adds render coverage in the P3-3 style
+  (mocked `fetch`, `renderWithQueryClient`): last-sync formatting including
+  the "never" fallback, the canary OK/drift status lines and per-source
+  missing-fields listing, the failed-jobs empty state, and the retry
+  button's POST + pending-disabled state. All new and existing tests pass
+  (1000+ backend pytest, `tsc -b`, `npm run build`, and a 91-case Vitest
+  suite — 83 pre-existing + 8 new)._
 
 ### Architecture assessment (no change recommended)
 
