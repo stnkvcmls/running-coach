@@ -4,16 +4,14 @@ import { useQueryClient } from '@tanstack/react-query'
 import { ClipboardList, RefreshCw, ChevronLeft, ChevronRight, AlertTriangle, Settings2, Watch, CheckCircle, ChevronDown, ChevronUp, Dumbbell, Droplet, PlayCircle } from 'lucide-react'
 import { useTrainingPlan, useGenerateTrainingPlan, useRealignmentStatus, useRealignPlan, usePushWorkoutToGarmin, useJobStatus } from '../../api/hooks'
 import type { StrengthRoutine, FuellingGuidance, TrainingPlanDay, TrainingPlanWeek } from '../../api/types'
+import { WORKOUT_TYPE_COLORS } from '../../utils/colors'
 import SeasonTimeline from './SeasonTimeline'
 import './PlanView.css'
 
+// `rest` has no --color-* token (it renders muted, not a workout colour) so it
+// stays a local override on top of the shared palette.
 const WORKOUT_COLORS: Record<string, string> = {
-  easy: 'var(--color-easy)',
-  tempo: 'var(--color-tempo)',
-  long: 'var(--color-long)',
-  interval: 'var(--color-interval)',
-  cross: 'var(--color-cross)',
-  strength: 'var(--color-strength)',
+  ...WORKOUT_TYPE_COLORS,
   rest: 'var(--text-muted)',
 }
 

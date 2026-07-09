@@ -92,7 +92,7 @@ Visual target per phase: docs/mockups/ui-redesign-mockup.html (toggle
 "Show component labels" to cross-reference elements against plan tasks).
 
 ## Phases
-- [ ] Phase 0 — Design-system foundation & defect fixes (tokens, `--surface`
+- [x] Phase 0 — Design-system foundation & defect fixes (tokens, `--surface`
       fix, shared buttons, chart theme, toast + skeleton primitives)
 - [ ] Phase 1 — Navigation & IA (5-tab nav, Settings behind avatar, sync
       status pill, reconnect orphaned /daily route, planned-dots on calendar)

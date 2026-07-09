@@ -5,23 +5,8 @@ import {
 } from 'recharts'
 import type { ChartSeries, MetricZone } from '../../api/types'
 import { useTheme } from '../../App'
-import { getChartTooltipStyle, getChartTooltipTextStyle, getChartTickColor } from '../../utils/theme'
+import { getAxisTick, getTooltipProps, METRIC_COLORS } from '../../utils/chartTheme'
 import './ChartTabs.css'
-
-const chartColors: Record<string, string> = {
-  heart_rate: '#e74c3c',
-  elevation: '#2ecc71',
-  pace: '#f39c12',
-  gap_pace: '#fd9644',
-  cadence: '#0984e3',
-  power: '#e84393',
-  gct: '#6c5ce7',
-  vert_osc: '#00cec9',
-  vert_ratio: '#fd79a8',
-  stride: '#00b894',
-  perf_cond: '#fdcb6e',
-  stamina: '#a29bfe',
-}
 
 const SCATTER_METRICS = new Set(['cadence', 'stride', 'gct', 'vert_osc', 'vert_ratio'])
 
@@ -56,16 +41,14 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
   const series = chartData[activeKey]
   if (!series) return null
 
-  const color = chartColors[activeKey] || '#6c5ce7'
+  const color = METRIC_COLORS[activeKey] || '#6c5ce7'
   const isScatter = SCATTER_METRICS.has(activeKey)
   const zones = metricZones?.[activeKey]
 
   // Reverse Y for pace metrics (lower value = faster = better)
   const reversed = activeKey === 'pace' || activeKey === 'gap_pace'
 
-  const tooltipStyle = getChartTooltipStyle(theme)
-  const tooltipTextStyle = getChartTooltipTextStyle(theme)
-  const tickColor = getChartTickColor(theme)
+  const { contentStyle: tooltipStyle, labelStyle: tooltipTextStyle } = getTooltipProps(theme)
 
   const yTickFormatter = (v: number) => {
     if (activeKey === 'pace' || activeKey === 'gap_pace') {
@@ -118,7 +101,7 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
                 domain={['auto', 'auto']}
                 tickCount={7}
                 tickFormatter={yTickFormatter}
-                tick={{ fontSize: 10, fill: tickColor }}
+                tick={getAxisTick(theme)}
                 axisLine={false}
                 tickLine={false}
                 width={38}
@@ -184,7 +167,7 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
               domain={['auto', 'auto']}
               tickCount={7}
               tickFormatter={yTickFormatter}
-              tick={{ fontSize: 10, fill: tickColor }}
+              tick={getAxisTick(theme)}
               axisLine={false}
               tickLine={false}
               width={38}

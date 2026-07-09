@@ -12,7 +12,7 @@ import {
 import { useTrainingLoad } from '../../api/hooks'
 import type { TrainingLoadPoint } from '../../api/types'
 import { useTheme } from '../../App'
-import { getChartTickColor } from '../../utils/theme'
+import { getAxisTick, getGridStroke, getTooltipProps } from '../../utils/chartTheme'
 import './TrainingLoadChart.css'
 
 interface Props {
@@ -67,11 +67,8 @@ function rsbTone(zone: string | null): string {
 export default function TrainingLoadChart({ current }: Props) {
   const { data } = useTrainingLoad(90)
   const { theme } = useTheme()
-  const tickColor = getChartTickColor(theme)
-  const tooltipBg = theme === 'light' ? '#ffffff' : '#1a1a2e'
-  const tooltipBorder = theme === 'light' ? '#e0e4ec' : '#2d2d44'
-  const tooltipText = theme === 'light' ? '#1a1a2e' : '#e0e0e0'
-  const refLineColor = theme === 'light' ? '#e0e4ec' : '#2d2d44'
+  const { contentStyle } = getTooltipProps(theme)
+  const refLineColor = getGridStroke(theme)
 
   function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) {
     if (!active || !payload || !payload.length) return null
@@ -79,12 +76,12 @@ export default function TrainingLoadChart({ current }: Props) {
     payload.forEach(p => { byKey[p.dataKey] = p.value })
     return (
       <div style={{
-        background: tooltipBg,
-        border: `1px solid ${tooltipBorder}`,
-        borderRadius: 8,
+        background: contentStyle.background,
+        border: contentStyle.border,
+        borderRadius: contentStyle.borderRadius,
         padding: '8px 12px',
         fontSize: 12,
-        color: tooltipText,
+        color: contentStyle.color,
       }}>
         <div style={{ fontWeight: 600, marginBottom: 4 }}>{label}</div>
         <div style={{ color: CTL_COLOR }}>Fitness: {byKey.ctl?.toFixed(0)}</div>
@@ -172,12 +169,12 @@ export default function TrainingLoadChart({ current }: Props) {
               </defs>
               <XAxis
                 dataKey="label"
-                tick={{ fontSize: 10, fill: tickColor }}
+                tick={getAxisTick(theme)}
                 axisLine={false}
                 tickLine={false}
                 minTickGap={28}
               />
-              <YAxis yAxisId="load" tick={{ fontSize: 10, fill: tickColor }} axisLine={false} tickLine={false} width={28} />
+              <YAxis yAxisId="load" tick={getAxisTick(theme)} axisLine={false} tickLine={false} width={28} />
               <YAxis yAxisId="form" orientation="right" hide />
               {hasAcwr && (
                 <YAxis yAxisId="acwr" orientation="right" domain={[0, 2.5]} hide />

@@ -16,6 +16,7 @@ import PlanView from './components/plan/PlanView'
 import PlanSetupView from './components/plan-setup/PlanSetupView'
 import StatInfoView from './components/info/StatInfoView'
 import ChatView from './components/chat/ChatView'
+import { ToastHost } from './components/ui/Toast'
 import { useAthleteProfile } from './api/hooks'
 
 interface DateContextType {
@@ -113,6 +114,7 @@ export default function App() {
           </Routes>
         </main>
         {!isDetailPage && <BottomNav />}
+        <ToastHost />
       </div>
     </DateContext.Provider>
     </ThemeContext.Provider>

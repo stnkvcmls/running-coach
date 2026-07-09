@@ -336,30 +336,6 @@
   font-size: 0.72rem;
 }
 
-/* Shared utilities */
-.btn-primary {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 24px;
-  background: var(--accent);
-  color: #fff;
-  border-radius: var(--radius-sm);
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-
-.btn-primary:hover:not(:disabled) {
-  opacity: 0.88;
-}
-
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .spin {
   animation: spin 1s linear infinite;
 }

@@ -1,17 +1,20 @@
 import type { CSSProperties } from 'react'
+import { getTooltipProps, getChartTickColor as _getChartTickColor } from './chartTheme'
+import type { Theme } from './chartTheme'
 
-export type Theme = 'dark' | 'light'
+export type { Theme }
 
+/** @deprecated use getTooltipProps from utils/chartTheme */
 export function getChartTooltipStyle(theme: Theme): CSSProperties {
-  return theme === 'light'
-    ? { background: '#ffffff', border: '1px solid #e0e4ec', borderRadius: 8, fontSize: 12, color: '#1a1a2e' }
-    : { background: '#1a1a2e', border: '1px solid #2d2d44', borderRadius: 8, fontSize: 12, color: '#e0e0e0' }
+  return getTooltipProps(theme).contentStyle
 }
 
+/** @deprecated use utils/chartTheme */
 export function getChartTickColor(theme: Theme): string {
-  return theme === 'light' ? '#6b7280' : '#888'
+  return _getChartTickColor(theme)
 }
 
+/** @deprecated use getTooltipProps from utils/chartTheme */
 export function getChartTooltipTextStyle(theme: Theme): CSSProperties {
-  return { color: theme === 'light' ? '#1a1a2e' : '#e0e0e0' }
+  return getTooltipProps(theme).labelStyle
 }

@@ -31,6 +31,7 @@
   color: var(--text);
   border-top: 1px solid var(--border);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .lap-num {
