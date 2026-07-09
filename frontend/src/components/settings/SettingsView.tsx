@@ -14,6 +14,7 @@ import {
 import AthleteProfileSection from './AthleteProfileSection'
 import CoachMemorySection from './CoachMemorySection'
 import NotificationsSection from './NotificationsSection'
+import SystemHealthSection from './SystemHealthSection'
 import ThresholdEstimateSection from './ThresholdEstimateSection'
 import ZoneConfigSection from './ZoneConfigSection'
 import './SettingsView.css'
@@ -269,6 +270,9 @@ export default function SettingsView() {
 
       {/* Push notifications */}
       <NotificationsSection />
+
+      {/* Ops observability: last sync, canary status, failed jobs */}
+      <SystemHealthSection />
 
       {/* Auto-estimated thresholds */}
       <ThresholdEstimateSection />

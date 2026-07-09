@@ -4,7 +4,8 @@ Standards-based Web Push (VAPID) so the PWA + service worker already
 installed on the athlete's phone can receive bite-sized coach nudges without
 polling or a native app: a new AI insight after an activity syncs, the weekly
 review landing, a plan-adaptation suggestion on a low-readiness morning, a
-Garmin re-auth flag, a race-week reminder, and a new personal record.
+Garmin re-auth flag, a race-week reminder, a new personal record, and system
+health alarms (schema-drift canary, repeated AI-job failures — P3-4).
 
 ``notify()`` is the single entry point every call site uses. It is a no-op
 (with a one-time warning) when VAPID keys aren't configured, so existing
@@ -34,6 +35,7 @@ CATEGORIES: dict[str, str] = {
     "reauth": "Garmin connection issues",
     "race_reminder": "Race-week reminders",
     "briefing": "Pre-workout briefings",
+    "system_health": "System health alerts",
 }
 
 _PREFS_KEY = "notification_preferences"

@@ -556,14 +556,53 @@ existing tests pass (backend pytest, `tsc -b`, Vitest, `npm run build`)._
   field) and the summary/edit toggle; and the briefing generate/regenerate
   flow. All 83 frontend tests pass (57 pre-existing + 26 new); `tsc -b` and
   `npm run build` are clean._
-- **P3-4 · Ops observability surface.** The schema-drift canary and AIJob
-  failures live in logs and `SyncStatus` — invisible in the UI. Add a compact
-  health panel in Settings (last sync per job, canary status, recent failed
-  jobs with retry buttons) over data that already exists, and route canary
-  alarms + repeated job failures through P0-1 notifications. **S–M.** Files:
-  `app/api.py`/`app/routers/settings.py` (`GET /health-detail`),
+- **P3-4 · Ops observability surface. ✅ Done.** The schema-drift canary and
+  AIJob failures live in logs and `SyncStatus` — invisible in the UI. Add a
+  compact health panel in Settings (last sync per job, canary status, recent
+  failed jobs with retry buttons) over data that already exists, and route
+  canary alarms + repeated job failures through P0-1 notifications. **S–M.**
+  Files: `app/api.py`/`app/routers/settings.py` (`GET /health-detail`),
   `frontend/src/components/settings/SystemHealthSection.tsx` + `.css` (new),
   `tests/test_api_endpoints.py`.
+  _Implemented as described, scoped to P3-4 only. `check_payload_fields`
+  (`app/garmin_sync.py`) now also records each check's result into an
+  in-memory `_canary_status` registry keyed by source, exposed via
+  `get_canary_status()` — its signature, return value, and logging are
+  unchanged, so the ~30 existing canary tests needed no changes. In-memory
+  rather than `SyncStatus`-persisted is a deliberate simplification: the
+  canary reflects the shape of Garmin's API, which is identical for every
+  user and re-checked every sync cycle, and two of the six contract-check
+  call sites (`_extract_activity_fields`, `_parse_calendar_response`) don't
+  have a DB session in scope without restructuring their callers. The
+  health panel itself is `GET /health-detail` (`app/routers/settings.py`,
+  the post-P3-1 split location), returning curated last-sync timestamps for
+  the four sync jobs (activities/daily/profile/calendar, out of the fuller
+  `SyncStatus` dump already shown elsewhere in Settings), the current canary
+  status per source, and the athlete's 10 most recent failed `AIJob` rows.
+  Retrying a failed job is `POST /jobs/{id}/retry` (`app/routers/daily.py`,
+  next to the existing single-job status endpoint), which resets it to
+  `pending`/`attempts=0` for the worker's next poll. For the notification
+  routing: `app/coach/jobs.py`'s `_finish_claimed_job` pushes a
+  `system_health` alert the moment a job's status flips to `"failed"`
+  (attempts exhausted) — event-driven, since `db`/`user_id` are already in
+  scope there. Canary alarms instead follow the existing periodic-check
+  pattern (`app/main.py`'s `_push_plan_adaptation_if_needed` /
+  `_push_race_week_reminders`): a new `_push_canary_alarms_if_needed`, called
+  from `run_daily_sync_for_user`, diffs the current drifted-source set
+  against the previously-alarmed set (a `SyncStatus` row), so a standing
+  drift condition notifies once on the transition rather than every sync
+  cycle — the same shape as `mark_garmin_needs_reauth`'s reauth flip. Both
+  routes push through a new `system_health` notification category
+  (`app/notifications.py`) reusing all of P0-1's existing plumbing (opt-out
+  preferences, VAPID no-op guard). No new tables or migrations: everything
+  reads `SyncStatus` and `AIJob` rows that already exist.
+  `SystemHealthSection.test.tsx` adds render coverage in the P3-3 style
+  (mocked `fetch`, `renderWithQueryClient`): last-sync formatting including
+  the "never" fallback, the canary OK/drift status lines and per-source
+  missing-fields listing, the failed-jobs empty state, and the retry
+  button's POST + pending-disabled state. All new and existing tests pass
+  (1000+ backend pytest, `tsc -b`, `npm run build`, and a 91-case Vitest
+  suite — 83 pre-existing + 8 new)._
 
 ### Architecture assessment (no change recommended)
 

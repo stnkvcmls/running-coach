@@ -246,6 +246,76 @@ def test_push_race_week_reminders_ignores_other_dates(db, patch_db_session, monk
     notify.assert_not_called()
 
 
+# --- system-health canary alarms (P3-4) -------------------------------------
+
+def test_push_canary_alarms_sends_once_then_dedupes(db, patch_db_session, monkeypatch):
+    from app import garmin_sync
+    from app import notifications as notifications_mod
+
+    patch_db_session(main)
+    monkeypatch.setattr(
+        garmin_sync, "get_canary_status",
+        lambda: {"activity_summary": {"ok": False, "missing": ["activityId"], "checked_at": "x"}},
+    )
+    notify = MagicMock()
+    monkeypatch.setattr(notifications_mod, "notify", notify)
+
+    main._push_canary_alarms_if_needed(1)
+    notify.assert_called_once()
+    assert notify.call_args.args[2] == "system_health"
+    assert "activity_summary" in notify.call_args.kwargs["body"]
+
+    # A second call with the same drifted source must not push again.
+    notify.reset_mock()
+    main._push_canary_alarms_if_needed(1)
+    notify.assert_not_called()
+
+
+def test_push_canary_alarms_pushes_again_for_newly_drifted_source(db, patch_db_session, monkeypatch):
+    from app import garmin_sync
+    from app import notifications as notifications_mod
+
+    patch_db_session(main)
+    notify = MagicMock()
+    monkeypatch.setattr(notifications_mod, "notify", notify)
+
+    monkeypatch.setattr(
+        garmin_sync, "get_canary_status",
+        lambda: {"activity_summary": {"ok": False, "missing": ["activityId"], "checked_at": "x"}},
+    )
+    main._push_canary_alarms_if_needed(1)
+    notify.assert_called_once()
+
+    notify.reset_mock()
+    monkeypatch.setattr(
+        garmin_sync, "get_canary_status",
+        lambda: {
+            "activity_summary": {"ok": False, "missing": ["activityId"], "checked_at": "x"},
+            "daily_stats": {"ok": False, "missing": ["totalSteps"], "checked_at": "y"},
+        },
+    )
+    main._push_canary_alarms_if_needed(1)
+    notify.assert_called_once()
+    assert "daily_stats" in notify.call_args.kwargs["body"]
+    assert "activity_summary" not in notify.call_args.kwargs["body"]
+
+
+def test_push_canary_alarms_skips_when_all_ok(db, patch_db_session, monkeypatch):
+    from app import garmin_sync
+    from app import notifications as notifications_mod
+
+    patch_db_session(main)
+    monkeypatch.setattr(
+        garmin_sync, "get_canary_status",
+        lambda: {"activity_summary": {"ok": True, "missing": [], "checked_at": "x"}},
+    )
+    notify = MagicMock()
+    monkeypatch.setattr(notifications_mod, "notify", notify)
+
+    main._push_canary_alarms_if_needed(1)
+    notify.assert_not_called()
+
+
 # --- pre-workout briefing enqueue (P1-3) ------------------------------------
 
 def test_generate_briefing_if_needed_enqueues_once_then_dedupes(db, patch_db_session, monkeypatch):

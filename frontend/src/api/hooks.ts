@@ -26,6 +26,7 @@ import type {
   PlanRealignmentStatus,
   PushWorkoutResponse,
   SettingsResponse,
+  SystemHealthResponse,
   AiConfigResponse,
   AiConfigRequest,
   AthleteProfile,
@@ -192,6 +193,21 @@ export function useJobStatus(jobId: number | null) {
       const s = query.state.data?.status
       return s === 'pending' || s === 'running' ? 2000 : false
     },
+  })
+}
+
+export function useSystemHealth() {
+  return useQuery({
+    queryKey: ['system-health'],
+    queryFn: () => apiGet<SystemHealthResponse>('/health-detail'),
+  })
+}
+
+export function useRetryJob() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (jobId: number) => apiPost<AIJobResponse>(`/jobs/${jobId}/retry`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['system-health'] }),
   })
 }
 

@@ -11,6 +11,7 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.models import (
     Activity,
+    AIJob,
     AthleteProfile,
     DailySummary,
     GarminCalendarEvent,
@@ -24,11 +25,13 @@ from app.schemas import (
     AiConfigResponse,
     AthleteProfileRequest,
     AthleteProfileResponse,
+    CanaryStatusEntry,
     GarminConnectResult,
     GarminConnectionStatus,
     GarminCredentialsRequest,
     GarminMfaRequest,
     SettingsResponse,
+    SystemHealthResponse,
     ThresholdApplyRequest,
     ThresholdEstimateField,
     ThresholdEstimateResponse,
@@ -75,6 +78,60 @@ def api_settings(
         "calendar_events": db.query(func.count(GarminCalendarEvent.id)).filter(GarminCalendarEvent.user_id == uid).scalar() or 0,
     }
     return SettingsResponse(sync_statuses=sync_statuses, counts=counts)
+
+
+# Curated "last sync per job" keys -> display label, out of the full
+# SyncStatus dump (which also carries backfill progress markers, cached
+# threshold estimates, dedup flags, etc.).
+_LAST_SYNC_KEYS = {
+    "activities": "last_activity_sync",
+    "daily": "last_daily_sync",
+    "profile": "last_profile_sync",
+    "calendar": "last_calendar_sync",
+}
+
+_MAX_FAILED_JOBS = 10
+
+
+@router.get("/health-detail", response_model=SystemHealthResponse)
+def api_health_detail(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Ops observability surface (P3-4): last sync per job, canary status,
+    and recent failed AI jobs, over data already tracked elsewhere.
+    """
+    from app import garmin_sync
+
+    uid = current_user.id
+    sync_rows = {
+        row.key: row.value
+        for row in db.query(SyncStatus).filter(
+            SyncStatus.user_id == uid, SyncStatus.key.in_(_LAST_SYNC_KEYS.values())
+        )
+    }
+    last_sync = {label: sync_rows.get(key) for label, key in _LAST_SYNC_KEYS.items()}
+
+    canary = {
+        source: CanaryStatusEntry(**result)
+        for source, result in garmin_sync.get_canary_status().items()
+    }
+    canary_ok = all(entry.ok for entry in canary.values())
+
+    failed_jobs = (
+        db.query(AIJob)
+        .filter(AIJob.user_id == uid, AIJob.status == "failed")
+        .order_by(AIJob.completed_at.desc())
+        .limit(_MAX_FAILED_JOBS)
+        .all()
+    )
+
+    return SystemHealthResponse(
+        last_sync=last_sync,
+        canary_ok=canary_ok,
+        canary=canary,
+        recent_failed_jobs=failed_jobs,
+    )
 
 
 @router.get("/ai-config", response_model=AiConfigResponse)

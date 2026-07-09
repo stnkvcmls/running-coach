@@ -500,3 +500,43 @@ def test_drift_simulation_calendar_items_renamed():
     assert result["ok"] is False
     events = garmin_sync._parse_calendar_response(payload)
     assert events == []
+
+
+# ---------------------------------------------------------------------------
+# get_canary_status (P3-4): in-memory record of the last check per source
+# ---------------------------------------------------------------------------
+
+def test_get_canary_status_records_ok_check():
+    garmin_sync.check_payload_fields({"a": 1, "b": 2}, ["a", "b"], "p3_4_ok_source")
+    status = garmin_sync.get_canary_status()
+    assert status["p3_4_ok_source"]["ok"] is True
+    assert status["p3_4_ok_source"]["missing"] == []
+    assert status["p3_4_ok_source"]["checked_at"] is not None
+
+
+def test_get_canary_status_records_drift():
+    garmin_sync.check_payload_fields({"a": 1}, ["a", "b"], "p3_4_drift_source")
+    status = garmin_sync.get_canary_status()
+    assert status["p3_4_drift_source"]["ok"] is False
+    assert status["p3_4_drift_source"]["missing"] == ["b"]
+
+
+def test_get_canary_status_records_non_dict_payload():
+    garmin_sync.check_payload_fields(None, ["a"], "p3_4_non_dict_source")
+    status = garmin_sync.get_canary_status()
+    assert status["p3_4_non_dict_source"]["ok"] is False
+    assert status["p3_4_non_dict_source"]["missing"] == ["a"]
+
+
+def test_get_canary_status_overwritten_by_later_check():
+    garmin_sync.check_payload_fields({"a": 1}, ["a", "b"], "p3_4_overwrite_source")
+    assert garmin_sync.get_canary_status()["p3_4_overwrite_source"]["ok"] is False
+    garmin_sync.check_payload_fields({"a": 1, "b": 2}, ["a", "b"], "p3_4_overwrite_source")
+    assert garmin_sync.get_canary_status()["p3_4_overwrite_source"]["ok"] is True
+
+
+def test_get_canary_status_returns_a_copy():
+    garmin_sync.check_payload_fields({"a": 1}, ["a"], "p3_4_copy_source")
+    status = garmin_sync.get_canary_status()
+    status["p3_4_copy_source"]["ok"] = False
+    assert garmin_sync.get_canary_status()["p3_4_copy_source"]["ok"] is True
