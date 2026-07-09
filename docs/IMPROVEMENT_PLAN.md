@@ -518,12 +518,44 @@ existing tests pass (backend pytest, `tsc -b`, Vitest, `npm run build`)._
   `threading.Barrier`, which only both arrive if they truly ran in parallel)
   and a timeout test (worker returns before a deliberately slow job finishes,
   which then completes and self-records shortly after)._
-- **P3-3 · Frontend component tests.** Vitest covers only pure utils (57 cases);
-  the adaptive-coaching UI (PlanAdaptationCard, RacePacingCard, ChatView action
-  chips, FeedbackPrompt, and the new P0/P1 cards) has zero render coverage. Add
-  React Testing Library + a few focused interaction tests for the cards that
-  encode coaching decisions. **M.** Files: `frontend/package.json`,
-  `frontend/src/components/**/*.test.tsx` (new), `vite.config.ts`.
+- **P3-3 · Frontend component tests. ✅ Done.** Vitest covers only pure utils
+  (57 cases); the adaptive-coaching UI (PlanAdaptationCard, RacePacingCard,
+  ChatView action chips, FeedbackPrompt, and the new P0/P1 cards) has zero
+  render coverage. Add React Testing Library + a few focused interaction tests
+  for the cards that encode coaching decisions. **M.** Files:
+  `frontend/package.json`, `frontend/src/components/**/*.test.tsx` (new),
+  `vite.config.ts`.
+  _Implemented as described. Added `@testing-library/react` and
+  `@testing-library/jest-dom` (interactions are simple enough that the
+  built-in `fireEvent` covers them — `@testing-library/user-event` wasn't
+  needed), switched
+  `vite.config.ts`'s Vitest `environment` from `node` to `jsdom`, and added a
+  `setupFiles` entry (`src/test/setup.ts`) that wires up jest-dom's matchers,
+  registers `@testing-library/react`'s `cleanup()` in `afterEach` (Vitest's
+  `globals` option is off in this repo, so RTL's own auto-cleanup — which
+  looks for a global `afterEach` — never fires without this), and polyfills
+  `Element.prototype.scrollIntoView`, which jsdom doesn't implement and
+  `ChatView` calls on every message. `src/test/test-utils.tsx` adds a
+  `renderWithQueryClient` helper (a fresh, retry-disabled `QueryClient` per
+  render) since every card under test reads or writes through the
+  `api/hooks.ts` react-query hooks. Rather than a mocking library, tests stub
+  `global.fetch` directly per-case and assert on the request URL/body — this
+  matches the codebase's existing pattern where every API call (including
+  `ChatView`'s hand-rolled SSE streaming, which isn't on react-query) goes
+  through the small `apiGet/apiPost/...` wrappers in `api/client.ts`, so one
+  mocking approach covers both. Six new spec files land one per named target
+  from the plan text (`PlanAdaptationCard`, `RacePacingCard`, `ChatView`,
+  `FeedbackPrompt`) plus two representative P0/P1 cards
+  (`DailyCheckinCard` for P1-1, `BriefingCard` for P1-3), covering the
+  coaching-relevant branches: downgrade/upgrade/risk-caution framing and the
+  accept/dismiss POST bodies; race-pacing expand/collapse, strategy refetch,
+  the conditions-cost line, and push-to-watch; RPE chip selection and the
+  thumbs-up/thumbs-down → setback-modal → feedback POST flow; chat history
+  action chips and a hint-prompt send through a mocked SSE stream; check-in
+  scale gating (submit disabled until a tap, soreness ≤3 reveals the note
+  field) and the summary/edit toggle; and the briefing generate/regenerate
+  flow. All 83 frontend tests pass (57 pre-existing + 26 new); `tsc -b` and
+  `npm run build` are clean._
 - **P3-4 · Ops observability surface.** The schema-drift canary and AIJob
   failures live in logs and `SyncStatus` — invisible in the UI. Add a compact
   health panel in Settings (last sync per job, canary status, recent failed
