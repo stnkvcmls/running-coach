@@ -497,6 +497,28 @@ def api_get_job(
     return job
 
 
+@router.post("/jobs/{job_id}/retry", response_model=AIJobResponse)
+def api_retry_job(
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Reset a failed AI background job to pending so the worker retries it."""
+    job = db.query(AIJob).filter(AIJob.id == job_id, AIJob.user_id == current_user.id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.status != "failed":
+        raise HTTPException(status_code=400, detail=f"Job is {job.status}, not failed")
+    job.status = "pending"
+    job.attempts = 0
+    job.error_message = None
+    job.started_at = None
+    job.completed_at = None
+    db.commit()
+    db.refresh(job)
+    return job
+
+
 def _sync_calendar_for_user(user_id: int) -> None:
     """Resolve a user by id and sync their Garmin calendar (background thread)."""
     from app.database import db_session as make_session

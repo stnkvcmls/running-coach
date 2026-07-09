@@ -336,6 +336,19 @@ export interface SettingsResponse {
   counts: Record<string, number>
 }
 
+export interface CanaryStatusEntry {
+  ok: boolean
+  missing: string[]
+  checked_at: string | null
+}
+
+export interface SystemHealthResponse {
+  last_sync: Record<string, string | null>
+  canary_ok: boolean
+  canary: Record<string, CanaryStatusEntry>
+  recent_failed_jobs: AIJobResponse[]
+}
+
 export interface AiConfigResponse {
   provider: string
   model: string

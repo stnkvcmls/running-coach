@@ -168,6 +168,13 @@ def _finish_claimed_job(claimed: dict, exc: Exception | None) -> None:
         else:
             job.error_message = str(exc)[:1000]
             job.status = "failed" if claimed["attempts"] >= claimed["max_attempts"] else "pending"
+            if job.status == "failed":
+                notifications_mod.notify(
+                    db, job.user_id, "system_health",
+                    title="A background job failed",
+                    body=f"{job.task_type} failed after {job.attempts} attempts: {job.error_message}",
+                    url="/settings",
+                )
         db.commit()
 
 

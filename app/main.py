@@ -1,5 +1,6 @@
 import concurrent.futures
 import ctypes
+import json
 import logging
 import os
 import threading
@@ -208,6 +209,11 @@ def run_daily_sync_for_user(user_id: int) -> None:
     except Exception:
         logger.exception("Briefing generation check failed for user %s", user_id)
 
+    try:
+        _push_canary_alarms_if_needed(user_id)
+    except Exception:
+        logger.exception("Canary alarm push check failed for user %s", user_id)
+
 
 def _push_plan_adaptation_if_needed(user_id: int, today_summary: DailySummary | None) -> None:
     """Push a readiness-driven plan-adaptation suggestion once per plan day.
@@ -350,6 +356,53 @@ def _push_race_week_reminders(user_id: int, days_out: int = 7) -> None:
                 url="/",
             )
             db.add(SyncStatus(user_id=user_id, key=dedup_key, value=date.today().isoformat()))
+        db.commit()
+
+
+_CANARY_ALARM_KEY = "canary_alarm_active"
+
+
+def _push_canary_alarms_if_needed(user_id: int) -> None:
+    """Push a system-health alert when a Garmin API contract newly drifts.
+
+    Compares ``garmin_sync.get_canary_status()`` (updated on every
+    ``check_payload_fields`` call during sync) against the set of sources
+    already known to be alarmed, persisted in a ``SyncStatus`` row. Only
+    newly-drifted sources are pushed, so a standing schema-drift condition
+    notifies once rather than on every sync cycle -- the same
+    transition-only shape as ``garmin_sync.mark_garmin_needs_reauth``.
+    """
+    from app import garmin_sync
+    from app import notifications as notifications_mod
+
+    status = garmin_sync.get_canary_status()
+    bad_sources = sorted(source for source, result in status.items() if not result.get("ok", True))
+
+    with db_session() as db:
+        row = (
+            db.query(SyncStatus)
+            .filter(SyncStatus.user_id == user_id, SyncStatus.key == _CANARY_ALARM_KEY)
+            .first()
+        )
+        previously_bad = set(json.loads(row.value)) if row and row.value else set()
+        newly_bad = sorted(set(bad_sources) - previously_bad)
+
+        if newly_bad:
+            notifications_mod.notify(
+                db, user_id, "system_health",
+                title="Garmin API schema drift detected",
+                body=(
+                    f"Missing expected fields in: {', '.join(newly_bad)}. "
+                    "Synced data may be incomplete until this is fixed."
+                ),
+                url="/settings",
+            )
+
+        value = json.dumps(bad_sources)
+        if row:
+            row.value = value
+        else:
+            db.add(SyncStatus(user_id=user_id, key=_CANARY_ALARM_KEY, value=value))
         db.commit()
 
 

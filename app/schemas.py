@@ -945,6 +945,19 @@ class AIJobResponse(BaseModel):
         from_attributes = True
 
 
+class CanaryStatusEntry(BaseModel):
+    ok: bool
+    missing: list[str] = []
+    checked_at: str | None = None
+
+
+class SystemHealthResponse(BaseModel):
+    last_sync: dict[str, str | None] = {}
+    canary_ok: bool
+    canary: dict[str, CanaryStatusEntry] = {}
+    recent_failed_jobs: list[AIJobResponse] = []
+
+
 class VapidPublicKeyResponse(BaseModel):
     public_key: str
     configured: bool

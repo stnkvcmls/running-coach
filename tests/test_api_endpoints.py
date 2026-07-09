@@ -6,6 +6,7 @@ import pytest
 
 from app.models import (
     Activity,
+    AIJob,
     AthleteProfile,
     ChatMessage,
     CoachMemory,
@@ -238,6 +239,49 @@ def test_settings_counts_and_statuses(client, db):
     body = client.get("/api/v1/settings").json()
     assert body["counts"]["activities"] == 1
     assert "last_activity_sync" in body["sync_statuses"]
+
+
+# --- /health-detail (P3-4) ---
+
+def test_health_detail_reports_last_sync_timestamps(client, db):
+    db.add(SyncStatus(user_id=1, key="last_activity_sync", value="2026-06-01T00:00:00"))
+    db.add(SyncStatus(user_id=1, key="last_daily_sync", value="2026-06-02T00:00:00"))
+    db.commit()
+    body = client.get("/api/v1/health-detail").json()
+    assert body["last_sync"]["activities"] == "2026-06-01T00:00:00"
+    assert body["last_sync"]["daily"] == "2026-06-02T00:00:00"
+    assert body["last_sync"]["profile"] is None
+    assert body["last_sync"]["calendar"] is None
+
+
+def test_health_detail_reflects_canary_status(client, db, monkeypatch):
+    import app.garmin_sync as garmin_sync
+    monkeypatch.setattr(
+        garmin_sync, "get_canary_status",
+        lambda: {"activity_summary": {"ok": False, "missing": ["activityId"], "checked_at": "x"}},
+    )
+    body = client.get("/api/v1/health-detail").json()
+    assert body["canary_ok"] is False
+    assert body["canary"]["activity_summary"]["missing"] == ["activityId"]
+
+
+def test_health_detail_ok_when_no_drift_recorded(client, db, monkeypatch):
+    import app.garmin_sync as garmin_sync
+    monkeypatch.setattr(garmin_sync, "get_canary_status", lambda: {})
+    body = client.get("/api/v1/health-detail").json()
+    assert body["canary_ok"] is True
+    assert body["canary"] == {}
+
+
+def test_health_detail_lists_recent_failed_jobs_for_current_user_only(client, db):
+    db.add(AIJob(user_id=1, task_type="generate_plan", status="failed", attempts=3, max_attempts=3, error_message="boom"))
+    db.add(AIJob(user_id=1, task_type="weekly_review", status="done", attempts=1, max_attempts=3))
+    db.add(AIJob(user_id=2, task_type="generate_plan", status="failed", attempts=3, max_attempts=3))
+    db.commit()
+    body = client.get("/api/v1/health-detail").json()
+    assert len(body["recent_failed_jobs"]) == 1
+    assert body["recent_failed_jobs"][0]["task_type"] == "generate_plan"
+    assert body["recent_failed_jobs"][0]["error_message"] == "boom"
 
 
 # --- /ai-config ---

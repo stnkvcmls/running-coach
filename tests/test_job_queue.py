@@ -191,6 +191,45 @@ def test_execute_job_marks_failed_when_max_attempts_reached(db, patch_db_session
     assert job.attempts == 3
 
 
+def test_execute_job_failed_pushes_system_health_notification(db, patch_db_session, monkeypatch):
+    """Exhausting retries (P3-4) should push a system_health alert exactly once."""
+    import app.ai_coach as ai_mod
+    from app import notifications as notifications_mod
+
+    patch_db_session(ai_mod)
+    notify = MagicMock()
+    monkeypatch.setattr(notifications_mod, "notify", notify)
+
+    job_id = enqueue_job("generate_plan", {}, user_id=1)
+
+    for _ in range(3):
+        with patch.object(ai_mod, "generate_training_plan", side_effect=RuntimeError("boom")):
+            execute_job(job_id)
+        db.expire_all()
+
+    job = db.query(AIJob).filter(AIJob.id == job_id).first()
+    assert job.status == "failed"
+    notify.assert_called_once()
+    assert notify.call_args.args[1] == 1
+    assert notify.call_args.args[2] == "system_health"
+
+
+def test_execute_job_pending_retry_does_not_push_notification(db, patch_db_session, monkeypatch):
+    """A retry-eligible failure (attempts < max_attempts) should not alert yet."""
+    import app.ai_coach as ai_mod
+    from app import notifications as notifications_mod
+
+    patch_db_session(ai_mod)
+    notify = MagicMock()
+    monkeypatch.setattr(notifications_mod, "notify", notify)
+
+    job_id = enqueue_job("generate_plan", {}, user_id=1)
+    with patch.object(ai_mod, "generate_training_plan", side_effect=RuntimeError("timeout")):
+        execute_job(job_id)
+
+    notify.assert_not_called()
+
+
 def test_execute_job_ignores_already_running_or_done_job(db, patch_db_session):
     """execute_job is a no-op for jobs not in 'pending' status."""
     import app.ai_coach as ai_mod
@@ -409,6 +448,57 @@ def test_api_get_job_returns_status(client, db):
 
 def test_api_get_job_404_for_unknown(client):
     resp = client.get("/api/v1/jobs/99999")
+    assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# API endpoint: POST /jobs/{id}/retry (P3-4)
+# ---------------------------------------------------------------------------
+
+def test_api_retry_job_resets_failed_job_to_pending(client, db):
+    job = AIJob(
+        user_id=1, task_type="generate_plan", status="failed",
+        attempts=3, max_attempts=3, error_message="boom",
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    resp = client.post(f"/api/v1/jobs/{job.id}/retry")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "pending"
+    assert body["attempts"] == 0
+    assert body["error_message"] is None
+
+    db.expire_all()
+    refreshed = db.query(AIJob).filter(AIJob.id == job.id).first()
+    assert refreshed.status == "pending"
+    assert refreshed.attempts == 0
+
+
+def test_api_retry_job_404_for_unknown(client):
+    resp = client.post("/api/v1/jobs/99999/retry")
+    assert resp.status_code == 404
+
+
+def test_api_retry_job_rejects_non_failed_job(client, db):
+    job = AIJob(user_id=1, task_type="generate_plan", status="pending", attempts=0, max_attempts=3)
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    resp = client.post(f"/api/v1/jobs/{job.id}/retry")
+    assert resp.status_code == 400
+
+
+def test_api_retry_job_404_for_other_users_job(client, db):
+    job = AIJob(user_id=2, task_type="generate_plan", status="failed", attempts=3, max_attempts=3)
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    resp = client.post(f"/api/v1/jobs/{job.id}/retry")
     assert resp.status_code == 404
 
 

@@ -372,6 +372,19 @@ _ACTIVITY_STREAM_CONTRACT: tuple[str, ...] = (
 # Required top-level key in the Garmin calendar API response.
 _CALENDAR_RESPONSE_CONTRACT: tuple[str, ...] = ("calendarItems",)
 
+# In-memory record of the most recent check per contract source (P3-4). This
+# is process state, not persisted data: the canary reflects the *current*
+# shape of Garmin's API, which is the same for every user and re-checked on
+# every sync cycle (activities every few minutes), so a fresh-on-restart
+# snapshot is accurate within minutes rather than needing DB threading
+# through call sites that don't otherwise have a session in scope.
+_canary_status: dict[str, dict] = {}
+
+
+def get_canary_status() -> dict[str, dict]:
+    """Return the most recent ``check_payload_fields`` result per source."""
+    return {source: dict(result) for source, result in _canary_status.items()}
+
 
 def check_payload_fields(
     payload: dict,
@@ -382,7 +395,8 @@ def check_payload_fields(
 
     Returns ``{"ok": bool, "present": list[str], "missing": list[str]}``.
     Logs a WARNING for each absent field so schema drift surfaces in logs
-    without aborting the sync path.
+    without aborting the sync path, and records the result in
+    ``_canary_status`` for the Settings health panel (P3-4).
     """
     if not isinstance(payload, dict):
         logger.warning(
@@ -390,7 +404,9 @@ def check_payload_fields(
             source,
             type(payload).__name__,
         )
-        return {"ok": False, "present": [], "missing": list(contract)}
+        result = {"ok": False, "present": [], "missing": list(contract)}
+        _canary_status[source] = {**result, "checked_at": datetime.now(timezone.utc).isoformat()}
+        return result
     present = [f for f in contract if f in payload]
     missing = [f for f in contract if f not in payload]
     if missing:
@@ -399,7 +415,9 @@ def check_payload_fields(
             source,
             missing,
         )
-    return {"ok": not missing, "present": present, "missing": missing}
+    result = {"ok": not missing, "present": present, "missing": missing}
+    _canary_status[source] = {**result, "checked_at": datetime.now(timezone.utc).isoformat()}
+    return result
 
 
 def _extract_activity_fields(summary: dict, details: dict | None = None) -> dict:
