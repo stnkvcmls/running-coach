@@ -56,28 +56,19 @@ def api_me(current_user: User = Depends(get_current_user)):
 
 # --- Settings ---
 
-_INTERNAL_SYNC_KEYS = {"threshold_estimate", "training_load_series"}
-
-
 @router.get("/settings", response_model=SettingsResponse)
 def api_settings(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     uid = current_user.id
-    sync_statuses = {}
-    for s in db.query(SyncStatus).filter(SyncStatus.user_id == uid).all():
-        if s.key in _INTERNAL_SYNC_KEYS:
-            continue
-        sync_statuses[s.key] = {"value": s.value, "updated_at": str(s.updated_at) if s.updated_at else None}
-
     counts = {
         "activities": db.query(func.count(Activity.id)).filter(Activity.user_id == uid).scalar() or 0,
         "daily_summaries": db.query(func.count(DailySummary.id)).filter(DailySummary.user_id == uid).scalar() or 0,
         "insights": db.query(func.count(Insight.id)).filter(Insight.user_id == uid).scalar() or 0,
         "calendar_events": db.query(func.count(GarminCalendarEvent.id)).filter(GarminCalendarEvent.user_id == uid).scalar() or 0,
     }
-    return SettingsResponse(sync_statuses=sync_statuses, counts=counts)
+    return SettingsResponse(counts=counts)
 
 
 # Curated "last sync per job" keys -> display label, out of the full

@@ -332,7 +332,6 @@ export interface TodayResponse {
 }
 
 export interface SettingsResponse {
-  sync_statuses: Record<string, { value: string; updated_at: string | null }>
   counts: Record<string, number>
 }
 
