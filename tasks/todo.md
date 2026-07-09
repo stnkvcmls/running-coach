@@ -88,6 +88,8 @@ scheduled card disappears from Today and the activity is tagged as a workout.
 Goal: execute the phased UI/UX redesign. Each phase is one focused session,
 independently shippable; full specs, file lists, and acceptance criteria live
 in the plan doc. Follow its "Global rules for the implementing agent".
+Visual target per phase: docs/mockups/ui-redesign-mockup.html (toggle
+"Show component labels" to cross-reference elements against plan tasks).
 
 ## Phases
 - [ ] Phase 0 — Design-system foundation & defect fixes (tokens, `--surface`

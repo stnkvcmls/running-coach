@@ -10,6 +10,16 @@ unattended.
 
 It is a **plan only** — no product code has been changed in this commit.
 
+**Visual reference:** [`docs/mockups/ui-redesign-mockup.html`](mockups/ui-redesign-mockup.html)
+renders the target end state of every redesigned surface (Today, Plan,
+Activities, Activity detail, Progress, desktop layout) as static
+high-fidelity mockups built with the app's design tokens. Open it in a
+browser; the "Show component labels" toggle overlays component-file names
+and plan-task numbers on each element for post-implementation
+cross-referencing. Where this document and the mockup disagree, **this
+document is authoritative** — the mockup illustrates hierarchy and states,
+not final pixels or copy.
+
 ---
 
 ## Table of contents
@@ -502,6 +512,13 @@ These rules apply to **every** phase:
 8. When a phase says "screenshot-verify", use the pre-installed Chromium +
    Playwright against `npm run dev` (or `vite preview`) with mocked API
    (see §8) — best-effort, non-blocking if the environment lacks a display.
+9. **Mockup cross-reference**: after completing a phase, open
+   `docs/mockups/ui-redesign-mockup.html` with component labels toggled on
+   and compare the built UI against the frame(s) tagged with that phase.
+   Match structure, hierarchy, and component states — not pixel positions
+   or sample copy. Frame → phase mapping: Today (Phases 1–2), Plan (4),
+   Activities + Activity detail (3), Progress (5), desktop Today (6).
+   Note real deviations and their reason in the phase's commit message.
 
 Phases are ordered by dependency; within a phase, tasks are ordered. Effort
 estimates assume one focused agent session per phase.
