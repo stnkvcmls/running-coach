@@ -54,12 +54,6 @@
   margin-top: 2px;
 }
 
-.sync-time {
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  margin-top: 1px;
-}
-
 .sync-buttons {
   display: flex;
   flex-direction: column;

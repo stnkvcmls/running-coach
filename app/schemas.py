@@ -439,7 +439,6 @@ class TodayResponse(BaseModel):
 
 
 class SettingsResponse(BaseModel):
-    sync_statuses: dict[str, Any] = {}
     counts: dict[str, int] = {}
 
 

@@ -232,13 +232,11 @@ def test_insights_list_and_filter(client, db):
 
 # --- /settings ---
 
-def test_settings_counts_and_statuses(client, db):
+def test_settings_counts(client, db):
     _add_activity(db, datetime(2026, 6, 1, 7, 0))
-    db.add(SyncStatus(key="last_activity_sync", value="2026-06-01T00:00:00"))
     db.commit()
     body = client.get("/api/v1/settings").json()
     assert body["counts"]["activities"] == 1
-    assert "last_activity_sync" in body["sync_statuses"]
 
 
 # --- /health-detail (P3-4) ---

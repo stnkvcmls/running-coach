@@ -299,25 +299,6 @@ export default function SettingsView() {
         </div>
       </section>
 
-      {/* Sync status */}
-      <section className="settings-section">
-        <h2 className="section-title">Sync Status</h2>
-        <div className="card sync-list">
-          {Object.entries(data.sync_statuses).map(([key, status]) => (
-            <div key={key} className="sync-item">
-              <div className="sync-key">{key.replace(/_/g, ' ')}</div>
-              <div className="sync-value">{status.value || '-'}</div>
-              {status.updated_at && (
-                <div className="sync-time">{new Date(status.updated_at).toLocaleString()}</div>
-              )}
-            </div>
-          ))}
-          {Object.keys(data.sync_statuses).length === 0 && (
-            <div className="empty-state">No sync data yet</div>
-          )}
-        </div>
-      </section>
-
       {/* Manual sync buttons */}
       <section className="settings-section">
         <h2 className="section-title">Manual Sync</h2>
