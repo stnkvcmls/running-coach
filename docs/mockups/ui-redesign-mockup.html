@@ -1,0 +1,2032 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Running Coach — UI Redesign Mockups</title>
+</head>
+<body>
+<style>
+  /* ============ page chrome tokens (viewer-theme aware) ============ */
+  :root {
+    --pg-bg: #f6f5fa;
+    --pg-panel: #ffffff;
+    --pg-ink: #211f2e;
+    --pg-muted: #6a6780;
+    --pg-hairline: #e4e2ee;
+    --pg-accent: #6c5ce7;
+    --pg-code-bg: #edebf7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --pg-bg: #131118;
+      --pg-panel: #1b1926;
+      --pg-ink: #e6e4f0;
+      --pg-muted: #9a96ad;
+      --pg-hairline: #2c2940;
+      --pg-code-bg: #262336;
+    }
+  }
+  :root[data-theme="dark"] {
+    --pg-bg: #131118; --pg-panel: #1b1926; --pg-ink: #e6e4f0;
+    --pg-muted: #9a96ad; --pg-hairline: #2c2940; --pg-code-bg: #262336;
+  }
+  :root[data-theme="light"] {
+    --pg-bg: #f6f5fa; --pg-panel: #ffffff; --pg-ink: #211f2e;
+    --pg-muted: #6a6780; --pg-hairline: #e4e2ee; --pg-code-bg: #edebf7;
+  }
+
+  body {
+    background: var(--pg-bg);
+    color: var(--pg-ink);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    line-height: 1.5;
+    margin: 0;
+    padding: 40px 24px 72px;
+  }
+  .wrap { max-width: 1320px; margin: 0 auto; }
+
+  .eyebrow {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--pg-accent); margin: 0 0 8px;
+  }
+  h1 { font-size: 1.7rem; margin: 0 0 10px; text-wrap: balance; letter-spacing: -0.01em; }
+  .lede { color: var(--pg-muted); max-width: 62ch; margin: 0 0 18px; font-size: 0.95rem; }
+  .lede code, .refs code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.85em; background: var(--pg-code-bg);
+    padding: 1px 5px; border-radius: 4px;
+  }
+
+  .anno-toggle {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 0.85rem; color: var(--pg-ink);
+    border: 1px solid var(--pg-hairline); background: var(--pg-panel);
+    padding: 8px 14px; border-radius: 8px; cursor: pointer; user-select: none;
+  }
+  .anno-toggle input { accent-color: var(--pg-accent); }
+  .anno-toggle:focus-within { box-shadow: 0 0 0 2px var(--pg-bg), 0 0 0 4px var(--pg-accent); }
+
+  /* ============ gallery ============ */
+  .gallery { display: flex; flex-direction: column; gap: 52px; margin-top: 36px; }
+  .pair { display: flex; gap: 32px; flex-wrap: wrap; align-items: flex-start; }
+  .sec-h { font-size: 1.2rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sec-sub { color: var(--pg-muted); font-size: 0.85rem; margin: 0 0 18px; max-width: 72ch; }
+  .shot { margin: 0; }
+  .shot > figcaption {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 10px;
+    max-width: 390px; margin-bottom: 12px;
+  }
+  .shot.wide > figcaption { max-width: 900px; }
+  .phase-badge {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.68rem; letter-spacing: 0.05em; font-weight: 600;
+    color: #fff; background: var(--pg-accent);
+    padding: 2px 8px; border-radius: 20px; white-space: nowrap;
+  }
+  .cur-badge { background: var(--pg-muted); }
+  .shot-title { font-weight: 700; font-size: 1rem; }
+  .refs {
+    flex-basis: 100%; color: var(--pg-muted); font-size: 0.78rem; line-height: 1.6;
+  }
+
+  /* ============ device frame + app design tokens ============ */
+  /* App tokens mirror frontend/src/styles/globals.css plus the Phase 0
+     additions (updated --text-muted, --surface, spacing/type scale). */
+  .phone {
+    width: 390px; border-radius: 24px; overflow: hidden;
+    border: 1px solid var(--pg-hairline);
+    box-shadow: 0 12px 40px rgba(16, 10, 60, 0.18);
+    position: relative;
+    font-size: 16px;
+  }
+  .app-dark {
+    --a-bg: #0f0f1a; --a-card: #1a1a2e; --a-input: #16213e; --a-hover: #232342;
+    --a-text: #e0e0e0; --a-muted: #98a0b3; --a-secondary: #aaa;
+    --a-accent: #6c5ce7; --a-accent-light: #a29bfe;
+    --a-success: #2ecc71; --a-warning: #f39c12; --a-danger: #e74c3c;
+    --a-border: #2d2d44;
+    --a-easy: #2ecc71; --a-tempo: #f39c12; --a-interval: #e74c3c;
+    --a-long: #0984e3; --a-race: #e84393; --a-strength: #a29bfe;
+    --a-ready: #00b894;
+  }
+  .app-light {
+    --a-bg: #f5f5f7; --a-card: #ffffff; --a-input: #eef0f4; --a-hover: #e8ecf2;
+    --a-text: #1a1a2e; --a-muted: #5b6472; --a-secondary: #9ca3af;
+    --a-accent: #6c5ce7; --a-accent-light: #5a4bd1;
+    --a-success: #27ae60; --a-warning: #e67e22; --a-danger: #e74c3c;
+    --a-border: #e0e4ec;
+    --a-easy: #27ae60; --a-tempo: #e67e22; --a-interval: #e74c3c;
+    --a-long: #0984e3; --a-race: #e84393; --a-strength: #7c6ee0;
+    --a-ready: #00b894;
+  }
+  .screen { background: var(--a-bg); color: var(--a-text); }
+  .screen * { box-sizing: border-box; }
+
+  /* ---- app chrome ---- */
+  .topbar {
+    height: 48px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 12px 0 16px; background: var(--a-card);
+    border-bottom: 1px solid var(--a-border); position: relative;
+  }
+  .topbar-title { font-weight: 700; font-size: 0.95rem; }
+  .topbar-title small { color: var(--a-muted); font-weight: 500; font-size: 0.75rem; margin-left: 6px; }
+  .topbar-right { display: flex; align-items: center; gap: 10px; position: relative; }
+  .sync-pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 0.68rem; font-variant-numeric: tabular-nums;
+    color: var(--a-muted); border: 1px solid var(--a-border);
+    padding: 3px 8px; border-radius: 20px; min-width: 58px; justify-content: center;
+  }
+  .sync-pill.warn { color: var(--a-warning); border-color: var(--a-warning); }
+  .icon-btn { color: var(--a-muted); display: inline-flex; }
+  .avatar {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--a-accent); color: #fff;
+    font-size: 0.72rem; font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+
+  .weekstrip {
+    display: flex; align-items: center; gap: 2px;
+    padding: 8px 6px 10px; background: var(--a-card);
+    border-bottom: 1px solid var(--a-border); position: relative;
+  }
+  .ws-nav { color: var(--a-muted); padding: 0 2px; display: flex; }
+  .ws-day {
+    flex: 1; text-align: center; border-radius: 10px; padding: 4px 0 6px;
+    display: flex; flex-direction: column; align-items: center; gap: 1px;
+  }
+  .ws-name { font-size: 0.6rem; color: var(--a-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .ws-num { font-size: 0.85rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .ws-day.sel { background: var(--a-accent); }
+  .ws-day.sel .ws-name, .ws-day.sel .ws-num { color: #fff; }
+  .ws-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--a-accent-light); margin-top: 2px; }
+  .ws-dot.planned { background: transparent; border: 1px solid var(--a-muted); width: 4px; height: 4px; }
+  .ws-day.sel .ws-dot.planned { border-color: #fff; }
+
+  .content { padding: 14px 16px 20px; display: flex; flex-direction: column; gap: 14px; position: relative; }
+
+  .bottomnav {
+    display: flex; justify-content: space-around; align-items: center;
+    height: 60px; background: var(--a-card); border-top: 1px solid var(--a-border);
+    position: relative;
+  }
+  .nav-item {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    color: var(--a-muted); font-size: 0.62rem; font-weight: 500; min-width: 56px;
+  }
+  .nav-item.active { color: var(--a-accent-light); }
+  .app-light .nav-item.active { color: var(--a-accent); }
+
+  /* ---- shared app components ---- */
+  .a-card {
+    background: var(--a-card); border-radius: 12px; padding: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3); position: relative;
+  }
+  .app-light .a-card { box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .a-section-title {
+    font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--a-muted); margin: 0 0 8px;
+  }
+  .a-label { font-size: 0.65rem; color: var(--a-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .a-value { font-size: 1.15rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .a-value small { font-size: 0.65rem; color: var(--a-muted); font-weight: 400; }
+  .a-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border-radius: 10px;
+    font-size: 0.64rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .a-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 0.75rem; font-weight: 600; border-radius: 8px; padding: 7px 12px;
+  }
+  .a-btn.primary { background: var(--a-accent); color: #fff; }
+  .a-btn.secondary { background: var(--a-input); color: var(--a-text); border: 1px solid var(--a-border); }
+  .a-btn.ghost { color: var(--a-accent-light); padding: 7px 4px; }
+  .app-light .a-btn.ghost { color: var(--a-accent); }
+
+  .alert-banner {
+    display: flex; align-items: center; gap: 8px;
+    background: color-mix(in srgb, var(--a-warning) 12%, var(--a-card));
+    border: 1px solid color-mix(in srgb, var(--a-warning) 40%, transparent);
+    border-radius: 10px; padding: 8px 12px; font-size: 0.76rem; position: relative;
+  }
+  .alert-banner .spacer { flex: 1; }
+  .alert-banner .act { color: var(--a-warning); font-weight: 700; white-space: nowrap; }
+  .alert-banner .dismiss { color: var(--a-muted); }
+
+  /* ---- Today hero ---- */
+  .hero { display: flex; flex-direction: column; gap: 12px; }
+  .hero-top { display: flex; gap: 14px; align-items: center; }
+  .ring { position: relative; width: 84px; height: 84px; flex: none; }
+  .ring svg { transform: rotate(-90deg); }
+  .ring-center {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; line-height: 1.1;
+  }
+  .ring-score { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--a-ready); }
+  .ring-label { font-size: 0.58rem; color: var(--a-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .hero-session { flex: 1; min-width: 0; }
+  .hero-session-name { font-size: 1.15rem; font-weight: 700; margin: 2px 0; }
+  .hero-session-meta { font-size: 0.76rem; color: var(--a-secondary); font-variant-numeric: tabular-nums; }
+  .structure-bar { display: flex; height: 14px; border-radius: 4px; overflow: hidden; gap: 2px; position: relative; }
+  .structure-bar span { border-radius: 2px; }
+  .hero-brief { font-size: 0.8rem; color: var(--a-secondary); line-height: 1.45; }
+  .hero-brief b { color: var(--a-text); font-weight: 600; }
+  .hero-brief .more { color: var(--a-accent-light); font-weight: 600; white-space: nowrap; }
+  .hero-actions { display: flex; gap: 8px; }
+
+  .checkin-chip {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--a-card); border-radius: 20px; padding: 8px 14px;
+    font-size: 0.78rem; position: relative;
+  }
+  .checkin-chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--a-success); }
+  .checkin-chip .edit { margin-left: auto; color: var(--a-accent-light); font-weight: 600; font-size: 0.72rem; }
+
+  .glance { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; align-items: center; }
+  .glance .a-value { font-size: 1rem; }
+  .glance-arrow { position: absolute; right: 10px; top: 10px; color: var(--a-muted); }
+
+  .race-strip {
+    display: flex; align-items: center; gap: 10px;
+    border-left: 3px solid var(--a-race); border-radius: 10px;
+    background: var(--a-card); padding: 10px 12px; font-size: 0.78rem; position: relative;
+  }
+  .race-days { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .race-goal { color: var(--a-muted); margin-left: auto; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .tl-values { display: flex; gap: 18px; margin-bottom: 8px; }
+  .legend { display: flex; gap: 14px; margin-top: 6px; font-size: 0.66rem; color: var(--a-muted); }
+  .legend i { display: inline-block; width: 10px; height: 3px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
+
+  .bars { display: flex; align-items: flex-end; gap: 8px; height: 84px; padding-top: 6px; }
+  .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
+  .bar { width: 100%; max-width: 26px; border-radius: 4px 4px 2px 2px; background: var(--a-accent); }
+  .bar.planned { background: transparent; border: 1.5px dashed var(--a-border); }
+  .bar-x { font-size: 0.6rem; color: var(--a-muted); }
+
+  .insight-row { display: flex; gap: 10px; font-size: 0.78rem; line-height: 1.45; }
+  .insight-row .tag { flex: none; color: var(--a-accent-light); font-weight: 700; }
+
+  .fold {
+    position: absolute; left: 0; right: 0; top: 690px;
+    border-top: 2px dashed color-mix(in srgb, var(--a-accent) 55%, transparent);
+    z-index: 5; pointer-events: none;
+  }
+  .fold::after {
+    content: "≈ first viewport fold · 390×844";
+    position: absolute; right: 8px; top: 3px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.6rem; color: var(--a-accent-light);
+    background: var(--a-bg); padding: 1px 6px; border-radius: 4px;
+  }
+
+  /* ---- Plan ---- */
+  .plan-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .phase-pill { background: color-mix(in srgb, var(--a-accent) 18%, transparent); color: var(--a-accent-light); }
+  .plan-gen { font-size: 0.7rem; color: var(--a-muted); margin-right: auto; }
+  .week-tabs { display: flex; gap: 8px; position: relative; }
+  .week-tab {
+    flex: 1; background: var(--a-card); border-radius: 10px; padding: 8px 6px;
+    text-align: center; border: 1px solid transparent;
+  }
+  .week-tab.active { border-color: var(--a-accent); }
+  .week-tab .wt-label { font-size: 0.74rem; font-weight: 700; }
+  .week-tab .wt-km { font-size: 0.62rem; color: var(--a-muted); font-variant-numeric: tabular-nums; }
+  .wt-dots { display: flex; justify-content: center; gap: 3px; margin-top: 4px; }
+  .wt-dots i { width: 5px; height: 5px; border-radius: 50%; display: inline-block; background: var(--a-border); }
+  .wt-dots i.d { background: var(--a-success); }
+  .wt-dots i.m { background: var(--a-danger); }
+  .wt-dots i.t { background: var(--a-accent); }
+
+  .week-progress { position: relative; }
+  .wp-row { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--a-muted); margin-bottom: 5px; }
+  .wp-row b { color: var(--a-text); font-variant-numeric: tabular-nums; }
+  .wp-track { height: 6px; border-radius: 3px; background: var(--a-input); overflow: hidden; }
+  .wp-fill { height: 100%; border-radius: 3px; background: var(--a-accent); width: 40%; }
+
+  .day-row {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--a-card); border-radius: 10px; padding: 10px 12px;
+    border-left: 3px solid var(--a-border); font-size: 0.78rem; position: relative;
+  }
+  .day-row .glyph { flex: none; width: 18px; text-align: center; font-weight: 700; }
+  .day-row .d-day { flex: none; width: 30px; color: var(--a-muted); font-size: 0.68rem; text-transform: uppercase; }
+  .day-row .d-main { flex: 1; min-width: 0; }
+  .day-row .d-name { font-weight: 600; }
+  .day-row .d-sub { font-size: 0.68rem; color: var(--a-muted); font-variant-numeric: tabular-nums; }
+  .day-row .d-sub a { color: var(--a-accent-light); text-decoration: none; font-weight: 600; }
+  .day-row.done { border-left-color: var(--a-success); }
+  .day-row.done .glyph { color: var(--a-success); }
+  .day-row.missed { border-left-color: var(--a-danger); opacity: 0.75; }
+  .day-row.missed .glyph { color: var(--a-danger); }
+  .day-row.today { border-left-color: var(--a-accent); border: 1px solid var(--a-accent); border-left-width: 3px; flex-wrap: wrap; }
+  .day-row.today .glyph { color: var(--a-accent-light); }
+  .day-row.upcoming .glyph, .day-row.rest .glyph { color: var(--a-muted); }
+  .day-row.rest { opacity: 0.65; }
+  .day-row .d-extras { flex-basis: 100%; display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+  .toast {
+    position: absolute; bottom: 72px; left: 50%; transform: translateX(-50%);
+    background: var(--a-card); border: 1px solid var(--a-success);
+    color: var(--a-text); font-size: 0.75rem; font-weight: 600;
+    padding: 9px 16px; border-radius: 20px; white-space: nowrap;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4); z-index: 6;
+  }
+  .toast b { color: var(--a-success); }
+
+  /* ---- Activities ---- */
+  .chips { display: flex; gap: 8px; overflow: hidden; position: relative; }
+  .chip {
+    font-size: 0.72rem; font-weight: 600; padding: 6px 12px; border-radius: 20px;
+    background: var(--a-card); color: var(--a-muted); border: 1px solid var(--a-border);
+    white-space: nowrap;
+  }
+  .chip.active { background: var(--a-accent); color: #fff; border-color: var(--a-accent); }
+  .group-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--a-muted); padding: 2px 2px 0; position: relative;
+  }
+  .group-head b { color: var(--a-text); font-variant-numeric: tabular-nums; letter-spacing: 0; }
+  .act-row { display: flex; gap: 10px; align-items: center; }
+  .sport-icon {
+    flex: none; width: 38px; height: 38px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .act-main { flex: 1; min-width: 0; }
+  .act-name { font-size: 0.86rem; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+  .pb-badge { background: color-mix(in srgb, #f1c40f 20%, transparent); color: #d9a80c; }
+  .act-meta { font-size: 0.72rem; color: var(--a-muted); font-variant-numeric: tabular-nums; margin-top: 1px; }
+  .zone-bar { display: flex; height: 4px; border-radius: 2px; overflow: hidden; margin-top: 6px; gap: 1px; }
+  .zone-bar span { border-radius: 1px; }
+  .act-chev { color: var(--a-muted); flex: none; }
+
+  /* ---- Activity detail ---- */
+  .det-head { display: flex; gap: 10px; padding: 12px 16px; background: var(--a-card); border-bottom: 2px solid var(--a-tempo); position: relative; }
+  .det-title { font-size: 1.1rem; font-weight: 700; margin: 4px 0 2px; }
+  .det-date { font-size: 0.7rem; color: var(--a-muted); }
+  .sticky-hint {
+    display: flex; align-items: center; gap: 8px; padding: 8px 16px;
+    background: color-mix(in srgb, var(--a-card) 88%, #000);
+    border-bottom: 1px solid var(--a-border);
+    font-size: 0.75rem; font-weight: 600; font-variant-numeric: tabular-nums; position: relative;
+  }
+  .sticky-hint .s-meta { color: var(--a-muted); font-weight: 500; margin-left: auto; }
+  .stat3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; text-align: center; }
+  .verdict {
+    display: flex; gap: 8px; align-items: flex-start;
+    background: color-mix(in srgb, var(--a-accent) 12%, var(--a-card));
+    border: 1px solid color-mix(in srgb, var(--a-accent) 35%, transparent);
+    border-radius: 10px; padding: 9px 12px; font-size: 0.76rem; line-height: 1.45; position: relative;
+  }
+  .verdict .v-tag { color: var(--a-accent-light); font-weight: 700; flex: none; }
+  .route-svg { display: block; margin: 0 auto; }
+  .splits { display: flex; flex-direction: column; gap: 5px; position: relative; }
+  .split-row { display: flex; align-items: center; gap: 8px; font-size: 0.68rem; font-variant-numeric: tabular-nums; }
+  .split-km { flex: none; width: 20px; color: var(--a-muted); text-align: right; }
+  .split-track { flex: 1; display: flex; align-items: center; gap: 6px; }
+  .split-bar { height: 12px; border-radius: 3px; }
+  .split-val { color: var(--a-secondary); white-space: nowrap; }
+  .split-hr { flex: none; width: 44px; color: var(--a-muted); text-align: right; }
+  .seg-toggle { display: inline-flex; border: 1px solid var(--a-border); border-radius: 8px; overflow: hidden; font-size: 0.66rem; font-weight: 600; }
+  .seg-toggle span { padding: 4px 10px; color: var(--a-muted); }
+  .seg-toggle .on { background: var(--a-input); color: var(--a-text); }
+  .collapse-row {
+    display: flex; justify-content: center; gap: 6px; align-items: center;
+    color: var(--a-accent-light); font-size: 0.74rem; font-weight: 600;
+    padding: 4px 0; position: relative;
+  }
+
+  /* ---- Progress ---- */
+  .range-sel { display: inline-flex; border: 1px solid var(--a-border); border-radius: 10px; overflow: hidden; position: relative; }
+  .range-sel span { padding: 6px 12px; font-size: 0.7rem; font-weight: 600; color: var(--a-muted); font-variant-numeric: tabular-nums; }
+  .range-sel .on { background: var(--a-accent); color: #fff; }
+  .record-card {
+    border: 1px solid color-mix(in srgb, #f1c40f 45%, transparent);
+    background: linear-gradient(160deg, color-mix(in srgb, #f1c40f 10%, var(--a-card)), var(--a-card) 55%);
+  }
+  .record-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .record-item { display: flex; flex-direction: column; gap: 2px; }
+  .new-badge { background: #f1c40f; color: #3a2f00; }
+
+  /* ---- desktop frame ---- */
+  .desktop {
+    width: 100%; max-width: 900px; border-radius: 16px; overflow: hidden;
+    border: 1px solid var(--pg-hairline); box-shadow: 0 12px 40px rgba(16,10,60,0.18);
+    font-size: 15px;
+  }
+  .desk-body { display: flex; background: var(--a-bg); color: var(--a-text); }
+  .rail {
+    flex: none; width: 132px; background: var(--a-card); border-right: 1px solid var(--a-border);
+    padding: 14px 10px; display: flex; flex-direction: column; gap: 4px; position: relative;
+  }
+  .rail .nav-item { flex-direction: row; justify-content: flex-start; gap: 10px; font-size: 0.76rem; padding: 9px 10px; border-radius: 8px; min-width: 0; }
+  .rail .nav-item.active { background: var(--a-hover); }
+  .desk-main { flex: 1; padding: 16px; display: grid; grid-template-columns: 1.1fr 1fr; gap: 14px; align-content: start; position: relative; }
+  .desk-main .full { grid-column: 1 / -1; }
+  .desk-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+  /* ---- current-implementation (before) pieces ---- */
+  .old-topbar-week { font-size: 0.8rem; font-weight: 600; }
+  .old-banner {
+    display: flex; gap: 10px; align-items: flex-start;
+    background: color-mix(in srgb, var(--a-warning) 12%, var(--a-card));
+    border: 1px solid color-mix(in srgb, var(--a-warning) 40%, transparent);
+    border-radius: 12px; padding: 12px; font-size: 0.78rem; position: relative;
+  }
+  .ob-body { display: flex; flex-direction: column; gap: 9px; }
+  .ob-actions { display: flex; gap: 12px; align-items: center; }
+  .rc-row { display: flex; justify-content: space-between; font-size: 0.7rem; margin-bottom: 3px; }
+  .rc-row b { font-variant-numeric: tabular-nums; }
+  .rc-track { height: 5px; border-radius: 3px; background: var(--a-input); margin-bottom: 9px; }
+  .rc-fill { height: 100%; border-radius: 3px; }
+  .checkin-row { display: flex; align-items: center; gap: 8px; font-size: 0.72rem; margin-top: 10px; }
+  .checkin-row .cr-label { width: 64px; color: var(--a-muted); }
+  .checkin-dots { display: flex; gap: 6px; }
+  .checkin-dots i {
+    width: 22px; height: 22px; border-radius: 50%; background: var(--a-input);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-style: normal; font-size: 0.62rem; color: var(--a-muted);
+  }
+  .checkin-dots i.sel { background: var(--a-accent); color: #fff; }
+  .old-race-days { font-size: 1.6rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .ali { display: flex; align-items: center; gap: 10px; }
+  .ali-dot { flex: none; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+  .ali-dot i { width: 10px; height: 10px; border-radius: 50%; display: block; }
+  .ali-name { font-size: 0.84rem; font-weight: 600; }
+  .ali-meta { font-size: 0.68rem; color: var(--a-muted); }
+  .ali-stats { font-size: 0.7rem; color: var(--a-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .old-plan-card { background: var(--a-card); border-radius: 12px; padding: 12px; font-size: 0.76rem; display: flex; flex-direction: column; gap: 8px; position: relative; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+  .opc-head { display: flex; justify-content: space-between; color: var(--a-muted); font-size: 0.68rem; }
+  .old-tabs { display: flex; border-bottom: 1px solid var(--a-border); position: relative; }
+  .old-tabs span { flex: 1; text-align: center; font-size: 0.62rem; padding: 9px 0; color: var(--a-muted); border-bottom: 2px solid transparent; }
+  .old-tabs .on { color: var(--a-accent-light); font-weight: 700; border-bottom-color: var(--a-accent); }
+  .laps { width: 100%; border-collapse: collapse; font-size: 0.7rem; font-variant-numeric: tabular-nums; }
+  .laps th { text-align: left; color: var(--a-muted); font-weight: 600; font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 4px 6px; border-bottom: 1px solid var(--a-border); }
+  .laps td { padding: 5px 6px; border-bottom: 1px solid var(--a-border); }
+  .fade-more { text-align: center; color: var(--a-muted); font-size: 0.7rem; padding: 6px 0 2px; }
+  .nav6 .nav-item { min-width: 44px; font-size: 0.56rem; padding: 6px 4px; }
+
+  /* ---- annotations ---- */
+  .anno {
+    display: none; position: absolute; top: -9px; right: 8px; z-index: 8;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.58rem; font-weight: 600; letter-spacing: 0.02em;
+    background: var(--pg-accent); color: #fff;
+    padding: 2px 7px; border-radius: 4px; white-space: nowrap;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+  }
+  .anno.left { right: auto; left: 8px; }
+  .anno.below { top: auto; bottom: -9px; }
+  .anno.issue { background: #c2452d; }
+  .topbar > .anno { top: 34px; }
+  body.show-anno .anno { display: block; }
+  .chip-wrap { position: relative; }
+  .pad-toast { padding-bottom: 64px; }
+
+  .foot {
+    margin-top: 44px; border-top: 1px solid var(--pg-hairline); padding-top: 18px;
+    color: var(--pg-muted); font-size: 0.82rem; max-width: 74ch;
+  }
+  .foot h2 { font-size: 0.95rem; color: var(--pg-ink); margin: 0 0 8px; }
+  .foot ul { margin: 8px 0 0; padding-left: 18px; }
+  .foot li { margin-bottom: 5px; }
+
+  svg.i { flex: none; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .anno { transition: opacity 120ms ease; }
+  }
+</style>
+
+<div class="wrap">
+<header>
+  <p class="eyebrow">running-coach · UI/UX redesign · visual reference</p>
+  <h1>Redesign mockups — target end state</h1>
+  <p class="lede">
+    Static, high-fidelity mockups of the screens specified in
+    <code>docs/UI_UX_REDESIGN_PLAN.md</code>, shown as before/after pairs:
+    the <strong>current implementation</strong> (grey badge, issues tagged in
+    red) beside the <strong>redesign target</strong> (phase badge). Both sides
+    use the same sample data so differences are design, not data. Frames use
+    the app's real design tokens (<code>globals.css</code> + Phase 0
+    additions). Toggle component labels to cross-reference each element
+    against the plan's phase tasks after implementation.
+  </p>
+  <label class="anno-toggle">
+    <input type="checkbox" id="annoToggle">
+    Show component labels (implementation cross-reference)
+  </label>
+</header>
+
+<div class="gallery">
+
+<!-- ================= TODAY ================= -->
+<section>
+<h2 class="sec-h">Today</h2>
+<p class="sec-sub">From a flat 11-section card stack (readiness, briefing, and the day's
+session never meet; check-in stays full-size after submit) to a single hero that answers
+"what am I doing and am I ready?" above the fold.</p>
+<div class="pair">
+
+<figure class="shot">
+  <figcaption>
+    <span class="phase-badge cur-badge">Current</span>
+    <span class="shot-title">Today — dark</span>
+    <span class="refs">Audit §2.1–2.2 · Equal-weight cards in fixed order; empty-state hero; readiness and session separated; 6-tab nav with Settings.</span>
+  </figcaption>
+  <div class="phone app-dark"><div class="screen">
+
+    <div class="topbar">
+      <span class="anno issue">no title, sync status, or identity · §2.1</span>
+      <span class="old-topbar-week">Week 28/52</span>
+      <div class="topbar-right">
+        <span class="icon-btn"><svg class="i" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></span>
+        <span class="icon-btn"><svg class="i" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
+      </div>
+    </div>
+
+    <div class="weekstrip">
+      <span class="anno issue">activity dots only — planned days invisible · §2.1</span>
+      <span class="ws-nav"><svg class="i" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></span>
+      <div class="ws-day"><span class="ws-name">Mon</span><span class="ws-num">6</span><span class="ws-dot"></span></div>
+      <div class="ws-day"><span class="ws-name">Tue</span><span class="ws-num">7</span></div>
+      <div class="ws-day"><span class="ws-name">Wed</span><span class="ws-num">8</span><span class="ws-dot"></span></div>
+      <div class="ws-day sel"><span class="ws-name">Thu</span><span class="ws-num">9</span></div>
+      <div class="ws-day"><span class="ws-name">Fri</span><span class="ws-num">10</span></div>
+      <div class="ws-day"><span class="ws-name">Sat</span><span class="ws-num">11</span></div>
+      <div class="ws-day"><span class="ws-name">Sun</span><span class="ws-num">12</span></div>
+      <span class="ws-nav"><svg class="i" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span>
+    </div>
+
+    <div class="content">
+      <div class="old-banner">
+        <span class="anno issue">bulky banner above everything</span>
+        <svg class="i" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--a-warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+        <div class="ob-body">
+          <span>2 planned sessions missed. Regenerate to adapt your plan?</span>
+          <div class="ob-actions">
+            <span class="a-btn primary" style="font-size:0.7rem;padding:6px 10px">Regenerate</span>
+            <span style="color:var(--a-muted)">Dismiss</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="a-card">
+        <span class="anno issue">briefing separated from the session it describes</span>
+        <p class="a-section-title" style="margin-bottom:6px">Pre-workout briefing</p>
+        <p style="font-size:0.78rem;line-height:1.5;color:var(--a-secondary);margin:0">
+          Good sleep and stable HRV — green light for quality. Keep the first
+          2&nbsp;km relaxed before settling into pace. Fuel with 40&nbsp;g carbs
+          an hour out.</p>
+      </div>
+
+      <div>
+        <p class="a-section-title">Today's workouts</p>
+        <div class="a-card" style="text-align:center;color:var(--a-muted);font-size:0.8rem;padding:24px 16px">
+          <span class="anno issue">hero real estate spent on an empty state</span>
+          No workouts on this day
+        </div>
+      </div>
+
+      <div>
+        <p class="a-section-title">Scheduled</p>
+        <div class="a-card" style="font-size:0.78rem">
+          <span class="a-badge" style="background:color-mix(in srgb,var(--a-tempo) 20%,transparent);color:var(--a-tempo)">Tempo</span>
+          <div style="font-weight:700;font-size:0.95rem;margin:6px 0 2px">Tempo 10k</div>
+          <div style="color:var(--a-muted);font-size:0.7rem">WU 2 km easy · 3 × 3 km @ 4:45 /km · 90 s recovery · CD 1.6 km</div>
+        </div>
+      </div>
+
+      <div class="a-card" style="text-align:center">
+        <span class="anno issue">full-height card per race</span>
+        <span class="a-badge" style="background:color-mix(in srgb,var(--a-race) 20%,transparent);color:var(--a-race)">Primary</span>
+        <div class="old-race-days" style="margin-top:8px">73 days</div>
+        <div style="font-weight:600;font-size:0.9rem">Berlin Marathon</div>
+        <div style="color:var(--a-muted);font-size:0.72rem">Marathon</div>
+        <div style="color:var(--a-muted);font-size:0.72rem;margin-top:2px">Goal: 3:15:00</div>
+      </div>
+
+      <div class="a-card">
+        <span class="anno issue">readiness disconnected from today's session · §2.2</span>
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">
+          <div class="ring" style="width:64px;height:64px">
+            <svg width="64" height="64" viewBox="0 0 84 84">
+              <circle cx="42" cy="42" r="36" fill="none" stroke="var(--a-input)" stroke-width="7"/>
+              <circle cx="42" cy="42" r="36" fill="none" stroke="var(--a-ready)" stroke-width="7" stroke-linecap="round" stroke-dasharray="176.4 226.2"/>
+            </svg>
+            <div class="ring-center"><span class="ring-score" style="font-size:1.15rem">78</span></div>
+          </div>
+          <div>
+            <div style="color:var(--a-ready);font-weight:700;font-size:0.9rem">Ready</div>
+            <div style="color:var(--a-muted);font-size:0.7rem">Training Readiness</div>
+          </div>
+        </div>
+        <div class="rc-row"><span>Sleep</span><b style="color:var(--a-ready)">82</b></div>
+        <div class="rc-track"><div class="rc-fill" style="width:82%;background:var(--a-ready)"></div></div>
+        <div class="rc-row"><span>Recovery</span><b style="color:var(--a-ready)">74</b></div>
+        <div class="rc-track"><div class="rc-fill" style="width:74%;background:var(--a-ready)"></div></div>
+        <div class="rc-row"><span>Freshness</span><b style="color:#fdcb6e">61</b></div>
+        <div class="rc-track"><div class="rc-fill" style="width:61%;background:#fdcb6e"></div></div>
+        <div class="rc-row"><span>Resting HR</span><b style="color:var(--a-ready)">80</b></div>
+        <div class="rc-track"><div class="rc-fill" style="width:80%;background:var(--a-ready)"></div></div>
+        <div class="rc-row"><span>HRV</span><b style="color:var(--a-ready)">71</b></div>
+        <div class="rc-track"><div class="rc-fill" style="width:71%;background:var(--a-ready)"></div></div>
+        <div class="rc-row"><span>How you feel</span><b style="color:var(--a-ready)">75</b></div>
+        <div class="rc-track" style="margin-bottom:0"><div class="rc-fill" style="width:75%;background:var(--a-ready)"></div></div>
+      </div>
+
+      <div class="a-card">
+        <span class="anno issue">full form persists after submit · §2.2</span>
+        <p class="a-section-title" style="margin-bottom:2px">Daily check-in</p>
+        <div class="checkin-row"><span class="cr-label">Soreness</span>
+          <div class="checkin-dots"><i>1</i><i class="sel">2</i><i>3</i><i>4</i><i>5</i></div></div>
+        <div class="checkin-row"><span class="cr-label">Energy</span>
+          <div class="checkin-dots"><i>1</i><i>2</i><i>3</i><i class="sel">4</i><i>5</i></div></div>
+        <div class="checkin-row"><span class="cr-label">Mood</span>
+          <div class="checkin-dots"><i>1</i><i>2</i><i>3</i><i class="sel">4</i><i>5</i></div></div>
+      </div>
+
+      <div>
+        <p class="a-section-title">Daily summary</p>
+        <div class="a-card glance">
+          <span class="anno issue">not tappable — /daily detail unreachable · §2.1</span>
+          <div><span class="a-label">RHR</span><br><span class="a-value">46<small> bpm</small></span></div>
+          <div><span class="a-label">Sleep</span><br><span class="a-value">82</span></div>
+          <div><span class="a-label">Body Batt</span><br><span class="a-value">71</span></div>
+          <div><span class="a-label">Steps</span><br><span class="a-value">8,412</span></div>
+        </div>
+      </div>
+
+      <div>
+        <p class="a-section-title">Training load</p>
+        <div class="a-card">
+          <div class="tl-values">
+            <div><span class="a-label">Fitness</span><br><span class="a-value">52</span></div>
+            <div><span class="a-label">Fatigue</span><br><span class="a-value">61</span></div>
+            <div><span class="a-label">Form</span><br><span class="a-value" style="color:var(--a-warning)">−9</span></div>
+          </div>
+          <svg width="100%" height="52" viewBox="0 0 326 52" preserveAspectRatio="none">
+            <line x1="0" y1="42" x2="326" y2="42" stroke="var(--a-border)" stroke-width="1"/>
+            <path d="M0 38 C40 36 70 34 105 31 S 200 26 260 22 L 326 20" fill="none" stroke="var(--a-accent)" stroke-width="2" stroke-linecap="round"/>
+            <path d="M0 40 C30 34 60 36 95 28 S 180 24 230 16 L 326 11" fill="none" stroke="var(--a-danger)" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
+          </svg>
+          <div class="legend">
+            <span><i style="background:var(--a-accent)"></i>Fitness (CTL)</span>
+            <span><i style="background:var(--a-danger)"></i>Fatigue (ATL)</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <p class="a-section-title">Week 28 overview</p>
+        <div class="a-card">
+          <span class="anno issue">own palette — disagrees with utils/colors.ts · §2.2</span>
+          <div class="bars" style="height:64px">
+            <div class="bar-col"><div class="bar" style="height:34%"></div><span class="bar-x">Mon</span></div>
+            <div class="bar-col"><div class="bar" style="height:0"></div><span class="bar-x">Tue</span></div>
+            <div class="bar-col"><div class="bar" style="height:48%"></div><span class="bar-x">Wed</span></div>
+            <div class="bar-col"><div class="bar" style="height:0"></div><span class="bar-x">Thu</span></div>
+            <div class="bar-col"><div class="bar" style="height:0"></div><span class="bar-x">Fri</span></div>
+            <div class="bar-col"><div class="bar" style="height:0"></div><span class="bar-x">Sat</span></div>
+            <div class="bar-col"><div class="bar" style="height:0"></div><span class="bar-x">Sun</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <p class="a-section-title">My insights</p>
+        <div class="a-card insight-row">
+          <span class="tag">Trend</span>
+          <span>Easy-run HR is down 4 bpm at the same pace over 3 weeks — aerobic base is improving.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="bottomnav nav6">
+      <span class="anno issue">6 tabs · Settings permanent · "Wellness" mislabel · §2.1</span>
+      <span class="nav-item active">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        Today</span>
+      <span class="nav-item">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        Activities</span>
+      <span class="nav-item">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        Coach</span>
+      <span class="nav-item">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M8 11h8M8 15h5"/></svg>
+        Plan</span>
+      <span class="nav-item">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg>
+        Wellness</span>
+      <span class="nav-item">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1"/></svg>
+        Settings</span>
+    </div>
+  </div></div>
+</figure>
+
+<figure class="shot">
+  <figcaption>
+    <span class="phase-badge">Phase 1 + 2</span>
+    <span class="shot-title">Today — dark</span>
+    <span class="refs">Plan §5.1–5.2, tasks 1.1–1.6, 2.1–2.6 · Hero fuses readiness × session × briefing; alerts and races compact; check-in collapses after submit. Dashed line = Phase 2 fold criterion.</span>
+  </figcaption>
+  <div class="phone app-dark"><div class="screen">
+
+    <div class="topbar">
+      <span class="anno left">TopBar.tsx · task 1.2</span>
+      <span class="topbar-title">Today <small>Week 28</small></span>
+      <div class="topbar-right">
+        <span class="sync-pill"><span class="anno below">SyncStatusPill.tsx</span>
+          <svg class="i" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+          12:04</span>
+        <span class="icon-btn"><svg class="i" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></span>
+        <span class="icon-btn"><svg class="i" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
+        <span class="avatar">S</span>
+      </div>
+    </div>
+
+    <div class="weekstrip">
+      <span class="anno">WeekStrip.tsx · planned ○ / done ● · task 1.6</span>
+      <span class="ws-nav"><svg class="i" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></span>
+      <div class="ws-day"><span class="ws-name">Mon</span><span class="ws-num">6</span><span class="ws-dot"></span></div>
+      <div class="ws-day"><span class="ws-name">Tue</span><span class="ws-num">7</span><span class="ws-dot planned"></span></div>
+      <div class="ws-day"><span class="ws-name">Wed</span><span class="ws-num">8</span><span class="ws-dot"></span></div>
+      <div class="ws-day sel"><span class="ws-name">Thu</span><span class="ws-num">9</span><span class="ws-dot planned"></span></div>
+      <div class="ws-day"><span class="ws-name">Fri</span><span class="ws-num">10</span></div>
+      <div class="ws-day"><span class="ws-name">Sat</span><span class="ws-num">11</span><span class="ws-dot planned"></span></div>
+      <div class="ws-day"><span class="ws-name">Sun</span><span class="ws-num">12</span><span class="ws-dot planned"></span></div>
+      <span class="ws-nav"><svg class="i" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span>
+    </div>
+
+    <div class="content">
+      <div class="fold"></div>
+
+      <div class="alert-banner">
+        <span class="anno">AlertBanner (shared) · task 2.2</span>
+        <svg class="i" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--a-warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+        2 sessions missed
+        <span class="spacer"></span>
+        <span class="act">Adapt plan</span>
+        <span class="dismiss">Dismiss</span>
+      </div>
+
+      <div class="a-card hero">
+        <span class="anno">TodayHero.tsx · task 2.1</span>
+        <div class="hero-top">
+          <div class="ring">
+            <span class="anno left below">ScoreRing.tsx</span>
+            <svg width="84" height="84" viewBox="0 0 84 84">
+              <circle cx="42" cy="42" r="36" fill="none" stroke="var(--a-input)" stroke-width="7"/>
+              <circle cx="42" cy="42" r="36" fill="none" stroke="var(--a-ready)" stroke-width="7"
+                stroke-linecap="round" stroke-dasharray="176.4 226.2"/>
+            </svg>
+            <div class="ring-center"><span class="ring-score">78</span><span class="ring-label">Ready</span></div>
+          </div>
+          <div class="hero-session">
+            <span class="a-label">Today's session</span>
+            <div class="hero-session-name">Tempo 10k</div>
+            <div class="hero-session-meta">4:45 /km target · ~48 min</div>
+          </div>
+        </div>
+        <div class="structure-bar">
+          <span class="anno below">WorkoutStructureBar.tsx · task 4.2</span>
+          <span style="flex:16;background:var(--a-hover)"></span>
+          <span style="flex:9;background:var(--a-tempo)"></span>
+          <span style="flex:2;background:var(--a-hover)"></span>
+          <span style="flex:9;background:var(--a-tempo)"></span>
+          <span style="flex:2;background:var(--a-hover)"></span>
+          <span style="flex:9;background:var(--a-tempo)"></span>
+          <span style="flex:10;background:var(--a-hover)"></span>
+        </div>
+        <p class="hero-brief"><b>Good sleep and stable HRV — green light for quality.</b>
+          Keep the first 2&nbsp;km relaxed before settling into pace. <span class="more">More →</span></p>
+        <div class="hero-actions">
+          <span class="a-btn primary">Details</span>
+          <span class="a-btn secondary">
+            <svg class="i" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="6"/><path d="M12 10v2l1.5 1.5M9 3h6M9 21h6"/></svg>
+            Send to watch</span>
+        </div>
+      </div>
+
+      <div class="checkin-chip">
+        <span class="anno">DailyCheckinCard.tsx collapsed · task 2.3</span>
+        <span class="dot"></span> Feeling good · low soreness
+        <span class="edit">Edit</span>
+      </div>
+
+      <div>
+        <p class="a-section-title">At a glance</p>
+        <div class="a-card glance">
+          <span class="anno">at-a-glance grid → /daily/:id · task 2.4</span>
+          <div><span class="a-label">RHR</span><br><span class="a-value">46<small> bpm</small></span></div>
+          <div><span class="a-label">Sleep</span><br><span class="a-value">82</span></div>
+          <div><span class="a-label">Body Batt</span><br><span class="a-value">71</span></div>
+          <div><span class="a-label">Steps</span><br><span class="a-value">8,412</span></div>
+          <span class="glance-arrow"><svg class="i" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span>
+        </div>
+      </div>
+
+      <div class="race-strip">
+        <span class="anno">race strip · task 2.5</span>
+        <svg class="i" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--a-race)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/></svg>
+        Berlin Marathon
+        <span class="race-days">73 d</span>
+        <span class="race-goal">goal 3:15</span>
+      </div>
+
+      <div>
+        <p class="a-section-title">Training load</p>
+        <div class="a-card">
+          <span class="anno">TrainingLoadChart.tsx · chartTheme.ts</span>
+          <div class="tl-values">
+            <div><span class="a-label">Fitness</span><br><span class="a-value">52</span></div>
+            <div><span class="a-label">Fatigue</span><br><span class="a-value">61</span></div>
+            <div><span class="a-label">Form</span><br><span class="a-value" style="color:var(--a-warning)">−9</span></div>
+          </div>
+          <svg width="100%" height="64" viewBox="0 0 326 64" preserveAspectRatio="none">
+            <line x1="0" y1="48" x2="326" y2="48" stroke="var(--a-border)" stroke-width="1"/>
+            <path d="M0 44 C40 42 70 40 105 37 S 200 31 260 27 S 310 25 326 24" fill="none" stroke="var(--a-accent)" stroke-width="2" stroke-linecap="round"/>
+            <path d="M0 46 C30 40 60 42 95 34 S 180 30 230 20 S 300 16 326 14" fill="none" stroke="var(--a-danger)" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
+            <circle cx="326" cy="24" r="3" fill="var(--a-accent)"/>
+            <circle cx="326" cy="14" r="3" fill="var(--a-danger)"/>
+          </svg>
+          <div class="legend">
+            <span><i style="background:var(--a-accent)"></i>Fitness (CTL)</span>
+            <span><i style="background:var(--a-danger)"></i>Fatigue (ATL)</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <p class="a-section-title">Week 28 overview</p>
+        <div class="a-card">
+          <span class="anno">WeekOverview.tsx · unified sport palette (0.5)</span>
+          <div class="bars">
+            <div class="bar-col"><div class="bar" style="height:34%"></div><span class="bar-x">Mon</span></div>
+            <div class="bar-col"><div class="bar" style="height:0"></div><span class="bar-x">Tue</span></div>
+            <div class="bar-col"><div class="bar" style="height:48%"></div><span class="bar-x">Wed</span></div>
+            <div class="bar-col"><div class="bar planned" style="height:42%"></div><span class="bar-x">Thu</span></div>
+            <div class="bar-col"><div class="bar" style="height:0"></div><span class="bar-x">Fri</span></div>
+            <div class="bar-col"><div class="bar planned" style="height:26%"></div><span class="bar-x">Sat</span></div>
+            <div class="bar-col"><div class="bar planned" style="height:92%"></div><span class="bar-x">Sun</span></div>
+          </div>
+          <div class="legend">
+            <span><i style="background:var(--a-accent)"></i>Completed</span>
+            <span><i style="border:1.5px dashed var(--a-border);background:transparent;height:5px"></i>Planned</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <p class="a-section-title">My insights</p>
+        <div class="a-card insight-row">
+          <span class="anno">InsightsList.tsx</span>
+          <span class="tag">Trend</span>
+          <span>Easy-run HR is down 4 bpm at the same pace over 3 weeks — aerobic base is improving.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="bottomnav">
+      <span class="anno">BottomNav.tsx · 5 tabs · task 1.1</span>
+      <span class="nav-item active">
+        <svg class="i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>
+        Today</span>
+      <span class="nav-item">
+        <svg class="i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M8 11h8M8 15h5"/></svg>
+        Plan</span>
+      <span class="nav-item">
+        <svg class="i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        Coach</span>
+      <span class="nav-item">
+        <svg class="i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        Activities</span>
+      <span class="nav-item">
+        <svg class="i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg>
+        Progress</span>
+    </div>
+  </div></div>
+</figure>
+
+</div>
+</section>
+
+<!-- ================= PLAN ================= -->
+<section>
+<h2 class="sec-h">Plan</h2>
+<p class="sec-sub">From uniform day cards with no completion state to a week checklist:
+✓ done (linked to the run), ✗ missed, ▶ today, week tabs that carry volume and status.</p>
+<div class="pair">
+
+<figure class="shot">
+  <figcaption>
+    <span class="phase-badge cur-badge">Current</span>
+    <span class="shot-title">Plan — dark</span>
+    <span class="refs">Audit §2.6 · Every day is an equal card; past days only dim; workout structure is prose; W1 always opens first.</span>
+  </figcaption>
+  <div class="phone app-dark"><div class="screen">
+
+    <div class="topbar">
+      <span class="old-topbar-week">Week 28/52</span>
+      <div class="topbar-right">
+        <span class="icon-btn"><svg class="i" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></span>
+        <span class="icon-btn"><svg class="i" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="plan-head">
+        <span class="a-badge phase-pill">Build Phase</span>
+        <span class="plan-gen">Generated 6 Jul</span>
+        <span class="a-btn ghost">Preferences</span>
+        <span class="a-btn ghost">Regenerate</span>
+      </div>
+
+      <div class="week-tabs">
+        <span class="anno issue">no volume/status · opens W1, not current week · §2.6</span>
+        <div class="week-tab active"><div class="wt-label">W1</div></div>
+        <div class="week-tab"><div class="wt-label">W2</div></div>
+        <div class="week-tab"><div class="wt-label">W3</div></div>
+        <div class="week-tab"><div class="wt-label">W4</div></div>
+      </div>
+
+      <div style="font-size:0.72rem;color:var(--a-muted)">Workouts: 2/5 &nbsp;·&nbsp; Distance: 46.0 km</div>
+
+      <div class="old-plan-card" style="opacity:0.7">
+        <span class="anno issue">past days only dim — no ✓/✗, no link to the run · §2.6</span>
+        <div class="opc-head"><span>Mon</span><span>6 Jul</span></div>
+        <span class="a-badge opc-badge" style="background:var(--a-easy);color:#fff">Easy</span>
+        <div style="font-variant-numeric:tabular-nums">8.0 km <span style="color:var(--a-muted)">· 5:40 /km</span></div>
+        <p style="margin:0;color:var(--a-secondary);font-size:0.72rem;line-height:1.45">Relaxed aerobic run. Keep HR under 145 and finish feeling fresh.</p>
+        <div><span class="a-btn secondary" style="font-size:0.66rem;padding:4px 9px">Send to watch</span></div>
+      </div>
+
+      <div class="old-plan-card" style="opacity:0.7">
+        <div class="opc-head"><span>Tue</span><span>7 Jul</span></div>
+        <span class="a-badge opc-badge" style="background:var(--a-interval);color:#fff">Intervals</span>
+        <div style="font-variant-numeric:tabular-nums">6.0 km <span style="color:var(--a-muted)">· 6×800 @ 4:05</span></div>
+        <p style="margin:0;color:var(--a-secondary);font-size:0.72rem;line-height:1.45">
+          <span class="anno issue below">structure as prose — no visual shape · §2.6</span>
+          Warm up 2 km easy. 6 × 800 m at 4:05 /km with 90 s jog recovery. Cool down 1.6 km very easy.</p>
+        <div><span class="a-btn secondary" style="font-size:0.66rem;padding:4px 9px">Send to watch</span></div>
+      </div>
+
+      <div class="old-plan-card">
+        <div class="opc-head"><span>Wed</span><span>8 Jul</span></div>
+        <span class="a-badge opc-badge" style="background:var(--a-hover);color:var(--a-muted)">Rest</span>
+        <p style="margin:0;color:var(--a-secondary);font-size:0.72rem">Full rest or gentle mobility.</p>
+      </div>
+
+      <div class="old-plan-card">
+        <span class="anno issue">today looks like every other day · §2.6</span>
+        <div class="opc-head"><span>Thu</span><span>9 Jul</span></div>
+        <span class="a-badge opc-badge" style="background:var(--a-tempo);color:#fff">Tempo</span>
+        <div style="font-variant-numeric:tabular-nums">10.0 km <span style="color:var(--a-muted)">· 4:45 /km</span></div>
+        <p style="margin:0;color:var(--a-secondary);font-size:0.72rem;line-height:1.45">Warm up 2 km, then 3 × 3 km at threshold with 90 s float. Cool down.</p>
+        <div><span class="a-btn secondary" style="font-size:0.66rem;padding:4px 9px">Send to watch</span></div>
+      </div>
+
+      <div class="fade-more">… Fri Easy 10k · Sat Strength · Sun Long 22k</div>
+    </div>
+
+    <div class="bottomnav nav6">
+      <span class="nav-item">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        Today</span>
+      <span class="nav-item">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        Activities</span>
+      <span class="nav-item">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        Coach</span>
+      <span class="nav-item active">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M8 11h8M8 15h5"/></svg>
+        Plan</span>
+      <span class="nav-item">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg>
+        Wellness</span>
+      <span class="nav-item">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1"/></svg>
+        Settings</span>
+    </div>
+  </div></div>
+</figure>
+
+<figure class="shot">
+  <figcaption>
+    <span class="phase-badge">Phase 4</span>
+    <span class="shot-title">Plan — dark</span>
+    <span class="refs">Plan §5.4, tasks 4.1–4.5 · Day rows with ✓/✗/▶/○ state machine, done→activity link, week tabs with volume + state dots, structure bar on interval days, toast for send-to-watch.</span>
+  </figcaption>
+  <div class="phone app-dark"><div class="screen">
+
+    <div class="topbar">
+      <span class="topbar-title">Plan <small>Week 28</small></span>
+      <div class="topbar-right">
+        <span class="sync-pill">
+          <svg class="i" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+          12:04</span>
+        <span class="avatar">S</span>
+      </div>
+    </div>
+
+    <div class="content pad-toast">
+      <div class="plan-head">
+        <span class="a-badge phase-pill">Build phase</span>
+        <span class="plan-gen">Generated 6 Jul</span>
+        <span class="a-btn ghost">Preferences</span>
+        <span class="a-btn ghost">Regenerate</span>
+      </div>
+
+      <div class="week-tabs">
+        <span class="anno">week tabs + state dots · task 4.3</span>
+        <div class="week-tab"><div class="wt-label">W1</div><div class="wt-km">42 km</div>
+          <div class="wt-dots"><i class="d"></i><i class="d"></i><i></i><i class="d"></i><i class="m"></i><i class="d"></i><i class="d"></i></div></div>
+        <div class="week-tab active"><div class="wt-label">W2</div><div class="wt-km">46 km</div>
+          <div class="wt-dots"><i class="d"></i><i class="m"></i><i></i><i class="t"></i><i></i><i></i><i></i></div></div>
+        <div class="week-tab"><div class="wt-label">W3</div><div class="wt-km">50 km</div>
+          <div class="wt-dots"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+        <div class="week-tab"><div class="wt-label">W4</div><div class="wt-km">38 km</div>
+          <div class="wt-dots"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+      </div>
+
+      <div class="a-card week-progress">
+        <span class="anno">week progress · task 4.4</span>
+        <div class="wp-row"><span>Threshold development</span><b>18.4 / 46 km</b></div>
+        <div class="wp-track"><div class="wp-fill"></div></div>
+      </div>
+
+      <div class="day-row done">
+        <span class="anno">DayRow state: done → activity · task 4.1</span>
+        <span class="glyph">✓</span><span class="d-day">Mon</span>
+        <div class="d-main">
+          <div class="d-name">Easy 8k</div>
+          <div class="d-sub">done · adherence 96% · <a>view run →</a></div>
+        </div>
+      </div>
+
+      <div class="day-row missed">
+        <span class="glyph">✗</span><span class="d-day">Tue</span>
+        <div class="d-main">
+          <div class="d-name">Intervals 6×800</div>
+          <div class="d-sub">missed</div>
+        </div>
+      </div>
+
+      <div class="day-row rest">
+        <span class="glyph">—</span><span class="d-day">Wed</span>
+        <div class="d-main"><div class="d-name">Rest</div></div>
+      </div>
+
+      <div class="day-row today">
+        <span class="anno">today + WorkoutStructureBar · tasks 4.1–4.2</span>
+        <span class="glyph">▶</span><span class="d-day">Thu</span>
+        <div class="d-main">
+          <div class="d-name">Tempo 10k</div>
+          <div class="d-sub">4:45 /km target · ~48 min</div>
+        </div>
+        <span class="a-badge" style="background:color-mix(in srgb,var(--a-tempo) 20%,transparent);color:var(--a-tempo)">Tempo</span>
+        <div class="d-extras">
+          <div class="structure-bar" style="height:12px">
+            <span style="flex:16;background:var(--a-hover)"></span>
+            <span style="flex:9;background:var(--a-tempo)"></span>
+            <span style="flex:2;background:var(--a-hover)"></span>
+            <span style="flex:9;background:var(--a-tempo)"></span>
+            <span style="flex:2;background:var(--a-hover)"></span>
+            <span style="flex:9;background:var(--a-tempo)"></span>
+            <span style="flex:10;background:var(--a-hover)"></span>
+          </div>
+          <div><span class="a-btn secondary" style="font-size:0.68rem;padding:5px 10px">
+            <svg class="i" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="6"/><path d="M12 10v2l1.5 1.5M9 3h6M9 21h6"/></svg>
+            Send to watch</span></div>
+        </div>
+      </div>
+
+      <div class="day-row upcoming">
+        <span class="glyph">○</span><span class="d-day">Fri</span>
+        <div class="d-main">
+          <div class="d-name">Easy 10k</div>
+          <div class="d-sub">5:40 /km · conversational</div>
+        </div>
+        <span class="a-badge" style="background:color-mix(in srgb,var(--a-easy) 20%,transparent);color:var(--a-easy)">Easy</span>
+      </div>
+
+      <div class="day-row upcoming">
+        <span class="glyph">○</span><span class="d-day">Sat</span>
+        <div class="d-main">
+          <div class="d-name">Strength — lower body</div>
+          <div class="d-sub">~35 min · 6 exercises</div>
+        </div>
+        <span class="a-badge" style="background:color-mix(in srgb,var(--a-strength) 22%,transparent);color:var(--a-strength)">Strength</span>
+      </div>
+
+      <div class="day-row upcoming">
+        <span class="glyph">○</span><span class="d-day">Sun</span>
+        <div class="d-main">
+          <div class="d-name">Long 22k</div>
+          <div class="d-sub">5:30 /km · fuelling: 60 g carbs/h</div>
+        </div>
+        <span class="a-badge" style="background:color-mix(in srgb,var(--a-long) 20%,transparent);color:var(--a-long)">Long</span>
+      </div>
+    </div>
+
+    <div class="toast"><span class="anno">Toast.tsx · tasks 0.11, 4.5</span><b>✓</b>&nbsp; Sent "Tempo 10k" to watch</div>
+
+    <div class="bottomnav">
+      <span class="nav-item">
+        <svg class="i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>
+        Today</span>
+      <span class="nav-item active">
+        <svg class="i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M8 11h8M8 15h5"/></svg>
+        Plan</span>
+      <span class="nav-item">
+        <svg class="i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        Coach</span>
+      <span class="nav-item">
+        <svg class="i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        Activities</span>
+      <span class="nav-item">
+        <svg class="i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg>
+        Progress</span>
+    </div>
+  </div></div>
+</figure>
+
+</div>
+</section>
+
+<!-- ================= ACTIVITIES (LIGHT) ================= -->
+<section>
+<h2 class="sec-h">Activities</h2>
+<p class="sec-sub">From one-line text rows grouped by month to scannable cards: sport icon,
+PB badge, zone micro-bar, weekly group totals. Both frames in light theme to spec that palette.</p>
+<div class="pair">
+
+<figure class="shot">
+  <figcaption>
+    <span class="phase-badge cur-badge">Current</span>
+    <span class="shot-title">Activities — light theme</span>
+    <span class="refs">Audit §2.3 · Coloured-dot rows, month groups with no totals, fixed six-sport filter set, clickable divs.</span>
+  </figcaption>
+  <div class="phone app-light"><div class="screen">
+
+    <div class="topbar">
+      <span class="old-topbar-week">Week 28/52</span>
+      <div class="topbar-right">
+        <span class="icon-btn"><svg class="i" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>
+        <span class="icon-btn"><svg class="i" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="chip-wrap">
+        <span class="anno issue">fixed six-sport set regardless of the athlete · §2.3</span>
+        <div class="chips">
+          <span class="chip active">All</span>
+          <span class="chip">Running</span>
+          <span class="chip">Trail</span>
+          <span class="chip">Cycling</span>
+          <span class="chip">Walking</span>
+          <span class="chip">Swimming</span>
+        </div>
+      </div>
+
+      <div class="group-head">
+        <span class="anno issue">month groups — no totals · §2.3</span>
+        <span>July 2026</span>
+      </div>
+
+      <div class="a-card ali">
+        <span class="anno issue">div onClick — no keyboard access; no icon/PB/zones · §2.3</span>
+        <div class="ali-dot" style="background:color-mix(in srgb,var(--a-tempo) 14%,transparent)"><i style="background:var(--a-tempo)"></i></div>
+        <div style="flex:1;min-width:0">
+          <div class="ali-name">Tempo Run</div>
+          <div class="ali-meta">8 Jul, 07:12</div>
+        </div>
+        <span class="ali-stats">12.4 km · 58:12 · 4:41 /km</span>
+        <span class="act-chev"><svg class="i" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span>
+      </div>
+
+      <div class="a-card ali">
+        <div class="ali-dot" style="background:color-mix(in srgb,var(--a-easy) 14%,transparent)"><i style="background:var(--a-easy)"></i></div>
+        <div style="flex:1;min-width:0">
+          <div class="ali-name">Morning Easy Run</div>
+          <div class="ali-meta">6 Jul, 06:48</div>
+        </div>
+        <span class="ali-stats">8.1 km · 46:03 · 5:41 /km</span>
+        <span class="act-chev"><svg class="i" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span>
+      </div>
+
+      <div class="a-card ali">
+        <div class="ali-dot" style="background:color-mix(in srgb,var(--a-long) 14%,transparent)"><i style="background:var(--a-long)"></i></div>
+        <div style="flex:1;min-width:0">
+          <div class="ali-name">Recovery Spin</div>
+          <div class="ali-meta">5 Jul, 16:20</div>
+        </div>
+        <span class="ali-stats">24.6 km · 1:02:11</span>
+        <span class="act-chev"><svg class="i" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span>
+      </div>
+
+      <div class="a-card ali">
+        <div class="ali-dot" style="background:color-mix(in srgb,var(--a-long) 14%,transparent)"><i style="background:var(--a-long)"></i></div>
+        <div style="flex:1;min-width:0">
+          <div class="ali-name">Long Run — canal loop</div>
+          <div class="ali-meta">5 Jul, 08:02</div>
+        </div>
+        <span class="ali-stats">21.3 km · 1:58:40 · 5:34 /km</span>
+        <span class="act-chev"><svg class="i" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span>
+      </div>
+
+      <div class="a-card ali">
+        <div class="ali-dot" style="background:color-mix(in srgb,var(--a-interval) 14%,transparent)"><i style="background:var(--a-interval)"></i></div>
+        <div style="flex:1;min-width:0">
+          <div class="ali-name">Track — 6×800</div>
+          <div class="ali-meta">2 Jul, 18:31</div>
+        </div>
+        <span class="ali-stats">9.6 km · 47:20 · 4:56 /km</span>
+        <span class="act-chev"><svg class="i" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span>
+      </div>
+
+      <div class="group-head"><span>June 2026</span></div>
+      <div class="fade-more">… 18 more activities</div>
+    </div>
+
+    <div class="bottomnav nav6">
+      <span class="nav-item">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        Today</span>
+      <span class="nav-item active">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        Activities</span>
+      <span class="nav-item">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        Coach</span>
+      <span class="nav-item">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M8 11h8M8 15h5"/></svg>
+        Plan</span>
+      <span class="nav-item">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg>
+        Wellness</span>
+      <span class="nav-item">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1"/></svg>
+        Settings</span>
+    </div>
+  </div></div>
+</figure>
+
+<figure class="shot">
+  <figcaption>
+    <span class="phase-badge">Phase 3</span>
+    <span class="shot-title">Activities — light theme</span>
+    <span class="refs">Plan §5.3, tasks 3.1–3.3 · Sport-icon rows with PB badge and zone micro-bar, weekly group headers with totals, data-derived filter chips. Shown in light theme to spec both palettes.</span>
+  </figcaption>
+  <div class="phone app-light"><div class="screen">
+
+    <div class="topbar">
+      <span class="topbar-title">Activities</span>
+      <div class="topbar-right">
+        <span class="sync-pill">
+          <svg class="i" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+          12:04</span>
+        <span class="avatar">S</span>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="chip-wrap">
+        <span class="anno">filter chips from data · task 3.3</span>
+        <div class="chips">
+          <span class="chip active">All</span>
+          <span class="chip">Running</span>
+          <span class="chip">Trail</span>
+          <span class="chip">Cycling</span>
+        </div>
+      </div>
+
+      <div class="group-head">
+        <span class="anno">weekly header + totals · task 3.2</span>
+        <span>Week 28</span><b>3 runs · 30.7 km</b>
+      </div>
+
+      <div class="a-card act-row">
+        <span class="anno">ActivityListItem.tsx · task 3.1</span>
+        <div class="sport-icon" style="background:color-mix(in srgb,var(--a-tempo) 15%,transparent);color:var(--a-tempo)">
+          <svg class="i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        </div>
+        <div class="act-main">
+          <div class="act-name">Tempo Run
+            <span class="a-badge pb-badge">🏆 PB</span></div>
+          <div class="act-meta">Wed · 07:12 &nbsp; 12.4 km · 58:12 · 4:41 /km · ♥ 152</div>
+          <div class="zone-bar">
+            <span style="flex:8;background:#74b9ff"></span>
+            <span style="flex:30;background:#55efc4"></span>
+            <span style="flex:42;background:#ffeaa7"></span>
+            <span style="flex:16;background:#fab1a0"></span>
+            <span style="flex:4;background:#ff7675"></span>
+          </div>
+        </div>
+        <span class="act-chev"><svg class="i" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span>
+      </div>
+
+      <div class="a-card act-row">
+        <div class="sport-icon" style="background:color-mix(in srgb,var(--a-easy) 15%,transparent);color:var(--a-easy)">
+          <svg class="i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        </div>
+        <div class="act-main">
+          <div class="act-name">Morning Easy Run</div>
+          <div class="act-meta">Mon · 06:48 &nbsp; 8.1 km · 46:03 · 5:41 /km · ♥ 131</div>
+          <div class="zone-bar">
+            <span style="flex:34;background:#74b9ff"></span>
+            <span style="flex:52;background:#55efc4"></span>
+            <span style="flex:14;background:#ffeaa7"></span>
+          </div>
+        </div>
+        <span class="act-chev"><svg class="i" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span>
+      </div>
+
+      <div class="a-card act-row">
+        <div class="sport-icon" style="background:color-mix(in srgb,var(--a-long) 15%,transparent);color:var(--a-long)">
+          <svg class="i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M6 17l4-9h4l4 9M10 8l-2-3h3"/></svg>
+        </div>
+        <div class="act-main">
+          <div class="act-name">Recovery Spin</div>
+          <div class="act-meta">Sun · 16:20 &nbsp; 24.6 km · 1:02:11 · ♥ 118</div>
+        </div>
+        <span class="act-chev"><svg class="i" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span>
+      </div>
+
+      <div class="group-head"><span>Week 27</span><b>5 runs · 51.2 km</b></div>
+
+      <div class="a-card act-row">
+        <div class="sport-icon" style="background:color-mix(in srgb,var(--a-long) 15%,transparent);color:var(--a-long)">
+          <svg class="i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        </div>
+        <div class="act-main">
+          <div class="act-name">Long Run — canal loop</div>
+          <div class="act-meta">Sun · 08:02 &nbsp; 21.3 km · 1:58:40 · 5:34 /km · ♥ 139</div>
+          <div class="zone-bar">
+            <span style="flex:22;background:#74b9ff"></span>
+            <span style="flex:58;background:#55efc4"></span>
+            <span style="flex:20;background:#ffeaa7"></span>
+          </div>
+        </div>
+        <span class="act-chev"><svg class="i" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span>
+      </div>
+
+      <div class="a-card act-row">
+        <div class="sport-icon" style="background:color-mix(in srgb,var(--a-interval) 14%,transparent);color:var(--a-interval)">
+          <svg class="i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        </div>
+        <div class="act-main">
+          <div class="act-name">Track — 6×800</div>
+          <div class="act-meta">Thu · 18:31 &nbsp; 9.6 km · 47:20 · 4:56 /km · ♥ 158</div>
+          <div class="zone-bar">
+            <span style="flex:14;background:#74b9ff"></span>
+            <span style="flex:22;background:#55efc4"></span>
+            <span style="flex:24;background:#ffeaa7"></span>
+            <span style="flex:28;background:#fab1a0"></span>
+            <span style="flex:12;background:#ff7675"></span>
+          </div>
+        </div>
+        <span class="act-chev"><svg class="i" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span>
+      </div>
+    </div>
+
+    <div class="bottomnav">
+      <span class="nav-item">
+        <svg class="i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>
+        Today</span>
+      <span class="nav-item">
+        <svg class="i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M8 11h8M8 15h5"/></svg>
+        Plan</span>
+      <span class="nav-item">
+        <svg class="i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        Coach</span>
+      <span class="nav-item active">
+        <svg class="i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        Activities</span>
+      <span class="nav-item">
+        <svg class="i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg>
+        Progress</span>
+    </div>
+  </div></div>
+</figure>
+
+</div>
+</section>
+
+<!-- ================= ACTIVITY DETAIL ================= -->
+<section>
+<h2 class="sec-h">Activity detail</h2>
+<p class="sec-sub">From a 2,000-px scroll of stat grids with a table for splits and the AI
+verdict at the very bottom, to a page with wayfinding: sticky header, verdict up top, splits
+you can read at a glance, deep stats collapsed but intact.</p>
+<div class="pair">
+
+<figure class="shot">
+  <figcaption>
+    <span class="phase-badge cur-badge">Current</span>
+    <span class="shot-title">Activity detail — dark</span>
+    <span class="refs">Audit §2.3 · Stat-grid wall before charts, splits as a table only, AI insight last; no sticky header or section jumps.</span>
+  </figcaption>
+  <div class="phone app-dark"><div class="screen">
+
+    <div class="det-head">
+      <span class="anno issue">no wayfinding once scrolled · §2.3</span>
+      <svg class="i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--a-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      <div>
+        <span class="a-badge" style="background:color-mix(in srgb,var(--a-tempo) 20%,transparent);color:var(--a-tempo)">Tempo</span>
+        <span class="a-badge pb-badge">🏆 New PB</span>
+        <div class="det-title">Tempo Run</div>
+        <div class="det-date">Wednesday, 8 July 2026 · 07:12</div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="stat3">
+        <div><span class="a-label">Distance</span><br><span class="a-value" style="font-size:1.45rem">12.4<small> km</small></span></div>
+        <div><span class="a-label">Duration</span><br><span class="a-value" style="font-size:1.45rem">58:12</span></div>
+        <div><span class="a-label">Avg pace</span><br><span class="a-value" style="font-size:1.45rem">4:41<small> /km</small></span></div>
+      </div>
+
+      <div class="a-card" style="text-align:center">
+        <svg class="route-svg" width="200" height="105" viewBox="0 0 220 120" fill="none">
+          <path d="M18 96 C 30 60 52 38 84 30 S 138 34 158 22 S 198 18 202 44 C 205 66 180 74 160 82 S 120 88 100 98 S 48 112 34 104 S 12 104 18 96 Z"
+            stroke="var(--a-accent)" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="18" cy="96" r="4" fill="var(--a-success)"/>
+          <circle cx="202" cy="44" r="4" fill="var(--a-danger)"/>
+        </svg>
+      </div>
+
+      <div>
+        <p class="a-section-title">Stats</p>
+        <div class="a-card">
+          <span class="anno issue">wall of grids before any chart · §2.3</span>
+          <div class="stat3" style="row-gap:12px">
+            <div><span class="a-label">Avg HR</span><br><span class="a-value">152<small> bpm</small></span></div>
+            <div><span class="a-label">Max HR</span><br><span class="a-value">171<small> bpm</small></span></div>
+            <div><span class="a-label">Elev gain</span><br><span class="a-value">84<small> m</small></span></div>
+            <div><span class="a-label">Calories</span><br><span class="a-value">748</span></div>
+            <div><span class="a-label">Cadence</span><br><span class="a-value">176<small> spm</small></span></div>
+            <div><span class="a-label">Stride</span><br><span class="a-value">1.21<small> m</small></span></div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <p class="a-section-title">Running dynamics</p>
+        <div class="a-card stat3">
+          <div><span class="a-label">GCT</span><br><span class="a-value">242<small> ms</small></span></div>
+          <div><span class="a-label">Vert. osc.</span><br><span class="a-value">7.8<small> cm</small></span></div>
+          <div><span class="a-label">Vert. ratio</span><br><span class="a-value">6.4<small> %</small></span></div>
+        </div>
+      </div>
+
+      <div>
+        <p class="a-section-title">Power</p>
+        <div class="a-card stat3" style="grid-template-columns:repeat(4,1fr)">
+          <div><span class="a-label">Avg</span><br><span class="a-value">289<small> W</small></span></div>
+          <div><span class="a-label">NP</span><br><span class="a-value">297<small> W</small></span></div>
+          <div><span class="a-label">TSS</span><br><span class="a-value">82</span></div>
+          <div><span class="a-label">IF</span><br><span class="a-value">0.91</span></div>
+        </div>
+      </div>
+
+      <div class="fade-more">… Performance · Conditions · HR zones · Pace zones · Charts</div>
+
+      <div>
+        <p class="a-section-title">Splits</p>
+        <div class="a-card">
+          <span class="anno issue">table only — the workout's shape is invisible · §2.3</span>
+          <table class="laps">
+            <tr><th>Km</th><th>Pace</th><th>HR</th><th>Elev</th></tr>
+            <tr><td>1</td><td>5:02</td><td>138</td><td>+6 m</td></tr>
+            <tr><td>2</td><td>4:48</td><td>147</td><td>+2 m</td></tr>
+            <tr><td>3</td><td>4:41</td><td>151</td><td>−1 m</td></tr>
+            <tr><td>4</td><td>4:39</td><td>153</td><td>+3 m</td></tr>
+            <tr><td>5</td><td>4:36</td><td>156</td><td>0 m</td></tr>
+            <tr><td>6</td><td>4:37</td><td>157</td><td>−4 m</td></tr>
+            <tr><td>7</td><td>4:58</td><td>149</td><td>+8 m</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="a-card">
+        <span class="anno issue">AI verdict buried at page end · §2.3</span>
+        <p class="a-section-title" style="margin-bottom:6px">Coach analysis</p>
+        <p style="font-size:0.78rem;line-height:1.5;color:var(--a-secondary);margin:0">
+          Strong tempo — 3% faster than target with controlled HR drift. The
+          middle 9 km sat right at threshold; decoupling stayed under 4%,
+          which suggests the pace was sustainable…</p>
+      </div>
+    </div>
+  </div></div>
+</figure>
+
+<figure class="shot">
+  <figcaption>
+    <span class="phase-badge">Phase 3</span>
+    <span class="shot-title">Activity detail — dark</span>
+    <span class="refs">Plan §2.3/§5.3, tasks 3.4–3.6 · Sticky condensed header (shown in scrolled state), AI verdict chip under hero stats, splits as pace bars with zone colour + HR, collapsible stat groups.</span>
+  </figcaption>
+  <div class="phone app-dark"><div class="screen">
+
+    <div class="sticky-hint">
+      <span class="anno">sticky condensed header · task 3.4</span>
+      <svg class="i" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      Tempo Run
+      <span class="s-meta">12.4 km · 4:41 /km</span>
+    </div>
+
+    <div class="det-head">
+      <svg class="i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--a-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      <div>
+        <span class="a-badge" style="background:color-mix(in srgb,var(--a-tempo) 20%,transparent);color:var(--a-tempo)">Tempo</span>
+        <span class="a-badge pb-badge">🏆 New PB</span>
+        <div class="det-title">Tempo Run</div>
+        <div class="det-date">Wednesday, 8 July 2026 · 07:12</div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="stat3">
+        <div><span class="a-label">Distance</span><br><span class="a-value" style="font-size:1.45rem">12.4<small> km</small></span></div>
+        <div><span class="a-label">Duration</span><br><span class="a-value" style="font-size:1.45rem">58:12</span></div>
+        <div><span class="a-label">Avg pace</span><br><span class="a-value" style="font-size:1.45rem">4:41<small> /km</small></span></div>
+      </div>
+
+      <div class="verdict">
+        <span class="anno">AI verdict chip → AiInsightCard · task 3.4</span>
+        <span class="v-tag">Coach</span>
+        <span>Strong tempo — 3% faster than target with controlled HR drift. Full analysis ↓</span>
+      </div>
+
+      <div class="a-card" style="text-align:center">
+        <span class="anno">RouteMap.tsx (kept, static under reduced motion · 0.10)</span>
+        <svg class="route-svg" width="220" height="120" viewBox="0 0 220 120" fill="none">
+          <path d="M18 96 C 30 60 52 38 84 30 S 138 34 158 22 S 198 18 202 44 C 205 66 180 74 160 82 S 120 88 100 98 S 48 112 34 104 S 12 104 18 96 Z"
+            stroke="var(--a-accent)" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="18" cy="96" r="4" fill="var(--a-success)"/>
+          <circle cx="202" cy="44" r="4" fill="var(--a-danger)"/>
+        </svg>
+      </div>
+
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <p class="a-section-title" style="margin:0">Splits</p>
+          <span class="seg-toggle"><span class="on">Bars</span><span>Table</span></span>
+        </div>
+        <div class="a-card splits">
+          <span class="anno">SplitsBars.tsx · task 3.5</span>
+          <div class="split-row"><span class="split-km">1</span><div class="split-track"><div class="split-bar" style="width:62%;background:#55efc4"></div><span class="split-val">5:02</span></div><span class="split-hr">♥ 138</span></div>
+          <div class="split-row"><span class="split-km">2</span><div class="split-track"><div class="split-bar" style="width:70%;background:#ffeaa7"></div><span class="split-val">4:48</span></div><span class="split-hr">♥ 147</span></div>
+          <div class="split-row"><span class="split-km">3</span><div class="split-track"><div class="split-bar" style="width:76%;background:#ffeaa7"></div><span class="split-val">4:41</span></div><span class="split-hr">♥ 151</span></div>
+          <div class="split-row"><span class="split-km">4</span><div class="split-track"><div class="split-bar" style="width:78%;background:#ffeaa7"></div><span class="split-val">4:39</span></div><span class="split-hr">♥ 153</span></div>
+          <div class="split-row"><span class="split-km">5</span><div class="split-track"><div class="split-bar" style="width:80%;background:#fab1a0"></div><span class="split-val">4:36</span></div><span class="split-hr">♥ 156</span></div>
+          <div class="split-row"><span class="split-km">6</span><div class="split-track"><div class="split-bar" style="width:79%;background:#fab1a0"></div><span class="split-val">4:37</span></div><span class="split-hr">♥ 157</span></div>
+          <div class="split-row"><span class="split-km">7</span><div class="split-track"><div class="split-bar" style="width:64%;background:#55efc4"></div><span class="split-val">4:58</span></div><span class="split-hr">♥ 149</span></div>
+          <div class="legend" style="margin-top:8px">
+            <span><i style="background:#55efc4;height:8px;width:8px;border-radius:2px"></i>Z2</span>
+            <span><i style="background:#ffeaa7;height:8px;width:8px;border-radius:2px"></i>Z3</span>
+            <span><i style="background:#fab1a0;height:8px;width:8px;border-radius:2px"></i>Z4</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="a-card">
+        <div class="stat3">
+          <div><span class="a-label">Avg HR</span><br><span class="a-value">152<small> bpm</small></span></div>
+          <div><span class="a-label">Elev gain</span><br><span class="a-value">84<small> m</small></span></div>
+          <div><span class="a-label">Cadence</span><br><span class="a-value">176<small> spm</small></span></div>
+        </div>
+      </div>
+
+      <div class="collapse-row">
+        <span class="anno">collapsible stat groups · task 3.4</span>
+        Show all stats (dynamics · power · conditions)
+        <svg class="i" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+    </div>
+  </div></div>
+</figure>
+
+</div>
+</section>
+
+<!-- ================= PROGRESS ================= -->
+<section>
+<h2 class="sec-h">Progress (Trends)</h2>
+<p class="sec-sub">From six cramped tabs on a transparent bar (the undefined
+<code>--surface</code> token) with per-chart palettes, to chip tabs, a shared range
+selector, one chart theme, and records that celebrate.</p>
+<div class="pair">
+
+<figure class="shot">
+  <figcaption>
+    <span class="phase-badge cur-badge">Current</span>
+    <span class="shot-title">Trends — dark</span>
+    <span class="refs">Audit §2.5 · Nav says "Wellness", page is Trends; inline-styled tab bar referencing an undefined CSS variable; no shared time-range control.</span>
+  </figcaption>
+  <div class="phone app-dark"><div class="screen">
+
+    <div class="topbar">
+      <span class="old-topbar-week">Week 28/52</span>
+      <div class="topbar-right">
+        <span class="icon-btn"><svg class="i" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></span>
+        <span class="icon-btn"><svg class="i" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
+      </div>
+    </div>
+
+    <div class="old-tabs">
+      <span class="anno issue">6 tabs at 0.82rem · var(--surface) undefined → transparent bg · §2.5</span>
+      <span class="on">Wellness</span><span>Intensity</span><span>Performance</span><span>Records</span><span>Aerobic</span><span>Custom</span>
+    </div>
+
+    <div class="content">
+      <div>
+        <p class="a-section-title">Resting heart rate</p>
+        <div class="a-card">
+          <span class="anno issue">no shared range selector; per-chart palette/tooltips · §2.5</span>
+          <svg width="100%" height="60" viewBox="0 0 326 60" preserveAspectRatio="none">
+            <line x1="0" y1="46" x2="326" y2="46" stroke="var(--a-border)" stroke-width="1"/>
+            <path d="M0 22 C30 25 50 20 80 24 S 140 32 180 30 S 260 38 300 40 L 326 42" fill="none" stroke="#0984e3" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+      </div>
+
+      <div>
+        <p class="a-section-title">Sleep score</p>
+        <div class="a-card">
+          <svg width="100%" height="60" viewBox="0 0 326 60" preserveAspectRatio="none">
+            <line x1="0" y1="46" x2="326" y2="46" stroke="var(--a-border)" stroke-width="1"/>
+            <path d="M0 34 C40 30 60 38 100 30 S 180 24 220 28 S 290 20 326 22" fill="none" stroke="#a29bfe" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+      </div>
+
+      <div>
+        <p class="a-section-title">HRV</p>
+        <div class="a-card">
+          <svg width="100%" height="60" viewBox="0 0 326 60" preserveAspectRatio="none">
+            <line x1="0" y1="46" x2="326" y2="46" stroke="var(--a-border)" stroke-width="1"/>
+            <path d="M0 40 C40 38 60 42 100 36 S 180 30 220 26 S 290 22 326 20" fill="none" stroke="#2ecc71" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+      </div>
+
+      <div class="fade-more">… Stress · Body battery · Steps</div>
+    </div>
+
+    <div class="bottomnav nav6">
+      <span class="anno issue">active tab says "Wellness" — page is Trends · §2.1</span>
+      <span class="nav-item">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        Today</span>
+      <span class="nav-item">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        Activities</span>
+      <span class="nav-item">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        Coach</span>
+      <span class="nav-item">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M8 11h8M8 15h5"/></svg>
+        Plan</span>
+      <span class="nav-item active">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg>
+        Wellness</span>
+      <span class="nav-item">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1"/></svg>
+        Settings</span>
+    </div>
+  </div></div>
+</figure>
+
+<figure class="shot">
+  <figcaption>
+    <span class="phase-badge">Phase 5</span>
+    <span class="shot-title">Progress — dark</span>
+    <span class="refs">Plan §5.5, tasks 5.1–5.5 · Renamed tab, scrollable chip tabs, shared RangeSelector, chartTheme-styled trend, gold "New!" records celebration.</span>
+  </figcaption>
+  <div class="phone app-dark"><div class="screen">
+
+    <div class="topbar">
+      <span class="topbar-title">Progress</span>
+      <div class="topbar-right">
+        <span class="sync-pill">
+          <svg class="i" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+          12:04</span>
+        <span class="avatar">S</span>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="chip-wrap">
+        <span class="anno">tab chips · task 5.1</span>
+        <div class="chips">
+          <span class="chip active">Wellness</span>
+          <span class="chip">Performance</span>
+          <span class="chip">Intensity</span>
+          <span class="chip">Aerobic</span>
+          <span class="chip">Records</span>
+        </div>
+      </div>
+
+      <div>
+        <span class="range-sel">
+          <span class="anno">RangeSelector.tsx · task 5.2</span>
+          <span>30 d</span><span class="on">90 d</span><span>180 d</span><span>365 d</span>
+        </span>
+      </div>
+
+      <div>
+        <p class="a-section-title">Resting heart rate</p>
+        <div class="a-card">
+          <span class="anno">chartTheme.ts adoption · task 5.3</span>
+          <div class="tl-values">
+            <div><span class="a-label">Now</span><br><span class="a-value">46<small> bpm</small></span></div>
+            <div><span class="a-label">90-day avg</span><br><span class="a-value">48<small> bpm</small></span></div>
+          </div>
+          <svg width="100%" height="60" viewBox="0 0 326 60" preserveAspectRatio="none">
+            <line x1="0" y1="46" x2="326" y2="46" stroke="var(--a-border)" stroke-width="1"/>
+            <path d="M0 22 C30 25 50 20 80 24 S 140 32 180 30 S 260 38 300 40 L 326 42" fill="none" stroke="var(--a-accent)" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="326" cy="42" r="3" fill="var(--a-accent)"/>
+          </svg>
+          <div class="legend"><span><i style="background:var(--a-accent)"></i>RHR · lower is better</span></div>
+        </div>
+      </div>
+
+      <div>
+        <p class="a-section-title">HRV (7-day)</p>
+        <div class="a-card">
+          <div class="tl-values">
+            <div><span class="a-label">Now</span><br><span class="a-value">64<small> ms</small></span></div>
+            <div><span class="a-label">Baseline</span><br><span class="a-value">61<small> ms</small></span></div>
+          </div>
+          <svg width="100%" height="60" viewBox="0 0 326 60" preserveAspectRatio="none">
+            <line x1="0" y1="46" x2="326" y2="46" stroke="var(--a-border)" stroke-width="1"/>
+            <path d="M0 40 C40 38 60 42 100 36 S 180 30 220 26 S 290 22 326 20" fill="none" stroke="var(--a-ready)" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="326" cy="20" r="3" fill="var(--a-ready)"/>
+          </svg>
+          <div class="legend"><span><i style="background:var(--a-ready)"></i>HRV trend</span></div>
+        </div>
+      </div>
+
+      <div>
+        <p class="a-section-title">Recent records</p>
+        <div class="a-card record-card">
+          <span class="anno">records celebration · task 5.4</span>
+          <div class="record-grid">
+            <div class="record-item">
+              <span class="a-label">5k</span>
+              <span class="a-value">19:42 <span class="a-badge new-badge">New!</span></span>
+              <span style="font-size:0.66rem;color:var(--a-muted)">Tempo Run · 8 Jul</span>
+            </div>
+            <div class="record-item">
+              <span class="a-label">20 min power</span>
+              <span class="a-value">312<small> W</small></span>
+              <span style="font-size:0.66rem;color:var(--a-muted)">14 Jun</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="text-align:center">
+        <span class="a-btn ghost">Daily history →</span>
+        <span class="anno below" style="position:static;display:none">→ /daily · task 1.5</span>
+      </div>
+    </div>
+
+    <div class="bottomnav">
+      <span class="nav-item">
+        <svg class="i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>
+        Today</span>
+      <span class="nav-item">
+        <svg class="i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M8 11h8M8 15h5"/></svg>
+        Plan</span>
+      <span class="nav-item">
+        <svg class="i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        Coach</span>
+      <span class="nav-item">
+        <svg class="i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        Activities</span>
+      <span class="nav-item active">
+        <svg class="i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg>
+        Progress</span>
+    </div>
+  </div></div>
+</figure>
+
+</div>
+</section>
+
+<!-- ================= DESKTOP ================= -->
+<section>
+<h2 class="sec-h">Desktop ≥ 1024 px</h2>
+<p class="sec-sub">From a centred 640-px phone column with dead margins to a nav rail
+and a two-column Today grid — CSS-only reflow of the same components.</p>
+<div class="pair">
+
+<figure class="shot wide">
+  <figcaption>
+    <span class="phase-badge cur-badge">Current</span>
+    <span class="shot-title">Today — desktop</span>
+    <span class="refs">Audit §2.10 · Three media queries in the whole app; wide viewports get the stretched mobile column.</span>
+  </figcaption>
+  <div class="desktop app-dark"><div class="screen">
+    <div class="topbar">
+      <span class="old-topbar-week">Week 28/52</span>
+      <div class="topbar-right">
+        <span class="icon-btn"><svg class="i" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></span>
+        <span class="icon-btn"><svg class="i" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:center;position:relative;padding:16px 0 20px">
+      <span class="anno issue">640px column · dead margins either side · §2.10</span>
+      <div style="width:440px;display:flex;flex-direction:column;gap:12px">
+        <div class="old-banner">
+          <svg class="i" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--a-warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+          <div class="ob-body">
+            <span>2 planned sessions missed. Regenerate to adapt your plan?</span>
+            <div class="ob-actions">
+              <span class="a-btn primary" style="font-size:0.7rem;padding:6px 10px">Regenerate</span>
+              <span style="color:var(--a-muted)">Dismiss</span>
+            </div>
+          </div>
+        </div>
+        <div class="a-card">
+          <p class="a-section-title" style="margin-bottom:6px">Pre-workout briefing</p>
+          <p style="font-size:0.78rem;line-height:1.5;color:var(--a-secondary);margin:0">Good sleep and stable HRV — green light for quality.</p>
+        </div>
+        <div>
+          <p class="a-section-title">Today's workouts</p>
+          <div class="a-card" style="text-align:center;color:var(--a-muted);font-size:0.8rem;padding:22px 16px">No workouts on this day</div>
+        </div>
+        <div class="fade-more">… nine more stacked sections</div>
+      </div>
+    </div>
+    <div class="bottomnav nav6">
+      <span class="anno issue">mobile bottom nav on desktop · §2.10</span>
+      <span class="nav-item active">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        Today</span>
+      <span class="nav-item">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        Activities</span>
+      <span class="nav-item">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        Coach</span>
+      <span class="nav-item">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M8 11h8M8 15h5"/></svg>
+        Plan</span>
+      <span class="nav-item">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg>
+        Wellness</span>
+      <span class="nav-item">
+        <svg class="i" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1"/></svg>
+        Settings</span>
+    </div>
+  </div></div>
+</figure>
+
+<figure class="shot wide">
+  <figcaption>
+    <span class="phase-badge">Phase 6</span>
+    <span class="shot-title">Today — desktop ≥ 1024 px</span>
+    <span class="refs">Plan tasks 6.4–6.5 · Bottom nav becomes a left rail; Today reflows to a two-column grid (hero/alerts/check-in left, glance/load/week right, insights full-width). CSS-only reflow of the same components.</span>
+  </figcaption>
+  <div class="desktop app-dark"><div class="desk-body">
+
+    <div class="rail">
+      <span class="anno">BottomNav.tsx as rail · task 6.5</span>
+      <span class="nav-item active">
+        <svg class="i" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        Today</span>
+      <span class="nav-item">
+        <svg class="i" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M8 11h8M8 15h5"/></svg>
+        Plan</span>
+      <span class="nav-item">
+        <svg class="i" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        Coach</span>
+      <span class="nav-item">
+        <svg class="i" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        Activities</span>
+      <span class="nav-item">
+        <svg class="i" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg>
+        Progress</span>
+    </div>
+
+    <div class="desk-main">
+      <span class="anno left">TodayView two-column grid · task 6.4</span>
+      <div class="desk-col">
+        <div class="alert-banner">
+          <svg class="i" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--a-warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+          2 sessions missed <span class="spacer"></span><span class="act">Adapt plan</span>
+        </div>
+        <div class="a-card hero">
+          <div class="hero-top">
+            <div class="ring">
+              <svg width="84" height="84" viewBox="0 0 84 84">
+                <circle cx="42" cy="42" r="36" fill="none" stroke="var(--a-input)" stroke-width="7"/>
+                <circle cx="42" cy="42" r="36" fill="none" stroke="var(--a-ready)" stroke-width="7" stroke-linecap="round" stroke-dasharray="176.4 226.2"/>
+              </svg>
+              <div class="ring-center"><span class="ring-score">78</span><span class="ring-label">Ready</span></div>
+            </div>
+            <div class="hero-session">
+              <span class="a-label">Today's session</span>
+              <div class="hero-session-name">Tempo 10k</div>
+              <div class="hero-session-meta">4:45 /km target · ~48 min</div>
+            </div>
+          </div>
+          <div class="structure-bar">
+            <span style="flex:16;background:var(--a-hover)"></span>
+            <span style="flex:9;background:var(--a-tempo)"></span>
+            <span style="flex:2;background:var(--a-hover)"></span>
+            <span style="flex:9;background:var(--a-tempo)"></span>
+            <span style="flex:2;background:var(--a-hover)"></span>
+            <span style="flex:9;background:var(--a-tempo)"></span>
+            <span style="flex:10;background:var(--a-hover)"></span>
+          </div>
+          <p class="hero-brief"><b>Good sleep and stable HRV — green light for quality.</b> <span class="more">More →</span></p>
+          <div class="hero-actions">
+            <span class="a-btn primary">Details</span>
+            <span class="a-btn secondary">Send to watch</span>
+          </div>
+        </div>
+        <div class="checkin-chip"><span class="dot"></span> Feeling good · low soreness <span class="edit">Edit</span></div>
+        <div class="race-strip">
+          <svg class="i" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--a-race)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/></svg>
+          Berlin Marathon <span class="race-days">73 d</span><span class="race-goal">goal 3:15</span>
+        </div>
+      </div>
+
+      <div class="desk-col">
+        <div class="a-card glance">
+          <div><span class="a-label">RHR</span><br><span class="a-value">46<small> bpm</small></span></div>
+          <div><span class="a-label">Sleep</span><br><span class="a-value">82</span></div>
+          <div><span class="a-label">Body Batt</span><br><span class="a-value">71</span></div>
+          <div><span class="a-label">Steps</span><br><span class="a-value">8,412</span></div>
+        </div>
+        <div class="a-card">
+          <p class="a-section-title">Training load</p>
+          <svg width="100%" height="52" viewBox="0 0 300 52" preserveAspectRatio="none">
+            <line x1="0" y1="40" x2="300" y2="40" stroke="var(--a-border)" stroke-width="1"/>
+            <path d="M0 38 C40 36 70 34 105 31 S 200 26 260 22 L 300 20" fill="none" stroke="var(--a-accent)" stroke-width="2" stroke-linecap="round"/>
+            <path d="M0 40 C30 34 60 36 95 28 S 180 24 230 16 L 300 11" fill="none" stroke="var(--a-danger)" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
+          </svg>
+          <div class="legend">
+            <span><i style="background:var(--a-accent)"></i>Fitness</span>
+            <span><i style="background:var(--a-danger)"></i>Fatigue</span>
+          </div>
+        </div>
+        <div class="a-card">
+          <p class="a-section-title">Week 28 overview</p>
+          <div class="bars" style="height:64px">
+            <div class="bar-col"><div class="bar" style="height:34%"></div><span class="bar-x">M</span></div>
+            <div class="bar-col"><div class="bar" style="height:0"></div><span class="bar-x">T</span></div>
+            <div class="bar-col"><div class="bar" style="height:48%"></div><span class="bar-x">W</span></div>
+            <div class="bar-col"><div class="bar planned" style="height:42%"></div><span class="bar-x">T</span></div>
+            <div class="bar-col"><div class="bar" style="height:0"></div><span class="bar-x">F</span></div>
+            <div class="bar-col"><div class="bar planned" style="height:26%"></div><span class="bar-x">S</span></div>
+            <div class="bar-col"><div class="bar planned" style="height:92%"></div><span class="bar-x">S</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="a-card insight-row full">
+        <span class="tag">Trend</span>
+        <span>Easy-run HR is down 4 bpm at the same pace over 3 weeks — aerobic base is improving.</span>
+      </div>
+    </div>
+  </div></div>
+</figure>
+
+</div>
+</section>
+
+</div>
+
+<footer class="foot">
+  <h2>How to use this file</h2>
+  <ul>
+    <li><strong>For review:</strong> each surface shows the current implementation (grey "Current" badge; known issues tagged in red with audit-section references) beside the redesign target (phase badge). Both sides use the same sample data. The "after" frames are the visual target for each phase — layout, hierarchy, and component states. Copy is realistic sample data, not final copy.</li>
+    <li><strong>For implementation cross-reference (Sonnet):</strong> after finishing a phase, open this file with component labels on and compare the built UI against the matching frame. Labels name the component file and plan task (e.g. <code>TodayHero.tsx · task 2.1</code>). Match structure and hierarchy, not pixel positions.</li>
+    <li><strong>Tokens:</strong> frame styling uses the values from <code>frontend/src/styles/globals.css</code> plus Phase 0 additions (updated <code>--text-muted</code> #98a0b3 dark / #5b6472 light, <code>--surface</code>, tabular numerals). Zone colours in micro-bars are illustrative — implementation uses <code>MetricZone.zone_color</code> from the API.</li>
+    <li><strong>Deviations are allowed</strong> where the plan text and mockup disagree: the plan document (<code>docs/UI_UX_REDESIGN_PLAN.md</code>) is authoritative; this file illustrates it.</li>
+  </ul>
+</footer>
+</div>
+
+<script>
+  document.getElementById('annoToggle').addEventListener('change', function () {
+    document.body.classList.toggle('show-anno', this.checked);
+  });
+</script>
+
+</body>
+</html>

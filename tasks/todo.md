@@ -82,3 +82,26 @@ scheduled card disappears from Today and the activity is tagged as a workout.
   most one activity (1:1), and workouts with no matching activity stay scheduled.
 - Backend change is confined to `/today`; the activity-detail page still shows
   the planned workout + adherence unchanged.
+
+# UI/UX redesign (plan only — see docs/UI_UX_REDESIGN_PLAN.md)
+
+Goal: execute the phased UI/UX redesign. Each phase is one focused session,
+independently shippable; full specs, file lists, and acceptance criteria live
+in the plan doc. Follow its "Global rules for the implementing agent".
+Visual target per phase: docs/mockups/ui-redesign-mockup.html (toggle
+"Show component labels" to cross-reference elements against plan tasks).
+
+## Phases
+- [ ] Phase 0 — Design-system foundation & defect fixes (tokens, `--surface`
+      fix, shared buttons, chart theme, toast + skeleton primitives)
+- [ ] Phase 1 — Navigation & IA (5-tab nav, Settings behind avatar, sync
+      status pill, reconnect orphaned /daily route, planned-dots on calendar)
+- [ ] Phase 2 — Today screen hierarchy (TodayHero: readiness × session ×
+      briefing, compact alerts/races, check-in collapse, skeletons)
+- [ ] Phase 3 — Activity list & detail (rich rows, weekly totals, sticky
+      detail header, insight verdict chip, SplitsBars)
+- [ ] Phase 4 — Plan & calendar (day completion states, WorkoutStructureBar,
+      informative week tabs, auto-select current week)
+- [ ] Phase 5 — Trends → Progress (tab chrome, RangeSelector, chartTheme
+      adoption, records celebration)
+- [ ] Phase 6 — Accessibility, responsive desktop layout & polish

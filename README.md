@@ -250,5 +250,6 @@ alembic revision -m "..."   # create a new migration
 
 - [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md) — detailed feature & architecture reference
 - [`docs/IMPROVEMENT_PLAN.md`](docs/IMPROVEMENT_PLAN.md) — roadmap
+- [`docs/UI_UX_REDESIGN_PLAN.md`](docs/UI_UX_REDESIGN_PLAN.md) — UI/UX audit, competitor benchmark & phased redesign plan
 - [`docs/multi_user_plan.md`](docs/multi_user_plan.md) — multi-user design
 - [`docs/performance-testing.md`](docs/performance-testing.md) — load-test harness
