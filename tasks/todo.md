@@ -107,3 +107,11 @@ Visual target per phase: docs/mockups/ui-redesign-mockup.html (toggle
 - [x] Phase 6 — Accessibility, responsive desktop layout & polish (semantics
       sweep, chart aria-labels, reduced-motion, desktop two-column layout +
       nav rail, empty states, onboarding closing step, tap targets)
+
+## Review (2026-07-10)
+- [x] Post-implementation review of Phases 0–6 against the plan + mockups —
+      findings and follow-up plan in docs/UI_UX_REDESIGN_REVIEW.md.
+      Verdict: faithful implementation; 2 mobile-only layout bugs (detail-page
+      section order no-op, sticky week headers under TopBar), UTC "today" in
+      plan state, no error boundary, sync-pill semantics — all specced as
+      Follow-up Phases A–D in the review doc.
