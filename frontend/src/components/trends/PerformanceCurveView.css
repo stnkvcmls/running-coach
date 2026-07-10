@@ -237,8 +237,7 @@
   font-size: 0.8rem;
 }
 
-.perf-curve-empty,
-.perf-curve-loading {
+.perf-curve-empty {
   padding: 48px 16px;
   text-align: center;
   color: var(--text-muted);

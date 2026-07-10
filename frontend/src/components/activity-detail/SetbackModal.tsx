@@ -45,7 +45,7 @@ export default function SetbackModal({ onSubmit, onSkip }: Props) {
   return (
     <div className="setback-modal__overlay" onClick={onSkip}>
       <div className="setback-modal__content" onClick={e => e.stopPropagation()}>
-        <button className="setback-modal__close" onClick={onSkip}>
+        <button className="setback-modal__close" onClick={onSkip} aria-label="Close">
           <X size={20} />
         </button>
         <h2 className="setback-modal__title">What went wrong?</h2>

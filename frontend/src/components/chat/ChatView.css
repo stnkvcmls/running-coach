@@ -62,6 +62,24 @@
   color: var(--text);
 }
 
+.chat-inline-hints {
+  display: flex;
+  gap: 8px;
+  padding: 0 16px 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chat-inline-hints::-webkit-scrollbar {
+  display: none;
+}
+
+.chat-inline-hints .chat-hint-chip {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .chat-bubble-row {
   display: flex;
   align-items: flex-end;

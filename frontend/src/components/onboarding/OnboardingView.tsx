@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
-import { useAthleteProfile, useUpdateAthleteProfile } from '../../api/hooks'
+import { useAthleteProfile, useUpdateAthleteProfile, useGenerateTrainingPlan } from '../../api/hooks'
 import type { AthleteProfileRequest } from '../../api/types'
 import CardPicker from '../plan-setup/CardPicker'
 import SliderPicker, { SliderOption } from '../plan-setup/SliderPicker'
@@ -29,7 +29,10 @@ const DIFFICULTY_OPTIONS: SliderOption[] = [
   { value: 'challenging', label: 'Challenging', description: 'Runs designed to keep you working hard, improving speed and endurance.', bullets: ['2 hard runs per week', 'Regular difficulty', 'Often long runs will have pace targets'] },
 ]
 
-const TOTAL_STEPS = 7
+// Steps 1..TOTAL_STEPS-2 are the data-collection wizard questions; step 0 is
+// the welcome screen and the last step is the closing "you're set" screen —
+// neither of those two bookends gets a progress dot or the wizard footer.
+const TOTAL_STEPS = 8
 
 interface WizardState {
   running_ability: string
@@ -46,6 +49,7 @@ export default function OnboardingView() {
   const navigate = useNavigate()
   const { data: profile, isLoading } = useAthleteProfile()
   const { mutate: save, isPending } = useUpdateAthleteProfile()
+  const { mutate: generatePlan, isPending: isGenerating } = useGenerateTrainingPlan()
 
   const [step, setStep] = useState(0)
   const [state, setState] = useState<WizardState>({
@@ -68,7 +72,9 @@ export default function OnboardingView() {
   function next() { setStep(s => Math.min(TOTAL_STEPS - 1, s + 1)) }
   function back() { setStep(s => Math.max(0, s - 1)) }
 
-  function finish() {
+  // Saves the collected wizard answers, then advances to the closing screen
+  // (navigation now happens from that screen's own buttons, not here).
+  function finishWizard() {
     const data: AthleteProfileRequest = {
       running_ability: state.running_ability,
       training_volume: state.training_volume,
@@ -79,23 +85,24 @@ export default function OnboardingView() {
       available_days: JSON.stringify(state.available_days),
       long_run_day: state.long_run_day,
     }
-    save(data, { onSuccess: () => navigate('/plan') })
+    save(data, { onSuccess: () => setStep(TOTAL_STEPS - 1) })
   }
 
-  const isLast = step === TOTAL_STEPS - 1
+  const isClosing = step === TOTAL_STEPS - 1
+  const isFinalQuestion = step === TOTAL_STEPS - 2
 
   return (
     <div className="ob-view">
-      {step > 0 && (
-        <button className="ob-back" onClick={back}>
+      {step > 0 && !isClosing && (
+        <button className="ob-back" onClick={back} aria-label="Back">
           <ChevronLeft size={22} />
         </button>
       )}
 
       {/* Step dots */}
-      {step > 0 && (
+      {step > 0 && !isClosing && (
         <div className="ob-dots">
-          {Array.from({ length: TOTAL_STEPS - 1 }).map((_, i) => (
+          {Array.from({ length: TOTAL_STEPS - 2 }).map((_, i) => (
             <div key={i} className={`ob-dot ${i === step - 1 ? 'ob-dot--active' : i < step - 1 ? 'ob-dot--done' : ''}`} />
           ))}
         </div>
@@ -167,18 +174,25 @@ export default function OnboardingView() {
             />
           </Step>
         )}
+        {isClosing && (
+          <ClosingStep
+            onGoToToday={() => navigate('/')}
+            onGeneratePlan={() => generatePlan(undefined, { onSuccess: () => navigate('/plan') })}
+            generating={isGenerating}
+          />
+        )}
       </div>
 
-      {step > 0 && (
+      {step > 0 && !isClosing && (
         <div className="ob-footer">
-          {isLast ? (
-            <button className="ob-btn-primary" onClick={finish} disabled={isPending}>
-              {isPending ? 'Saving…' : 'Finish & Go to Plan'}
+          {isFinalQuestion ? (
+            <button className="ob-btn-primary" onClick={finishWizard} disabled={isPending}>
+              {isPending ? 'Saving…' : 'Continue'}
             </button>
           ) : (
             <button className="ob-btn-primary" onClick={next}>Continue</button>
           )}
-          {step === TOTAL_STEPS - 1 && (
+          {isFinalQuestion && (
             <button className="ob-skip" onClick={() => navigate('/plan')}>Skip</button>
           )}
         </div>
@@ -197,6 +211,27 @@ function WelcomeStep({ onStart }: { onStart: () => void }) {
       </p>
       <button className="ob-btn-primary" onClick={onStart}>Get Started</button>
       <button className="ob-skip" onClick={() => window.location.replace('/')}>Skip for now</button>
+    </div>
+  )
+}
+
+function ClosingStep({ onGoToToday, onGeneratePlan, generating }: {
+  onGoToToday: () => void
+  onGeneratePlan: () => void
+  generating: boolean
+}) {
+  return (
+    <div className="ob-welcome">
+      <div className="ob-welcome-icon">✅</div>
+      <h1 className="ob-welcome-title">You're all set</h1>
+      <p className="ob-welcome-subtitle">
+        Your first Garmin sync is running in the background. Your training plan
+        generates automatically every Sunday — or you can build it right now.
+      </p>
+      <button className="ob-btn-primary" onClick={onGeneratePlan} disabled={generating}>
+        {generating ? 'Generating…' : 'Generate plan now'}
+      </button>
+      <button className="ob-skip" onClick={onGoToToday}>Go to Today</button>
     </div>
   )
 }

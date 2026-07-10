@@ -49,35 +49,36 @@ def test_data_endpoint_rejects_days_out_of_bounds(client, db):
 
 
 def test_data_endpoint_aggregates_activity_metrics_per_day(client, db):
-    day = datetime(2026, 6, 10, 7, 0)
+    day = datetime.combine(date.today() - timedelta(days=10), datetime.min.time()).replace(hour=7)
     _add_activity(db, day, distance_m=8000.0, avg_hr=140)
     _add_activity(db, day + timedelta(hours=8), distance_m=2000.0, avg_hr=160)
 
     resp = client.get("/api/v1/custom-charts/data?metrics=distance_km,avg_hr&days=30")
     assert resp.status_code == 200
     points = resp.json()["points"]
-    point = next(p for p in points if p["date"] == "2026-06-10")
+    point = next(p for p in points if p["date"] == day.date().isoformat())
     assert point["values"]["distance_km"] == 10.0  # summed
     assert point["values"]["avg_hr"] == 150.0       # averaged
 
 
 def test_data_endpoint_wellness_passthrough(client, db):
-    _add_daily_summary(db, date(2026, 6, 11), sleep_score=87.5)
+    day = date.today() - timedelta(days=10)
+    _add_daily_summary(db, day, sleep_score=87.5)
     resp = client.get("/api/v1/custom-charts/data?metrics=sleep_score&days=30")
     assert resp.status_code == 200
     points = resp.json()["points"]
-    point = next(p for p in points if p["date"] == "2026-06-11")
+    point = next(p for p in points if p["date"] == day.isoformat())
     assert point["values"]["sleep_score"] == 87.5
 
 
 def test_data_endpoint_merges_multiple_sources_by_date_with_nulls(client, db):
-    day = date(2026, 6, 12)
+    day = date.today() - timedelta(days=10)
     _add_activity(db, datetime.combine(day, datetime.min.time()).replace(hour=7), distance_m=5000.0)
     # No DailySummary row for this date.
 
     resp = client.get("/api/v1/custom-charts/data?metrics=distance_km,sleep_score&days=30")
     assert resp.status_code == 200
-    point = next(p for p in resp.json()["points"] if p["date"] == "2026-06-12")
+    point = next(p for p in resp.json()["points"] if p["date"] == day.isoformat())
     assert point["values"]["distance_km"] == 5.0
     assert point["values"]["sleep_score"] is None
 
@@ -101,12 +102,12 @@ def test_data_endpoint_load_metrics_present(client, db):
 
 
 def test_data_endpoint_scopes_to_current_user(client, db):
-    day = datetime(2026, 6, 13, 7, 0)
+    day = datetime.combine(date.today() - timedelta(days=10), datetime.min.time()).replace(hour=7)
     _add_activity(db, day, distance_m=5000.0, user_id=2)  # other user
     resp = client.get("/api/v1/custom-charts/data?metrics=distance_km&days=30")
     assert resp.status_code == 200
     dates = [p["date"] for p in resp.json()["points"]]
-    assert "2026-06-13" not in dates
+    assert day.date().isoformat() not in dates  # other user's activity isn't visible
 
 
 def test_data_endpoint_without_compare_omits_compare_points(client, db):

@@ -92,16 +92,18 @@ Visual target per phase: docs/mockups/ui-redesign-mockup.html (toggle
 "Show component labels" to cross-reference elements against plan tasks).
 
 ## Phases
-- [ ] Phase 0 — Design-system foundation & defect fixes (tokens, `--surface`
+- [x] Phase 0 — Design-system foundation & defect fixes (tokens, `--surface`
       fix, shared buttons, chart theme, toast + skeleton primitives)
-- [ ] Phase 1 — Navigation & IA (5-tab nav, Settings behind avatar, sync
+- [x] Phase 1 — Navigation & IA (5-tab nav, Settings behind avatar, sync
       status pill, reconnect orphaned /daily route, planned-dots on calendar)
-- [ ] Phase 2 — Today screen hierarchy (TodayHero: readiness × session ×
+- [x] Phase 2 — Today screen hierarchy (TodayHero: readiness × session ×
       briefing, compact alerts/races, check-in collapse, skeletons)
-- [ ] Phase 3 — Activity list & detail (rich rows, weekly totals, sticky
+- [x] Phase 3 — Activity list & detail (rich rows, weekly totals, sticky
       detail header, insight verdict chip, SplitsBars)
-- [ ] Phase 4 — Plan & calendar (day completion states, WorkoutStructureBar,
+- [x] Phase 4 — Plan & calendar (day completion states, WorkoutStructureBar,
       informative week tabs, auto-select current week)
-- [ ] Phase 5 — Trends → Progress (tab chrome, RangeSelector, chartTheme
+- [x] Phase 5 — Trends → Progress (tab chrome, RangeSelector, chartTheme
       adoption, records celebration)
-- [ ] Phase 6 — Accessibility, responsive desktop layout & polish
+- [x] Phase 6 — Accessibility, responsive desktop layout & polish (semantics
+      sweep, chart aria-labels, reduced-motion, desktop two-column layout +
+      nav rail, empty states, onboarding closing step, tap targets)

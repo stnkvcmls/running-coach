@@ -52,6 +52,10 @@ export default function MonthCalendar() {
           const today = isToday(day)
           const activities = dayData?.activities || []
 
+          const events = dayData?.events || []
+          const hasRace = activities.length === 0 && events.some(e => e.event_type === 'race')
+          const hasPlanned = activities.length === 0 && !hasRace && events.some(e => e.event_type === 'workout')
+
           return (
             <button
               key={key}
@@ -68,6 +72,16 @@ export default function MonthCalendar() {
                       style={{ background: getColorHex(a.name, a.activity_type) }}
                     />
                   ))}
+                </div>
+              )}
+              {hasRace && (
+                <div className="month-day-dots">
+                  <span className="month-dot month-dot-race" />
+                </div>
+              )}
+              {hasPlanned && (
+                <div className="month-day-dots">
+                  <span className="month-dot month-dot-planned" />
                 </div>
               )}
             </button>

@@ -10,7 +10,8 @@ import {
 } from 'recharts'
 import { usePerformanceCurve, type PerformanceCurveCompareParams } from '../../api/hooks'
 import { useTheme } from '../../App'
-import { getChartTickColor } from '../../utils/theme'
+import { getChartTickColor, getTooltipProps, getGridStroke, PERFORMANCE_CURVE_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
+import Skeleton from '../ui/Skeleton'
 import type { PerformanceCurveCompareMode, PerformanceCurvePoint } from '../../api/types'
 import StatHelpButton from '../info/StatHelpButton'
 import './PerformanceCurveView.css'
@@ -33,9 +34,7 @@ const COMPARE_OPTIONS: { label: string; value: CompareChoice }[] = [
   { label: 'Vs. custom range', value: 'custom' },
 ]
 
-const ACTUAL_COLOR = '#6c5ce7'
-const MODEL_COLOR = '#00b894'
-const COMPARE_COLOR = '#e17055'
+const { actual: ACTUAL_COLOR, model: MODEL_COLOR, compare: COMPARE_COLOR } = PERFORMANCE_CURVE_COLORS
 
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10)
@@ -115,11 +114,22 @@ export default function PerformanceCurveView() {
   const { data, isLoading } = usePerformanceCurve(days, compareParams)
   const { theme } = useTheme()
   const tickColor = getChartTickColor(theme)
-  const tooltipBg = theme === 'light' ? '#ffffff' : '#1a1a2e'
-  const tooltipBorder = theme === 'light' ? '#e0e4ec' : '#2d2d44'
-  const tooltipText = theme === 'light' ? '#1a1a2e' : '#e0e0e0'
+  const { contentStyle } = getTooltipProps(theme)
+  const reduceMotion = usePrefersReducedMotion()
 
-  if (isLoading) return <div className="perf-curve-loading">Loading performance data…</div>
+  if (isLoading) {
+    return (
+      <div className="perf-curve-view">
+        <div className="perf-curve-header">
+          <Skeleton height={18} width={150} />
+          <Skeleton height={30} width={180} radius="var(--radius-sm)" />
+        </div>
+        <div className="perf-curve-chart-card" style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)' }}>
+          <Skeleton height={200} radius="var(--radius-xs)" />
+        </div>
+      </div>
+    )
+  }
 
   const hasPace = (data?.pace_points?.length ?? 0) > 0
   const hasPower = (data?.power_points?.length ?? 0) > 0
@@ -161,10 +171,7 @@ export default function PerformanceCurveView() {
     if (!active || !payload?.length) return null
     const isPace = mode === 'pace'
     return (
-      <div style={{
-        background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 8,
-        padding: '6px 10px', fontSize: 12, color: tooltipText,
-      }}>
+      <div style={{ ...contentStyle, padding: '6px 10px' }}>
         <div style={{ fontWeight: 600, marginBottom: 2 }}>{label}</div>
         {payload.map((p: any) => {
           if (p.value == null) return null
@@ -319,10 +326,14 @@ export default function PerformanceCurveView() {
           background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)',
         }}>
           <div className="perf-curve-chart-title">{yLabel} vs Duration</div>
-          <div className="perf-curve-chart">
+          <div
+            className="perf-curve-chart"
+            role="img"
+            aria-label={`${yLabel} versus duration curve, based on ${data?.activities_analyzed ?? 0} activities.`}
+          >
             <ResponsiveContainer width="100%" height={200}>
               <ComposedChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={theme === 'light' ? '#e0e4ec' : '#2d2d44'} />
+                <CartesianGrid strokeDasharray="3 3" stroke={getGridStroke(theme)} />
                 <XAxis
                   dataKey="label"
                   tick={{ fill: tickColor, fontSize: 10 }}
@@ -344,6 +355,7 @@ export default function PerformanceCurveView() {
                   dot={false}
                   name="Best effort"
                   connectNulls
+                  isAnimationActive={!reduceMotion}
                 />
                 <Line
                   type="monotone"
@@ -354,6 +366,7 @@ export default function PerformanceCurveView() {
                   dot={false}
                   name="Model fit"
                   connectNulls
+                  isAnimationActive={!reduceMotion}
                 />
                 {hasComparison && (
                   <Line
@@ -365,6 +378,7 @@ export default function PerformanceCurveView() {
                     dot={false}
                     name={data!.comparison!.label}
                     connectNulls
+                    isAnimationActive={!reduceMotion}
                   />
                 )}
               </ComposedChart>

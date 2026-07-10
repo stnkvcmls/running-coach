@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { AlertTriangle, Download, RefreshCw, Watch } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { AlertTriangle, ArrowLeft, Download, RefreshCw, Watch } from 'lucide-react'
 import {
   useSettings,
   useTriggerSync,
@@ -17,6 +18,7 @@ import NotificationsSection from './NotificationsSection'
 import SystemHealthSection from './SystemHealthSection'
 import ThresholdEstimateSection from './ThresholdEstimateSection'
 import ZoneConfigSection from './ZoneConfigSection'
+import '../activity-detail/ActivityDetailView.css'
 import './SettingsView.css'
 
 const PROVIDER_LABELS: Record<string, string> = {
@@ -250,12 +252,23 @@ function GarminConnectionSection() {
 export default function SettingsView() {
   const { data, isLoading } = useSettings()
   const syncMutation = useTriggerSync()
+  const navigate = useNavigate()
 
   if (isLoading) return <div className="spinner" />
   if (!data) return <div className="empty-state">Could not load settings</div>
 
   return (
     <div className="settings-view">
+      <header className="detail-header">
+        <button className="back-btn" onClick={() => navigate(-1)} aria-label="Back">
+          <ArrowLeft size={20} />
+        </button>
+        <div className="detail-header-info">
+          <h1 className="detail-title">Settings</h1>
+        </div>
+      </header>
+
+      <div className="settings-body">
       {/* Signed-in account */}
       <AccountSection />
 
@@ -320,6 +333,7 @@ export default function SettingsView() {
           />
         </div>
       </section>
+      </div>
     </div>
   )
 }

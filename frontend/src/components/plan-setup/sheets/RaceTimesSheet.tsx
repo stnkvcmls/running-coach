@@ -95,11 +95,25 @@ export default function RaceTimesSheet({ open, onClose, initial, onSave }: Props
 
           if (val) {
             return (
-              <div key={d.key} className="sheet-time-card sheet-time-card--filled" onClick={() => startEdit(d.key)}>
+              <div
+                key={d.key}
+                className="sheet-time-card sheet-time-card--filled"
+                role="button"
+                tabIndex={0}
+                aria-label={`Edit ${d.label}`}
+                onClick={() => startEdit(d.key)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    startEdit(d.key)
+                  }
+                }}
+              >
                 <div className="sheet-time-card-icon">{d.abbr}</div>
                 <span className="sheet-time-card-label">{d.label}</span>
                 <span className="sheet-time-card-value">{val}</span>
                 <button
+                  aria-label={`Clear ${d.label}`}
                   onClick={e => { e.stopPropagation(); clearTime(d.key) }}
                   style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.85rem', padding: '2px 4px' }}
                 >✕</button>
@@ -108,11 +122,11 @@ export default function RaceTimesSheet({ open, onClose, initial, onSave }: Props
           }
 
           return (
-            <div key={d.key} className="sheet-time-card" onClick={() => startEdit(d.key)}>
+            <button type="button" key={d.key} className="sheet-time-card" onClick={() => startEdit(d.key)}>
               <div className="sheet-time-card-icon" style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)' }}>{d.abbr}</div>
               <span className="sheet-time-card-label">{d.label}</span>
               <span className="sheet-time-card-add">+</span>
-            </div>
+            </button>
           )
         })}
       </div>

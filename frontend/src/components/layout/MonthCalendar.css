@@ -101,3 +101,25 @@
 .month-day.selected .month-dot {
   opacity: 0.7;
 }
+
+/* Planned (unfulfilled) workout — hollow ring, not yet done */
+.month-dot.month-dot-planned {
+  background: transparent;
+  border: 1px solid var(--text-muted);
+}
+
+.month-day.selected .month-dot.month-dot-planned {
+  border-color: rgba(255, 255, 255, 0.7);
+}
+
+/* Upcoming race — distinct ring in the race colour */
+.month-dot.month-dot-race {
+  width: 5px;
+  height: 5px;
+  background: transparent;
+  border: 1.5px solid var(--color-race);
+}
+
+.month-day.selected .month-dot.month-dot-race {
+  border-color: #fff;
+}

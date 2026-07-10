@@ -11,7 +11,7 @@ interface Props {
 
 export default function AiInsightCard({ insight, onReanalyze, isAnalyzing }: Props) {
   return (
-    <section className="detail-section">
+    <section className="detail-section" id="ai-insight">
       <div className="ai-insight-card card">
         <div className="ai-header">
           <div className="ai-title-row">

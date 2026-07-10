@@ -1,0 +1,18 @@
+.trends-page {
+  min-height: 100%;
+}
+
+.trends-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 12px 16px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.trends-tabs::-webkit-scrollbar {
+  display: none;
+}

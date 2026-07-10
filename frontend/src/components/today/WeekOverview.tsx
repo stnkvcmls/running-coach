@@ -1,20 +1,12 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import type { WeeklyMileage } from '../../api/types'
 import { useTheme } from '../../App'
-import { getChartTickColor } from '../../utils/theme'
+import { getAxisTick, getGridStroke, getTooltipProps, usePrefersReducedMotion } from '../../utils/chartTheme'
+import { SPORT_COLORS } from '../../utils/colors'
 import './WeekOverview.css'
 
 interface Props {
   data: WeeklyMileage[]
-}
-
-// Consistent colors for activity types
-const ACTIVITY_COLORS: Record<string, string> = {
-  run: '#6c5ce7',    // Purple
-  bike: '#00b894',   // Green
-  swim: '#0984e3',   // Blue
-  walk: '#fdcb6e',   // Yellow
-  other: '#b2bec3',  // Gray
 }
 
 const ACTIVITY_LABELS: Record<string, string> = {
@@ -40,23 +32,22 @@ export default function WeekOverview({ data }: Props) {
   const maxKm = Math.max(...data.map(d => d.km), 1)
   const activityTypes = getActivityTypes(data)
   const { theme } = useTheme()
-  const tickColor = getChartTickColor(theme)
-
-  const tooltipBg = theme === 'light' ? '#ffffff' : '#1a1a2e'
-  const tooltipBorder = theme === 'light' ? '#e0e4ec' : '#2d2d44'
-  const tooltipText = theme === 'light' ? '#1a1a2e' : '#e0e0e0'
+  const { contentStyle } = getTooltipProps(theme)
+  const borderColor = getGridStroke(theme)
+  const reduceMotion = usePrefersReducedMotion()
+  const totalKm = data.reduce((s, d) => s + d.km, 0)
 
   function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) {
     if (active && payload && payload.length) {
       const total = payload.reduce((sum, entry) => sum + (entry.value || 0), 0)
       return (
         <div style={{
-          background: tooltipBg,
-          border: `1px solid ${tooltipBorder}`,
-          borderRadius: 8,
+          background: contentStyle.background,
+          border: contentStyle.border,
+          borderRadius: contentStyle.borderRadius,
           padding: '8px 12px',
           fontSize: 12,
-          color: tooltipText,
+          color: contentStyle.color,
         }}>
           <div style={{ fontWeight: 600, marginBottom: 4 }}>{label}</div>
           {payload.map((entry, index) => {
@@ -73,7 +64,7 @@ export default function WeekOverview({ data }: Props) {
               </div>
             )
           })}
-          <div style={{ marginTop: 4, paddingTop: 4, borderTop: `1px solid ${tooltipBorder}`, fontWeight: 600 }}>
+          <div style={{ marginTop: 4, paddingTop: 4, borderTop: `1px solid ${borderColor}`, fontWeight: 600 }}>
             Total: {total.toFixed(1)} km
           </div>
         </div>
@@ -85,15 +76,19 @@ export default function WeekOverview({ data }: Props) {
   return (
     <div className="card week-overview">
       <div className="week-total">
-        <span className="stat-value-lg">{data.reduce((s, d) => s + d.km, 0).toFixed(1)}</span>
+        <span className="stat-value-lg">{totalKm.toFixed(1)}</span>
         <span className="stat-unit">km total</span>
       </div>
-      <div className="week-chart">
+      <div
+        className="week-chart"
+        role="img"
+        aria-label={`Weekly training volume by activity type, ${data.length} weeks, ${totalKm.toFixed(1)} km total, peak week ${maxKm.toFixed(1)} km.`}
+      >
         <ResponsiveContainer width="100%" height={160}>
           <BarChart data={data} barCategoryGap="20%">
             <XAxis
               dataKey="label"
-              tick={{ fontSize: 11, fill: tickColor }}
+              tick={getAxisTick(theme, 11)}
               axisLine={false}
               tickLine={false}
             />
@@ -105,8 +100,9 @@ export default function WeekOverview({ data }: Props) {
                 dataKey={`by_type.${type}`}
                 name={ACTIVITY_LABELS[type] || type}
                 stackId="a"
-                fill={ACTIVITY_COLORS[type]}
+                fill={SPORT_COLORS[type as keyof typeof SPORT_COLORS]}
                 radius={index === activityTypes.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                isAnimationActive={!reduceMotion}
               >
                 {data.map((_, i) => (
                   <Cell
@@ -124,7 +120,7 @@ export default function WeekOverview({ data }: Props) {
         <div className="week-legend">
           {activityTypes.map(type => (
             <div key={type} className="legend-item">
-              <div className="legend-dot" style={{ backgroundColor: ACTIVITY_COLORS[type] }} />
+              <div className="legend-dot" style={{ backgroundColor: SPORT_COLORS[type as keyof typeof SPORT_COLORS] }} />
               <span className="legend-label">{ACTIVITY_LABELS[type] || type}</span>
             </div>
           ))}

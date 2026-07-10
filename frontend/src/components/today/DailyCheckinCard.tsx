@@ -10,6 +10,45 @@ interface Props {
 
 const SCALE = [1, 2, 3, 4, 5]
 
+function tone(value: number): 'good' | 'okay' | 'low' {
+  if (value >= 4) return 'good'
+  if (value === 3) return 'okay'
+  return 'low'
+}
+
+function moodWord(mood: number | null): string | null {
+  if (mood == null) return null
+  if (mood >= 5) return 'Feeling great'
+  if (mood === 4) return 'Feeling good'
+  if (mood === 3) return 'Feeling okay'
+  if (mood === 2) return 'Feeling low'
+  return 'Feeling rough'
+}
+
+function sorenessWord(soreness: number | null): string | null {
+  if (soreness == null) return null
+  if (soreness === 5) return 'no soreness'
+  if (soreness === 4) return 'low soreness'
+  if (soreness === 3) return 'some soreness'
+  return 'sore'
+}
+
+function energyWord(energy: number | null): string | null {
+  if (energy == null) return null
+  if (energy >= 4) return 'energized'
+  if (energy === 3) return 'steady energy'
+  return 'low energy'
+}
+
+function checkinSummary(checkin: DailyCheckin): string {
+  const parts = [moodWord(checkin.mood), sorenessWord(checkin.soreness)].filter((p): p is string => p != null)
+  if (parts.length === 0) {
+    const energy = energyWord(checkin.energy)
+    if (energy) parts.push(energy)
+  }
+  return parts.length > 0 ? parts.join(' · ') : 'Logged'
+}
+
 function TapRow({
   label,
   hint,
@@ -74,20 +113,13 @@ export default function DailyCheckinCard({ date, checkin }: Props) {
   }
 
   if (!editing && checkin) {
+    const primary = checkin.mood ?? checkin.energy ?? checkin.soreness ?? 4
     return (
-      <div className="card daily-checkin-card">
-        <div className="checkin-header">
-          <h3 className="checkin-title">How you're feeling</h3>
-          <button className="checkin-edit-btn" onClick={() => setEditing(true)}>
-            Edit
-          </button>
-        </div>
-        <div className="checkin-summary">
-          {checkin.soreness != null && <span>Soreness {checkin.soreness}/5</span>}
-          {checkin.energy != null && <span>Energy {checkin.energy}/5</span>}
-          {checkin.mood != null && <span>Mood {checkin.mood}/5</span>}
-        </div>
-      </div>
+      <button className="checkin-chip" onClick={() => setEditing(true)}>
+        <span className={`checkin-chip-dot checkin-chip-dot--${tone(primary)}`} />
+        <span className="checkin-chip-summary">{checkinSummary(checkin)}</span>
+        <span className="checkin-chip-edit">Edit</span>
+      </button>
     )
   }
 

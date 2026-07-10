@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import type { ActivitySummary } from '../../api/types'
 import { getActivityColor, colorMap } from '../../utils/colors'
 import { formatDistance, formatDuration, formatPace } from '../../utils/formatting'
@@ -11,7 +11,6 @@ interface Props {
 }
 
 export default function WorkoutCard({ activity }: Props) {
-  const navigate = useNavigate()
   const colorType = getActivityColor(activity.name, activity.activity_type)
   const color = colorMap[colorType]
 
@@ -20,10 +19,10 @@ export default function WorkoutCard({ activity }: Props) {
     : colorType.charAt(0).toUpperCase() + colorType.slice(1)
 
   return (
-    <div
+    <Link
+      to={`/activities/${activity.id}`}
       className="workout-card card"
       style={{ borderLeftColor: color }}
-      onClick={() => navigate(`/activities/${activity.id}`)}
     >
       <div className="workout-header">
         <div className="workout-header-left">
@@ -60,6 +59,6 @@ export default function WorkoutCard({ activity }: Props) {
           </div>
         )}
       </div>
-    </div>
+    </Link>
   )
 }

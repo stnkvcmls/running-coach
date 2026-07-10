@@ -13,6 +13,10 @@ const HINT_PROMPTS = [
   'What should I focus on tomorrow?',
 ]
 
+// Keep suggesting prompts while the conversation is still short (roughly the
+// first couple of exchanges) instead of hiding them forever after message 1.
+const HINT_REAPPEAR_MESSAGE_THRESHOLD = 4
+
 function formatTime(iso: string | null): string {
   if (!iso) return ''
   const d = new Date(iso)
@@ -173,6 +177,8 @@ export default function ChatView() {
   }
 
   const isEmpty = messages.length === 0 && !streaming
+  const showInlineHints = !isEmpty && !streaming && input.trim() === ''
+    && messages.length < HINT_REAPPEAR_MESSAGE_THRESHOLD
 
   return (
     <div className="chat-view">
@@ -243,12 +249,27 @@ export default function ChatView() {
         <div ref={bottomRef} />
       </div>
 
+      {showInlineHints && (
+        <div className="chat-inline-hints">
+          {HINT_PROMPTS.map(hint => (
+            <button
+              key={hint}
+              className="chat-hint-chip"
+              onClick={() => sendMessage(hint)}
+            >
+              {hint}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="chat-input-area">
         {messages.length > 0 && (
           <button
             className="chat-clear-btn"
             onClick={clearChat}
             title="Clear conversation"
+            aria-label="Clear conversation"
             disabled={streaming}
           >
             <Trash2 size={16} />

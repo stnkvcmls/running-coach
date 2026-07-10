@@ -23,6 +23,13 @@ describe('FeedbackPrompt', () => {
     vi.unstubAllGlobals()
   })
 
+  it('gives the icon-only thumb buttons accessible names', () => {
+    const { container } = renderWithQueryClient(<FeedbackPrompt activityId={1} />)
+    const { up, down } = thumbButtons(container)
+    expect(up).toHaveAccessibleName('Rate workout as good')
+    expect(down).toHaveAccessibleName('Rate workout as bad')
+  })
+
   it('selects and toggles off an RPE chip', () => {
     renderWithQueryClient(<FeedbackPrompt activityId={1} />)
 

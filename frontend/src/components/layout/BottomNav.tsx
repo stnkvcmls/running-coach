@@ -1,14 +1,13 @@
 import { NavLink } from 'react-router-dom'
-import { CalendarDays, Activity, ClipboardList, TrendingUp, MessageCircle, Settings } from 'lucide-react'
+import { CalendarDays, ClipboardList, MessageCircle, Activity, TrendingUp } from 'lucide-react'
 import './BottomNav.css'
 
 const tabs = [
   { to: '/', icon: CalendarDays, label: 'Today', end: true },
-  { to: '/activities', icon: Activity, label: 'Activities' },
-  { to: '/chat', icon: MessageCircle, label: 'Coach' },
   { to: '/plan', icon: ClipboardList, label: 'Plan' },
-  { to: '/trends', icon: TrendingUp, label: 'Wellness' },
-  { to: '/settings', icon: Settings, label: 'Settings' },
+  { to: '/chat', icon: MessageCircle, label: 'Coach' },
+  { to: '/activities', icon: Activity, label: 'Activities' },
+  { to: '/trends', icon: TrendingUp, label: 'Progress' },
 ]
 
 export default function BottomNav() {

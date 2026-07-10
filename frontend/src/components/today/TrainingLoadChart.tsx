@@ -12,7 +12,7 @@ import {
 import { useTrainingLoad } from '../../api/hooks'
 import type { TrainingLoadPoint } from '../../api/types'
 import { useTheme } from '../../App'
-import { getChartTickColor } from '../../utils/theme'
+import { getAxisTick, getGridStroke, getTooltipProps, usePrefersReducedMotion } from '../../utils/chartTheme'
 import './TrainingLoadChart.css'
 
 interface Props {
@@ -67,11 +67,9 @@ function rsbTone(zone: string | null): string {
 export default function TrainingLoadChart({ current }: Props) {
   const { data } = useTrainingLoad(90)
   const { theme } = useTheme()
-  const tickColor = getChartTickColor(theme)
-  const tooltipBg = theme === 'light' ? '#ffffff' : '#1a1a2e'
-  const tooltipBorder = theme === 'light' ? '#e0e4ec' : '#2d2d44'
-  const tooltipText = theme === 'light' ? '#1a1a2e' : '#e0e0e0'
-  const refLineColor = theme === 'light' ? '#e0e4ec' : '#2d2d44'
+  const { contentStyle } = getTooltipProps(theme)
+  const refLineColor = getGridStroke(theme)
+  const reduceMotion = usePrefersReducedMotion()
 
   function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) {
     if (!active || !payload || !payload.length) return null
@@ -79,12 +77,12 @@ export default function TrainingLoadChart({ current }: Props) {
     payload.forEach(p => { byKey[p.dataKey] = p.value })
     return (
       <div style={{
-        background: tooltipBg,
-        border: `1px solid ${tooltipBorder}`,
-        borderRadius: 8,
+        background: contentStyle.background,
+        border: contentStyle.border,
+        borderRadius: contentStyle.borderRadius,
         padding: '8px 12px',
         fontSize: 12,
-        color: tooltipText,
+        color: contentStyle.color,
       }}>
         <div style={{ fontWeight: 600, marginBottom: 4 }}>{label}</div>
         <div style={{ color: CTL_COLOR }}>Fitness: {byKey.ctl?.toFixed(0)}</div>
@@ -161,7 +159,11 @@ export default function TrainingLoadChart({ current }: Props) {
       )}
 
       {chartData.length > 1 && (
-        <div className="tl-chart">
+        <div
+          className="tl-chart"
+          role="img"
+          aria-label={`Training load trend, last 90 days. Fitness ${current.ctl.toFixed(0)}, fatigue ${current.atl.toFixed(0)}, form ${current.tsb >= 0 ? '+' : ''}${current.tsb.toFixed(0)}${current.form_zone_label ? ` (${current.form_zone_label})` : ''}.`}
+        >
           <ResponsiveContainer width="100%" height={180}>
             <ComposedChart data={chartData} margin={{ top: 8, right: 4, left: -8, bottom: 0 }}>
               <defs>
@@ -172,12 +174,12 @@ export default function TrainingLoadChart({ current }: Props) {
               </defs>
               <XAxis
                 dataKey="label"
-                tick={{ fontSize: 10, fill: tickColor }}
+                tick={getAxisTick(theme)}
                 axisLine={false}
                 tickLine={false}
                 minTickGap={28}
               />
-              <YAxis yAxisId="load" tick={{ fontSize: 10, fill: tickColor }} axisLine={false} tickLine={false} width={28} />
+              <YAxis yAxisId="load" tick={getAxisTick(theme)} axisLine={false} tickLine={false} width={28} />
               <YAxis yAxisId="form" orientation="right" hide />
               {hasAcwr && (
                 <YAxis yAxisId="acwr" orientation="right" domain={[0, 2.5]} hide />
@@ -200,6 +202,7 @@ export default function TrainingLoadChart({ current }: Props) {
                 fill="url(#ctlFill)"
                 dot={false}
                 name="Fitness"
+                isAnimationActive={!reduceMotion}
               />
               <Line
                 yAxisId="load"
@@ -209,6 +212,7 @@ export default function TrainingLoadChart({ current }: Props) {
                 strokeWidth={1.5}
                 dot={false}
                 name="Fatigue"
+                isAnimationActive={!reduceMotion}
               />
               <Line
                 yAxisId="form"
@@ -219,6 +223,7 @@ export default function TrainingLoadChart({ current }: Props) {
                 strokeDasharray="4 2"
                 dot={false}
                 name="Form"
+                isAnimationActive={!reduceMotion}
               />
               {hasAcwr && (
                 <Line
@@ -230,6 +235,7 @@ export default function TrainingLoadChart({ current }: Props) {
                   strokeDasharray="2 2"
                   dot={false}
                   name="ACWR"
+                  isAnimationActive={!reduceMotion}
                 />
               )}
             </ComposedChart>

@@ -1,0 +1,23 @@
+.score-ring {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 3px solid var(--ring-color, var(--accent));
+  flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.score-ring-number {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.score-ring-sub {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}

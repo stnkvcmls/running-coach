@@ -13,32 +13,9 @@
   margin-bottom: 4px;
 }
 
-.trends-range-tabs {
+.trends-daily-history-row {
   display: flex;
-  gap: 4px;
-}
-
-.range-tab {
-  padding: 4px 10px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  cursor: pointer;
-  transition: all 0.15s;
-  font-family: inherit;
-}
-
-.range-tab.active {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
-}
-
-.range-tab:hover:not(.active) {
-  color: var(--text);
-  border-color: var(--text-muted);
+  justify-content: flex-end;
 }
 
 .wellness-card {
@@ -80,10 +57,10 @@
   margin-top: 4px;
 }
 
-.trends-loading,
 .trends-empty {
   padding: 48px 16px;
   text-align: center;
   color: var(--text-muted);
   font-size: 0.9rem;
+  line-height: 1.5;
 }

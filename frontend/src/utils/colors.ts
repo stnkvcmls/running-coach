@@ -27,3 +27,27 @@ export const colorMap: Record<ActivityColor, string> = {
 export function getColorHex(name: string | null, activityType: string | null): string {
   return colorMap[getActivityColor(name, activityType)]
 }
+
+export type Sport = 'run' | 'bike' | 'swim' | 'walk' | 'strength' | 'other'
+
+/** Canonical per-sport colour, shared by every chart/legend keyed on sport type. */
+export const SPORT_COLORS: Record<Sport, string> = {
+  run: '#6c5ce7',
+  bike: '#00b894',
+  swim: '#0984e3',
+  walk: '#fdcb6e',
+  strength: '#a29bfe',
+  other: '#b2bec3',
+}
+
+/** Re-export of the `--color-*` workout-type palette in globals.css, for TSX that needs the value as data rather than a CSS rule. */
+export const WORKOUT_TYPE_COLORS: Record<string, string> = {
+  easy: 'var(--color-easy)',
+  tempo: 'var(--color-tempo)',
+  interval: 'var(--color-interval)',
+  long: 'var(--color-long)',
+  race: 'var(--color-race)',
+  cross: 'var(--color-cross)',
+  strength: 'var(--color-strength)',
+  default: 'var(--color-default)',
+}

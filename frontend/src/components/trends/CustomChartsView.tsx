@@ -10,7 +10,8 @@ import {
 } from 'recharts'
 import { useCustomChartMetrics, useCustomChartData } from '../../api/hooks'
 import { useTheme } from '../../App'
-import { getChartTickColor, getChartTooltipStyle } from '../../utils/theme'
+import { getChartTickColor, getTooltipProps, CHART_SERIES_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
+import Skeleton from '../ui/Skeleton'
 import type { CustomChartMetric, CustomChartMetricGroup } from '../../api/types'
 import './CustomChartsView.css'
 
@@ -31,7 +32,7 @@ const GROUP_LABELS: Record<CustomChartMetricGroup, string> = {
 
 const GROUP_ORDER: CustomChartMetricGroup[] = ['activity', 'wellness', 'load']
 
-const SERIES_COLORS = ['#6c5ce7', '#00b894', '#e17055', '#0984e3']
+const SERIES_COLORS = CHART_SERIES_COLORS
 
 const MAX_METRICS = 4
 const CONFIG_KEY = 'runningCoach.customChart.config'
@@ -86,7 +87,8 @@ export default function CustomChartsView() {
   const [presets, setPresets] = useState<ChartPreset[]>(loadPresets)
   const { theme } = useTheme()
   const tickColor = getChartTickColor(theme)
-  const tooltipStyle = getChartTooltipStyle(theme)
+  const { contentStyle: tooltipStyle } = getTooltipProps(theme)
+  const reduceMotion = usePrefersReducedMotion()
 
   const { metricIds, days, compare = false } = config
   const { data: chartData, isLoading: dataLoading } = useCustomChartData(metricIds, days, compare)
@@ -170,7 +172,15 @@ export default function CustomChartsView() {
   }, [chartData, isComparing])
 
   if (metricsLoading) {
-    return <div className="custom-chart-empty">Loading metrics…</div>
+    return (
+      <div className="custom-chart-view">
+        <div className="trends-header">
+          <Skeleton height={22} width={140} />
+          <Skeleton height={30} width={220} radius="var(--radius-sm)" />
+        </div>
+        <Skeleton height={120} radius="var(--radius)" />
+      </div>
+    )
   }
 
   return (
@@ -237,11 +247,15 @@ export default function CustomChartsView() {
       {metricIds.length === 0 ? (
         <div className="custom-chart-empty">Select at least one metric to build a chart.</div>
       ) : dataLoading ? (
-        <div className="custom-chart-empty">Loading chart…</div>
+        <Skeleton height={320} radius="var(--radius)" />
       ) : rows.length === 0 ? (
         <div className="custom-chart-empty">No data available for the selected metrics and range.</div>
       ) : (
-        <div className="card custom-chart-card">
+        <div
+          className="card custom-chart-card"
+          role="img"
+          aria-label={`Custom chart of ${metricIds.map(id => metricsById.get(id)?.label ?? id).join(', ')}, last ${days} days${isComparing ? ', compared to the previous period' : ''}.`}
+        >
           <ResponsiveContainer width="100%" height={320}>
             <ComposedChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
               <XAxis dataKey="label" tick={{ fontSize: 11, fill: tickColor }} tickLine={false} axisLine={false} />
@@ -276,6 +290,7 @@ export default function CustomChartsView() {
                   dot={false}
                   connectNulls
                   name={metricsById.get(id)?.label ?? id}
+                  isAnimationActive={!reduceMotion}
                 />
               ))}
               {isComparing && metricIds.map((id, i) => (
@@ -290,6 +305,7 @@ export default function CustomChartsView() {
                   dot={false}
                   connectNulls
                   name={`${metricsById.get(id)?.label ?? id} (previous)`}
+                  isAnimationActive={!reduceMotion}
                 />
               ))}
             </ComposedChart>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useDailySummaries } from '../../api/hooks'
 import { format, parseISO } from '../../utils/date'
 import { formatSleepHours } from '../../utils/formatting'
@@ -8,7 +8,6 @@ import './DailySummariesView.css'
 export default function DailySummariesView() {
   const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } =
     useDailySummaries()
-  const navigate = useNavigate()
   const sentinelRef = useRef<HTMLDivElement>(null)
 
   const summaries = useMemo(() => data?.pages.flat() ?? [], [data])
@@ -39,7 +38,7 @@ export default function DailySummariesView() {
       )}
       <div className="daily-list">
         {summaries.map(s => (
-          <div key={s.id} className="daily-card card" onClick={() => navigate(`/daily/${s.id}`)}>
+          <Link key={s.id} to={`/daily/${s.id}`} className="daily-card card">
             <div className="daily-date-col">
               <span className="daily-day">{format(parseISO(s.date), 'd')}</span>
               <span className="daily-month">{format(parseISO(s.date), 'MMM')}</span>
@@ -78,7 +77,7 @@ export default function DailySummariesView() {
                 )}
               </div>
             </div>
-          </div>
+          </Link>
         ))}
       </div>
 

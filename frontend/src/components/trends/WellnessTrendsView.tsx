@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   ComposedChart,
   Area,
@@ -10,22 +11,18 @@ import {
 } from 'recharts'
 import { useWellnessTrends } from '../../api/hooks'
 import { useTheme } from '../../App'
-import { getChartTickColor } from '../../utils/theme'
+import { getChartTickColor, getTooltipProps, WELLNESS_METRIC_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
+import RangeSelector, { DEFAULT_RANGE_OPTIONS, type RangeDays } from '../ui/RangeSelector'
+import Skeleton from '../ui/Skeleton'
 import './WellnessTrendsView.css'
 
-type Range = 30 | 60 | 90
-
-const RANGES: { label: string; value: Range }[] = [
-  { label: '30d', value: 30 },
-  { label: '60d', value: 60 },
-  { label: '90d', value: 90 },
-]
-
-const SLEEP_COLOR = '#6c5ce7'
-const RHR_COLOR = '#e17055'
-const STRESS_COLOR = '#fd79a8'
-const BATTERY_COLOR = '#00b894'
-const HRV_COLOR = '#0984e3'
+const {
+  sleep: SLEEP_COLOR,
+  restingHr: RHR_COLOR,
+  stress: STRESS_COLOR,
+  bodyBattery: BATTERY_COLOR,
+  hrv: HRV_COLOR,
+} = WELLNESS_METRIC_COLORS
 
 function avg7(data: any[], key: string): number | null {
   const vals = data.slice(-7).map(d => d[key]).filter((v: any) => v != null) as number[]
@@ -33,26 +30,36 @@ function avg7(data: any[], key: string): number | null {
   return vals.reduce((a, b) => a + b, 0) / vals.length
 }
 
+function WellnessSkeleton() {
+  return (
+    <div className="trends-view">
+      <div className="trends-header">
+        <Skeleton height={18} width={140} />
+        <Skeleton height={30} width={160} radius="var(--radius-sm)" />
+      </div>
+      {[0, 1, 2, 3].map(i => (
+        <div key={i} className="card wellness-card">
+          <Skeleton height={10} width={100} />
+          <Skeleton height={24} width={90} />
+          <Skeleton height={120} radius="var(--radius-xs)" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function WellnessTrendsView() {
-  const [days, setDays] = useState<Range>(30)
+  const [days, setDays] = useState<RangeDays>(30)
   const { data, isLoading } = useWellnessTrends(days)
   const { theme } = useTheme()
   const tickColor = getChartTickColor(theme)
-  const tooltipBg = theme === 'light' ? '#ffffff' : '#1a1a2e'
-  const tooltipBorder = theme === 'light' ? '#e0e4ec' : '#2d2d44'
-  const tooltipText = theme === 'light' ? '#1a1a2e' : '#e0e0e0'
+  const { contentStyle } = getTooltipProps(theme)
+  const reduceMotion = usePrefersReducedMotion()
 
   function MetricTooltip({ active, payload, label, unit }: { active?: boolean; payload?: any[]; label?: string; unit: string }) {
     if (!active || !payload?.length) return null
     return (
-      <div style={{
-        background: tooltipBg,
-        border: `1px solid ${tooltipBorder}`,
-        borderRadius: 8,
-        padding: '6px 10px',
-        fontSize: 12,
-        color: tooltipText,
-      }}>
+      <div style={{ ...contentStyle, padding: '6px 10px' }}>
         <div style={{ fontWeight: 600, marginBottom: 2 }}>{label}</div>
         {payload.map((p: any) => (
           p.value != null && (
@@ -66,10 +73,14 @@ export default function WellnessTrendsView() {
   }
 
   if (isLoading) {
-    return <div className="trends-loading">Loading wellness data…</div>
+    return <WellnessSkeleton />
   }
   if (!data?.length) {
-    return <div className="trends-empty">No wellness data available.</div>
+    return (
+      <div className="trends-empty">
+        No wellness data yet. Wellness trends appear once your Garmin sync captures sleep, HRV, or stress data.
+      </div>
+    )
   }
 
   const chartData = data.map(s => ({
@@ -92,7 +103,7 @@ export default function WellnessTrendsView() {
   const latestHrvStatus = [...data].reverse().find(s => s.hrv_status != null)?.hrv_status ?? null
   const hasHrv = chartData.some(d => d.hrv != null)
 
-  const minTickGap = days === 30 ? 14 : days === 60 ? 20 : 28
+  const minTickGap = days === 30 ? 6 : days === 90 ? 14 : days === 180 ? 28 : 50
 
   const xAxisProps = {
     dataKey: 'label',
@@ -113,17 +124,11 @@ export default function WellnessTrendsView() {
     <div className="trends-view">
       <div className="trends-header">
         <h2 className="section-title">Wellness Trends</h2>
-        <div className="trends-range-tabs">
-          {RANGES.map(r => (
-            <button
-              key={r.value}
-              className={`range-tab ${days === r.value ? 'active' : ''}`}
-              onClick={() => setDays(r.value)}
-            >
-              {r.label}
-            </button>
-          ))}
-        </div>
+        <RangeSelector options={DEFAULT_RANGE_OPTIONS} value={days} onChange={setDays} />
+      </div>
+
+      <div className="trends-daily-history-row">
+        <Link to="/daily" className="btn-ghost">Daily history →</Link>
       </div>
 
       {/* Sleep Score */}
@@ -140,7 +145,11 @@ export default function WellnessTrendsView() {
             <div className="wellness-metric-sub">{avgSleepHours.toFixed(1)}h avg · 7-day</div>
           )}
         </div>
-        <div className="wellness-chart">
+        <div
+          className="wellness-chart"
+          role="img"
+          aria-label={`Sleep score trend, last ${days} days.${avgSleepScore != null ? ` 7-day average ${avgSleepScore.toFixed(0)} out of 100.` : ''}`}
+        >
           <ResponsiveContainer width="100%" height={120}>
             <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
               <defs>
@@ -161,6 +170,7 @@ export default function WellnessTrendsView() {
                 dot={false}
                 name="Score"
                 connectNulls
+                isAnimationActive={!reduceMotion}
               />
             </ComposedChart>
           </ResponsiveContainer>
@@ -178,7 +188,11 @@ export default function WellnessTrendsView() {
             </div>
           )}
         </div>
-        <div className="wellness-chart">
+        <div
+          className="wellness-chart"
+          role="img"
+          aria-label={`Resting heart rate trend, last ${days} days.${avgRhr != null ? ` 7-day average ${avgRhr.toFixed(0)} bpm.` : ''}`}
+        >
           <ResponsiveContainer width="100%" height={120}>
             <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
               <XAxis {...xAxisProps} />
@@ -192,6 +206,7 @@ export default function WellnessTrendsView() {
                 dot={false}
                 name="RHR"
                 connectNulls
+                isAnimationActive={!reduceMotion}
               />
             </ComposedChart>
           </ResponsiveContainer>
@@ -209,7 +224,11 @@ export default function WellnessTrendsView() {
             </div>
           )}
         </div>
-        <div className="wellness-chart">
+        <div
+          className="wellness-chart"
+          role="img"
+          aria-label={`Average stress trend, last ${days} days.${avgStress != null ? ` 7-day average ${avgStress.toFixed(0)} out of 100.` : ''}`}
+        >
           <ResponsiveContainer width="100%" height={120}>
             <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
               <defs>
@@ -230,6 +249,7 @@ export default function WellnessTrendsView() {
                 dot={false}
                 name="Stress"
                 connectNulls
+                isAnimationActive={!reduceMotion}
               />
             </ComposedChart>
           </ResponsiveContainer>
@@ -247,7 +267,11 @@ export default function WellnessTrendsView() {
             </div>
           )}
         </div>
-        <div className="wellness-chart">
+        <div
+          className="wellness-chart"
+          role="img"
+          aria-label={`Body battery trend, last ${days} days.${avgBatteryHigh != null ? ` 7-day average high ${avgBatteryHigh.toFixed(0)}.` : ''}`}
+        >
           <ResponsiveContainer width="100%" height={120}>
             <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
               <defs>
@@ -268,6 +292,7 @@ export default function WellnessTrendsView() {
                 dot={false}
                 name="High"
                 connectNulls
+                isAnimationActive={!reduceMotion}
               />
               <Line
                 type="monotone"
@@ -278,6 +303,7 @@ export default function WellnessTrendsView() {
                 dot={false}
                 name="Low"
                 connectNulls
+                isAnimationActive={!reduceMotion}
               />
             </ComposedChart>
           </ResponsiveContainer>
@@ -299,7 +325,11 @@ export default function WellnessTrendsView() {
               <div className="wellness-metric-sub">Status: {latestHrvStatus.toLowerCase()}</div>
             )}
           </div>
-          <div className="wellness-chart">
+          <div
+            className="wellness-chart"
+            role="img"
+            aria-label={`Overnight heart rate variability trend, last ${days} days.${avgHrv != null ? ` 7-day average ${avgHrv.toFixed(0)} milliseconds.` : ''}`}
+          >
             <ResponsiveContainer width="100%" height={120}>
               <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
                 <defs>
@@ -320,6 +350,7 @@ export default function WellnessTrendsView() {
                   dot={false}
                   name="HRV"
                   connectNulls
+                  isAnimationActive={!reduceMotion}
                 />
               </ComposedChart>
             </ResponsiveContainer>

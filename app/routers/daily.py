@@ -36,7 +36,7 @@ from app.schemas import (
 )
 from app import training_load
 from app import plan_adaptation as plan_adaptation_mod
-from app.routers._shared import _enrich_event_with_steps, _parse_date
+from app.routers._shared import _categorize_activity_type, _enrich_event_with_steps, _parse_date
 
 router = APIRouter()
 
@@ -89,21 +89,6 @@ def api_today(
     for w in range(7, -1, -1):
         ws = week_start_base - timedelta(weeks=w)
         weekly_buckets[ws] = {}
-
-    def _categorize_activity_type(activity_type: str | None) -> str:
-        """Group similar activity types into categories."""
-        if not activity_type:
-            return "other"
-        activity_type = activity_type.lower()
-        if "run" in activity_type:
-            return "run"
-        elif "cycling" in activity_type or "biking" in activity_type:
-            return "bike"
-        elif "swim" in activity_type:
-            return "swim"
-        elif "walk" in activity_type or "hik" in activity_type:
-            return "walk"
-        return "other"
 
     for a_started, a_dist, a_type in all_activities:
         if a_started is None or not a_dist:

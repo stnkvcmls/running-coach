@@ -1,6 +1,6 @@
-import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, addMonths, subMonths, startOfMonth, eachDayOfInterval, getDay, isSameDay, isToday as fnsIsToday, parseISO, getISOWeek, getISOWeeksInYear } from 'date-fns'
+import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, addMonths, subMonths, startOfMonth, eachDayOfInterval, getDay, isSameDay, isToday as fnsIsToday, parseISO, getISOWeek, getISOWeeksInYear, differenceInCalendarWeeks } from 'date-fns'
 
-export { format, addWeeks, subWeeks, addMonths, subMonths, startOfMonth, isSameDay, parseISO }
+export { format, addWeeks, subWeeks, addMonths, subMonths, startOfMonth, startOfWeek, isSameDay, parseISO }
 
 export function getWeekDays(date: Date): Date[] {
   const start = startOfWeek(date, { weekStartsOn: 1 }) // Monday start
@@ -42,4 +42,11 @@ export function getWeekNumber(date: Date): number {
 
 export function getTotalWeeksInYear(year: number): number {
   return getISOWeeksInYear(new Date(year, 6, 1))
+}
+
+/** Whole ISO weeks between `date`'s Monday and the current week's Monday (0 = this week, 1 = last week, negative = future). */
+export function weeksSinceCurrentWeek(date: Date): number {
+  const currentWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 })
+  const weekStart = startOfWeek(date, { weekStartsOn: 1 })
+  return differenceInCalendarWeeks(currentWeekStart, weekStart, { weekStartsOn: 1 })
 }

@@ -95,3 +95,159 @@
   color: var(--text-muted);
   line-height: 1.4;
 }
+
+.sticky-detail-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--top-bar-height);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  z-index: var(--z-nav);
+}
+
+.sticky-detail-header .back-btn {
+  width: 32px;
+  height: 32px;
+  margin-top: 0;
+}
+
+.sticky-detail-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+}
+
+.sticky-detail-meta {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  margin-left: auto;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.verdict-chip {
+  display: block;
+  margin: 12px 0;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.verdict-chip:hover {
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg-card));
+}
+
+.verdict-tag {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+}
+
+.collapse-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 12px;
+  margin-top: 4px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--border);
+  color: var(--accent-light);
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: background var(--transition-fast);
+}
+
+.collapse-toggle:hover {
+  background: var(--bg-hover);
+}
+
+.collapse-chevron {
+  transition: transform var(--transition-fast);
+}
+
+.collapse-chevron.flipped {
+  transform: rotate(180deg);
+}
+
+/* Column wrappers are transparent to layout below 1024px — their children
+   render as one flat, in-order stack directly inside .detail-body (see the
+   desktop override below). The `order` values restore the section's
+   original top-to-bottom position across that flattened mobile stack;
+   :has() targets the pieces self-wrapped by child components (RouteMap,
+   HrZonesChart, PaceZonesChart, SplitsBars) since those don't have a
+   literal <section> tag here to add a class to. Items sharing an `order`
+   (the Dynamics/Power/Performance/Conditions group) fall back to their
+   existing relative document order, which is already correct. */
+.detail-columns,
+.detail-col-left,
+.detail-col-right {
+  display: contents;
+}
+
+.detail-body .stat-grid-large { order: 1; }
+.detail-body .verdict-chip { order: 2; }
+.detail-section:has(.route-card) { order: 3; }
+.detail-section:has(.workout-description-card) { order: 4; }
+.detail-section:has(.adherence-card) { order: 5; }
+.detail-section:has(.stat-grid):not(:has(.stat-grid-large)) { order: 6; }
+.detail-body .collapse-toggle { order: 7; }
+.detail-section:has(.hr-zones-card) { order: 8; }
+.detail-section:has(.pace-zones-card) { order: 9; }
+.detail-section:has(.chart-tabs) { order: 10; }
+.detail-section:has(.splits-card) { order: 11; }
+.detail-section:has(.ai-insight-card),
+.detail-section:has(.feedback-prompt),
+.detail-section-generating {
+  order: 12;
+}
+
+/* Desktop: reflow into a two-column layout (charts/laps left, stats rail
+   right, AI insight/feedback full-width below). Each column is an
+   independent flex column rather than a CSS grid row-track, so a tall chart
+   in one column never forces blank space into the other. */
+@media (min-width: 1024px) {
+  .detail-body {
+    max-width: 1080px;
+  }
+
+  .detail-columns {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 24px;
+  }
+
+  .detail-col-left,
+  .detail-col-right {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+  }
+}

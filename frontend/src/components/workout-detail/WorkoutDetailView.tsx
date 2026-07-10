@@ -4,7 +4,7 @@ import { useCalendarEvent } from '../../api/hooks'
 import type { CalendarEvent } from '../../api/types'
 import { formatDistance } from '../../utils/formatting'
 import { format, parseISO } from '../../utils/date'
-import WorkoutSteps from '../today/WorkoutSteps'
+import WorkoutStructureBar from '../ui/WorkoutStructureBar'
 import '../activity-detail/ActivityDetailView.css'
 import './WorkoutDetailView.css'
 
@@ -29,7 +29,7 @@ export default function WorkoutDetailView() {
   return (
     <div className="activity-detail">
       <header className="detail-header" style={{ borderBottomColor: 'var(--warning)' }}>
-        <button className="back-btn" onClick={() => navigate(-1)}>
+        <button className="back-btn" onClick={() => navigate(-1)} aria-label="Back">
           <ArrowLeft size={20} />
         </button>
         <div className="detail-header-info">
@@ -58,7 +58,7 @@ export default function WorkoutDetailView() {
           <section className="detail-section">
             <h3 className="section-title">Description</h3>
             <div className="card workout-steps-card">
-              <WorkoutSteps steps={event.workout_steps} />
+              <WorkoutStructureBar steps={event.workout_steps} />
             </div>
           </section>
         ) : event.workout_description ? (

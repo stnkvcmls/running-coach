@@ -44,7 +44,9 @@ export default function SliderPicker({ value, onChange, options, chart }: Slider
         ))}
       </div>
 
-      <div className="sp-track" onClick={handleTrackClick}>
+      {/* Decorative + mouse-only "jump to position" convenience; every option is already
+          reachable and selectable via the fully keyboard-accessible .sp-label buttons above. */}
+      <div className="sp-track" onClick={handleTrackClick} aria-hidden="true">
         <div className="sp-fill" style={{ width: `${thumbPct}%` }} />
         <div className="sp-thumb" style={{ left: `${thumbPct}%` }} />
       </div>

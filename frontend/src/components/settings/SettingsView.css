@@ -1,4 +1,9 @@
 .settings-view {
+  min-height: 100dvh;
+  background: var(--bg);
+}
+
+.settings-body {
   padding: 16px;
   max-width: 640px;
   margin: 0 auto;

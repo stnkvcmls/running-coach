@@ -79,6 +79,7 @@
 }
 
 .sheet-time-card {
+  width: 100%;
   background: var(--bg-input);
   border: 1.5px dashed var(--border);
   border-radius: var(--radius-sm);
@@ -88,6 +89,9 @@
   gap: 12px;
   cursor: pointer;
   transition: border-color 0.15s;
+  font: inherit;
+  text-align: left;
+  color: inherit;
 }
 
 .sheet-time-card--filled {

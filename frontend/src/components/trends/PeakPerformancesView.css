@@ -158,12 +158,27 @@
   color: var(--text-muted);
 }
 
-.pr-empty,
-.pr-loading {
+.pr-empty {
   padding: 48px 16px;
   text-align: center;
   color: var(--text-muted);
   font-size: 0.9rem;
+}
+
+/* Records celebration (task 5.4) — same gold used by the activity-detail PB badge */
+.pr-new-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 8px;
+  background: #f0a50022;
+  color: #f0a500;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
 }
 
 .pr-empty-inline {
