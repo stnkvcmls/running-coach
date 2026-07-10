@@ -1,6 +1,7 @@
 """Training plan CRUD, season plan, adaptation, realignment, and Garmin push."""
+import json
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -8,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import (
+    Activity,
     AthleteProfile,
     DailyCheckin,
     DailySummary,
@@ -33,18 +35,86 @@ from app.schemas import (
     TrainingPlanWeek,
 )
 from app.strength_routines import ROUTINE_LIBRARY, get_routine, get_routine_for_week
+from app.routers._shared import _categorize_activity_type
 from app import training_load
 from app import plan_adaptation as plan_adaptation_mod
 from app import nutrition as nutrition_mod
+from app import adherence as adherence_mod
+from app import workout_translator as workout_translator_mod
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# Coarse sport category a completed activity must fall into to count as
+# fulfilling a given plan-day workout type (see _match_activity_and_adherence).
+_RUN_WORKOUT_TYPES = {"easy", "tempo", "long", "interval"}
+_CROSS_ACTIVITY_CATEGORIES = {"bike", "swim", "walk"}
+
+
+def _fulfils_workout_type(workout_type: str, activity_category: str) -> bool:
+    if workout_type in _RUN_WORKOUT_TYPES:
+        return activity_category == "run"
+    if workout_type == "strength":
+        return activity_category == "strength"
+    if workout_type == "cross":
+        return activity_category in _CROSS_ACTIVITY_CATEGORIES
+    return False
+
+
+def _match_activity_and_adherence(
+    plan_day: TrainingPlanDay,
+    db: Session,
+    profile: AthleteProfile | None,
+) -> tuple[int | None, float | None]:
+    """Find the activity (if any) that fulfilled a past plan day, and score it.
+
+    Mirrors Today's scheduled-workout matching (app/routers/daily.py): same
+    calendar day, same coarse sport category, first match wins. Only ever
+    considered for days strictly before today — "today"/"upcoming" are
+    determined client-side regardless of any activity already logged. Rest
+    days never match. The adherence score reuses the same structured-steps
+    comparison the Garmin push (workout_translator) and activity-detail
+    adherence card (app/adherence.py) already rely on; it's computed here
+    purely to score the match, not persisted or exposed as steps.
+    """
+    if plan_day.day_date >= date.today() or plan_day.workout_type == "rest":
+        return None, None
+
+    day_start = datetime.combine(plan_day.day_date, datetime.min.time())
+    day_end = day_start + timedelta(days=1)
+    activities = (
+        db.query(Activity)
+        .filter(
+            Activity.user_id == plan_day.user_id,
+            Activity.started_at >= day_start,
+            Activity.started_at < day_end,
+        )
+        .all()
+    )
+    matched = next(
+        (a for a in activities if _fulfils_workout_type(plan_day.workout_type, _categorize_activity_type(a.activity_type))),
+        None,
+    )
+    if matched is None:
+        return None, None
+
+    adherence_score: float | None = None
+    if plan_day.workout_type in _RUN_WORKOUT_TYPES:
+        translated = workout_translator_mod.translate_plan_day(plan_day, profile)
+        if translated:
+            steps = adherence_mod.parse_workout_steps(json.dumps(translated))
+            computed = adherence_mod.compute_adherence(matched, steps)
+            if computed is not None:
+                adherence_score = computed.adherence_score
+
+    return matched.id, adherence_score
+
 
 def _day_to_response(
     d: TrainingPlanDay,
-    weight_kg: float | None = None,
+    db: Session,
+    profile: AthleteProfile | None = None,
     heat_stress: bool = False,
 ) -> TrainingPlanDayResponse:
     """Convert a TrainingPlanDay ORM row to its response schema, hydrating routine."""
@@ -58,11 +128,12 @@ def _day_to_response(
         guidance = nutrition_mod.compute_fuelling_guidance(
             duration_sec=duration_sec,
             intensity="long",
-            weight_kg=weight_kg,
+            weight_kg=profile.weight_kg if profile else None,
             heat_stress=heat_stress,
         )
         if guidance:
             resp.fuelling_guidance = FuellingGuidance(**guidance.__dict__)
+    resp.matched_activity_id, resp.adherence_score = _match_activity_and_adherence(d, db, profile)
     return resp
 
 
@@ -71,7 +142,6 @@ def _build_plan_response(plan: TrainingPlan, db: Session) -> TrainingPlanRespons
     from app.ai_coach import recent_heat_stress
 
     profile = db.query(AthleteProfile).filter(AthleteProfile.user_id == plan.user_id).first()
-    weight_kg = profile.weight_kg if profile else None
     heat_stress = recent_heat_stress(db, date.today(), plan.user_id)
 
     days = (
@@ -98,7 +168,7 @@ def _build_plan_response(plan: TrainingPlan, db: Session) -> TrainingPlanRespons
             week_start=week_start_date,
             week_end=week_end_date,
             theme=theme,
-            days=[_day_to_response(d, weight_kg, heat_stress) for d in sorted_days],
+            days=[_day_to_response(d, db, profile, heat_stress) for d in sorted_days],
         ))
 
     return TrainingPlanResponse(
@@ -280,7 +350,7 @@ def api_adapt_plan_day(
     profile = db.query(AthleteProfile).filter(AthleteProfile.user_id == uid).first()
     from app.ai_coach import recent_heat_stress
     heat_stress = recent_heat_stress(db, date.today(), uid)
-    return _day_to_response(plan_day, profile.weight_kg if profile else None, heat_stress)
+    return _day_to_response(plan_day, db, profile, heat_stress)
 
 
 @router.get("/training-plan/realignment-status", response_model=PlanRealignmentStatus)

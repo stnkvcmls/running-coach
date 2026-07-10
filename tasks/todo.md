@@ -100,7 +100,7 @@ Visual target per phase: docs/mockups/ui-redesign-mockup.html (toggle
       briefing, compact alerts/races, check-in collapse, skeletons)
 - [x] Phase 3 — Activity list & detail (rich rows, weekly totals, sticky
       detail header, insight verdict chip, SplitsBars)
-- [ ] Phase 4 — Plan & calendar (day completion states, WorkoutStructureBar,
+- [x] Phase 4 — Plan & calendar (day completion states, WorkoutStructureBar,
       informative week tabs, auto-select current week)
 - [ ] Phase 5 — Trends → Progress (tab chrome, RangeSelector, chartTheme
       adoption, records celebration)

@@ -14,7 +14,7 @@ import PaceZonesChart from './PaceZonesChart'
 import SplitsBars from './SplitsBars'
 import AiInsightCard from './AiInsightCard'
 import FeedbackPrompt from './FeedbackPrompt'
-import WorkoutSteps from '../today/WorkoutSteps'
+import WorkoutStructureBar from '../ui/WorkoutStructureBar'
 import AdherenceCard from './AdherenceCard'
 import StatHelpButton from '../info/StatHelpButton'
 import { toast } from '../ui/Toast'
@@ -183,7 +183,7 @@ export default function ActivityDetailView() {
           <section className="detail-section">
             <h3 className="section-title">Description</h3>
             <div className="card workout-description-card">
-              <WorkoutSteps steps={activity.scheduled_workout.workout_steps} />
+              <WorkoutStructureBar steps={activity.scheduled_workout.workout_steps} color={color} />
             </div>
           </section>
         )}

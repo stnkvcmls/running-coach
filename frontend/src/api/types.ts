@@ -512,6 +512,11 @@ export interface TrainingPlanDay {
   week_theme: string | null
   routine: StrengthRoutine | null
   fuelling_guidance: FuellingGuidance | null
+  // Read-only, computed server-side: the activity that fulfilled this day
+  // and its adherence score, when day_date is in the past. Null for
+  // today/future days and for days with no matching activity.
+  matched_activity_id: number | null
+  adherence_score: number | null
 }
 
 export interface TrainingPlanWeek {

@@ -16,6 +16,28 @@ def _parse_date(s: str | None) -> date:
         return date.today()
 
 
+def _categorize_activity_type(activity_type: str | None) -> str:
+    """Group a raw Garmin activity type into a coarse category.
+
+    Shared by Today's workout-tag matching (scheduled event -> activity) and
+    the training plan's day-completion matching (plan day -> activity).
+    """
+    if not activity_type:
+        return "other"
+    activity_type = activity_type.lower()
+    if "run" in activity_type:
+        return "run"
+    elif "cycling" in activity_type or "biking" in activity_type:
+        return "bike"
+    elif "swim" in activity_type:
+        return "swim"
+    elif "walk" in activity_type or "hik" in activity_type:
+        return "walk"
+    elif "strength" in activity_type:
+        return "strength"
+    return "other"
+
+
 def _enrich_event_with_steps(event: GarminCalendarEvent) -> CalendarEventResponse:
     """Convert a GarminCalendarEvent to CalendarEventResponse with parsed workout steps."""
     resp = CalendarEventResponse.model_validate(event)

@@ -39,3 +39,27 @@ it only bites JS that assumes `<main>` is the scroll container.
 `main.scrollTop`. This is a pre-existing shell property, not a bug to fix in
 each phase; just don't assume `<main>` owns scroll when writing scroll-driven
 features or their tests (relevant again for Phase 6's desktop nav-rail work).
+
+## Frontend: `vi.useFakeTimers()` hangs `findBy*`/`waitFor` in a component test
+
+**Symptom:** A test for a date-dependent component (Phase 4's PlanView week
+auto-select, which reads `new Date()` to find "today's" week) needs a pinned
+clock, so it called `vi.useFakeTimers()` + `vi.setSystemTime(...)` before
+`renderWithProviders(...)`, following the `Toast.test.tsx` precedent. Every
+`await screen.findByText(...)` in the test then timed out at 5000ms even
+though the component rendered correctly.
+
+**Cause:** `vi.useFakeTimers()` with no options fakes `setTimeout` globally,
+not just `Date`. Testing Library's `findBy*`/`waitFor` poll via `setTimeout`,
+and react-query's fetch-resolution scheduling also rides on real timers/
+microtasks — both stall forever once `setTimeout` is faked and nothing calls
+`vi.advanceTimersByTimeAsync(...)`. `Toast.test.tsx` gets away with full fake
+timers only because it asserts synchronously after `act()`, never awaiting a
+`findBy*`.
+
+**Fix:** When a test needs both a pinned clock *and* async data-fetching
+queries, fake only `Date`: `vi.useFakeTimers({ toFake: ['Date'] })` before
+`vi.setSystemTime(...)`. Real timers keep `findBy*`/react-query working while
+`new Date()` inside the component still returns the pinned time. Reach for
+this combo any time a later phase's test touches both an async hook and a
+"today"/date-range calculation (Phase 5's RangeSelector is a likely repeat).

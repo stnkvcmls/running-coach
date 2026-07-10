@@ -4,7 +4,7 @@ import { useCalendarEvent } from '../../api/hooks'
 import type { CalendarEvent } from '../../api/types'
 import { formatDistance } from '../../utils/formatting'
 import { format, parseISO } from '../../utils/date'
-import WorkoutSteps from '../today/WorkoutSteps'
+import WorkoutStructureBar from '../ui/WorkoutStructureBar'
 import '../activity-detail/ActivityDetailView.css'
 import './WorkoutDetailView.css'
 
@@ -58,7 +58,7 @@ export default function WorkoutDetailView() {
           <section className="detail-section">
             <h3 className="section-title">Description</h3>
             <div className="card workout-steps-card">
-              <WorkoutSteps steps={event.workout_steps} />
+              <WorkoutStructureBar steps={event.workout_steps} />
             </div>
           </section>
         ) : event.workout_description ? (

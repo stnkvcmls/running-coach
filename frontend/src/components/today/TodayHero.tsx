@@ -6,6 +6,7 @@ import type { ActivitySummary, TodayResponse, TrainingPlanDay } from '../../api/
 import { formatDistance, formatDuration } from '../../utils/formatting'
 import { scoreColor, ComponentBar } from './ReadinessCard'
 import ScoreRing from '../ui/ScoreRing'
+import WorkoutStructureBar from '../ui/WorkoutStructureBar'
 import BriefingCard from './BriefingCard'
 import './ReadinessCard.css'
 import './TodayHero.css'
@@ -144,6 +145,12 @@ export default function TodayHero({ data }: Props) {
   const matchedActivity = data.activities.find(a => a.workout_tag != null) ?? null
   const briefing = data.briefing
 
+  // Only the "scheduled Garmin event, no AI plan day" state carries real
+  // workout_steps today — TrainingPlanDay has no structured-step data yet.
+  const scheduledEvent = !matchedActivity && !planDay && data.scheduled_events.length > 0
+    ? data.scheduled_events[0]
+    : null
+
   return (
     <div className="card hero">
       <div className="hero-top">
@@ -177,8 +184,9 @@ export default function TodayHero({ data }: Props) {
         </div>
       )}
 
-      {/* TODO(Phase 4, task 4.2): WorkoutStructureBar renders here once workout_steps
-          are available for the day's planned/completed session. */}
+      {scheduledEvent?.workout_steps && scheduledEvent.workout_steps.length > 0 && (
+        <WorkoutStructureBar steps={scheduledEvent.workout_steps} />
+      )}
 
       {data.plan_day_id != null && (
         briefing && !briefingExpanded ? (

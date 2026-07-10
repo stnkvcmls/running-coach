@@ -1110,6 +1110,93 @@ def test_training_plan_short_long_day_has_no_fuelling_guidance(client, db):
     assert long_day["fuelling_guidance"] is None
 
 
+# --- Plan day completion matching (UI/UX Phase 4, additive-only) ---
+
+def _seed_plan_day(db, day_date, **kw):
+    plan = TrainingPlan(generated_at=datetime.combine(day_date, datetime.min.time()), week_start=day_date, plan_weeks=1)
+    db.add(plan)
+    db.flush()
+    defaults = dict(
+        plan_id=plan.id,
+        day_date=day_date,
+        day_of_week=day_date.strftime("%A"),
+        week_number=1,
+        workout_type="easy",
+        target_distance_m=8000,
+        target_pace_min_km=5.5,
+    )
+    defaults.update(kw)
+    day = TrainingPlanDay(**defaults)
+    db.add(day)
+    db.commit()
+    db.refresh(day)
+    return day
+
+
+def _get_day(client, day_id):
+    resp = client.get("/api/v1/training-plan")
+    assert resp.status_code == 200
+    for week in resp.json()["weeks"]:
+        for d in week["days"]:
+            if d["id"] == day_id:
+                return d
+    raise AssertionError(f"day {day_id} not found in training-plan response")
+
+
+def test_plan_day_matched_activity_and_adherence_score(client, db):
+    """A past easy day with a same-day run gets matched + scored (100% here:
+    activity distance equals the target, and the easy builder sets no pace
+    target so only the distance component feeds the score)."""
+    yesterday = date.today() - timedelta(days=1)
+    day = _seed_plan_day(db, yesterday)
+    activity = _add_activity(db, datetime.combine(yesterday, datetime.min.time().replace(hour=7)), distance_m=8000)
+
+    body = _get_day(client, day.id)
+    assert body["matched_activity_id"] == activity.id
+    assert body["adherence_score"] == 100.0
+
+
+def test_plan_day_missed_when_no_matching_activity(client, db):
+    yesterday = date.today() - timedelta(days=1)
+    day = _seed_plan_day(db, yesterday)
+
+    body = _get_day(client, day.id)
+    assert body["matched_activity_id"] is None
+    assert body["adherence_score"] is None
+
+
+def test_plan_day_unmatched_when_activity_is_different_sport(client, db):
+    """A ride on the scheduled day doesn't fulfil a running workout."""
+    yesterday = date.today() - timedelta(days=1)
+    day = _seed_plan_day(db, yesterday)
+    _add_activity(db, datetime.combine(yesterday, datetime.min.time().replace(hour=7)), activity_type="cycling")
+
+    body = _get_day(client, day.id)
+    assert body["matched_activity_id"] is None
+
+
+def test_plan_day_today_and_future_never_matched(client, db):
+    """Matching only applies to days strictly before today, even if an
+    activity already exists (today's/future's state is decided client-side)."""
+    today_ = date.today()
+    day = _seed_plan_day(db, today_)
+    _add_activity(db, datetime.combine(today_, datetime.min.time().replace(hour=7)), distance_m=8000)
+
+    body = _get_day(client, day.id)
+    assert body["matched_activity_id"] is None
+    assert body["adherence_score"] is None
+
+
+def test_plan_day_rest_day_never_matched(client, db):
+    yesterday = date.today() - timedelta(days=1)
+    day = _seed_plan_day(db, yesterday, workout_type="rest", target_distance_m=None, target_pace_min_km=None)
+    _add_activity(db, datetime.combine(yesterday, datetime.min.time().replace(hour=7)), distance_m=8000)
+
+    body = _get_day(client, day.id)
+    assert body["matched_activity_id"] is None
+    assert body["adherence_score"] is None
+
+
 # ---------------------------------------------------------------------------
 # POST /chat — chat tool-use action events (P0-2)
 # ---------------------------------------------------------------------------

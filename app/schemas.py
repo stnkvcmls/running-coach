@@ -734,6 +734,11 @@ class TrainingPlanDayResponse(BaseModel):
     week_theme: str | None = None
     routine: StrengthRoutine | None = None
     fuelling_guidance: FuellingGuidance | None = None
+    # Read-only, computed at response time (not stored columns): the activity
+    # that fulfilled this day, and its adherence score, when day_date is in the
+    # past. Both stay null for today/future days and for days with no match.
+    matched_activity_id: int | None = None
+    adherence_score: float | None = None
 
     class Config:
         from_attributes = True
