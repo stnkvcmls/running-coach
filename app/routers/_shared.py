@@ -1,6 +1,8 @@
 """Small helpers shared across two or more domain routers."""
 from datetime import date, datetime
 
+from sqlalchemy.orm import Session
+
 from app import adherence as adherence_mod
 from app import records as records_mod
 from app.models import GarminCalendarEvent, PersonalRecord
@@ -63,3 +65,23 @@ def _to_pr_response(r: PersonalRecord) -> PersonalRecordResponse:
         label=records_mod.record_label(r),
         display_value=records_mod.record_display_value(r),
     )
+
+
+def _personal_records_by_activity(
+    db: Session, user_id: int, activity_ids: list[int],
+) -> dict[int, list[PersonalRecordResponse]]:
+    """Batch-fetch PersonalRecords for a page/day of activities, grouped by
+    activity id — one indexed IN-query instead of one per row. Used to set
+    ActivitySummary.personal_records on list/Today payloads.
+    """
+    if not activity_ids:
+        return {}
+    rows = (
+        db.query(PersonalRecord)
+        .filter(PersonalRecord.user_id == user_id, PersonalRecord.activity_id.in_(activity_ids))
+        .all()
+    )
+    out: dict[int, list[PersonalRecordResponse]] = {}
+    for r in rows:
+        out.setdefault(r.activity_id, []).append(_to_pr_response(r))
+    return out

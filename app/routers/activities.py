@@ -21,7 +21,7 @@ from app import records as records_mod
 from app import streams as streams_mod
 from app import weather as weather_mod
 from app.utils import safe_json_loads, parse_activity_charts, parse_activity_route
-from app.routers._shared import _enrich_event_with_steps, _to_pr_response
+from app.routers._shared import _enrich_event_with_steps, _personal_records_by_activity, _to_pr_response
 
 import logging
 
@@ -47,7 +47,11 @@ def api_activities(
         query = query.filter(Activity.activity_type == type)
     offset = (page - 1) * limit
     activities = query.offset(offset).limit(limit).all()
-    return [ActivitySummary.model_validate(a) for a in activities]
+    records_by_id = _personal_records_by_activity(db, current_user.id, [a.id for a in activities])
+    summaries = [ActivitySummary.model_validate(a) for a in activities]
+    for s in summaries:
+        s.personal_records = records_by_id.get(s.id) or None
+    return summaries
 
 
 @router.get("/activities/{activity_id}", response_model=ActivityDetail)

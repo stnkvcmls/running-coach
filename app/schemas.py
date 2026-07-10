@@ -23,6 +23,10 @@ class ActivitySummary(BaseModel):
     # Set when this activity fulfils a scheduled workout on the same day. Carries
     # the matched workout's label so the UI can show a "workout" tag.
     workout_tag: str | None = None
+    # Personal records this activity set, if any — same shape as
+    # ActivityDetail's field, additively populated on list/Today rows too so
+    # the PB badge and celebration toast can fire without a detail fetch.
+    personal_records: list["PersonalRecordResponse"] | None = None
 
     class Config:
         from_attributes = True

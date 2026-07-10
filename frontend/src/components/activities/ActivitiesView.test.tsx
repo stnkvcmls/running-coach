@@ -1,8 +1,12 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { screen } from '@testing-library/react'
 import { renderWithProviders } from '../../test/test-utils'
 import ActivitiesView from './ActivitiesView'
-import type { ActivitySummary } from '../../api/types'
+import type { ActivitySummary, PersonalRecordResponse } from '../../api/types'
+import { celebrateNewRecords } from '../../utils/records'
+
+vi.mock('../../utils/records', () => ({ celebrateNewRecords: vi.fn() }))
+const mockedCelebrate = vi.mocked(celebrateNewRecords)
 
 // Fixed in the distant past so grouping always falls into the "month" bucket
 // (>8 ISO weeks old), independent of whatever date the test happens to run on.
@@ -34,6 +38,10 @@ function mockFetch(activities: ActivitySummary[]) {
 }
 
 describe('ActivitiesView grouping and filters', () => {
+  beforeEach(() => {
+    mockedCelebrate.mockClear()
+  })
+
   afterEach(() => {
     vi.unstubAllGlobals()
   })
@@ -82,5 +90,32 @@ describe('ActivitiesView grouping and filters', () => {
     screen.getByRole('button', { name: 'Running' }).click()
     expect(await screen.findByRole('button', { name: 'Running' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'false')
+  })
+})
+
+describe('ActivitiesView PB celebration', () => {
+  beforeEach(() => {
+    mockedCelebrate.mockClear()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it("fires celebrateNewRecords with every loaded activity's personal records", async () => {
+    const pr: PersonalRecordResponse = {
+      id: 1, record_type: 'distance', metric: null, duration_sec: null, distance_label: '5K',
+      value: 1200, previous_value: null, activity_id: 1, achieved_at: '2020-01-20T07:00:00Z',
+      label: '5K', display_value: '19:42',
+    }
+    vi.stubGlobal('fetch', mockFetch([
+      summary({ id: 1, personal_records: [pr] }),
+      summary({ id: 2, personal_records: null }),
+    ]))
+
+    renderWithProviders(<ActivitiesView />)
+
+    expect(await screen.findByText('January 2020')).toBeInTheDocument()
+    expect(mockedCelebrate).toHaveBeenCalledWith([pr])
   })
 })

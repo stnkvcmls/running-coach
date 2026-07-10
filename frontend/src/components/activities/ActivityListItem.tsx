@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { ChevronRight, CheckCircle } from 'lucide-react'
+import { ChevronRight, CheckCircle, Trophy } from 'lucide-react'
 import type { ActivitySummary } from '../../api/types'
 import { getActivityAccent } from '../../utils/colors'
 import { getSportIcon } from '../../utils/sportIcon'
@@ -27,6 +27,14 @@ export default function ActivityListItem({ activity }: Props) {
             <span className="ali-tag" title={activity.workout_tag}>
               <CheckCircle size={11} />
               Workout
+            </span>
+          )}
+          {activity.personal_records && activity.personal_records.length > 0 && (
+            <span
+              className="badge pr-badge"
+              title={activity.personal_records.map(r => `${r.label}: ${r.display_value}`).join(', ')}
+            >
+              <Trophy size={11} /> PB
             </span>
           )}
         </div>

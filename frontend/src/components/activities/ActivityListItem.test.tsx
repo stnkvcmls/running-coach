@@ -80,4 +80,20 @@ describe('ActivityListItem', () => {
     const { container } = renderWithProviders(<ActivityListItem activity={activity({ avg_hr: null })} />)
     expect(container.querySelector('.ali-meta')?.textContent).not.toMatch(/♥/)
   })
+
+  it('shows a PB badge when the activity carries personal records', () => {
+    renderWithProviders(<ActivityListItem activity={activity({
+      personal_records: [{
+        id: 1, record_type: 'distance', metric: null, duration_sec: null, distance_label: '5K',
+        value: 1200, previous_value: null, activity_id: 42, achieved_at: '2026-07-08T07:12:00Z',
+        label: '5K', display_value: '19:42',
+      }],
+    })} />)
+    expect(screen.getByText('PB')).toBeInTheDocument()
+  })
+
+  it('omits the PB badge when there are no personal records', () => {
+    renderWithProviders(<ActivityListItem activity={activity({ personal_records: null })} />)
+    expect(screen.queryByText('PB')).not.toBeInTheDocument()
+  })
 })

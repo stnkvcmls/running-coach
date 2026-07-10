@@ -228,6 +228,17 @@ button {
   letter-spacing: 0.04em;
 }
 
+/* PB trophy badge modifier — shared by ActivityDetailView's header and
+   ActivityListItem's rows so a new PB reads the same wherever it appears. */
+.pr-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  background: #f0a50022;
+  color: #f0a500;
+}
+
 /* Shared button primitives */
 .btn-primary {
   display: inline-flex;
