@@ -211,6 +211,12 @@ button {
   to { transform: rotate(360deg); }
 }
 
+/* Shared spin animation for inline loading icons (e.g. lucide RefreshCw) —
+   one definition instead of a per-component copy in each card's CSS. */
+.spin {
+  animation: spin 1s linear infinite;
+}
+
 /* Badge */
 .badge {
   display: inline-block;

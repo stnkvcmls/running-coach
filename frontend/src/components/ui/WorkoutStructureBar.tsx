@@ -17,24 +17,51 @@ function segmentKind(step: WorkoutStep): StructureSegmentKind {
   return 'work'
 }
 
-function segmentWeight(step: WorkoutStep): number {
-  return step.end_condition_value != null && step.end_condition_value > 0 ? step.end_condition_value : 1
+/** Flat reference pace used only to make a *mixed* time/distance workout's
+ * segments visually comparable — the bar illustrates proportions, not an
+ * accurate time prediction, so one shared constant is fine. */
+const REFERENCE_PACE_SEC_PER_KM = 330
+
+function segmentWeight(step: WorkoutStep, unitsMixed: boolean): number {
+  const value = step.end_condition_value
+  if (value == null || value <= 0) return 1
+  if (!unitsMixed) return value
+  if (step.end_condition === 'distance') return (value / 1000) * REFERENCE_PACE_SEC_PER_KM
+  if (step.end_condition === 'time') return value
+  return 1
 }
 
-/** Flatten workout steps into proportional bar segments, expanding repeat blocks
- * into their constituent steps (repeated `repeat_count` times). */
-export function computeSegments(steps: WorkoutStep[]): StructureSegment[] {
-  const out: StructureSegment[] = []
+/** Recursively expand repeat blocks into their constituent leaf steps
+ * (repeated `repeat_count` times each). */
+function flattenSteps(steps: WorkoutStep[]): WorkoutStep[] {
+  const out: WorkoutStep[] = []
   for (const step of steps) {
     if (step.step_type === 'repeat' && step.steps && step.repeat_count) {
       for (let i = 0; i < step.repeat_count; i++) {
-        out.push(...computeSegments(step.steps))
+        out.push(...flattenSteps(step.steps))
       }
     } else {
-      out.push({ kind: segmentKind(step), weight: segmentWeight(step) })
+      out.push(step)
     }
   }
   return out
+}
+
+/** Flatten workout steps into proportional bar segments, expanding repeat blocks
+ * into their constituent steps. Weights use the raw `end_condition_value` when
+ * every leaf step shares one unit; if the workout mixes time- and
+ * distance-ended steps (e.g. a distance rep with a timed recovery), distance
+ * steps are converted to pseudo-seconds first so proportions stay meaningful
+ * instead of comparing metres to seconds directly. */
+export function computeSegments(steps: WorkoutStep[]): StructureSegment[] {
+  const flat = flattenSteps(steps)
+  const units = new Set(
+    flat
+      .filter(s => s.end_condition_value != null && s.end_condition_value > 0)
+      .map(s => s.end_condition),
+  )
+  const unitsMixed = units.size > 1
+  return flat.map(step => ({ kind: segmentKind(step), weight: segmentWeight(step, unitsMixed) }))
 }
 
 const SEGMENT_COLORS: Record<StructureSegmentKind, string> = {

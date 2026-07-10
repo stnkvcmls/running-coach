@@ -157,7 +157,9 @@ function DayRow({ day }: { day: TrainingPlanDay }) {
   const state = dayState(day)
   const color = WORKOUT_COLORS[day.workout_type] ?? 'var(--color-default)'
   const label = WORKOUT_LABELS[day.workout_type] ?? day.workout_type
-  const pushable = day.workout_type !== 'rest' && day.workout_type !== 'cross'
+  // Send-to-watch only makes sense for a session still ahead — a rest day
+  // has nothing to push and a past (done/missed) day is stale noise.
+  const pushable = (state === 'today' || state === 'upcoming') && day.workout_type !== 'cross'
 
   return (
     <div

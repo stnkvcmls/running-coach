@@ -104,10 +104,6 @@
   padding: 6px 4px;
 }
 
-.hero-action-send .spin {
-  animation: spin 1s linear infinite;
-}
-
 .hero-readiness-accordion {
   display: flex;
   flex-direction: column;

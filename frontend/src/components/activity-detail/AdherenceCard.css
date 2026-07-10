@@ -46,8 +46,10 @@
 
 .adherence-row {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
+  gap: 4px 8px;
   font-size: 0.85rem;
 }
 
@@ -58,7 +60,8 @@
 
 .adherence-row-values {
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 4px 8px;
   align-items: center;
 }
 

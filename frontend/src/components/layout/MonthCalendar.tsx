@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useDateContext } from '../../App'
 import { useCalendarMonth } from '../../api/hooks'
 import { getMonthDays, format, formatDateKey, formatMonthKey, isSameDay, isToday, addMonths, subMonths, startOfMonth } from '../../utils/date'
-import { getColorHex } from '../../utils/colors'
+import { getActivityAccent } from '../../utils/colors'
 import './MonthCalendar.css'
 
 const DAY_HEADERS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -69,7 +69,7 @@ export default function MonthCalendar() {
                     <span
                       key={j}
                       className="month-dot"
-                      style={{ background: getColorHex(a.name, a.activity_type) }}
+                      style={{ background: getActivityAccent(a.name, a.activity_type) }}
                     />
                   ))}
                 </div>

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Flag } from 'lucide-react'
+import { Flag, ChevronRight } from 'lucide-react'
 import { useDateContext } from '../../App'
 import { useToday, useRealignmentStatus, useRealignPlan } from '../../api/hooks'
 import { formatDateKey, format, isToday as checkIsToday } from '../../utils/date'
@@ -172,6 +172,7 @@ export default function TodayView() {
               <h2 className="section-title">At a Glance</h2>
               <Link to={`/daily/${data.daily_summary.id}`} className="daily-snapshot-link">
                 <StatGrid stats={glanceStats} columns={4} />
+                <ChevronRight size={16} className="daily-snapshot-chevron" />
               </Link>
             </section>
           )}

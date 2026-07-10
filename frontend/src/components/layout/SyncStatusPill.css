@@ -28,11 +28,3 @@
 .sync-pill-time {
   white-space: nowrap;
 }
-
-.sync-pill .spin {
-  animation: sync-pill-spin 1s linear infinite;
-}
-
-@keyframes sync-pill-spin {
-  to { transform: rotate(360deg); }
-}

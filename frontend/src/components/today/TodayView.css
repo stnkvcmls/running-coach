@@ -7,9 +7,6 @@
   gap: 16px;
 }
 
-.today-section {
-  margin-bottom: 20px;
-}
 
 /* Column wrappers are transparent to layout below 1024px — their children
    render as one flat, in-order stack directly inside .today-view's flex
@@ -38,12 +35,22 @@
 /* At-a-glance link wrapper */
 .daily-snapshot-link {
   display: block;
+  position: relative;
   border-radius: var(--radius);
   transition: opacity var(--transition-fast);
 }
 
 .daily-snapshot-link:hover .stat-grid {
   background: var(--bg-hover);
+}
+
+.daily-snapshot-chevron {
+  position: absolute;
+  top: 50%;
+  right: 16px;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
 }
 
 /* Race strip */
@@ -138,6 +145,7 @@
   .today-col-right {
     display: flex;
     flex-direction: column;
+    gap: 16px;
     flex: 1;
     min-width: 0;
   }
