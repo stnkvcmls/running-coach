@@ -1,9 +1,10 @@
 import type { TrainingPlanDay } from '../api/types'
+import { formatDateKey } from './date'
 
 export type PlanDayState = 'rest' | 'done' | 'missed' | 'today' | 'upcoming'
 
 export function todayStr(): string {
-  return new Date().toISOString().slice(0, 10)
+  return formatDateKey(new Date())
 }
 
 /** Completion state for a plan day: rest days are always 'rest'; a day

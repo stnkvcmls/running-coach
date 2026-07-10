@@ -36,10 +36,6 @@ const STATE_GLYPH: Record<PlanDayState, string> = {
   rest: '—',
 }
 
-function today(): string {
-  return todayStr()
-}
-
 function formatDistance(m: number | null): string {
   if (m == null) return ''
   return `${(m / 1000).toFixed(1)} km`
@@ -323,7 +319,7 @@ export default function PlanView() {
   // snap them back.
   useEffect(() => {
     if (weekIndexInitialized || !plan) return
-    const t = today()
+    const t = todayStr()
     const idx = plan.weeks.findIndex(w => w.week_start <= t && t <= w.week_end)
     setWeekIndex(idx >= 0 ? idx : 0)
     setWeekIndexInitialized(true)

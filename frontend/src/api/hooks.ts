@@ -233,12 +233,9 @@ export function useSyncStatus(): SyncStatus {
     : []
   const lastSyncedAt = syncTimestamps.length > 0 ? syncTimestamps[syncTimestamps.length - 1] : null
 
-  let status: SyncStatusState = 'ok'
-  if (garmin.data?.needs_reauth) {
-    status = 'needs_reauth'
-  } else if (health.isFetching || garmin.isFetching) {
-    status = 'syncing'
-  }
+  // No current payload exposes a running-sync/backfill signal — `syncing` is
+  // unreachable here until one exists; SyncStatusPill keeps the branch ready.
+  const status: SyncStatusState = garmin.data?.needs_reauth ? 'needs_reauth' : 'ok'
 
   return { status, lastSyncedAt }
 }

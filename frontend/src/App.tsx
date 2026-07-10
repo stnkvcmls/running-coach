@@ -17,6 +17,7 @@ import PlanSetupView from './components/plan-setup/PlanSetupView'
 import StatInfoView from './components/info/StatInfoView'
 import ChatView from './components/chat/ChatView'
 import { ToastHost } from './components/ui/Toast'
+import ErrorBoundary from './components/ui/ErrorBoundary'
 import { useAthleteProfile } from './api/hooks'
 import './App.css'
 
@@ -131,21 +132,23 @@ export default function App() {
         )}
         <div className="app-body">
           <main className={`app-main ${!isDetailPage ? 'app-main--with-nav' : ''}`}>
-            <Routes>
-              <Route path="/" element={<TodayView />} />
-              <Route path="/activities" element={<ActivitiesView />} />
-              <Route path="/activities/:id" element={<ActivityDetailView />} />
-              <Route path="/daily" element={<DailySummariesView />} />
-              <Route path="/daily/:id" element={<DailyDetailView />} />
-              <Route path="/workouts/:id" element={<WorkoutDetailView />} />
-              <Route path="/trends" element={<TrendsView />} />
-              <Route path="/plan" element={<PlanView />} />
-              <Route path="/plan/setup" element={<PlanSetupView />} />
-              <Route path="/settings" element={<SettingsView />} />
-              <Route path="/info/:topic" element={<StatInfoView />} />
-              <Route path="/onboarding" element={<OnboardingView />} />
-              <Route path="/chat" element={<ChatView />} />
-            </Routes>
+            <ErrorBoundary key={location.pathname}>
+              <Routes>
+                <Route path="/" element={<TodayView />} />
+                <Route path="/activities" element={<ActivitiesView />} />
+                <Route path="/activities/:id" element={<ActivityDetailView />} />
+                <Route path="/daily" element={<DailySummariesView />} />
+                <Route path="/daily/:id" element={<DailyDetailView />} />
+                <Route path="/workouts/:id" element={<WorkoutDetailView />} />
+                <Route path="/trends" element={<TrendsView />} />
+                <Route path="/plan" element={<PlanView />} />
+                <Route path="/plan/setup" element={<PlanSetupView />} />
+                <Route path="/settings" element={<SettingsView />} />
+                <Route path="/info/:topic" element={<StatInfoView />} />
+                <Route path="/onboarding" element={<OnboardingView />} />
+                <Route path="/chat" element={<ChatView />} />
+              </Routes>
+            </ErrorBoundary>
           </main>
           {!isDetailPage && <BottomNav />}
         </div>

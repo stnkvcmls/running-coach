@@ -23,6 +23,8 @@ export default function SyncStatusPill() {
     )
   }
 
+  // No current payload exposes a running-sync signal, so useSyncStatus never
+  // returns 'syncing' today — branch kept for when one is wired up.
   if (status === 'syncing') {
     return (
       <span className="sync-pill" role="status" aria-label="Syncing">
