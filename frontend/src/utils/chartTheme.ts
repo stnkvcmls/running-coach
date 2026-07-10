@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react'
+import type { MetricZone } from '../api/types'
 
 export type Theme = 'dark' | 'light'
 
@@ -45,4 +46,21 @@ export const METRIC_COLORS: Record<string, string> = {
   stride: '#00b894',
   perf_cond: '#fdcb6e',
   stamina: '#a29bfe',
+}
+
+/** Which zone a value falls into, by colour — shared by scatter-chart dots and SplitsBars. */
+export function getZoneColor(value: number, zones: MetricZone[]): string {
+  for (const zone of zones) {
+    const aboveMin = zone.min_value === null || value >= zone.min_value
+    const belowMax = zone.max_value === null || value < zone.max_value
+    if (aboveMin && belowMax) return zone.zone_color
+  }
+  // Check the last zone (unbounded max) separately with inclusive check
+  for (const zone of zones) {
+    if (zone.max_value === null) {
+      const aboveMin = zone.min_value === null || value >= zone.min_value
+      if (aboveMin) return zone.zone_color
+    }
+  }
+  return '#6c5ce7'
 }

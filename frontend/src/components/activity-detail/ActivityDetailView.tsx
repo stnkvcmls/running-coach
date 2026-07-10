@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, RotateCcw, Loader, Trophy } from 'lucide-react'
+import { ArrowLeft, Loader, Trophy, ChevronDown } from 'lucide-react'
 import { useActivity, useTriggerAnalysis, useJobStatus } from '../../api/hooks'
 import { getActivityColor, colorMap } from '../../utils/colors'
 import { formatDistance, formatDuration, formatPace } from '../../utils/formatting'
@@ -11,13 +11,25 @@ import RouteMap from './RouteMap'
 import ChartTabs from './ChartTabs'
 import HrZonesChart from './HrZonesChart'
 import PaceZonesChart from './PaceZonesChart'
-import LapsTable from './LapsTable'
+import SplitsBars from './SplitsBars'
 import AiInsightCard from './AiInsightCard'
 import FeedbackPrompt from './FeedbackPrompt'
 import WorkoutSteps from '../today/WorkoutSteps'
 import AdherenceCard from './AdherenceCard'
 import StatHelpButton from '../info/StatHelpButton'
+import { toast } from '../ui/Toast'
 import './ActivityDetailView.css'
+
+function firstSentence(markdown: string): string {
+  const stripped = markdown
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .replace(/_(.*?)_/g, '$1')
+    .replace(/`(.*?)`/g, '$1')
+    .replace(/\[(.*?)\]\(.*?\)/g, '$1')
+    .trim()
+  return stripped.split(/(?<=[.!?])\s/)[0] || stripped
+}
 
 export default function ActivityDetailView() {
   const { id } = useParams<{ id: string }>()
@@ -27,6 +39,9 @@ export default function ActivityDetailView() {
   const triggerAnalysis = useTriggerAnalysis()
   const [analysisJobId, setAnalysisJobId] = useState<number | null>(null)
   const { data: analysisJob } = useJobStatus(analysisJobId)
+  const [showAllStats, setShowAllStats] = useState(false)
+  const [showStickyHeader, setShowStickyHeader] = useState(false)
+  const headerRef = useRef<HTMLElement>(null)
 
   const isAnalyzing =
     triggerAnalysis.isPending ||
@@ -34,10 +49,21 @@ export default function ActivityDetailView() {
 
   useEffect(() => {
     if (analysisJob?.status === 'done' || analysisJob?.status === 'failed') {
+      if (analysisJob.status === 'failed') toast('Re-analysis failed — try again', { kind: 'error' })
       qc.invalidateQueries({ queryKey: ['activity', Number(id) || 0] })
       setAnalysisJobId(null)
     }
   }, [analysisJob?.status, id, qc])
+
+  useEffect(() => {
+    const el = headerRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      ([entry]) => setShowStickyHeader(!entry.isIntersecting),
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [activity?.id])
 
   function handleReanalyze() {
     triggerAnalysis.mutate(activity!.id, {
@@ -99,11 +125,25 @@ export default function ActivityDetailView() {
       : null,
   ].filter(Boolean) as { label: string; value: string; unit?: string }[]
 
+  const verdict = activity.insight?.content || activity.insight?.summary || null
+
   return (
     <div className="activity-detail">
+      {showStickyHeader && (
+        <div className="sticky-detail-header">
+          <button className="back-btn" onClick={() => navigate(-1)} aria-label="Back">
+            <ArrowLeft size={18} />
+          </button>
+          <span className="sticky-detail-name">{activity.name || 'Workout'}</span>
+          <span className="sticky-detail-meta">
+            {formatDistance(activity.distance_m)} km · {formatPace(activity.avg_pace_min_km)} /km
+          </span>
+        </div>
+      )}
+
       {/* Header */}
-      <header className="detail-header" style={{ borderBottomColor: color }}>
-        <button className="back-btn" onClick={() => navigate(-1)}>
+      <header ref={headerRef} className="detail-header" style={{ borderBottomColor: color }}>
+        <button className="back-btn" onClick={() => navigate(-1)} aria-label="Back">
           <ArrowLeft size={20} />
         </button>
         <div className="detail-header-info">
@@ -127,6 +167,14 @@ export default function ActivityDetailView() {
         {/* Primary stats */}
         <StatGrid stats={primaryStats} columns={3} large />
 
+        {/* AI verdict — first sentence up top; full analysis stays in AiInsightCard below */}
+        {verdict && (
+          <a href="#ai-insight" className="verdict-chip">
+            <span className="verdict-tag">Coach</span>
+            <span>{firstSentence(verdict)} Full analysis ↓</span>
+          </a>
+        )}
+
         {/* Route silhouette (animated; only when GPS data is present) */}
         <RouteMap route={activity.route} activityColor={color} />
 
@@ -147,49 +195,69 @@ export default function ActivityDetailView() {
           </section>
         )}
 
-        {/* Secondary stats */}
+        {/* Secondary stats — always visible */}
         {secondaryStats.length > 0 && (
           <section className="detail-section">
             <StatGrid stats={secondaryStats} columns={3} />
           </section>
         )}
 
-        {/* Running dynamics */}
-        {dynamicsStats.length > 0 && (
-          <section className="detail-section">
-            <h3 className="section-title">Running Dynamics</h3>
-            <StatGrid stats={dynamicsStats} columns={3} />
-          </section>
-        )}
+        {/* Dynamics / Power / Performance / Conditions — collapsed behind "Show all stats" */}
+        {(dynamicsStats.length > 0 || powerStats.length > 0 || perfStats.length > 0 || weatherStats.length > 0) && (
+          <>
+            {showAllStats && (
+              <>
+                {dynamicsStats.length > 0 && (
+                  <section className="detail-section">
+                    <h3 className="section-title">Running Dynamics</h3>
+                    <StatGrid stats={dynamicsStats} columns={3} />
+                  </section>
+                )}
 
-        {/* Power */}
-        {powerStats.length > 0 && (
-          <section className="detail-section">
-            <h3 className="section-title">Power</h3>
-            <StatGrid stats={powerStats} columns={4} />
-          </section>
-        )}
+                {powerStats.length > 0 && (
+                  <section className="detail-section">
+                    <h3 className="section-title">Power</h3>
+                    <StatGrid stats={powerStats} columns={4} />
+                  </section>
+                )}
 
-        {/* Performance */}
-        {perfStats.length > 0 && (
-          <section className="detail-section">
-            <div className="section-title-row">
-              <h3 className="section-title">Performance</h3>
-              <StatHelpButton topic="activity-performance" label="Performance" />
-            </div>
-            <StatGrid stats={perfStats} columns={3} />
-          </section>
-        )}
+                {perfStats.length > 0 && (
+                  <section className="detail-section">
+                    <div className="section-title-row">
+                      <h3 className="section-title">Performance</h3>
+                      <StatHelpButton topic="activity-performance" label="Performance" />
+                    </div>
+                    <StatGrid stats={perfStats} columns={3} />
+                  </section>
+                )}
 
-        {/* Weather conditions */}
-        {weatherStats.length > 0 && (
-          <section className="detail-section">
-            <h3 className="section-title">Conditions</h3>
-            <StatGrid stats={weatherStats} columns={2} />
-            {activity.weather_description && (
-              <p className="weather-description">{activity.weather_description}</p>
+                {weatherStats.length > 0 && (
+                  <section className="detail-section">
+                    <h3 className="section-title">Conditions</h3>
+                    <StatGrid stats={weatherStats} columns={2} />
+                    {activity.weather_description && (
+                      <p className="weather-description">{activity.weather_description}</p>
+                    )}
+                  </section>
+                )}
+              </>
             )}
-          </section>
+
+            <button
+              type="button"
+              className="collapse-toggle"
+              onClick={() => setShowAllStats(v => !v)}
+              aria-expanded={showAllStats}
+            >
+              {showAllStats ? 'Hide extra stats' : `Show all stats (${[
+                dynamicsStats.length > 0 && 'dynamics',
+                powerStats.length > 0 && 'power',
+                perfStats.length > 0 && 'performance',
+                weatherStats.length > 0 && 'conditions',
+              ].filter(Boolean).join(' · ')})`}
+              <ChevronDown size={14} className={`collapse-chevron ${showAllStats ? 'flipped' : ''}`} />
+            </button>
+          </>
         )}
 
         {/* HR Zones */}
@@ -207,8 +275,10 @@ export default function ActivityDetailView() {
           </section>
         )}
 
-        {/* Splits / Laps */}
-        {activity.splits && <LapsTable splits={activity.splits} />}
+        {/* Splits — bars by default, table fallback via toggle */}
+        {activity.splits && (
+          <SplitsBars splits={activity.splits} paceZones={activity.metric_zones?.pace} color={color} />
+        )}
 
         {/* AI Insight / Feedback */}
         {activity.insight ? (

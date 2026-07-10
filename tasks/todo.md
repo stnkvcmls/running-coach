@@ -98,7 +98,7 @@ Visual target per phase: docs/mockups/ui-redesign-mockup.html (toggle
       status pill, reconnect orphaned /daily route, planned-dots on calendar)
 - [x] Phase 2 — Today screen hierarchy (TodayHero: readiness × session ×
       briefing, compact alerts/races, check-in collapse, skeletons)
-- [ ] Phase 3 — Activity list & detail (rich rows, weekly totals, sticky
+- [x] Phase 3 — Activity list & detail (rich rows, weekly totals, sticky
       detail header, insight verdict chip, SplitsBars)
 - [ ] Phase 4 — Plan & calendar (day completion states, WorkoutStructureBar,
       informative week tabs, auto-select current week)

@@ -1,7 +1,8 @@
-import { useNavigate } from 'react-router-dom'
-import { ChevronRight } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { ChevronRight, CheckCircle } from 'lucide-react'
 import type { ActivitySummary } from '../../api/types'
 import { getActivityColor, colorMap } from '../../utils/colors'
+import { getSportIcon } from '../../utils/sportIcon'
 import { formatDistance, formatDuration, formatPace } from '../../utils/formatting'
 import { format, parseISO } from '../../utils/date'
 import './ActivityListItem.css'
@@ -11,36 +12,40 @@ interface Props {
 }
 
 export default function ActivityListItem({ activity }: Props) {
-  const navigate = useNavigate()
   const colorType = getActivityColor(activity.name, activity.activity_type)
   const color = colorMap[colorType]
+  const SportIcon = getSportIcon(activity.activity_type)
 
   return (
-    <div
-      className="activity-list-item card"
-      onClick={() => navigate(`/activities/${activity.id}`)}
-    >
-      <div className="ali-left">
-        <div className="ali-icon" style={{ background: `${color}22`, color }}>
-          <div className="ali-icon-dot" style={{ background: color }} />
-        </div>
-        <div className="ali-info">
-          <div className="ali-name">{activity.name || 'Workout'}</div>
-          <div className="ali-meta">
-            {activity.started_at && format(parseISO(activity.started_at), 'd MMM, HH:mm')}
-          </div>
-        </div>
+    <Link to={`/activities/${activity.id}`} className="activity-list-item card">
+      <div className="ali-icon" style={{ background: `${color}22`, color }}>
+        <SportIcon size={18} />
       </div>
-      <div className="ali-right">
-        <div className="ali-stats">
+      <div className="ali-main">
+        <div className="ali-name-row">
+          <span className="ali-name">{activity.name || 'Workout'}</span>
+          {activity.workout_tag && (
+            <span className="ali-tag" title={activity.workout_tag}>
+              <CheckCircle size={11} />
+              Workout
+            </span>
+          )}
+        </div>
+        <div className="ali-meta">
+          {activity.started_at && (
+            <>
+              {format(parseISO(activity.started_at), 'EEE · HH:mm')}
+              <span className="ali-sep">&middot;</span>
+            </>
+          )}
           <span>{formatDistance(activity.distance_m)} km</span>
           <span className="ali-sep">&middot;</span>
           <span>{formatDuration(activity.duration_sec)}</span>
           <span className="ali-sep">&middot;</span>
           <span>{formatPace(activity.avg_pace_min_km)} /km</span>
         </div>
-        <ChevronRight size={16} className="ali-chevron" />
       </div>
-    </div>
+      <ChevronRight size={16} className="ali-chevron" />
+    </Link>
   )
 }

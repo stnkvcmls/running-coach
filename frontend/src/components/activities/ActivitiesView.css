@@ -44,38 +44,32 @@
   margin-bottom: 16px;
 }
 
-.group-month {
-  font-size: 0.85rem;
+.group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg);
+  padding: 8px 4px;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--text-muted);
-  margin-bottom: 8px;
-  padding-left: 4px;
+}
+
+.group-head b {
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .group-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-
-.load-more-wrap {
-  text-align: center;
-  padding: 16px 0;
-}
-
-.load-more-btn {
-  padding: 10px 24px;
-  border-radius: 20px;
-  background: var(--bg-card);
-  color: var(--accent-light);
-  font-size: 0.85rem;
-  font-weight: 500;
-  border: 1px solid var(--border);
-  transition: background 0.15s;
-}
-
-.load-more-btn:hover {
-  background: var(--bg-hover);
 }
 
 .scroll-sentinel {

@@ -1,5 +1,6 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPost, apiPut, apiDelete } from './client'
+import { toast } from '../components/ui/Toast'
 import type {
   AIJobEnqueuedResponse,
   AIJobResponse,
@@ -253,6 +254,7 @@ export function useRetryJob() {
 export function useTriggerAnalysis() {
   return useMutation({
     mutationFn: (id: number) => apiPost<AIJobEnqueuedResponse>(`/activities/${id}/analyze`),
+    onError: () => toast('Could not start re-analysis', { kind: 'error' }),
   })
 }
 
@@ -266,6 +268,7 @@ export function useSubmitFeedback() {
       // in ActivityDetailView handles subsequent refreshes on completion.
       qc.invalidateQueries({ queryKey: ['activity', id] })
     },
+    onError: () => toast('Could not submit feedback — try again', { kind: 'error' }),
   })
 }
 

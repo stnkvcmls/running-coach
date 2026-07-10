@@ -5,26 +5,10 @@ import {
 } from 'recharts'
 import type { ChartSeries, MetricZone } from '../../api/types'
 import { useTheme } from '../../App'
-import { getAxisTick, getTooltipProps, METRIC_COLORS } from '../../utils/chartTheme'
+import { getAxisTick, getTooltipProps, getZoneColor, METRIC_COLORS } from '../../utils/chartTheme'
 import './ChartTabs.css'
 
 const SCATTER_METRICS = new Set(['cadence', 'stride', 'gct', 'vert_osc', 'vert_ratio'])
-
-function getDotColor(value: number, zones: MetricZone[]): string {
-  for (const zone of zones) {
-    const aboveMin = zone.min_value === null || value >= zone.min_value
-    const belowMax = zone.max_value === null || value < zone.max_value
-    if (aboveMin && belowMax) return zone.zone_color
-  }
-  // Check the last zone (unbounded max) separately with inclusive check
-  for (const zone of zones) {
-    if (zone.max_value === null) {
-      const aboveMin = zone.min_value === null || value >= zone.min_value
-      if (aboveMin) return zone.zone_color
-    }
-  }
-  return '#6c5ce7'
-}
 
 interface Props {
   chartData: Record<string, ChartSeries>
@@ -124,7 +108,7 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
                 fill={color}
                 shape={(props: any) => {
                   const dotColor = zones && zones.length > 0
-                    ? getDotColor(props.payload.y, zones)
+                    ? getZoneColor(props.payload.y, zones)
                     : color
                   return <circle cx={props.cx} cy={props.cy} r={2.5} fill={dotColor} />
                 }}

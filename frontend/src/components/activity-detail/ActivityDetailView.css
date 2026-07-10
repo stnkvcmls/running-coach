@@ -95,3 +95,102 @@
   color: var(--text-muted);
   line-height: 1.4;
 }
+
+.sticky-detail-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--top-bar-height);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  z-index: var(--z-nav);
+}
+
+.sticky-detail-header .back-btn {
+  width: 32px;
+  height: 32px;
+  margin-top: 0;
+}
+
+.sticky-detail-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+}
+
+.sticky-detail-meta {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  margin-left: auto;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.verdict-chip {
+  display: block;
+  margin: 12px 0;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.verdict-chip:hover {
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg-card));
+}
+
+.verdict-tag {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+}
+
+.collapse-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 12px;
+  margin-top: 4px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--border);
+  color: var(--accent-light);
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: background var(--transition-fast);
+}
+
+.collapse-toggle:hover {
+  background: var(--bg-hover);
+}
+
+.collapse-chevron {
+  transition: transform var(--transition-fast);
+}
+
+.collapse-chevron.flipped {
+  transform: rotate(180deg);
+}

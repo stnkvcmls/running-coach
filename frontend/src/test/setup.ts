@@ -21,3 +21,19 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
     disconnect() {}
   }
 }
+
+// jsdom doesn't implement IntersectionObserver; infinite-scroll sentinels and
+// the activity detail's sticky-header trigger both construct one. Tests that
+// need to simulate intersection changes override this with their own
+// vi.stubGlobal('IntersectionObserver', ...) mock.
+if (typeof globalThis.IntersectionObserver === 'undefined') {
+  globalThis.IntersectionObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() { return [] }
+    root = null
+    rootMargin = ''
+    thresholds: number[] = []
+  } as unknown as typeof IntersectionObserver
+}
