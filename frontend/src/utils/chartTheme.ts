@@ -48,6 +48,50 @@ export const METRIC_COLORS: Record<string, string> = {
   stamina: '#a29bfe',
 }
 
+/** Wellness metric line/area colours — WellnessTrendsView. */
+export const WELLNESS_METRIC_COLORS = {
+  sleep: '#6c5ce7',
+  restingHr: '#e17055',
+  stress: '#fd79a8',
+  bodyBattery: '#00b894',
+  hrv: '#0984e3',
+} as const
+
+/** Fixed HR/power zone 1–5 bar colours — IntensityTrendsView (no per-zone
+ * colour in the API response, unlike metric_zones/getZoneColor below). */
+export const INTENSITY_ZONE_COLORS: Record<string, string> = {
+  '1': '#2ecc71',
+  '2': '#27ae60',
+  '3': '#f39c12',
+  '4': '#e67e22',
+  '5': '#e74c3c',
+}
+
+/** Easy/moderate/hard polarization-bucket colours — IntensityTrendsView. */
+export const INTENSITY_BUCKET_COLORS = {
+  easy: '#27ae60',
+  moderate: '#f39c12',
+  hard: '#e74c3c',
+} as const
+
+/** Decoupling/efficiency-factor chart colours — AerobicTrendsView. */
+export const AEROBIC_COLORS = {
+  decoupling: '#6c5ce7',
+  efficiency: '#00b894',
+  good: '#00b894',
+  high: '#e17055',
+} as const
+
+/** Actual/model-fit/comparison line colours — PerformanceCurveView. */
+export const PERFORMANCE_CURVE_COLORS = {
+  actual: '#6c5ce7',
+  model: '#00b894',
+  compare: '#e17055',
+} as const
+
+/** Ordered categorical palette for arbitrary multi-series charts — CustomChartsView. */
+export const CHART_SERIES_COLORS = ['#6c5ce7', '#00b894', '#e17055', '#0984e3']
+
 /** Which zone a value falls into, by colour — shared by scatter-chart dots and SplitsBars. */
 export function getZoneColor(value: number, zones: MetricZone[]): string {
   for (const zone of zones) {

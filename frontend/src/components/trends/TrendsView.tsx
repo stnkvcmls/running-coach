@@ -5,15 +5,16 @@ import IntensityTrendsView from './IntensityTrendsView'
 import AerobicTrendsView from './AerobicTrendsView'
 import CustomChartsView from './CustomChartsView'
 import PeakPerformancesView from './PeakPerformancesView'
+import './TrendsView.css'
 
-type Tab = 'wellness' | 'intensity' | 'performance' | 'records' | 'aerobic' | 'custom'
+type Tab = 'wellness' | 'performance' | 'intensity' | 'aerobic' | 'records' | 'custom'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'wellness', label: 'Wellness' },
-  { id: 'intensity', label: 'Intensity' },
   { id: 'performance', label: 'Performance' },
-  { id: 'records', label: 'Records' },
+  { id: 'intensity', label: 'Intensity' },
   { id: 'aerobic', label: 'Aerobic' },
+  { id: 'records', label: 'Records' },
   { id: 'custom', label: 'Custom' },
 ]
 
@@ -21,42 +22,34 @@ export default function TrendsView() {
   const [tab, setTab] = useState<Tab>('wellness')
 
   return (
-    <div>
-      <div style={{
-        display: 'flex',
-        gap: 0,
-        borderBottom: '1px solid var(--border)',
-        padding: '0 16px',
-        background: 'var(--surface)',
-      }}>
+    <div className="trends-page">
+      <div className="trends-tabs" role="tablist" aria-label="Progress views">
         {TABS.map(t => (
           <button
             key={t.id}
+            id={`trends-tab-${t.id}`}
+            role="tab"
+            aria-selected={tab === t.id}
+            aria-controls={`trends-panel-${t.id}`}
+            className={`chip ${tab === t.id ? 'active' : ''}`}
             onClick={() => setTab(t.id)}
-            style={{
-              flex: 1,
-              padding: '10px 0',
-              border: 'none',
-              background: 'transparent',
-              color: tab === t.id ? 'var(--accent)' : 'var(--text-muted)',
-              fontWeight: tab === t.id ? 700 : 400,
-              fontSize: '0.82rem',
-              cursor: 'pointer',
-              borderBottom: tab === t.id ? '2px solid var(--accent)' : '2px solid transparent',
-              fontFamily: 'inherit',
-              transition: 'color 0.15s',
-            }}
           >
             {t.label}
           </button>
         ))}
       </div>
-      {tab === 'wellness' && <WellnessTrendsView />}
-      {tab === 'intensity' && <IntensityTrendsView />}
-      {tab === 'performance' && <PerformanceCurveView />}
-      {tab === 'records' && <PeakPerformancesView />}
-      {tab === 'aerobic' && <AerobicTrendsView />}
-      {tab === 'custom' && <CustomChartsView />}
+      <div
+        id={`trends-panel-${tab}`}
+        role="tabpanel"
+        aria-labelledby={`trends-tab-${tab}`}
+      >
+        {tab === 'wellness' && <WellnessTrendsView />}
+        {tab === 'performance' && <PerformanceCurveView />}
+        {tab === 'intensity' && <IntensityTrendsView />}
+        {tab === 'aerobic' && <AerobicTrendsView />}
+        {tab === 'records' && <PeakPerformancesView />}
+        {tab === 'custom' && <CustomChartsView />}
+      </div>
     </div>
   )
 }

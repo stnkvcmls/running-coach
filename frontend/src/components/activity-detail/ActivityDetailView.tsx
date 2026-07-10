@@ -18,6 +18,7 @@ import WorkoutStructureBar from '../ui/WorkoutStructureBar'
 import AdherenceCard from './AdherenceCard'
 import StatHelpButton from '../info/StatHelpButton'
 import { toast } from '../ui/Toast'
+import { celebrateNewRecords } from '../../utils/records'
 import './ActivityDetailView.css'
 
 function firstSentence(markdown: string): string {
@@ -64,6 +65,10 @@ export default function ActivityDetailView() {
     observer.observe(el)
     return () => observer.disconnect()
   }, [activity?.id])
+
+  useEffect(() => {
+    celebrateNewRecords(activity?.personal_records)
+  }, [activity?.personal_records])
 
   function handleReanalyze() {
     triggerAnalysis.mutate(activity!.id, {

@@ -1,0 +1,30 @@
+.range-selector {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.range-selector-btn {
+  padding: 6px 12px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  font-variant-numeric: tabular-nums;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.range-selector-btn + .range-selector-btn {
+  border-left: 1px solid var(--border);
+}
+
+.range-selector-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.range-selector-btn:hover:not(.active) {
+  background: var(--bg-hover);
+  color: var(--text);
+}

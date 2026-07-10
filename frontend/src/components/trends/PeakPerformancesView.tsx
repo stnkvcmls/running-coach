@@ -4,6 +4,8 @@ import { ChevronDown, ChevronUp, Trophy } from 'lucide-react'
 import { usePersonalRecords, useActivity } from '../../api/hooks'
 import { formatDistance, formatDuration } from '../../utils/formatting'
 import { format, parseISO } from '../../utils/date'
+import { isRecentRecord } from '../../utils/records'
+import Skeleton from '../ui/Skeleton'
 import type { PersonalRecordResponse } from '../../api/types'
 import './PeakPerformancesView.css'
 
@@ -73,6 +75,10 @@ function BestEffortDetail({ record }: { record: PersonalRecordResponse }) {
   )
 }
 
+function NewRecordBadge() {
+  return <span className="pr-new-badge">New!</span>
+}
+
 function BestEffortRow({ record, rank }: { record: PersonalRecordResponse; rank: number }) {
   const [open, setOpen] = useState(rank === 1)
   const pace = formatPaceForLabel(record.distance_label ?? '', record.value)
@@ -91,6 +97,7 @@ function BestEffortRow({ record, rank }: { record: PersonalRecordResponse; rank:
         <span className="pr-effort-values">
           <span className="pr-effort-time">{formatRaceTime(record.value)}</span>
           {pace && <span className="pr-effort-pace">{pace}</span>}
+          {isRecentRecord(record.achieved_at) && <NewRecordBadge />}
         </span>
         {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
       </button>
@@ -104,7 +111,26 @@ export default function PeakPerformancesView() {
   const { data, isLoading } = usePersonalRecords(recentDays)
   const [selectedLabel, setSelectedLabel] = useState<string | null>(null)
 
-  if (isLoading) return <div className="pr-loading">Loading personal records…</div>
+  if (isLoading) {
+    return (
+      <div className="pr-view">
+        <div className="pr-header">
+          <Skeleton height={18} width={160} />
+        </div>
+        <div className="pr-card">
+          <Skeleton height={12} width={100} />
+          <div className="pr-chip-row">
+            {[0, 1, 2, 3].map(i => <Skeleton key={i} height={26} width={48} radius={999} />)}
+          </div>
+          <Skeleton height={44} />
+        </div>
+        <div className="pr-card">
+          <Skeleton height={12} width={100} />
+          <Skeleton height={60} />
+        </div>
+      </div>
+    )
+  }
 
   const labels = data?.distance_labels ?? []
   const distanceBests = data?.distance_bests ?? {}
@@ -172,7 +198,10 @@ export default function PeakPerformancesView() {
             {durationBests.map(r => (
               <Link key={r.id} to={`/activities/${r.activity_id}`} className="pr-tile">
                 <div className="pr-tile-label">{r.label}</div>
-                <div className="pr-tile-value">{r.display_value}</div>
+                <div className="pr-tile-value">
+                  {r.display_value}
+                  {isRecentRecord(r.achieved_at) && <NewRecordBadge />}
+                </div>
                 <div className="pr-tile-date">{formatDate(r.achieved_at)}</div>
               </Link>
             ))}
@@ -202,7 +231,10 @@ export default function PeakPerformancesView() {
                 <Link to={`/activities/${r.activity_id}`} className="pr-recent-row">
                   <Trophy size={14} className="pr-recent-icon" />
                   <div className="pr-recent-text">
-                    <div className="pr-recent-label">New {r.label} best: {r.display_value}</div>
+                    <div className="pr-recent-label">
+                      New {r.label} best: {r.display_value}
+                      {isRecentRecord(r.achieved_at) && <NewRecordBadge />}
+                    </div>
                     <div className="pr-recent-meta">{formatDate(r.achieved_at)}</div>
                   </div>
                 </Link>

@@ -63,3 +63,25 @@ queries, fake only `Date`: `vi.useFakeTimers({ toFake: ['Date'] })` before
 `new Date()` inside the component still returns the pinned time. Reach for
 this combo any time a later phase's test touches both an async hook and a
 "today"/date-range calculation (Phase 5's RangeSelector is a likely repeat).
+
+## Frontend: `personal_records` lives on `ActivityDetail`, not `ActivitySummary`
+
+**Symptom:** Phase 5's records-celebration task (5.4) says "when the Today
+payload or activity detail carries fresh PRs (existing `personal_records`),
+fire a one-time toast." Wiring a `celebrateNewRecords()` effect into
+`TodayView.tsx` (whose `data.activities` are `ActivitySummary[]`) failed
+`tsc -b`: `Property 'personal_records' does not exist on type
+'ActivitySummary'`.
+
+**Cause:** `personal_records` is declared only on `ActivityDetail extends
+ActivitySummary` in `api/types.ts` — the lighter `ActivitySummary` returned by
+`/today` and the activities list never carries it, regardless of what a plan
+sentence implies by grouping the two surfaces together.
+
+**Fix:** Trust the type system over plan prose: `grep -rn 'personal_records'
+frontend/src` before wiring a new consumer would have shown the only existing
+reader is `ActivityDetailView.tsx`. When a spec says two surfaces "carry" the
+same field, verify both actually declare it before building on the
+assumption — and if only one does, implement that one and note the deviation
+rather than widening a schema to match the prose (widening `ActivitySummary`
+would have meant an out-of-scope backend change).

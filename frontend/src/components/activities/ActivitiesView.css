@@ -17,28 +17,7 @@
   display: none;
 }
 
-.chip {
-  padding: 6px 14px;
-  border-radius: 20px;
-  font-size: 0.78rem;
-  font-weight: 500;
-  background: var(--bg-card);
-  color: var(--text-muted);
-  white-space: nowrap;
-  transition: background 0.15s, color 0.15s;
-  border: 1px solid var(--border);
-}
-
-.chip.active {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
-}
-
-.chip:hover:not(.active) {
-  background: var(--bg-hover);
-  color: var(--text);
-}
+/* .chip / .chip.active shared in styles/globals.css */
 
 .activity-group {
   margin-bottom: 16px;
