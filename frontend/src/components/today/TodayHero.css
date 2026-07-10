@@ -84,6 +84,30 @@
   color: var(--accent-light);
 }
 
+.hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.hero-action-send {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  padding: 6px 14px;
+}
+
+.hero-action-plan-link {
+  font-size: 0.82rem;
+  padding: 6px 4px;
+}
+
+.hero-action-send .spin {
+  animation: spin 1s linear infinite;
+}
+
 .hero-readiness-accordion {
   display: flex;
   flex-direction: column;

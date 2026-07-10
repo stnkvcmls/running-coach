@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, fireEvent } from '@testing-library/react'
 import { renderWithProviders } from '../../test/test-utils'
 import TodayView from './TodayView'
-import type { TodayResponse, TrainingPlanResponse, PlanRealignmentStatus } from '../../api/types'
+import type { TodayResponse, TrainingPlanResponse, PlanRealignmentStatus, RaceInfo } from '../../api/types'
 
 const TODAY: TodayResponse = {
   selected_date: '2026-07-09',
@@ -148,5 +148,55 @@ describe('TodayView section order', () => {
     // Both full-width sections come after the two-column group in the DOM.
     expect(columns!.compareDocumentPosition(insights!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(columns!.compareDocumentPosition(alsoToday!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+})
+
+function raceInfo(id: number, title: string): RaceInfo {
+  return { id, title, date: '2026-08-01', distance_label: '10K', days_away: 20 + id, goal_time_sec: null, priority: 'B' }
+}
+
+function mockFetchWithToday(today: TodayResponse) {
+  return vi.fn().mockImplementation((url: string) => {
+    if (url.includes('/realignment-status')) {
+      return Promise.resolve({ ok: true, status: 200, json: async () => REALIGNMENT })
+    }
+    if (url.endsWith('/training-plan')) {
+      return Promise.resolve({ ok: true, status: 200, json: async () => EMPTY_PLAN })
+    }
+    if (url.includes('/today')) {
+      return Promise.resolve({ ok: true, status: 200, json: async () => today })
+    }
+    return Promise.resolve({ ok: true, status: 200, json: async () => ({}) })
+  })
+}
+
+describe('TodayView race strip cap', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('caps race strips at 2 and reveals the rest via "Show all N races"', async () => {
+    const races = [raceInfo(1, 'Berlin Marathon'), raceInfo(2, 'Amsterdam Half'), raceInfo(3, 'Local 10K')]
+    vi.stubGlobal('fetch', mockFetchWithToday({ ...TODAY, next_races: races }))
+    renderWithProviders(<TodayView />)
+
+    await screen.findByText('Berlin Marathon')
+    expect(screen.getByText('Amsterdam Half')).toBeInTheDocument()
+    expect(screen.queryByText('Local 10K')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /show all 3 races/i }))
+
+    expect(screen.getByText('Local 10K')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /show all/i })).not.toBeInTheDocument()
+  })
+
+  it('does not show the expand toggle when there are 2 or fewer races', async () => {
+    const races = [raceInfo(1, 'Berlin Marathon'), raceInfo(2, 'Amsterdam Half')]
+    vi.stubGlobal('fetch', mockFetchWithToday({ ...TODAY, next_races: races }))
+    renderWithProviders(<TodayView />)
+
+    await screen.findByText('Berlin Marathon')
+    expect(screen.getByText('Amsterdam Half')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /show all/i })).not.toBeInTheDocument()
   })
 })

@@ -94,6 +94,12 @@
   white-space: nowrap;
 }
 
+.today-races-show-all {
+  align-self: flex-start;
+  font-size: 0.82rem;
+  padding: 6px 4px;
+}
+
 /* Loading skeleton */
 .today-skeleton-hero-top {
   display: flex;
