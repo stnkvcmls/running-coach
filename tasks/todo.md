@@ -96,7 +96,7 @@ Visual target per phase: docs/mockups/ui-redesign-mockup.html (toggle
       fix, shared buttons, chart theme, toast + skeleton primitives)
 - [x] Phase 1 — Navigation & IA (5-tab nav, Settings behind avatar, sync
       status pill, reconnect orphaned /daily route, planned-dots on calendar)
-- [ ] Phase 2 — Today screen hierarchy (TodayHero: readiness × session ×
+- [x] Phase 2 — Today screen hierarchy (TodayHero: readiness × session ×
       briefing, compact alerts/races, check-in collapse, skeletons)
 - [ ] Phase 3 — Activity list & detail (rich rows, weekly totals, sticky
       detail header, insight verdict chip, SplitsBars)

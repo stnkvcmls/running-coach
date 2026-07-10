@@ -55,16 +55,14 @@ describe('DailyCheckinCard', () => {
     )
   })
 
-  it('shows a read-only summary for an existing check-in and re-enters editing on Edit', () => {
+  it('collapses to a one-line summary chip for an existing check-in and re-enters editing on tap', () => {
     const checkin: DailyCheckin = { date: '2026-07-09', soreness: 4, energy: 3, mood: 5, soreness_note: null }
     renderWithQueryClient(<DailyCheckinCard date="2026-07-09" checkin={checkin} />)
 
-    expect(screen.getByText('Soreness 4/5')).toBeInTheDocument()
-    expect(screen.getByText('Energy 3/5')).toBeInTheDocument()
-    expect(screen.getByText('Mood 5/5')).toBeInTheDocument()
+    const chip = screen.getByRole('button', { name: /feeling great.*low soreness.*edit/i })
     expect(screen.queryByRole('button', { name: 'Update' })).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    fireEvent.click(chip)
     expect(screen.getByRole('button', { name: 'Update' })).toBeInTheDocument()
   })
 

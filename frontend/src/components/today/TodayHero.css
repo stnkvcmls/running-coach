@@ -1,0 +1,112 @@
+.hero {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hero-top {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.hero-ring-btn {
+  flex-shrink: 0;
+  border-radius: 50%;
+  transition: opacity var(--transition-fast);
+}
+
+.hero-ring-btn:hover {
+  opacity: 0.85;
+}
+
+.hero-session {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.hero-session-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.hero-session-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hero-session-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hero-session-done-icon {
+  color: var(--success);
+  flex-shrink: 0;
+}
+
+.hero-session-badge {
+  display: inline-flex;
+  align-self: flex-start;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  color: #fff;
+  width: fit-content;
+}
+
+.hero-session-badge.hero-session-badge-neutral {
+  background: rgba(243, 156, 18, 0.15);
+  color: var(--warning);
+}
+
+.hero-session-meta {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.hero-session-cta {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--accent-light);
+}
+
+.hero-readiness-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.hero-brief {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.hero-brief b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.hero-brief-more {
+  color: var(--accent-light);
+  font-weight: 600;
+  white-space: nowrap;
+  font-size: 0.85rem;
+}

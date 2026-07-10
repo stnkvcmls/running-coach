@@ -1,0 +1,69 @@
+.alert-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: color-mix(in srgb, var(--color-tempo) 12%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--color-tempo) 40%, transparent);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  margin-bottom: 14px;
+  font-size: 0.8rem;
+}
+
+.alert-banner-icon {
+  flex-shrink: 0;
+  color: var(--color-tempo);
+}
+
+.alert-banner-msg {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alert-banner-action {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent-light);
+  font-weight: 600;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.alert-banner-action:hover:not(:disabled) {
+  opacity: 0.8;
+}
+
+.alert-banner-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.alert-banner-dismiss {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.alert-banner-dismiss:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.alert-banner-dismiss:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.alert-banner .spin {
+  animation: alert-banner-spin 1s linear infinite;
+}
+
+@keyframes alert-banner-spin {
+  to { transform: rotate(360deg); }
+}

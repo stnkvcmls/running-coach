@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { ClipboardList, RefreshCw, ChevronLeft, ChevronRight, AlertTriangle, Settings2, Watch, CheckCircle, ChevronDown, ChevronUp, Dumbbell, Droplet, PlayCircle } from 'lucide-react'
+import { ClipboardList, RefreshCw, ChevronLeft, ChevronRight, Settings2, Watch, CheckCircle, ChevronDown, ChevronUp, Dumbbell, Droplet, PlayCircle } from 'lucide-react'
 import { useTrainingPlan, useGenerateTrainingPlan, useRealignmentStatus, useRealignPlan, usePushWorkoutToGarmin, useJobStatus } from '../../api/hooks'
 import type { StrengthRoutine, FuellingGuidance, TrainingPlanDay, TrainingPlanWeek } from '../../api/types'
 import { WORKOUT_TYPE_COLORS } from '../../utils/colors'
+import AlertBanner from '../ui/AlertBanner'
 import SeasonTimeline from './SeasonTimeline'
 import './PlanView.css'
 
@@ -203,36 +204,13 @@ function RealignmentBanner({ onJobEnqueued }: { onJobEnqueued: (jobId: number) =
   }
 
   return (
-    <div className="realignment-banner">
-      <AlertTriangle size={16} className="realignment-icon" />
-      <div className="realignment-body">
-        <span className="realignment-msg">
-          {status.race_note ?? (
-            <>
-              {status.missed_count} planned session{status.missed_count !== 1 ? 's' : ''} missed.
-              Regenerate to adapt your plan?
-            </>
-          )}
-        </span>
-        <div className="realignment-actions">
-          <button
-            className="btn-primary realignment-btn"
-            onClick={handleRegenerate}
-            disabled={isPending}
-          >
-            {isPending ? <RefreshCw size={13} className="spin" /> : null}
-            Regenerate Plan
-          </button>
-          <button
-            className="realignment-dismiss"
-            onClick={() => realign('dismiss')}
-            disabled={isPending}
-          >
-            Dismiss
-          </button>
-        </div>
-      </div>
-    </div>
+    <AlertBanner
+      message={status.race_note ?? `${status.missed_count} session${status.missed_count !== 1 ? 's' : ''} missed`}
+      actionLabel="Regenerate"
+      onAction={handleRegenerate}
+      onDismiss={() => realign('dismiss')}
+      pending={isPending}
+    />
   )
 }
 

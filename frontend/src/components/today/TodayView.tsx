@@ -1,28 +1,24 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Flag } from 'lucide-react'
 import { useDateContext } from '../../App'
 import { useToday, useRealignmentStatus, useRealignPlan } from '../../api/hooks'
 import { formatDateKey, format, isToday as checkIsToday } from '../../utils/date'
 import { formatDuration } from '../../utils/formatting'
+import type { DailySummaryResponse, RaceInfo } from '../../api/types'
 import WorkoutCard from './WorkoutCard'
-import ScheduledWorkoutCard from './ScheduledWorkoutCard'
 import WeekOverview from './WeekOverview'
 import TrainingLoadChart from './TrainingLoadChart'
-import ReadinessCard from './ReadinessCard'
+import TodayHero from './TodayHero'
 import DailyCheckinCard from './DailyCheckinCard'
 import PlanAdaptationCard from './PlanAdaptationCard'
 import InsightsList from './InsightsList'
 import RacePacingCard from './RacePacingCard'
-import BriefingCard from './BriefingCard'
+import StatGrid from '../activity-detail/StatGrid'
 import StatHelpButton from '../info/StatHelpButton'
-import { AlertTriangle, RefreshCw } from 'lucide-react'
+import AlertBanner from '../ui/AlertBanner'
+import Skeleton from '../ui/Skeleton'
 import './TodayView.css'
-
-function formatPriority(priority: string | null): string | null {
-  if (priority === 'A') return 'Primary'
-  if (priority === 'B') return 'Secondary'
-  if (priority === 'C') return 'C Priority'
-  return null
-}
 
 function TodayRealignmentBanner() {
   const { data: status } = useRealignmentStatus()
@@ -31,38 +27,82 @@ function TodayRealignmentBanner() {
   if (!status?.should_prompt) return null
 
   return (
-    <section className="today-section">
-      <div className="today-realignment-banner">
-        <AlertTriangle size={16} className="today-realignment-icon" />
-        <div className="today-realignment-body">
-          <span className="today-realignment-msg">
-            {status.race_note ?? (
-              <>
-                {status.missed_count} planned session{status.missed_count !== 1 ? 's' : ''} missed.
-                Regenerate to adapt your plan?
-              </>
-            )}
-          </span>
-          <div className="today-realignment-actions">
-            <button
-              className="btn-primary today-realignment-btn"
-              onClick={() => realign('regenerate')}
-              disabled={isPending}
-            >
-              {isPending ? <RefreshCw size={13} className="spin" /> : null}
-              Regenerate
-            </button>
-            <button
-              className="today-realignment-dismiss"
-              onClick={() => realign('dismiss')}
-              disabled={isPending}
-            >
-              Dismiss
-            </button>
+    <AlertBanner
+      message={status.race_note ?? `${status.missed_count} session${status.missed_count !== 1 ? 's' : ''} missed`}
+      actionLabel="Regenerate"
+      onAction={() => realign('regenerate')}
+      onDismiss={() => realign('dismiss')}
+      pending={isPending}
+    />
+  )
+}
+
+function priorityColor(priority: string | null): string {
+  if (priority === 'A') return 'var(--color-race)'
+  if (priority === 'B') return 'var(--accent)'
+  if (priority === 'C') return 'var(--text-muted)'
+  return 'var(--color-race)'
+}
+
+function RaceStrip({ race }: { race: RaceInfo }) {
+  const [expanded, setExpanded] = useState(false)
+  const color = priorityColor(race.priority)
+
+  return (
+    <div className="race-strip" style={{ borderLeftColor: color }}>
+      <button
+        className="race-strip-summary"
+        onClick={() => setExpanded(v => !v)}
+        aria-expanded={expanded}
+      >
+        <Flag size={13} style={{ color, flexShrink: 0 }} />
+        <span className="race-strip-name">{race.title}</span>
+        <span className="race-strip-days">{race.days_away} d</span>
+        {race.goal_time_sec != null && (
+          <span className="race-strip-goal">goal {formatDuration(race.goal_time_sec)}</span>
+        )}
+      </button>
+      {expanded && race.id > 0 && <RacePacingCard race={race} />}
+    </div>
+  )
+}
+
+function buildGlanceStats(s: DailySummaryResponse): { label: string; value: string; unit?: string }[] {
+  const stats: { label: string; value: string; unit?: string }[] = []
+  if (s.resting_hr) stats.push({ label: 'RHR', value: String(s.resting_hr), unit: 'bpm' })
+  if (s.sleep_score != null) stats.push({ label: 'Sleep', value: String(Math.round(s.sleep_score)) })
+  if (s.body_battery_high != null) stats.push({ label: 'Body Battery', value: String(s.body_battery_high) })
+  if (s.steps != null) stats.push({ label: 'Steps', value: s.steps.toLocaleString() })
+  if (s.hrv_avg != null) stats.push({ label: 'HRV', value: String(Math.round(s.hrv_avg)), unit: 'ms' })
+  return stats
+}
+
+function TodaySkeleton() {
+  return (
+    <div className="today-view">
+      <div className="card">
+        <div className="today-skeleton-hero-top">
+          <Skeleton height={64} width={64} radius="50%" />
+          <div className="today-skeleton-session">
+            <Skeleton height={10} width="45%" />
+            <Skeleton height={18} width="65%" />
+            <Skeleton height={12} width="40%" />
           </div>
         </div>
+        <Skeleton height={13} width="85%" />
       </div>
-    </section>
+      <Skeleton height={44} radius={22} />
+      <div className="stat-grid card" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+        {[0, 1, 2, 3].map(i => (
+          <div key={i} className="stat-cell">
+            <Skeleton height={10} width="60%" />
+            <Skeleton height={20} width="70%" />
+          </div>
+        ))}
+      </div>
+      <Skeleton height={140} radius="var(--radius)" />
+      <Skeleton height={160} radius="var(--radius)" />
+    </div>
   )
 }
 
@@ -71,133 +111,48 @@ export default function TodayView() {
   const dateKey = formatDateKey(selectedDate)
   const { data, isLoading } = useToday(dateKey)
 
-  if (isLoading) return <div className="spinner" />
+  if (isLoading) return <TodaySkeleton />
 
   const isViewingToday = checkIsToday(selectedDate)
-  const dateLabel = isViewingToday ? 'Today' : format(selectedDate, 'EEEE, d MMM')
+
+  // Activities that didn't fulfil today's plan/scheduled workout — the hero
+  // already surfaces the matched one (workout_tag) in its completed state.
+  const extraActivities = data?.activities.filter(a => a.workout_tag == null) ?? []
+  const glanceStats = data?.daily_summary ? buildGlanceStats(data.daily_summary) : []
 
   return (
     <div className="today-view">
       {isViewingToday && <TodayRealignmentBanner />}
 
-      {/* Pre-workout briefing */}
-      {data?.plan_day_id != null && (
-        <section className="today-section">
-          <BriefingCard
-            dateKey={dateKey}
-            planDayId={data.plan_day_id}
-            briefing={data.briefing ?? null}
-          />
-        </section>
-      )}
+      {data && <TodayHero data={data} />}
 
-      {/* Today's workouts */}
-      <section className="today-section">
-        <h2 className="section-title">{dateLabel}'s workouts</h2>
-        {data?.activities && data.activities.length > 0 ? (
-          <div className="workout-list">
-            {data.activities.map(a => (
-              <WorkoutCard key={a.id} activity={a} />
-            ))}
-          </div>
-        ) : (
-          <div className="card empty-state">No workouts on this day</div>
-        )}
-      </section>
-
-      {/* Scheduled workouts */}
-      {data?.scheduled_events && data.scheduled_events.length > 0 && (
-        <section className="today-section">
-          <h2 className="section-title">Scheduled</h2>
-          <div className="workout-list">
-            {data.scheduled_events.map(e => (
-              <ScheduledWorkoutCard key={e.id} event={e} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Upcoming Races */}
-      {data?.next_races && data.next_races.length > 0 && (
-        <section className="today-section">
-          {data.next_races.map(race => (
-            <div key={race.id} className="card race-card">
-              {formatPriority(race.priority) && (
-                <div className="race-priority-badge">
-                  {formatPriority(race.priority)}
-                </div>
-              )}
-              <div className="race-days">{race.days_away} days</div>
-              <div className="race-name">{race.title}</div>
-              {race.distance_label && (
-                <div className="race-distance">{race.distance_label}</div>
-              )}
-              {race.goal_time_sec != null && (
-                <div className="race-goal-time">
-                  Goal: {formatDuration(race.goal_time_sec)}
-                </div>
-              )}
-              {race.id > 0 && <RacePacingCard race={race} />}
-            </div>
-          ))}
-        </section>
-      )}
-
-      {/* Training Readiness */}
-      {data?.readiness && (
-        <section className="today-section">
-          <ReadinessCard readiness={data.readiness} />
-        </section>
-      )}
-
-      {/* Daily check-in: soreness / energy / mood */}
       <section className="today-section">
         <DailyCheckinCard date={dateKey} checkin={data?.daily_checkin ?? null} />
       </section>
 
-      {/* Readiness-driven plan adaptation suggestion */}
       {data?.plan_adaptation && (
         <section className="today-section">
           <PlanAdaptationCard suggestion={data.plan_adaptation} />
         </section>
       )}
 
-      {/* Daily summary snapshot */}
-      {data?.daily_summary && (
+      {data?.daily_summary && glanceStats.length > 0 && (
         <section className="today-section">
-          <h2 className="section-title">Daily Summary</h2>
-          <Link to={`/daily/${data.daily_summary.id}`} className="card daily-snapshot">
-            <div className="snap-grid">
-              {data.daily_summary.resting_hr && (
-                <div className="snap-item">
-                  <span className="stat-label">Resting HR</span>
-                  <span className="stat-value">{data.daily_summary.resting_hr} <span className="stat-unit">bpm</span></span>
-                </div>
-              )}
-              {data.daily_summary.sleep_score != null && (
-                <div className="snap-item">
-                  <span className="stat-label">Sleep</span>
-                  <span className="stat-value">{Math.round(data.daily_summary.sleep_score)}</span>
-                </div>
-              )}
-              {data.daily_summary.body_battery_high != null && (
-                <div className="snap-item">
-                  <span className="stat-label">Body Battery</span>
-                  <span className="stat-value">{data.daily_summary.body_battery_high}</span>
-                </div>
-              )}
-              {data.daily_summary.steps != null && (
-                <div className="snap-item">
-                  <span className="stat-label">Steps</span>
-                  <span className="stat-value">{data.daily_summary.steps.toLocaleString()}</span>
-                </div>
-              )}
-            </div>
+          <h2 className="section-title">At a Glance</h2>
+          <Link to={`/daily/${data.daily_summary.id}`} className="daily-snapshot-link">
+            <StatGrid stats={glanceStats} columns={4} />
           </Link>
         </section>
       )}
 
-      {/* Training load (Fitness / Fatigue / Form) */}
+      {data?.next_races && data.next_races.length > 0 && (
+        <section className="today-section today-races">
+          {data.next_races.map(race => (
+            <RaceStrip key={race.id} race={race} />
+          ))}
+        </section>
+      )}
+
       {data?.training_load && (
         <section className="today-section">
           <div className="section-title-row">
@@ -208,7 +163,6 @@ export default function TodayView() {
         </section>
       )}
 
-      {/* Week overview chart */}
       {data?.weekly_data && data.weekly_data.length > 0 && (
         <section className="today-section">
           <h2 className="section-title">Week {format(selectedDate, 'I')} Overview</h2>
@@ -216,11 +170,21 @@ export default function TodayView() {
         </section>
       )}
 
-      {/* My insights */}
       {data?.insights && data.insights.length > 0 && (
         <section className="today-section">
           <h2 className="section-title">My Insights</h2>
           <InsightsList insights={data.insights} />
+        </section>
+      )}
+
+      {extraActivities.length > 0 && (
+        <section className="today-section">
+          <h2 className="section-title">Also today</h2>
+          <div className="workout-list">
+            {extraActivities.map(a => (
+              <WorkoutCard key={a.id} activity={a} />
+            ))}
+          </div>
         </section>
       )}
     </div>
