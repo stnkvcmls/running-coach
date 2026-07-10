@@ -29,7 +29,7 @@ export default function WorkoutDetailView() {
   return (
     <div className="activity-detail">
       <header className="detail-header" style={{ borderBottomColor: 'var(--warning)' }}>
-        <button className="back-btn" onClick={() => navigate(-1)}>
+        <button className="back-btn" onClick={() => navigate(-1)} aria-label="Back">
           <ArrowLeft size={20} />
         </button>
         <div className="detail-header-info">

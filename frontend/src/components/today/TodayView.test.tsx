@@ -116,4 +116,37 @@ describe('TodayView section order', () => {
     expect(section).not.toBeNull()
     expect(section).toHaveTextContent('Easy shakeout')
   })
+
+  it('groups sections into the desktop two-column layout without changing document order', async () => {
+    vi.stubGlobal('fetch', mockFetch())
+    const { container } = renderWithProviders(<TodayView />)
+    await screen.findByText('At a Glance')
+    await screen.findByText(/sessions missed/)
+
+    const left = container.querySelector('.today-col-left')
+    const right = container.querySelector('.today-col-right')
+    expect(left).not.toBeNull()
+    expect(right).not.toBeNull()
+
+    // Left column: alert banner, hero, check-in, plan-adaptation, races.
+    expect(left).toHaveTextContent('sessions missed')
+    expect(left).toHaveTextContent("Today's session")
+    expect(left).toHaveTextContent('Berlin Marathon')
+
+    // Right column: at-a-glance, training load, week overview.
+    expect(right).toHaveTextContent('At a Glance')
+    expect(right).toHaveTextContent('Training Load')
+    expect(right).toHaveTextContent('Week')
+
+    // Insights and "Also today" render full-width, after both columns.
+    const columns = container.querySelector('.today-columns')
+    const insights = screen.getByText('My Insights').closest('section')
+    const alsoToday = screen.getByText('Also today').closest('section')
+    expect(columns).not.toBeNull()
+    expect(insights).not.toBeNull()
+    expect(alsoToday).not.toBeNull()
+    // Both full-width sections come after the two-column group in the DOM.
+    expect(columns!.compareDocumentPosition(insights!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(columns!.compareDocumentPosition(alsoToday!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
 })

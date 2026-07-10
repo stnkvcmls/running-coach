@@ -60,12 +60,14 @@ export default function FeedbackPrompt({ activityId }: Props) {
             <button
               className="feedback-prompt__thumb feedback-prompt__thumb--up"
               onClick={handleThumbsUp}
+              aria-label="Rate workout as good"
             >
               <ThumbsUp size={22} />
             </button>
             <button
               className="feedback-prompt__thumb feedback-prompt__thumb--down"
               onClick={handleThumbsDown}
+              aria-label="Rate workout as bad"
             >
               <ThumbsDown size={22} />
             </button>

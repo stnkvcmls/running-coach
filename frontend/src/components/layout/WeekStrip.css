@@ -9,8 +9,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   color: var(--text-muted);
   flex-shrink: 0;
@@ -32,10 +32,12 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 2px;
   padding: 4px 6px 6px;
   border-radius: var(--radius-sm);
-  min-width: 36px;
+  min-width: 42px;
+  min-height: 44px;
   transition: background 0.15s;
   position: relative;
 }

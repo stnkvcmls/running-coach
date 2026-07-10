@@ -31,12 +31,17 @@ function InsightCard({ insight }: { insight: InsightResponse }) {
   const color = categoryColors[insight.category || ''] || '#6c5ce7'
 
   return (
-    <div className="insight-card card" onClick={() => setExpanded(!expanded)}>
-      <div className="insight-header">
+    <div className="insight-card card">
+      <button
+        type="button"
+        className="insight-header"
+        onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
+      >
         <Lightbulb size={16} style={{ color, flexShrink: 0 }} />
         <span className="insight-summary">{insight.summary || 'AI Insight'}</span>
         {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-      </div>
+      </button>
       {expanded && insight.content && (
         <div className="insight-content">
           <ReactMarkdown>{insight.content}</ReactMarkdown>

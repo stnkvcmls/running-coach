@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { useActivities } from '../../api/hooks'
+import { Link } from 'react-router-dom'
+import { useActivities, useGarminStatus } from '../../api/hooks'
 import { format, parseISO, weeksSinceCurrentWeek, getWeekNumber, startOfWeek } from '../../utils/date'
 import type { ActivitySummary } from '../../api/types'
 import ActivityListItem from './ActivityListItem'
@@ -49,6 +50,7 @@ export default function ActivitiesView() {
   const [activeFilter, setActiveFilter] = useState('')
   const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage } =
     useActivities(activeFilter || undefined)
+  const { data: garminStatus } = useGarminStatus()
   const sentinelRef = useRef<HTMLDivElement>(null)
 
   const activities = useMemo(() => data?.pages.flat() ?? [], [data])
@@ -124,7 +126,16 @@ export default function ActivitiesView() {
       {isLoading && <div className="spinner" />}
 
       {!isLoading && grouped.length === 0 && (
-        <div className="empty-state">No activities found</div>
+        <div className="empty-state">
+          {garminStatus && !garminStatus.connected ? (
+            <>
+              <p>Connect Garmin to start tracking your runs.</p>
+              <Link to="/settings" className="btn-primary">Connect Garmin in Settings</Link>
+            </>
+          ) : (
+            <p>No activities found</p>
+          )}
+        </div>
       )}
 
       {grouped.map(group => (

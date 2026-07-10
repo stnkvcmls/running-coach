@@ -1,0 +1,39 @@
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+.app-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.app-main {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.app-main--with-nav {
+  padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
+}
+
+/* Desktop: bottom nav becomes a left rail (BottomNav.css) sitting beside the
+   scrollable content instead of overlaying its bottom edge. */
+@media (min-width: 1024px) {
+  .app-body {
+    flex-direction: row;
+    align-items: stretch;
+  }
+
+  .app-main {
+    min-width: 0;
+  }
+
+  .app-main--with-nav {
+    padding-bottom: 0;
+  }
+}

@@ -11,6 +11,24 @@
   margin-bottom: 20px;
 }
 
+/* Column wrappers are transparent to layout below 1024px — their children
+   render as one flat, in-order stack directly inside .today-view's flex
+   column (see the desktop override below and the `order` styles in
+   TodayView.tsx that restore the original top-to-bottom priority order). */
+.today-columns,
+.today-col-left,
+.today-col-right {
+  display: contents;
+}
+
+.today-view .alert-banner {
+  order: 1;
+}
+
+.today-view .card.hero {
+  order: 2;
+}
+
 .workout-list {
   display: flex;
   flex-direction: column;
@@ -90,4 +108,31 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* Desktop: reflow into a two-column layout (hero/alerts/check-in/races left,
+   at-a-glance/training-load/week-overview right, insights + "also today"
+   full-width below). Each column is an independent flex column rather than a
+   CSS grid row-track, so a tall card in one column never forces blank space
+   into the other (a shared-row grid would size every row to its tallest
+   cell across *both* columns). */
+@media (min-width: 1024px) {
+  .today-view {
+    max-width: 1080px;
+  }
+
+  .today-columns {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 20px;
+  }
+
+  .today-col-left,
+  .today-col-right {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+  }
 }

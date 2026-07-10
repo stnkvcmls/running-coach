@@ -3,6 +3,7 @@ import { useZoneConfigs } from '../../api/hooks'
 import type { ChartSeries } from '../../api/types'
 import { useTheme } from '../../App'
 import { getChartTooltipStyle, getChartTickColor, getChartTooltipTextStyle } from '../../utils/theme'
+import { usePrefersReducedMotion } from '../../utils/chartTheme'
 import './PaceZonesChart.css'
 
 interface Props {
@@ -18,6 +19,7 @@ function formatPace(minPerKm: number): string {
 export default function PaceZonesChart({ paceSeries }: Props) {
   const { data: zoneData, isLoading } = useZoneConfigs()
   const { theme } = useTheme()
+  const reduceMotion = usePrefersReducedMotion()
 
   if (isLoading || !zoneData) return null
 
@@ -74,10 +76,16 @@ export default function PaceZonesChart({ paceSeries }: Props) {
   // Only show if there's meaningful data
   if (chartData.every(d => d.pct === 0)) return null
 
+  const dominant = chartData.reduce((max, d) => (d.pct > max.pct ? d : max), chartData[0])
+
   return (
     <section className="detail-section">
       <h3 className="section-title">Pace Zones</h3>
-      <div className="card pace-zones-card">
+      <div
+        className="card pace-zones-card"
+        role="img"
+        aria-label={`Pace zones based on threshold ${formatPace(threshold)} per km. Most time spent in ${dominant.zone}, ${dominant.pct}%.`}
+      >
         <ResponsiveContainer width="100%" height={180}>
           <BarChart data={chartData} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
             <XAxis type="number" hide domain={[0, 100]} />
@@ -98,7 +106,7 @@ export default function PaceZonesChart({ paceSeries }: Props) {
                 'Time',
               ]}
             />
-            <Bar dataKey="pct" radius={[0, 4, 4, 0]} barSize={20}>
+            <Bar dataKey="pct" radius={[0, 4, 4, 0]} barSize={20} isAnimationActive={!reduceMotion}>
               {chartData.map((d, i) => (
                 <Cell key={i} fill={d.color} />
               ))}

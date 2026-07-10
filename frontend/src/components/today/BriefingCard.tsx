@@ -63,6 +63,7 @@ export default function BriefingCard({ dateKey, planDayId, briefing }: Props) {
           onClick={handleGenerate}
           disabled={isGenerating}
           title="Regenerate briefing"
+          aria-label="Regenerate briefing"
         >
           <RefreshCw size={13} className={isGenerating ? 'spin' : ''} />
         </button>

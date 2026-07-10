@@ -104,4 +104,6 @@ Visual target per phase: docs/mockups/ui-redesign-mockup.html (toggle
       informative week tabs, auto-select current week)
 - [x] Phase 5 — Trends → Progress (tab chrome, RangeSelector, chartTheme
       adoption, records celebration)
-- [ ] Phase 6 — Accessibility, responsive desktop layout & polish
+- [x] Phase 6 — Accessibility, responsive desktop layout & polish (semantics
+      sweep, chart aria-labels, reduced-motion, desktop two-column layout +
+      nav rail, empty states, onboarding closing step, tap targets)

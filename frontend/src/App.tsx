@@ -18,6 +18,7 @@ import StatInfoView from './components/info/StatInfoView'
 import ChatView from './components/chat/ChatView'
 import { ToastHost } from './components/ui/Toast'
 import { useAthleteProfile } from './api/hooks'
+import './App.css'
 
 interface DateContextType {
   selectedDate: Date
@@ -115,7 +116,7 @@ export default function App() {
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme }}>
     <DateContext.Provider value={{ selectedDate, setSelectedDate }}>
-      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
+      <div className="app-shell">
         {showCalendar && (
           <>
             <TopBar
@@ -128,29 +129,26 @@ export default function App() {
             />
           </>
         )}
-        <main style={{
-          flex: 1,
-          overflowY: 'auto',
-          paddingBottom: isDetailPage ? '0' : 'calc(var(--nav-height) + env(safe-area-inset-bottom, 0px))',
-          WebkitOverflowScrolling: 'touch',
-        }}>
-          <Routes>
-            <Route path="/" element={<TodayView />} />
-            <Route path="/activities" element={<ActivitiesView />} />
-            <Route path="/activities/:id" element={<ActivityDetailView />} />
-            <Route path="/daily" element={<DailySummariesView />} />
-            <Route path="/daily/:id" element={<DailyDetailView />} />
-            <Route path="/workouts/:id" element={<WorkoutDetailView />} />
-            <Route path="/trends" element={<TrendsView />} />
-            <Route path="/plan" element={<PlanView />} />
-            <Route path="/plan/setup" element={<PlanSetupView />} />
-            <Route path="/settings" element={<SettingsView />} />
-            <Route path="/info/:topic" element={<StatInfoView />} />
-            <Route path="/onboarding" element={<OnboardingView />} />
-            <Route path="/chat" element={<ChatView />} />
-          </Routes>
-        </main>
-        {!isDetailPage && <BottomNav />}
+        <div className="app-body">
+          <main className={`app-main ${!isDetailPage ? 'app-main--with-nav' : ''}`}>
+            <Routes>
+              <Route path="/" element={<TodayView />} />
+              <Route path="/activities" element={<ActivitiesView />} />
+              <Route path="/activities/:id" element={<ActivityDetailView />} />
+              <Route path="/daily" element={<DailySummariesView />} />
+              <Route path="/daily/:id" element={<DailyDetailView />} />
+              <Route path="/workouts/:id" element={<WorkoutDetailView />} />
+              <Route path="/trends" element={<TrendsView />} />
+              <Route path="/plan" element={<PlanView />} />
+              <Route path="/plan/setup" element={<PlanSetupView />} />
+              <Route path="/settings" element={<SettingsView />} />
+              <Route path="/info/:topic" element={<StatInfoView />} />
+              <Route path="/onboarding" element={<OnboardingView />} />
+              <Route path="/chat" element={<ChatView />} />
+            </Routes>
+          </main>
+          {!isDetailPage && <BottomNav />}
+        </div>
         <ToastHost />
       </div>
     </DateContext.Provider>

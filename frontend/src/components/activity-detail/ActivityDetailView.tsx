@@ -169,121 +169,134 @@ export default function ActivityDetailView() {
       </header>
 
       <div className="detail-body">
-        {/* Primary stats */}
-        <StatGrid stats={primaryStats} columns={3} large />
+        {/* detail-columns/detail-col-* are `display: contents` below 1024px,
+            so every piece below still renders as one flat, in-order stack
+            (the `order` CSS in ActivityDetailView.css restores the original
+            top-to-bottom order across that flattened stack). At >=1024px
+            they become real, independently-tall flex columns — a shared-row
+            CSS grid would size every row to its tallest cell across *both*
+            columns, leaving gaps next to shorter content. */}
+        <div className="detail-columns">
+          <div className="detail-col detail-col-left">
+            {/* Route silhouette (animated; only when GPS data is present) */}
+            <RouteMap route={activity.route} activityColor={color} />
 
-        {/* AI verdict — first sentence up top; full analysis stays in AiInsightCard below */}
-        {verdict && (
-          <a href="#ai-insight" className="verdict-chip">
-            <span className="verdict-tag">Coach</span>
-            <span>{firstSentence(verdict)} Full analysis ↓</span>
-          </a>
-        )}
-
-        {/* Route silhouette (animated; only when GPS data is present) */}
-        <RouteMap route={activity.route} activityColor={color} />
-
-        {/* Workout Description */}
-        {activity.scheduled_workout?.workout_steps && activity.scheduled_workout.workout_steps.length > 0 && (
-          <section className="detail-section">
-            <h3 className="section-title">Description</h3>
-            <div className="card workout-description-card">
-              <WorkoutStructureBar steps={activity.scheduled_workout.workout_steps} color={color} />
-            </div>
-          </section>
-        )}
-
-        {/* Workout Adherence */}
-        {activity.adherence && (
-          <section className="detail-section">
-            <AdherenceCard adherence={activity.adherence} />
-          </section>
-        )}
-
-        {/* Secondary stats — always visible */}
-        {secondaryStats.length > 0 && (
-          <section className="detail-section">
-            <StatGrid stats={secondaryStats} columns={3} />
-          </section>
-        )}
-
-        {/* Dynamics / Power / Performance / Conditions — collapsed behind "Show all stats" */}
-        {(dynamicsStats.length > 0 || powerStats.length > 0 || perfStats.length > 0 || weatherStats.length > 0) && (
-          <>
-            {showAllStats && (
-              <>
-                {dynamicsStats.length > 0 && (
-                  <section className="detail-section">
-                    <h3 className="section-title">Running Dynamics</h3>
-                    <StatGrid stats={dynamicsStats} columns={3} />
-                  </section>
-                )}
-
-                {powerStats.length > 0 && (
-                  <section className="detail-section">
-                    <h3 className="section-title">Power</h3>
-                    <StatGrid stats={powerStats} columns={4} />
-                  </section>
-                )}
-
-                {perfStats.length > 0 && (
-                  <section className="detail-section">
-                    <div className="section-title-row">
-                      <h3 className="section-title">Performance</h3>
-                      <StatHelpButton topic="activity-performance" label="Performance" />
-                    </div>
-                    <StatGrid stats={perfStats} columns={3} />
-                  </section>
-                )}
-
-                {weatherStats.length > 0 && (
-                  <section className="detail-section">
-                    <h3 className="section-title">Conditions</h3>
-                    <StatGrid stats={weatherStats} columns={2} />
-                    {activity.weather_description && (
-                      <p className="weather-description">{activity.weather_description}</p>
-                    )}
-                  </section>
-                )}
-              </>
+            {/* Workout Description */}
+            {activity.scheduled_workout?.workout_steps && activity.scheduled_workout.workout_steps.length > 0 && (
+              <section className="detail-section">
+                <h3 className="section-title">Description</h3>
+                <div className="card workout-description-card">
+                  <WorkoutStructureBar steps={activity.scheduled_workout.workout_steps} color={color} />
+                </div>
+              </section>
             )}
 
-            <button
-              type="button"
-              className="collapse-toggle"
-              onClick={() => setShowAllStats(v => !v)}
-              aria-expanded={showAllStats}
-            >
-              {showAllStats ? 'Hide extra stats' : `Show all stats (${[
-                dynamicsStats.length > 0 && 'dynamics',
-                powerStats.length > 0 && 'power',
-                perfStats.length > 0 && 'performance',
-                weatherStats.length > 0 && 'conditions',
-              ].filter(Boolean).join(' · ')})`}
-              <ChevronDown size={14} className={`collapse-chevron ${showAllStats ? 'flipped' : ''}`} />
-            </button>
-          </>
-        )}
+            {/* HR Zones */}
+            {activity.hr_zones && <HrZonesChart zones={activity.hr_zones} />}
 
-        {/* HR Zones */}
-        {activity.hr_zones && <HrZonesChart zones={activity.hr_zones} />}
+            {/* Pace Zones (custom threshold-anchored) */}
+            {activity.chart_data?.pace && (
+              <PaceZonesChart paceSeries={activity.chart_data.pace} />
+            )}
 
-        {/* Pace Zones (custom threshold-anchored) */}
-        {activity.chart_data?.pace && (
-          <PaceZonesChart paceSeries={activity.chart_data.pace} />
-        )}
+            {/* Time-series charts */}
+            {activity.chart_data && Object.keys(activity.chart_data).length > 0 && (
+              <section className="detail-section">
+                <ChartTabs chartData={activity.chart_data} metricZones={activity.metric_zones} />
+              </section>
+            )}
 
-        {/* Time-series charts */}
-        {activity.chart_data && Object.keys(activity.chart_data).length > 0 && (
-          <section className="detail-section">
-            <ChartTabs chartData={activity.chart_data} metricZones={activity.metric_zones} />
-          </section>
-        )}
+            {/* Splits — bars by default, table fallback via toggle */}
+            {activity.splits && (
+              <SplitsBars splits={activity.splits} paceZones={activity.metric_zones?.pace} color={color} />
+            )}
+          </div>
 
-        {/* Splits — bars by default, table fallback via toggle */}
-        {activity.splits && (
-          <SplitsBars splits={activity.splits} paceZones={activity.metric_zones?.pace} color={color} />
-        )}
+          <div className="detail-col detail-col-right">
+            {/* Primary stats */}
+            <StatGrid stats={primaryStats} columns={3} large />
+
+            {/* AI verdict — first sentence up top; full analysis stays in AiInsightCard below */}
+            {verdict && (
+              <a href="#ai-insight" className="verdict-chip">
+                <span className="verdict-tag">Coach</span>
+                <span>{firstSentence(verdict)} Full analysis ↓</span>
+              </a>
+            )}
+
+            {/* Workout Adherence */}
+            {activity.adherence && (
+              <section className="detail-section">
+                <AdherenceCard adherence={activity.adherence} />
+              </section>
+            )}
+
+            {/* Secondary stats — always visible */}
+            {secondaryStats.length > 0 && (
+              <section className="detail-section">
+                <StatGrid stats={secondaryStats} columns={3} />
+              </section>
+            )}
+
+            {/* Dynamics / Power / Performance / Conditions — collapsed behind "Show all stats" */}
+            {(dynamicsStats.length > 0 || powerStats.length > 0 || perfStats.length > 0 || weatherStats.length > 0) && (
+              <>
+                {showAllStats && (
+                  <>
+                    {dynamicsStats.length > 0 && (
+                      <section className="detail-section">
+                        <h3 className="section-title">Running Dynamics</h3>
+                        <StatGrid stats={dynamicsStats} columns={3} />
+                      </section>
+                    )}
+
+                    {powerStats.length > 0 && (
+                      <section className="detail-section">
+                        <h3 className="section-title">Power</h3>
+                        <StatGrid stats={powerStats} columns={4} />
+                      </section>
+                    )}
+
+                    {perfStats.length > 0 && (
+                      <section className="detail-section">
+                        <div className="section-title-row">
+                          <h3 className="section-title">Performance</h3>
+                          <StatHelpButton topic="activity-performance" label="Performance" />
+                        </div>
+                        <StatGrid stats={perfStats} columns={3} />
+                      </section>
+                    )}
+
+                    {weatherStats.length > 0 && (
+                      <section className="detail-section">
+                        <h3 className="section-title">Conditions</h3>
+                        <StatGrid stats={weatherStats} columns={2} />
+                        {activity.weather_description && (
+                          <p className="weather-description">{activity.weather_description}</p>
+                        )}
+                      </section>
+                    )}
+                  </>
+                )}
+
+                <button
+                  type="button"
+                  className="collapse-toggle"
+                  onClick={() => setShowAllStats(v => !v)}
+                  aria-expanded={showAllStats}
+                >
+                  {showAllStats ? 'Hide extra stats' : `Show all stats (${[
+                    dynamicsStats.length > 0 && 'dynamics',
+                    powerStats.length > 0 && 'power',
+                    perfStats.length > 0 && 'performance',
+                    weatherStats.length > 0 && 'conditions',
+                  ].filter(Boolean).join(' · ')})`}
+                  <ChevronDown size={14} className={`collapse-chevron ${showAllStats ? 'flipped' : ''}`} />
+                </button>
+              </>
+            )}
+          </div>
+        </div>
 
         {/* AI Insight / Feedback */}
         {activity.insight ? (
@@ -293,7 +306,7 @@ export default function ActivityDetailView() {
             isAnalyzing={isAnalyzing}
           />
         ) : activity.feedback_rating ? (
-          <section className="detail-section">
+          <section className="detail-section detail-section-generating">
             <div className="card" style={{ textAlign: 'center', padding: '24px 16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                 <Loader size={18} style={{ animation: 'feedback-spin 1s linear infinite' }} />

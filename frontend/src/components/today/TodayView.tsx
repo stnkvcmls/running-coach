@@ -122,63 +122,76 @@ export default function TodayView() {
 
   return (
     <div className="today-view">
-      {isViewingToday && <TodayRealignmentBanner />}
+      {/* today-columns/today-col-* are `display: contents` below 1024px, so on
+          mobile every section below still renders as one flat, in-order
+          stack inside .today-view (the inline `order` styles restore the
+          original top-to-bottom priority order across that flattened stack).
+          At >=1024px they become real, independently-tall flex columns —
+          unlike a shared-row CSS grid, a tall card in one column never
+          forces empty space into the other. */}
+      <div className="today-columns">
+        <div className="today-col today-col-left">
+          {isViewingToday && <TodayRealignmentBanner />}
 
-      {data && <TodayHero data={data} />}
+          {data && <TodayHero data={data} />}
 
-      <section className="today-section">
-        <DailyCheckinCard date={dateKey} checkin={data?.daily_checkin ?? null} />
-      </section>
+          <section className="today-section" style={{ order: 3 }}>
+            <DailyCheckinCard date={dateKey} checkin={data?.daily_checkin ?? null} />
+          </section>
 
-      {data?.plan_adaptation && (
-        <section className="today-section">
-          <PlanAdaptationCard suggestion={data.plan_adaptation} />
-        </section>
-      )}
+          {data?.plan_adaptation && (
+            <section className="today-section" style={{ order: 4 }}>
+              <PlanAdaptationCard suggestion={data.plan_adaptation} />
+            </section>
+          )}
 
-      {data?.daily_summary && glanceStats.length > 0 && (
-        <section className="today-section">
-          <h2 className="section-title">At a Glance</h2>
-          <Link to={`/daily/${data.daily_summary.id}`} className="daily-snapshot-link">
-            <StatGrid stats={glanceStats} columns={4} />
-          </Link>
-        </section>
-      )}
+          {data?.next_races && data.next_races.length > 0 && (
+            <section className="today-section today-races" style={{ order: 6 }}>
+              {data.next_races.map(race => (
+                <RaceStrip key={race.id} race={race} />
+              ))}
+            </section>
+          )}
+        </div>
 
-      {data?.next_races && data.next_races.length > 0 && (
-        <section className="today-section today-races">
-          {data.next_races.map(race => (
-            <RaceStrip key={race.id} race={race} />
-          ))}
-        </section>
-      )}
+        <div className="today-col today-col-right">
+          {data?.daily_summary && glanceStats.length > 0 && (
+            <section className="today-section" style={{ order: 5 }}>
+              <h2 className="section-title">At a Glance</h2>
+              <Link to={`/daily/${data.daily_summary.id}`} className="daily-snapshot-link">
+                <StatGrid stats={glanceStats} columns={4} />
+              </Link>
+            </section>
+          )}
 
-      {data?.training_load && (
-        <section className="today-section">
-          <div className="section-title-row">
-            <h2 className="section-title">Training Load</h2>
-            <StatHelpButton topic="training-load" label="Training Load" />
-          </div>
-          <TrainingLoadChart current={data.training_load} />
-        </section>
-      )}
+          {data?.training_load && (
+            <section className="today-section" style={{ order: 7 }}>
+              <div className="section-title-row">
+                <h2 className="section-title">Training Load</h2>
+                <StatHelpButton topic="training-load" label="Training Load" />
+              </div>
+              <TrainingLoadChart current={data.training_load} />
+            </section>
+          )}
 
-      {data?.weekly_data && data.weekly_data.length > 0 && (
-        <section className="today-section">
-          <h2 className="section-title">Week {format(selectedDate, 'I')} Overview</h2>
-          <WeekOverview data={data.weekly_data} />
-        </section>
-      )}
+          {data?.weekly_data && data.weekly_data.length > 0 && (
+            <section className="today-section" style={{ order: 8 }}>
+              <h2 className="section-title">Week {format(selectedDate, 'I')} Overview</h2>
+              <WeekOverview data={data.weekly_data} />
+            </section>
+          )}
+        </div>
+      </div>
 
       {data?.insights && data.insights.length > 0 && (
-        <section className="today-section">
+        <section className="today-section" style={{ order: 9 }}>
           <h2 className="section-title">My Insights</h2>
           <InsightsList insights={data.insights} />
         </section>
       )}
 
       {extraActivities.length > 0 && (
-        <section className="today-section">
+        <section className="today-section" style={{ order: 10 }}>
           <h2 className="section-title">Also today</h2>
           <div className="workout-list">
             {extraActivities.map(a => (

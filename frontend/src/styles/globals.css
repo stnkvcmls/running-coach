@@ -69,7 +69,7 @@
   --surface: var(--bg-card);
   --text: #1a1a2e;
   --text-muted: #5b6472;
-  --text-secondary: #9ca3af;
+  --text-secondary: #616a78;
   --accent: #6c5ce7;
   --accent-light: #5a4bd1;
   --border: #e0e4ec;
@@ -297,6 +297,10 @@ button {
 
 /* Shared chip/filter primitive */
 .chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
   padding: 6px 14px;
   border-radius: 20px;
   font-size: 0.78rem;
@@ -327,11 +331,9 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .spinner,
-  .spin,
-  .spin-icon {
-    animation: none;
-  }
+  /* Every animation/transition in the app (spinners, skeleton shimmer, toast
+     slide, calendar snap) is neutralized here via !important so it wins
+     regardless of the source order/specificity of the rule that set it. */
   *, *::before, *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;

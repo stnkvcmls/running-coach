@@ -12,7 +12,7 @@ import {
 import { useTrainingLoad } from '../../api/hooks'
 import type { TrainingLoadPoint } from '../../api/types'
 import { useTheme } from '../../App'
-import { getAxisTick, getGridStroke, getTooltipProps } from '../../utils/chartTheme'
+import { getAxisTick, getGridStroke, getTooltipProps, usePrefersReducedMotion } from '../../utils/chartTheme'
 import './TrainingLoadChart.css'
 
 interface Props {
@@ -69,6 +69,7 @@ export default function TrainingLoadChart({ current }: Props) {
   const { theme } = useTheme()
   const { contentStyle } = getTooltipProps(theme)
   const refLineColor = getGridStroke(theme)
+  const reduceMotion = usePrefersReducedMotion()
 
   function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) {
     if (!active || !payload || !payload.length) return null
@@ -158,7 +159,11 @@ export default function TrainingLoadChart({ current }: Props) {
       )}
 
       {chartData.length > 1 && (
-        <div className="tl-chart">
+        <div
+          className="tl-chart"
+          role="img"
+          aria-label={`Training load trend, last 90 days. Fitness ${current.ctl.toFixed(0)}, fatigue ${current.atl.toFixed(0)}, form ${current.tsb >= 0 ? '+' : ''}${current.tsb.toFixed(0)}${current.form_zone_label ? ` (${current.form_zone_label})` : ''}.`}
+        >
           <ResponsiveContainer width="100%" height={180}>
             <ComposedChart data={chartData} margin={{ top: 8, right: 4, left: -8, bottom: 0 }}>
               <defs>
@@ -197,6 +202,7 @@ export default function TrainingLoadChart({ current }: Props) {
                 fill="url(#ctlFill)"
                 dot={false}
                 name="Fitness"
+                isAnimationActive={!reduceMotion}
               />
               <Line
                 yAxisId="load"
@@ -206,6 +212,7 @@ export default function TrainingLoadChart({ current }: Props) {
                 strokeWidth={1.5}
                 dot={false}
                 name="Fatigue"
+                isAnimationActive={!reduceMotion}
               />
               <Line
                 yAxisId="form"
@@ -216,6 +223,7 @@ export default function TrainingLoadChart({ current }: Props) {
                 strokeDasharray="4 2"
                 dot={false}
                 name="Form"
+                isAnimationActive={!reduceMotion}
               />
               {hasAcwr && (
                 <Line
@@ -227,6 +235,7 @@ export default function TrainingLoadChart({ current }: Props) {
                   strokeDasharray="2 2"
                   dot={false}
                   name="ACWR"
+                  isAnimationActive={!reduceMotion}
                 />
               )}
             </ComposedChart>

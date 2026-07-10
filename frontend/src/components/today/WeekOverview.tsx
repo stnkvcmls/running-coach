@@ -1,7 +1,7 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import type { WeeklyMileage } from '../../api/types'
 import { useTheme } from '../../App'
-import { getAxisTick, getGridStroke, getTooltipProps } from '../../utils/chartTheme'
+import { getAxisTick, getGridStroke, getTooltipProps, usePrefersReducedMotion } from '../../utils/chartTheme'
 import { SPORT_COLORS } from '../../utils/colors'
 import './WeekOverview.css'
 
@@ -34,6 +34,8 @@ export default function WeekOverview({ data }: Props) {
   const { theme } = useTheme()
   const { contentStyle } = getTooltipProps(theme)
   const borderColor = getGridStroke(theme)
+  const reduceMotion = usePrefersReducedMotion()
+  const totalKm = data.reduce((s, d) => s + d.km, 0)
 
   function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) {
     if (active && payload && payload.length) {
@@ -74,10 +76,14 @@ export default function WeekOverview({ data }: Props) {
   return (
     <div className="card week-overview">
       <div className="week-total">
-        <span className="stat-value-lg">{data.reduce((s, d) => s + d.km, 0).toFixed(1)}</span>
+        <span className="stat-value-lg">{totalKm.toFixed(1)}</span>
         <span className="stat-unit">km total</span>
       </div>
-      <div className="week-chart">
+      <div
+        className="week-chart"
+        role="img"
+        aria-label={`Weekly training volume by activity type, ${data.length} weeks, ${totalKm.toFixed(1)} km total, peak week ${maxKm.toFixed(1)} km.`}
+      >
         <ResponsiveContainer width="100%" height={160}>
           <BarChart data={data} barCategoryGap="20%">
             <XAxis
@@ -96,6 +102,7 @@ export default function WeekOverview({ data }: Props) {
                 stackId="a"
                 fill={SPORT_COLORS[type as keyof typeof SPORT_COLORS]}
                 radius={index === activityTypes.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                isAnimationActive={!reduceMotion}
               >
                 {data.map((_, i) => (
                   <Cell

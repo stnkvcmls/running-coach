@@ -11,7 +11,7 @@ import {
 } from 'recharts'
 import { useWellnessTrends } from '../../api/hooks'
 import { useTheme } from '../../App'
-import { getChartTickColor, getTooltipProps, WELLNESS_METRIC_COLORS } from '../../utils/chartTheme'
+import { getChartTickColor, getTooltipProps, WELLNESS_METRIC_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
 import RangeSelector, { DEFAULT_RANGE_OPTIONS, type RangeDays } from '../ui/RangeSelector'
 import Skeleton from '../ui/Skeleton'
 import './WellnessTrendsView.css'
@@ -54,6 +54,7 @@ export default function WellnessTrendsView() {
   const { theme } = useTheme()
   const tickColor = getChartTickColor(theme)
   const { contentStyle } = getTooltipProps(theme)
+  const reduceMotion = usePrefersReducedMotion()
 
   function MetricTooltip({ active, payload, label, unit }: { active?: boolean; payload?: any[]; label?: string; unit: string }) {
     if (!active || !payload?.length) return null
@@ -144,7 +145,11 @@ export default function WellnessTrendsView() {
             <div className="wellness-metric-sub">{avgSleepHours.toFixed(1)}h avg · 7-day</div>
           )}
         </div>
-        <div className="wellness-chart">
+        <div
+          className="wellness-chart"
+          role="img"
+          aria-label={`Sleep score trend, last ${days} days.${avgSleepScore != null ? ` 7-day average ${avgSleepScore.toFixed(0)} out of 100.` : ''}`}
+        >
           <ResponsiveContainer width="100%" height={120}>
             <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
               <defs>
@@ -165,6 +170,7 @@ export default function WellnessTrendsView() {
                 dot={false}
                 name="Score"
                 connectNulls
+                isAnimationActive={!reduceMotion}
               />
             </ComposedChart>
           </ResponsiveContainer>
@@ -182,7 +188,11 @@ export default function WellnessTrendsView() {
             </div>
           )}
         </div>
-        <div className="wellness-chart">
+        <div
+          className="wellness-chart"
+          role="img"
+          aria-label={`Resting heart rate trend, last ${days} days.${avgRhr != null ? ` 7-day average ${avgRhr.toFixed(0)} bpm.` : ''}`}
+        >
           <ResponsiveContainer width="100%" height={120}>
             <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
               <XAxis {...xAxisProps} />
@@ -196,6 +206,7 @@ export default function WellnessTrendsView() {
                 dot={false}
                 name="RHR"
                 connectNulls
+                isAnimationActive={!reduceMotion}
               />
             </ComposedChart>
           </ResponsiveContainer>
@@ -213,7 +224,11 @@ export default function WellnessTrendsView() {
             </div>
           )}
         </div>
-        <div className="wellness-chart">
+        <div
+          className="wellness-chart"
+          role="img"
+          aria-label={`Average stress trend, last ${days} days.${avgStress != null ? ` 7-day average ${avgStress.toFixed(0)} out of 100.` : ''}`}
+        >
           <ResponsiveContainer width="100%" height={120}>
             <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
               <defs>
@@ -234,6 +249,7 @@ export default function WellnessTrendsView() {
                 dot={false}
                 name="Stress"
                 connectNulls
+                isAnimationActive={!reduceMotion}
               />
             </ComposedChart>
           </ResponsiveContainer>
@@ -251,7 +267,11 @@ export default function WellnessTrendsView() {
             </div>
           )}
         </div>
-        <div className="wellness-chart">
+        <div
+          className="wellness-chart"
+          role="img"
+          aria-label={`Body battery trend, last ${days} days.${avgBatteryHigh != null ? ` 7-day average high ${avgBatteryHigh.toFixed(0)}.` : ''}`}
+        >
           <ResponsiveContainer width="100%" height={120}>
             <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
               <defs>
@@ -272,6 +292,7 @@ export default function WellnessTrendsView() {
                 dot={false}
                 name="High"
                 connectNulls
+                isAnimationActive={!reduceMotion}
               />
               <Line
                 type="monotone"
@@ -282,6 +303,7 @@ export default function WellnessTrendsView() {
                 dot={false}
                 name="Low"
                 connectNulls
+                isAnimationActive={!reduceMotion}
               />
             </ComposedChart>
           </ResponsiveContainer>
@@ -303,7 +325,11 @@ export default function WellnessTrendsView() {
               <div className="wellness-metric-sub">Status: {latestHrvStatus.toLowerCase()}</div>
             )}
           </div>
-          <div className="wellness-chart">
+          <div
+            className="wellness-chart"
+            role="img"
+            aria-label={`Overnight heart rate variability trend, last ${days} days.${avgHrv != null ? ` 7-day average ${avgHrv.toFixed(0)} milliseconds.` : ''}`}
+          >
             <ResponsiveContainer width="100%" height={120}>
               <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
                 <defs>
@@ -324,6 +350,7 @@ export default function WellnessTrendsView() {
                   dot={false}
                   name="HRV"
                   connectNulls
+                  isAnimationActive={!reduceMotion}
                 />
               </ComposedChart>
             </ResponsiveContainer>

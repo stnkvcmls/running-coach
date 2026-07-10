@@ -194,3 +194,60 @@
 .collapse-chevron.flipped {
   transform: rotate(180deg);
 }
+
+/* Column wrappers are transparent to layout below 1024px — their children
+   render as one flat, in-order stack directly inside .detail-body (see the
+   desktop override below). The `order` values restore the section's
+   original top-to-bottom position across that flattened mobile stack;
+   :has() targets the pieces self-wrapped by child components (RouteMap,
+   HrZonesChart, PaceZonesChart, SplitsBars) since those don't have a
+   literal <section> tag here to add a class to. Items sharing an `order`
+   (the Dynamics/Power/Performance/Conditions group) fall back to their
+   existing relative document order, which is already correct. */
+.detail-columns,
+.detail-col-left,
+.detail-col-right {
+  display: contents;
+}
+
+.detail-body .stat-grid-large { order: 1; }
+.detail-body .verdict-chip { order: 2; }
+.detail-section:has(.route-card) { order: 3; }
+.detail-section:has(.workout-description-card) { order: 4; }
+.detail-section:has(.adherence-card) { order: 5; }
+.detail-section:has(.stat-grid):not(:has(.stat-grid-large)) { order: 6; }
+.detail-body .collapse-toggle { order: 7; }
+.detail-section:has(.hr-zones-card) { order: 8; }
+.detail-section:has(.pace-zones-card) { order: 9; }
+.detail-section:has(.chart-tabs) { order: 10; }
+.detail-section:has(.splits-card) { order: 11; }
+.detail-section:has(.ai-insight-card),
+.detail-section:has(.feedback-prompt),
+.detail-section-generating {
+  order: 12;
+}
+
+/* Desktop: reflow into a two-column layout (charts/laps left, stats rail
+   right, AI insight/feedback full-width below). Each column is an
+   independent flex column rather than a CSS grid row-track, so a tall chart
+   in one column never forces blank space into the other. */
+@media (min-width: 1024px) {
+  .detail-body {
+    max-width: 1080px;
+  }
+
+  .detail-columns {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 24px;
+  }
+
+  .detail-col-left,
+  .detail-col-right {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+  }
+}

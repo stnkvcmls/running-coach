@@ -11,7 +11,7 @@ import {
 } from 'recharts'
 import { useAerobicTrends } from '../../api/hooks'
 import { useTheme } from '../../App'
-import { getChartTickColor, getTooltipProps, AEROBIC_COLORS } from '../../utils/chartTheme'
+import { getChartTickColor, getTooltipProps, AEROBIC_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
 import RangeSelector, { DEFAULT_RANGE_OPTIONS, type RangeDays } from '../ui/RangeSelector'
 import Skeleton from '../ui/Skeleton'
 import type { AerobicTrendPoint } from '../../api/types'
@@ -59,6 +59,7 @@ export default function AerobicTrendsView() {
   const { theme } = useTheme()
   const tickColor = getChartTickColor(theme)
   const tooltipProps = getTooltipProps(theme)
+  const reduceMotion = usePrefersReducedMotion()
 
   if (isLoading) {
     return <AerobicSkeleton />
@@ -90,6 +91,9 @@ export default function AerobicTrendsView() {
     name: p.activity_name,
     duration: formatDuration(p.duration_sec),
   }))
+
+  const latestDec = [...decData].reverse().find(d => d.value != null)
+  const latestEf = [...efData].reverse().find(d => d.value != null)
 
   const cardStyle: React.CSSProperties = {
     background: 'var(--surface)',
@@ -139,17 +143,22 @@ export default function AerobicTrendsView() {
         <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '0 0 12px' }}>
           How much pace/HR efficiency drifts between the first and second half of a run. Under 5% = well coupled.
         </p>
-        <ResponsiveContainer width="100%" height={200}>
-          <ComposedChart data={decData} margin={{ top: 8, right: 8, bottom: 0, left: -10 }}>
-            <XAxis dataKey="label" tick={{ fontSize: 11, fill: tickColor }} tickLine={false} axisLine={false} />
-            <YAxis tick={{ fontSize: 11, fill: tickColor }} tickLine={false} axisLine={false} tickFormatter={v => `${v}%`} />
-            <Tooltip content={<ChartTooltip unit="%" />} />
-            <ReferenceLine y={5} stroke={AEROBIC_COLORS.good} strokeDasharray="4 3" strokeWidth={1.5} label={{ value: 'Good (5%)', position: 'right', fontSize: 10, fill: AEROBIC_COLORS.good }} />
-            <ReferenceLine y={10} stroke={AEROBIC_COLORS.high} strokeDasharray="4 3" strokeWidth={1.5} label={{ value: 'High (10%)', position: 'right', fontSize: 10, fill: AEROBIC_COLORS.high }} />
-            <Scatter dataKey="value" fill={AEROBIC_COLORS.decoupling} opacity={0.7} name="Decoupling" r={4} />
-            <Line dataKey="mean" stroke={AEROBIC_COLORS.decoupling} strokeWidth={2} dot={false} name="7-run avg" connectNulls />
-          </ComposedChart>
-        </ResponsiveContainer>
+        <div
+          role="img"
+          aria-label={`Aerobic decoupling percentage, last ${days} days, lower is better.${latestDec ? ` Most recent value ${latestDec.value}%.` : ''}`}
+        >
+          <ResponsiveContainer width="100%" height={200}>
+            <ComposedChart data={decData} margin={{ top: 8, right: 8, bottom: 0, left: -10 }}>
+              <XAxis dataKey="label" tick={{ fontSize: 11, fill: tickColor }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: tickColor }} tickLine={false} axisLine={false} tickFormatter={v => `${v}%`} />
+              <Tooltip content={<ChartTooltip unit="%" />} />
+              <ReferenceLine y={5} stroke={AEROBIC_COLORS.good} strokeDasharray="4 3" strokeWidth={1.5} label={{ value: 'Good (5%)', position: 'right', fontSize: 10, fill: AEROBIC_COLORS.good }} />
+              <ReferenceLine y={10} stroke={AEROBIC_COLORS.high} strokeDasharray="4 3" strokeWidth={1.5} label={{ value: 'High (10%)', position: 'right', fontSize: 10, fill: AEROBIC_COLORS.high }} />
+              <Scatter dataKey="value" fill={AEROBIC_COLORS.decoupling} opacity={0.7} name="Decoupling" r={4} isAnimationActive={!reduceMotion} />
+              <Line dataKey="mean" stroke={AEROBIC_COLORS.decoupling} strokeWidth={2} dot={false} name="7-run avg" connectNulls isAnimationActive={!reduceMotion} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
       </div>
 
       {/* EF chart */}
@@ -158,15 +167,20 @@ export default function AerobicTrendsView() {
         <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '0 0 12px' }}>
           Average GAP speed per heart rate beat. Rising EF over time indicates improving aerobic fitness.
         </p>
-        <ResponsiveContainer width="100%" height={200}>
-          <ComposedChart data={efData} margin={{ top: 8, right: 8, bottom: 0, left: -10 }}>
-            <XAxis dataKey="label" tick={{ fontSize: 11, fill: tickColor }} tickLine={false} axisLine={false} />
-            <YAxis tick={{ fontSize: 11, fill: tickColor }} tickLine={false} axisLine={false} tickFormatter={v => `${v.toFixed(1)}`} />
-            <Tooltip content={<ChartTooltip unit=" mm/s·bpm" />} />
-            <Scatter dataKey="value" fill={AEROBIC_COLORS.efficiency} opacity={0.7} name="EF" r={4} />
-            <Line dataKey="mean" stroke={AEROBIC_COLORS.efficiency} strokeWidth={2} dot={false} name="7-run avg" connectNulls />
-          </ComposedChart>
-        </ResponsiveContainer>
+        <div
+          role="img"
+          aria-label={`Efficiency factor in millimeters per second per beat per minute, last ${days} days, higher is better.${latestEf ? ` Most recent value ${latestEf.value}.` : ''}`}
+        >
+          <ResponsiveContainer width="100%" height={200}>
+            <ComposedChart data={efData} margin={{ top: 8, right: 8, bottom: 0, left: -10 }}>
+              <XAxis dataKey="label" tick={{ fontSize: 11, fill: tickColor }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: tickColor }} tickLine={false} axisLine={false} tickFormatter={v => `${v.toFixed(1)}`} />
+              <Tooltip content={<ChartTooltip unit=" mm/s·bpm" />} />
+              <Scatter dataKey="value" fill={AEROBIC_COLORS.efficiency} opacity={0.7} name="EF" r={4} isAnimationActive={!reduceMotion} />
+              <Line dataKey="mean" stroke={AEROBIC_COLORS.efficiency} strokeWidth={2} dot={false} name="7-run avg" connectNulls isAnimationActive={!reduceMotion} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
       </div>
     </div>
   )

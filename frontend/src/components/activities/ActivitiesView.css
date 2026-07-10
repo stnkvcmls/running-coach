@@ -19,6 +19,10 @@
 
 /* .chip / .chip.active shared in styles/globals.css */
 
+.activities-view .empty-state p {
+  margin: 0 0 16px;
+}
+
 .activity-group {
   margin-bottom: 16px;
 }

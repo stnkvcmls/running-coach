@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest'
-import { getTooltipProps, getChartTickColor, getAxisTick, getGridStroke } from './chartTheme'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { renderHook, act } from '@testing-library/react'
+import { getTooltipProps, getChartTickColor, getAxisTick, getGridStroke, usePrefersReducedMotion } from './chartTheme'
 
 describe('getTooltipProps', () => {
   it('returns dark-theme colors', () => {
@@ -36,5 +37,52 @@ describe('getGridStroke', () => {
   it('matches the --border token per theme', () => {
     expect(getGridStroke('dark')).toBe('#2d2d44')
     expect(getGridStroke('light')).toBe('#e0e4ec')
+  })
+})
+
+function mockMatchMedia(initialMatches: boolean) {
+  const listeners: ((e: MediaQueryListEvent) => void)[] = []
+  const mql = {
+    matches: initialMatches,
+    media: '(prefers-reduced-motion: reduce)',
+    addEventListener: (_type: string, cb: (e: MediaQueryListEvent) => void) => listeners.push(cb),
+    removeEventListener: (_type: string, cb: (e: MediaQueryListEvent) => void) => {
+      const i = listeners.indexOf(cb)
+      if (i >= 0) listeners.splice(i, 1)
+    },
+  }
+  vi.stubGlobal('matchMedia', vi.fn().mockReturnValue(mql))
+  return {
+    trigger(matches: boolean) {
+      mql.matches = matches
+      listeners.forEach(cb => cb({ matches } as MediaQueryListEvent))
+    },
+  }
+}
+
+describe('usePrefersReducedMotion', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('returns false when the user has not requested reduced motion', () => {
+    mockMatchMedia(false)
+    const { result } = renderHook(() => usePrefersReducedMotion())
+    expect(result.current).toBe(false)
+  })
+
+  it('returns true when the user has requested reduced motion', () => {
+    mockMatchMedia(true)
+    const { result } = renderHook(() => usePrefersReducedMotion())
+    expect(result.current).toBe(true)
+  })
+
+  it('reacts to the media query changing after mount', () => {
+    const { trigger } = mockMatchMedia(false)
+    const { result } = renderHook(() => usePrefersReducedMotion())
+    expect(result.current).toBe(false)
+
+    act(() => trigger(true))
+    expect(result.current).toBe(true)
   })
 })

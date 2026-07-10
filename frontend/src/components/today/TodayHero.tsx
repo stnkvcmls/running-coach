@@ -74,6 +74,7 @@ function HeroSession({ data, planDay, planLoading, hasPlan, matchedActivity }: H
       <div className="hero-session">
         <span className="hero-session-label">Today's session</span>
         <div className="hero-session-name">Rest day</div>
+        <div className="hero-session-meta">Recovery day — let yesterday's training absorb.</div>
       </div>
     )
   }

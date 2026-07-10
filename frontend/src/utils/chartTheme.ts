@@ -1,7 +1,30 @@
-import type { CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import type { MetricZone } from '../api/types'
 
 export type Theme = 'dark' | 'light'
+
+/**
+ * Tracks `prefers-reduced-motion`. Recharts animates via its own rAF loop
+ * (react-smooth), independent of CSS — the global reduced-motion media query
+ * in globals.css can't reach it, so chart components pass the result to each
+ * series' `isAnimationActive` prop (mirrors the matchMedia check RouteMap.tsx
+ * uses for its canvas trace animation).
+ */
+export function usePrefersReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia
+      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      : false
+  )
+  useEffect(() => {
+    if (!window.matchMedia) return
+    const mql = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const handler = (e: MediaQueryListEvent) => setReduced(e.matches)
+    mql.addEventListener('change', handler)
+    return () => mql.removeEventListener('change', handler)
+  }, [])
+  return reduced
+}
 
 export interface ChartTooltipProps {
   contentStyle: CSSProperties

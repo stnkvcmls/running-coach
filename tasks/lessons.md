@@ -1,5 +1,51 @@
 # Lessons
 
+## Frontend: CSS Grid `dense` packing shares row-tracks across columns — it isn't masonry
+
+**Symptom:** Phase 6's desktop two-column reflow (`TodayView`/`ActivityDetailView`,
+conditionally-rendered sections split into a "left"/"right" visual grouping)
+used `display: grid; grid-template-columns: 1fr 1fr; grid-auto-flow: row dense;`
+with each section assigned only a `grid-column` (1, 2, or full-span), no
+`grid-row`. It built and passed all tests, but a real-browser screenshot showed
+a large dead gap in the left column: a short item (e.g. an alert banner) sat at
+the top of a very tall row because a much taller item (e.g. a big chart) landed
+in the *other* column of that same row.
+
+**Cause:** `grid-auto-flow: dense` fills gaps without leaving them *empty*, but
+it does not decouple column heights — every cell in row *N* shares row *N*'s
+height, which is the tallest cell in that row across **all** columns. Two
+conditionally-rendered items that happen to land in the same row-index (one
+short, one tall, in different columns) force the short column to inherit the
+tall row's height, pushing everything below it down. This is fundamentally
+different from masonry (independent per-column stacking); CSS Grid has no
+shipped masonry mode.
+
+**Fix:** For independently-conditional content split into visual columns, nest
+the actual DOM into real column wrapper `<div>`s and lay them out with
+**flexbox** (`display: flex; flex-direction: row` on the pair, `flex-direction:
+column` inside each) — flex columns size to their own content only. To avoid
+changing the *existing, tested* mobile section order (wrappers necessarily
+interleave differently from the original flat document order), make the
+wrappers `display: contents` below the desktop breakpoint (so their children
+render as one flat in-order stack, unaffected) and restore the original
+sequence with an explicit `order` integer per leaf item — CSS `order` sorts
+correctly whether the flex context is the single flattened mobile stack or one
+of the independent desktop columns, as long as the values are assigned once,
+globally, matching original document position. **Remember every full-width
+item living *outside* the column wrappers still needs an explicit `order`
+higher than every column item** — the un-set default is `order: 0`, which
+sorts *before* any item you deliberately numbered 1+, so an unordered trailing
+section (e.g. "Insights" placed after the columns) silently jumps to the very
+top of the mobile stack instead of staying last.
+
+**Verify-as-real-browser tip:** This class of bug (dead space from shared grid
+rows; wrong flattened order from a missed `order` value) is invisible to
+jsdom-based component tests — they don't run layout or apply CSS at all. Only
+an actual rendered screenshot (Playwright against `vite dev` + a seeded
+backend, or `vite preview`) at both the mobile and desktop breakpoint would
+have caught the gap or the reordering; run one before considering a CSS-driven
+reflow phase done.
+
 ## CI: `pytest` vs `python -m pytest` and the `app` import
 
 **Symptom:** Tests passed locally with `python3 -m pytest` but CI failed at

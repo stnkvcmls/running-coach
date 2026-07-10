@@ -1,4 +1,6 @@
 .workout-card {
+  display: block;
+  color: inherit;
   border-left: 4px solid var(--accent);
   cursor: pointer;
   transition: background 0.15s, transform 0.1s;

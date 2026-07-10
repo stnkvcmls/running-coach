@@ -10,7 +10,7 @@ import {
 } from 'recharts'
 import { useIntensityTrends } from '../../api/hooks'
 import { useTheme } from '../../App'
-import { getChartTickColor, getTooltipProps, INTENSITY_ZONE_COLORS, INTENSITY_BUCKET_COLORS } from '../../utils/chartTheme'
+import { getChartTickColor, getTooltipProps, INTENSITY_ZONE_COLORS, INTENSITY_BUCKET_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
 import RangeSelector, { DEFAULT_RANGE_OPTIONS, type RangeDays } from '../ui/RangeSelector'
 import Skeleton from '../ui/Skeleton'
 import type { IntensityWeek } from '../../api/types'
@@ -82,6 +82,7 @@ export default function IntensityTrendsView() {
   const { theme } = useTheme()
   const tickColor = getChartTickColor(theme)
   const { contentStyle } = getTooltipProps(theme)
+  const reduceMotion = usePrefersReducedMotion()
 
   const allZones = ['1', '2', '3', '4', '5']
 
@@ -145,6 +146,10 @@ export default function IntensityTrendsView() {
           <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 8, paddingLeft: 8 }}>
             Weekly time in zone (minutes)
           </p>
+          <div
+            role="img"
+            aria-label={`Weekly time in ${zoneType === 'hr' ? 'heart rate' : 'power'} zone, last ${days} days, ${weeks.length} weeks. Total ${formatMinutes(weeks.reduce((s, w) => s + w.total_seconds, 0))}.`}
+          >
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={chartData} margin={{ left: 0, right: 8, top: 4, bottom: 4 }}>
               <XAxis
@@ -181,10 +186,12 @@ export default function IntensityTrendsView() {
                   stackId="zones"
                   fill={INTENSITY_ZONE_COLORS[zone]}
                   name={`zone_${zone}`}
+                  isAnimationActive={!reduceMotion}
                 />
               ))}
             </BarChart>
           </ResponsiveContainer>
+          </div>
         </div>
       </div>
 

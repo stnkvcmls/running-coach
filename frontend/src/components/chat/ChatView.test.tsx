@@ -88,7 +88,25 @@ describe('ChatView', () => {
     await waitFor(() => expect(screen.getByText('Your week looked solid.')).toBeInTheDocument())
     expect(screen.getByText('Reviewed this week')).toBeInTheDocument()
 
-    // The user's own message is still shown above the reply.
-    expect(screen.getByText('How was my training this week?')).toBeInTheDocument()
+    // The user's own message is still shown above the reply (there may also
+    // be a reappeared hint chip with the same text, since history is short).
+    expect(screen.getByText('How was my training this week?', { selector: '.chat-bubble' })).toBeInTheDocument()
+  })
+
+  it('reappears hint chips near the composer once the input is empty again, while history is still short', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetch([], {
+        tokens: ['Your ', 'week ', 'looked solid.'],
+      }),
+    )
+    render(<ChatView />)
+
+    const hint = await screen.findByText('How was my training this week?')
+    fireEvent.click(hint)
+
+    await waitFor(() => expect(screen.getByText('Your week looked solid.')).toBeInTheDocument())
+
+    expect(screen.getByRole('button', { name: 'Am I ready for my next race?' })).toBeInTheDocument()
   })
 })

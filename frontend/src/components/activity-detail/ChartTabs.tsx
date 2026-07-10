@@ -5,7 +5,7 @@ import {
 } from 'recharts'
 import type { ChartSeries, MetricZone } from '../../api/types'
 import { useTheme } from '../../App'
-import { getAxisTick, getTooltipProps, getZoneColor, METRIC_COLORS } from '../../utils/chartTheme'
+import { getAxisTick, getTooltipProps, getZoneColor, METRIC_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
 import './ChartTabs.css'
 
 const SCATTER_METRICS = new Set(['cadence', 'stride', 'gct', 'vert_osc', 'vert_ratio'])
@@ -19,6 +19,7 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
   const keys = Object.keys(chartData)
   const [activeKey, setActiveKey] = useState(keys[0] || '')
   const { theme } = useTheme()
+  const reduceMotion = usePrefersReducedMotion()
 
   if (keys.length === 0) return null
 
@@ -76,7 +77,11 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
             </button>
           ))}
         </div>
-        <div className="card chart-card">
+        <div
+          className="card chart-card"
+          role="img"
+          aria-label={`${series.label} over the course of the activity, ${scatterData.length} samples, average ${yTickFormatter(average)}${series.unit ? ` ${series.unit}` : ''}.`}
+        >
           <ResponsiveContainer width="100%" height={200}>
             <ScatterChart margin={{ top: 4, right: 4, bottom: 4, left: 0 }}>
               <XAxis dataKey="x" hide type="number" domain={['dataMin', 'dataMax']} />
@@ -106,6 +111,7 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
               <Scatter
                 data={scatterData}
                 fill={color}
+                isAnimationActive={!reduceMotion}
                 shape={(props: any) => {
                   const dotColor = zones && zones.length > 0
                     ? getZoneColor(props.payload.y, zones)
@@ -122,6 +128,10 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
 
   // Area chart for non-scatter metrics
   const data = series.data.map((v, i) => ({ i, v }))
+  const areaValues = data.map(d => d.v).filter((v): v is number => v !== null && v !== undefined)
+  const areaRangeLabel = areaValues.length > 0
+    ? `ranging from ${yTickFormatter(Math.min(...areaValues))} to ${yTickFormatter(Math.max(...areaValues))}${series.unit ? ` ${series.unit}` : ''}`
+    : 'no data'
 
   return (
     <div>
@@ -136,7 +146,11 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
           </button>
         ))}
       </div>
-      <div className="card chart-card">
+      <div
+        className="card chart-card"
+        role="img"
+        aria-label={`${series.label} over the course of the activity, ${areaRangeLabel}.`}
+      >
         <ResponsiveContainer width="100%" height={200}>
           <AreaChart data={data} margin={{ top: 4, right: 4, bottom: 4, left: 0 }}>
             <defs>
@@ -172,6 +186,7 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
               connectNulls
               dot={false}
               activeDot={{ r: 3, fill: color }}
+              isAnimationActive={!reduceMotion}
             />
           </AreaChart>
         </ResponsiveContainer>

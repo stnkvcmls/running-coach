@@ -10,7 +10,7 @@ import {
 } from 'recharts'
 import { useCustomChartMetrics, useCustomChartData } from '../../api/hooks'
 import { useTheme } from '../../App'
-import { getChartTickColor, getTooltipProps, CHART_SERIES_COLORS } from '../../utils/chartTheme'
+import { getChartTickColor, getTooltipProps, CHART_SERIES_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
 import Skeleton from '../ui/Skeleton'
 import type { CustomChartMetric, CustomChartMetricGroup } from '../../api/types'
 import './CustomChartsView.css'
@@ -88,6 +88,7 @@ export default function CustomChartsView() {
   const { theme } = useTheme()
   const tickColor = getChartTickColor(theme)
   const { contentStyle: tooltipStyle } = getTooltipProps(theme)
+  const reduceMotion = usePrefersReducedMotion()
 
   const { metricIds, days, compare = false } = config
   const { data: chartData, isLoading: dataLoading } = useCustomChartData(metricIds, days, compare)
@@ -250,7 +251,11 @@ export default function CustomChartsView() {
       ) : rows.length === 0 ? (
         <div className="custom-chart-empty">No data available for the selected metrics and range.</div>
       ) : (
-        <div className="card custom-chart-card">
+        <div
+          className="card custom-chart-card"
+          role="img"
+          aria-label={`Custom chart of ${metricIds.map(id => metricsById.get(id)?.label ?? id).join(', ')}, last ${days} days${isComparing ? ', compared to the previous period' : ''}.`}
+        >
           <ResponsiveContainer width="100%" height={320}>
             <ComposedChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
               <XAxis dataKey="label" tick={{ fontSize: 11, fill: tickColor }} tickLine={false} axisLine={false} />
@@ -285,6 +290,7 @@ export default function CustomChartsView() {
                   dot={false}
                   connectNulls
                   name={metricsById.get(id)?.label ?? id}
+                  isAnimationActive={!reduceMotion}
                 />
               ))}
               {isComparing && metricIds.map((id, i) => (
@@ -299,6 +305,7 @@ export default function CustomChartsView() {
                   dot={false}
                   connectNulls
                   name={`${metricsById.get(id)?.label ?? id} (previous)`}
+                  isAnimationActive={!reduceMotion}
                 />
               ))}
             </ComposedChart>
