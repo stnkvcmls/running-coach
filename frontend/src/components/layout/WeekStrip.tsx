@@ -7,19 +7,27 @@ import './WeekStrip.css'
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
+type DayMarker = 'done' | 'race' | 'planned' | null
+
 export default function WeekStrip() {
   const { selectedDate, setSelectedDate } = useDateContext()
   const weekDays = useMemo(() => getWeekDays(selectedDate), [selectedDate])
   const dateKey = formatDateKey(weekDays[0])
   const { data: weekData } = useCalendarWeek(dateKey)
 
-  const activityDates = useMemo(() => {
-    if (!weekData) return new Set<string>()
-    return new Set(
-      weekData
-        .filter(d => d.activities.length > 0)
-        .map(d => d.date)
-    )
+  const markerByDate = useMemo(() => {
+    const m = new Map<string, DayMarker>()
+    if (!weekData) return m
+    for (const day of weekData) {
+      if (day.activities.length > 0) {
+        m.set(day.date, 'done')
+      } else if (day.events.some(e => e.event_type === 'race')) {
+        m.set(day.date, 'race')
+      } else if (day.events.some(e => e.event_type === 'workout')) {
+        m.set(day.date, 'planned')
+      }
+    }
+    return m
   }, [weekData])
 
   const goBack = () => setSelectedDate(subWeeks(selectedDate, 1))
@@ -34,7 +42,7 @@ export default function WeekStrip() {
         {weekDays.map((day, i) => {
           const selected = isSameDay(day, selectedDate)
           const today = isToday(day)
-          const hasActivity = activityDates.has(formatDateKey(day))
+          const marker = markerByDate.get(formatDateKey(day)) ?? null
           return (
             <button
               key={i}
@@ -43,7 +51,7 @@ export default function WeekStrip() {
             >
               <span className="day-name">{DAY_NAMES[i]}</span>
               <span className="day-number">{format(day, 'd')}</span>
-              {hasActivity && <span className="day-dot" />}
+              {marker && <span className={`day-dot ${marker !== 'done' ? `day-dot-${marker}` : ''}`} />}
             </button>
           )
         })}

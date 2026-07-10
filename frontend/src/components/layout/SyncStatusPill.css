@@ -1,0 +1,38 @@
+.sync-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 58px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.sync-pill:hover {
+  color: var(--text);
+}
+
+.sync-pill-warn,
+.sync-pill-warn:hover {
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
+.sync-pill-time {
+  white-space: nowrap;
+}
+
+.sync-pill .spin {
+  animation: sync-pill-spin 1s linear infinite;
+}
+
+@keyframes sync-pill-spin {
+  to { transform: rotate(360deg); }
+}

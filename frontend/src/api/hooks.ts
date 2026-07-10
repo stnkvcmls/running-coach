@@ -203,6 +203,45 @@ export function useSystemHealth() {
   })
 }
 
+export type SyncStatusState = 'ok' | 'syncing' | 'needs_reauth'
+
+export interface SyncStatus {
+  status: SyncStatusState
+  /** ISO timestamp of the most recent successful sync across all sources, if known. */
+  lastSyncedAt: string | null
+}
+
+const SYNC_STATUS_POLL_MS = 60_000
+
+export function useSyncStatus(): SyncStatus {
+  const health = useQuery({
+    queryKey: ['system-health'],
+    queryFn: () => apiGet<SystemHealthResponse>('/health-detail'),
+    refetchInterval: SYNC_STATUS_POLL_MS,
+  })
+  const garmin = useQuery({
+    queryKey: ['garmin-status'],
+    queryFn: () => apiGet<GarminConnectionStatus>('/garmin-credentials/status'),
+    refetchInterval: SYNC_STATUS_POLL_MS,
+  })
+
+  const syncTimestamps = health.data
+    ? Object.values(health.data.last_sync)
+        .filter((v): v is string => !!v)
+        .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
+    : []
+  const lastSyncedAt = syncTimestamps.length > 0 ? syncTimestamps[syncTimestamps.length - 1] : null
+
+  let status: SyncStatusState = 'ok'
+  if (garmin.data?.needs_reauth) {
+    status = 'needs_reauth'
+  } else if (health.isFetching || garmin.isFetching) {
+    status = 'syncing'
+  }
+
+  return { status, lastSyncedAt }
+}
+
 export function useRetryJob() {
   const qc = useQueryClient()
   return useMutation({

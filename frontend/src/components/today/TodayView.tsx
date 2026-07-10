@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useDateContext } from '../../App'
 import { useToday, useRealignmentStatus, useRealignPlan } from '../../api/hooks'
 import { formatDateKey, format, isToday as checkIsToday } from '../../utils/date'
@@ -165,7 +166,7 @@ export default function TodayView() {
       {data?.daily_summary && (
         <section className="today-section">
           <h2 className="section-title">Daily Summary</h2>
-          <div className="card daily-snapshot">
+          <Link to={`/daily/${data.daily_summary.id}`} className="card daily-snapshot">
             <div className="snap-grid">
               {data.daily_summary.resting_hr && (
                 <div className="snap-item">
@@ -192,7 +193,7 @@ export default function TodayView() {
                 </div>
               )}
             </div>
-          </div>
+          </Link>
         </section>
       )}
 

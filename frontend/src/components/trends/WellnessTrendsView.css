@@ -13,6 +13,11 @@
   margin-bottom: 4px;
 }
 
+.trends-daily-history-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .trends-range-tabs {
   display: flex;
   gap: 4px;

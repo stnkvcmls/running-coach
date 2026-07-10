@@ -94,7 +94,7 @@ Visual target per phase: docs/mockups/ui-redesign-mockup.html (toggle
 ## Phases
 - [x] Phase 0 — Design-system foundation & defect fixes (tokens, `--surface`
       fix, shared buttons, chart theme, toast + skeleton primitives)
-- [ ] Phase 1 — Navigation & IA (5-tab nav, Settings behind avatar, sync
+- [x] Phase 1 — Navigation & IA (5-tab nav, Settings behind avatar, sync
       status pill, reconnect orphaned /daily route, planned-dots on calendar)
 - [ ] Phase 2 — Today screen hierarchy (TodayHero: readiness × session ×
       briefing, compact alerts/races, check-in collapse, skeletons)

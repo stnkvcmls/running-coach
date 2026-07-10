@@ -65,6 +65,16 @@
 }
 
 /* Daily snapshot */
+.daily-snapshot {
+  display: block;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.daily-snapshot:hover {
+  background: var(--bg-hover);
+}
+
 .daily-snapshot .snap-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

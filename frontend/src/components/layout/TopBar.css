@@ -15,18 +15,30 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+}
+
+.top-bar-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .top-bar-week {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--text);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-left: 6px;
 }
 
 .top-bar-actions {
   display: flex;
   align-items: center;
   gap: 4px;
+  flex-shrink: 0;
 }
 
 .top-bar-icon-btn {
@@ -44,4 +56,24 @@
 .top-bar-icon-btn.active {
   background: var(--bg-card);
   color: var(--accent-light);
+}
+
+.top-bar-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-left: 2px;
+  transition: opacity var(--transition-fast);
+}
+
+.top-bar-avatar:hover {
+  opacity: 0.85;
 }

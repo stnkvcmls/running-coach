@@ -84,3 +84,25 @@
 .week-day.selected .day-dot {
   background: rgba(255, 255, 255, 0.7);
 }
+
+/* Planned (unfulfilled) workout — hollow ring, not yet done */
+.day-dot.day-dot-planned {
+  background: transparent;
+  border: 1px solid var(--text-muted);
+}
+
+.week-day.selected .day-dot.day-dot-planned {
+  border-color: rgba(255, 255, 255, 0.7);
+}
+
+/* Upcoming race — distinct ring in the race colour */
+.day-dot.day-dot-race {
+  width: 5px;
+  height: 5px;
+  background: transparent;
+  border: 1.5px solid var(--color-race);
+}
+
+.week-day.selected .day-dot.day-dot-race {
+  border-color: #fff;
+}

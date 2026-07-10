@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   ComposedChart,
   Area,
@@ -124,6 +125,10 @@ export default function WellnessTrendsView() {
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="trends-daily-history-row">
+        <Link to="/daily" className="btn-ghost">Daily history →</Link>
       </div>
 
       {/* Sleep Score */}

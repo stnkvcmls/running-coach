@@ -1,5 +1,5 @@
 import { useState, useEffect, createContext, useContext } from 'react'
-import { Routes, Route, useLocation, useNavigate } from 'react-router-dom'
+import { Routes, Route, useLocation, useNavigate, matchPath } from 'react-router-dom'
 import TopBar from './components/layout/TopBar'
 import BottomNav from './components/layout/BottomNav'
 import CalendarContainer from './components/layout/CalendarContainer'
@@ -47,6 +47,43 @@ export function useTheme() {
   return useContext(ThemeContext)
 }
 
+export interface RouteMeta {
+  path: string
+  title: string
+  /** Show the "Week N/52" suffix next to the title (Today + Plan only). */
+  weekLabel?: boolean
+  chrome: 'main' | 'detail'
+}
+
+const DEFAULT_ROUTE_META: RouteMeta = { path: '', title: '', chrome: 'main' }
+
+// Single source of truth for page chrome: 'main' renders TopBar + calendar
+// strip + bottom nav; 'detail' renders none of those (the view supplies its
+// own header, e.g. ActivityDetailView's back-arrow header).
+const ROUTES: RouteMeta[] = [
+  { path: '/', title: 'Today', weekLabel: true, chrome: 'main' },
+  { path: '/plan', title: 'Plan', weekLabel: true, chrome: 'main' },
+  { path: '/chat', title: 'Coach', chrome: 'main' },
+  { path: '/activities', title: 'Activities', chrome: 'main' },
+  { path: '/trends', title: 'Progress', chrome: 'main' },
+  { path: '/daily', title: 'Daily History', chrome: 'main' },
+  { path: '/activities/:id', title: 'Activity', chrome: 'detail' },
+  { path: '/daily/:id', title: 'Daily Summary', chrome: 'detail' },
+  { path: '/workouts/:id', title: 'Workout', chrome: 'detail' },
+  { path: '/info/:topic', title: 'Info', chrome: 'detail' },
+  { path: '/plan/setup', title: 'Plan Setup', chrome: 'detail' },
+  { path: '/settings', title: 'Settings', chrome: 'detail' },
+  { path: '/onboarding', title: 'Onboarding', chrome: 'detail' },
+]
+
+export function useRouteMeta(): RouteMeta {
+  const location = useLocation()
+  return (
+    ROUTES.find(route => matchPath({ path: route.path, end: true }, location.pathname)) ??
+    DEFAULT_ROUTE_META
+  )
+}
+
 export default function App() {
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [calendarExpanded, setCalendarExpanded] = useState(false)
@@ -71,8 +108,8 @@ export default function App() {
     }
   }, [profileLoading, profile, location.pathname, navigate])
 
-  const isOnboarding = location.pathname === '/onboarding'
-  const isDetailPage = isOnboarding || location.pathname === '/plan/setup' || location.pathname.startsWith('/activities/') || location.pathname.startsWith('/daily/') || location.pathname.startsWith('/workouts/') || location.pathname.startsWith('/info/')
+  const routeMeta = useRouteMeta()
+  const isDetailPage = routeMeta.chrome === 'detail'
   const showCalendar = !isDetailPage
 
   return (
