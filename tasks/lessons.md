@@ -1,5 +1,28 @@
 # Lessons
 
+## Frontend: a follow-up spec can describe a bug that a prior phase already fixed
+
+**Symptom:** The UI/UX follow-up plan's B3 task said "`useActivity(id)` has no
+`enabled` guard — add an optional `enabled` (or a guarded wrapper)." Reading
+`api/hooks.ts` first showed `useActivity` already has `enabled: id > 0`
+(added in an earlier phase). Following the spec literally would have added a
+second, redundant guard mechanism for no behavioural gain.
+
+**Cause:** Follow-up specs get written by reviewing code at one point in
+time; by the time they're executed the described state may have already
+been fixed by an unrelated earlier change (or simply misread during the
+review). The instruction's *goal* ("don't fetch when there's no matched
+activity") was still correct — only its premise about the current code was
+stale.
+
+**Fix:** `ActivityDetailView.tsx` already called `useActivity(Number(id) ||
+0)` relying on that exact same guard — passing `matchedActivity?.id ?? 0` in
+the new call site reused the existing mechanism instead of adding a parallel
+one. Before implementing a described bug, read the current code first; if
+it already does what the fix asks for, satisfy the underlying *goal* with
+the existing mechanism and note the discrepancy rather than building a
+second one anyway "because the spec said so."
+
 ## Frontend: CSS Grid `dense` packing shares row-tracks across columns — it isn't masonry
 
 **Symptom:** Phase 6's desktop two-column reflow (`TodayView`/`ActivityDetailView`,
@@ -131,3 +154,87 @@ same field, verify both actually declare it before building on the
 assumption — and if only one does, implement that one and note the deviation
 rather than widening a schema to match the prose (widening `ActivitySummary`
 would have meant an out-of-scope backend change).
+
+**Update (UI/UX Follow-up Phase D1):** once widening `ActivitySummary` *was*
+in scope (an explicit, additive backend task), the natural next mistake was
+reaching for a cheaper `has_pr: bool` existence flag instead of the full
+`personal_records: PersonalRecordResponse[]` — the task doc even offered the
+boolean as an equally-valid option. But `celebrateNewRecords()` (see
+`utils/records.ts`) needs each record's `id` (for its localStorage seen-set,
+so a toast fires only once), `achieved_at` (for the 7-day recency window),
+and `label`/`display_value` (the toast text) — none of which a boolean
+carries. A minimal existence flag is fine for a badge that only ever renders
+"yes/no", but the moment a *second* consumer needs the underlying data, check
+what that consumer's actual signature requires before picking the
+cheaper-looking schema shape.
+
+## Backend: `pywebpush` needs a stub to run `pytest` in a fresh container
+
+**Symptom:** `pip install -r requirements-dev.txt` fails building the
+`http-ece` wheel (a `pywebpush` dependency) with `AttributeError:
+install_layout` from `setuptools`/`distutils`. Even after installing every
+*other* dependency, `pytest` still fails at collection for the **entire**
+suite (not just `test_notifications.py`): `app/api.py` imports the
+`notifications` router unconditionally at module level, which imports
+`pywebpush` at module level too, so one missing package blocks collecting
+every test file via `conftest.py`.
+
+**Cause:** `http-ece` has no prebuilt wheel for this Python/setuptools
+combination and its `setup.py` doesn't work with the version of `setuptools`
+in this container. This is an environment limitation, not a code bug —
+`app/notifications.py` is untouched by UI/UX work.
+
+**Fix:** Drop a minimal stub module at
+`{site-packages}/pywebpush.py` exposing just the two names
+`app/notifications.py` imports (`WebPushException`, `webpush`) before
+installing the rest of `requirements-dev.txt` with
+`pip install --ignore-installed` (a system-managed `PyJWT` package also
+needs `--ignore-installed` to avoid an uninstall-conflict error). This
+matches what the redesign review apparently did ("pywebpush was stubbed and
+the stub's exception signature differs") — the stub is env-local, never
+committed, and only `test_notifications.py`'s assertions about specific
+exception shapes should be expected to diverge from a real `pywebpush`.
+Exclude only that one file: `pytest tests/ --ignore=tests/test_notifications.py`.
+
+## Frontend: a `position: sticky` descendant of an `overflow-y: auto` container with no bounded height never actually sticks
+
+**Symptom:** The prescribed one-line fix for a "sticky header hides behind
+the TopBar" bug (`ActivitiesView.css`'s `.group-head { top: 0 }` →
+`top: var(--top-bar-height)`) built, passed all unit tests, and even *looked*
+plausible in a single-frame screenshot — but a scroll-position sweep
+(`.group-head`'s `getBoundingClientRect().top` sampled across ~10 scrollY
+values) showed the header's on-screen position decreasing linearly through
+the sticky offset with zero clamping, at every scroll position. The header
+never actually stuck to anything; it just scrolled past like ordinary static
+content, offset value notwithstanding.
+
+**Cause:** `position: sticky`'s reference frame is the nearest ancestor that
+establishes a scroll container (any `overflow` other than `visible`), not
+necessarily the visible viewport. `.app-main { overflow-y: auto }` (in
+`App.css`) qualifies as that ancestor for `.group-head` — but per an earlier
+lesson in this file ("the page/window scrolls, not `<main>`"), `.app-main`
+never gets a bounded height anywhere in this shell (`.app-shell` only sets
+`min-height`), so `.app-main.scrollHeight` always equals its `clientHeight`
+and its own `scrollTop` never moves — the *document* scrolls instead. Sticky
+positioning is computed relative to that never-scrolling container, so it
+never has anything to clamp against, regardless of the `top` value. Confirmed
+with a minimal repro completely outside the app (a bare HTML file: a sticky
+child of a bounded-nowhere `overflow-y: auto` div, inside a scrolling
+`body`) — same non-stick, proving it's a general CSS mechanic, not
+app-specific. This is presumably why `ActivityDetailView`'s own sticky
+condensed header deliberately uses `position: fixed` + `IntersectionObserver`
+instead of CSS sticky.
+
+**Fix:** `.app-main`'s `overflow-y: auto` (and its paired
+`-webkit-overflow-scrolling: touch`) was dead CSS with zero behavioural
+effect (proven via `scrollHeight === clientHeight` at every breakpoint) whose
+*only* effect was silently breaking sticky descendants — removing it lets
+the real containing block (the document) take over, and `position: sticky`
+descendants (here and any added later) start working with no other changes.
+
+**Verify-as-real-browser tip:** A single screenshot at one scroll position
+cannot distinguish "genuinely stuck" from "just happened to scroll to a
+plausible-looking spot." Sample the element's `getBoundingClientRect()`
+across a *sweep* of scroll positions and look for a flat plateau at the
+sticky offset — a real clamp holds constant across a range; unstuck content
+decreases linearly with scroll at every point.

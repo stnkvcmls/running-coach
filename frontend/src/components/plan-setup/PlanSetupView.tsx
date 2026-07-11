@@ -85,7 +85,7 @@ export default function PlanSetupView() {
         onClick={() => generatePlan(undefined, { onSuccess: () => navigate('/plan') })}
         disabled={isGenerating}
       >
-        {isGenerating ? <RefreshCw size={16} className="psu-spin" /> : null}
+        {isGenerating ? <RefreshCw size={16} className="spin" /> : null}
         {isGenerating ? 'Generating…' : 'Save & Regenerate Plan'}
       </button>
 

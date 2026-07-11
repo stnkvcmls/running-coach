@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import type { ActivitySummary } from '../../api/types'
-import { getActivityColor, colorMap } from '../../utils/colors'
+import { getActivityColor, getActivityAccent } from '../../utils/colors'
 import { formatDistance, formatDuration, formatPace } from '../../utils/formatting'
 import { format, parseISO } from '../../utils/date'
 import { CheckCircle } from 'lucide-react'
@@ -12,7 +12,7 @@ interface Props {
 
 export default function WorkoutCard({ activity }: Props) {
   const colorType = getActivityColor(activity.name, activity.activity_type)
-  const color = colorMap[colorType]
+  const color = getActivityAccent(activity.name, activity.activity_type)
 
   const typeLabel = colorType === 'default'
     ? (activity.activity_type || 'Activity')

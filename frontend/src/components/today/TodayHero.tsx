@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CheckCircle2 } from 'lucide-react'
-import { useTrainingPlan } from '../../api/hooks'
+import { CheckCircle2, RefreshCw, Watch } from 'lucide-react'
+import { useTrainingPlan, useActivity, usePushWorkoutToGarmin } from '../../api/hooks'
 import type { ActivitySummary, TodayResponse, TrainingPlanDay } from '../../api/types'
 import { formatDistance, formatDuration } from '../../utils/formatting'
 import { scoreColor, ComponentBar } from './ReadinessCard'
 import ScoreRing from '../ui/ScoreRing'
 import WorkoutStructureBar from '../ui/WorkoutStructureBar'
 import BriefingCard from './BriefingCard'
+import { toast } from '../ui/Toast'
 import './ReadinessCard.css'
 import './TodayHero.css'
 
@@ -54,6 +55,14 @@ interface HeroSessionProps {
 }
 
 function HeroSession({ data, planDay, planLoading, hasPlan, matchedActivity }: HeroSessionProps) {
+  // Today's plan day never carries adherence_score server-side (only days
+  // strictly before today do) — fetch the matched activity's own detail for
+  // it instead; `enabled: id > 0` on useActivity keeps this from firing when
+  // there's no matched activity, and React Query caches it for the detail page.
+  const { data: matchedActivityDetail } = useActivity(matchedActivity?.id ?? 0)
+  const adherenceScore = matchedActivityDetail?.adherence?.adherence_score
+  const pushWorkout = usePushWorkoutToGarmin()
+
   if (matchedActivity) {
     return (
       <Link to={`/activities/${matchedActivity.id}`} className="hero-session hero-session-link">
@@ -64,6 +73,7 @@ function HeroSession({ data, planDay, planLoading, hasPlan, matchedActivity }: H
         </div>
         <div className="hero-session-meta">
           {formatDistance(matchedActivity.distance_m)} km · {formatDuration(matchedActivity.duration_sec)}
+          {adherenceScore != null && ` · ${Math.round(adherenceScore)}% adherence`}
         </div>
       </Link>
     )
@@ -82,6 +92,7 @@ function HeroSession({ data, planDay, planLoading, hasPlan, matchedActivity }: H
   if (planDay) {
     const label = WORKOUT_TYPE_LABELS[planDay.workout_type] ?? planDay.workout_type
     const badgeColor = WORKOUT_TYPE_BADGE_COLORS[planDay.workout_type] ?? 'var(--color-default)'
+    const pushable = planDay.workout_type !== 'rest' && planDay.workout_type !== 'cross'
     return (
       <div className="hero-session">
         <span className="hero-session-label">Today's session</span>
@@ -93,6 +104,26 @@ function HeroSession({ data, planDay, planLoading, hasPlan, matchedActivity }: H
             {planDay.target_pace_display}
           </div>
         )}
+        <div className="hero-actions">
+          {pushable && (
+            <button
+              type="button"
+              className="btn-primary hero-action-send"
+              disabled={pushWorkout.isPending}
+              onClick={() => {
+                pushWorkout.mutate(planDay.id, {
+                  onSuccess: () => toast(`Sent "${label}" to watch`, { kind: 'success' }),
+                  onError: (err: unknown) =>
+                    toast(err instanceof Error ? err.message : 'Failed to send to watch', { kind: 'error' }),
+                })
+              }}
+            >
+              {pushWorkout.isPending ? <RefreshCw size={14} className="spin" /> : <Watch size={14} />}
+              Send to watch
+            </button>
+          )}
+          <Link to="/plan" className="btn-ghost hero-action-plan-link">View in plan →</Link>
+        </div>
       </div>
     )
   }
@@ -162,7 +193,7 @@ export default function TodayHero({ data }: Props) {
             aria-expanded={readinessExpanded}
             aria-label={`Training readiness ${readiness.score} out of 100 — tap for details`}
           >
-            <ScoreRing score={readiness.score} color={ringColor} size={64} />
+            <ScoreRing score={readiness.score} color={ringColor} size={64} subLabel={readiness.label} />
           </button>
         )}
         <HeroSession

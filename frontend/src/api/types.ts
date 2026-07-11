@@ -34,6 +34,7 @@ export interface ActivitySummary {
   calories: number | null
   elevation_gain: number | null
   workout_tag?: string | null
+  personal_records?: PersonalRecordResponse[] | null
 }
 
 export interface InsightResponse {

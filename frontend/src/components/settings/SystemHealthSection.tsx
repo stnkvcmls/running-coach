@@ -21,7 +21,7 @@ function RetryButton({ jobId }: { jobId: number }) {
       onClick={() => retry.mutate(jobId)}
       disabled={retry.isPending}
     >
-      <RefreshCw size={14} className={retry.isPending ? 'spin-icon' : ''} />
+      <RefreshCw size={14} className={retry.isPending ? 'spin' : ''} />
       {retry.isPending ? 'Retrying…' : 'Retry'}
     </button>
   )

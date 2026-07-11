@@ -115,3 +115,33 @@ Visual target per phase: docs/mockups/ui-redesign-mockup.html (toggle
       section order no-op, sticky week headers under TopBar), UTC "today" in
       plan state, no error boundary, sync-pill semantics — all specced as
       Follow-up Phases A–D in the review doc.
+
+## Follow-up Phases A–D (2026-07-10)
+- [x] Phase A — Layout & correctness bugs: `.detail-body` flex column (A1);
+      `.group-head` sticky offset *and* the actual root cause — `.app-main`'s
+      dead `overflow-y: auto` was silently breaking every sticky descendant's
+      containing block (A2, two commits — see lessons.md); local-timezone
+      `todayStr()` (A3, new regression test); `ErrorBoundary` wrapping
+      `<Routes>` (A4); `useSyncStatus` no longer reports `syncing` from its
+      own poll (A5).
+- [x] Phase B — Today hero completeness: Send-to-watch + View-in-plan actions
+      on the planned state (B1); ring `subLabel` (B2); adherence appended to
+      the completed line once the matched activity's detail loads it (B3);
+      race strips capped at 2 + "Show all N races" (B4).
+- [x] Phase C — Consistency & polish: `getActivityAccent` sport-colour tint
+      for non-run activities (C1); Send-to-watch gated to today/upcoming
+      plan rows (C2); avg HR in activity rows (C3); mixed time/distance
+      `WorkoutStructureBar` segment weights (C4); rhythm/chevron/AdherenceCard
+      wrap fixes (C5); consolidated `.spin` CSS — found and fixed a second
+      hidden cross-file dependency (`spin-icon`) beyond the one the review
+      flagged (C6).
+- [x] Phase D1 — `personal_records` additively exposed on the activities-list
+      and Today `ActivitySummary` payloads (batched query, not N+1); PB badge
+      on `ActivityListItem`; `celebrateNewRecords` now fires from the
+      Activities list. D2/D3 deliberately not attempted (bigger, out of scope).
+- Verification: `frontend && npm run build && npm test` green (212 tests,
+  +30 new). `pytest` green (982 tests excluding `test_notifications.py`,
+  which needs a `pywebpush` stub in this container — see lessons.md).
+  Fixture-driven Playwright screenshots at 390×844 for every phase's
+  user-visible change (detail order, sticky header, hero states, races,
+  activities list icons/HR/PB badge, AdherenceCard wrap, Plan row gating).

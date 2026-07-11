@@ -353,7 +353,7 @@ function SyncButton({ label, type, mutation }: { label: string; type: string; mu
 
   return (
     <button className="sync-btn" onClick={handleSync} disabled={syncing}>
-      <RefreshCw size={16} className={syncing ? 'spin-icon' : ''} />
+      <RefreshCw size={16} className={syncing ? 'spin' : ''} />
       {syncing ? 'Syncing...' : label}
     </button>
   )

@@ -111,12 +111,3 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
-
-.psu-spin {
-  animation: psu-spin 1s linear infinite;
-}
-
-@keyframes psu-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}

@@ -33,7 +33,7 @@
   justify-content: space-between;
   gap: 8px;
   position: sticky;
-  top: 0;
+  top: var(--top-bar-height);
   z-index: 10;
   background: var(--bg);
   padding: 8px 4px;

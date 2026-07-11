@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Flag } from 'lucide-react'
+import { Flag, ChevronRight } from 'lucide-react'
 import { useDateContext } from '../../App'
 import { useToday, useRealignmentStatus, useRealignPlan } from '../../api/hooks'
 import { formatDateKey, format, isToday as checkIsToday } from '../../utils/date'
@@ -67,6 +67,8 @@ function RaceStrip({ race }: { race: RaceInfo }) {
   )
 }
 
+const RACE_STRIP_CAP = 2
+
 function buildGlanceStats(s: DailySummaryResponse): { label: string; value: string; unit?: string }[] {
   const stats: { label: string; value: string; unit?: string }[] = []
   if (s.resting_hr) stats.push({ label: 'RHR', value: String(s.resting_hr), unit: 'bpm' })
@@ -110,6 +112,7 @@ export default function TodayView() {
   const { selectedDate } = useDateContext()
   const dateKey = formatDateKey(selectedDate)
   const { data, isLoading } = useToday(dateKey)
+  const [showAllRaces, setShowAllRaces] = useState(false)
 
   if (isLoading) return <TodaySkeleton />
 
@@ -147,9 +150,18 @@ export default function TodayView() {
 
           {data?.next_races && data.next_races.length > 0 && (
             <section className="today-section today-races" style={{ order: 6 }}>
-              {data.next_races.map(race => (
+              {(showAllRaces ? data.next_races : data.next_races.slice(0, RACE_STRIP_CAP)).map(race => (
                 <RaceStrip key={race.id} race={race} />
               ))}
+              {!showAllRaces && data.next_races.length > RACE_STRIP_CAP && (
+                <button
+                  type="button"
+                  className="btn-ghost today-races-show-all"
+                  onClick={() => setShowAllRaces(true)}
+                >
+                  Show all {data.next_races.length} races
+                </button>
+              )}
             </section>
           )}
         </div>
@@ -160,6 +172,7 @@ export default function TodayView() {
               <h2 className="section-title">At a Glance</h2>
               <Link to={`/daily/${data.daily_summary.id}`} className="daily-snapshot-link">
                 <StatGrid stats={glanceStats} columns={4} />
+                <ChevronRight size={16} className="daily-snapshot-chevron" />
               </Link>
             </section>
           )}

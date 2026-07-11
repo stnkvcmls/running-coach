@@ -99,12 +99,3 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
-
-.plan-adaptation-accept .spin {
-  animation: plan-adaptation-spin 1s linear infinite;
-}
-
-@keyframes plan-adaptation-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}

@@ -68,6 +68,47 @@ describe('computeSegments', () => {
       { kind: 'work', weight: 1 },
     ])
   })
+
+  it('keeps raw values when every step shares one unit', () => {
+    const steps: WorkoutStep[] = [
+      step({ step_type: 'warmup', end_condition: 'distance', end_condition_value: 1000 }),
+      step({ step_type: 'interval', end_condition: 'distance', end_condition_value: 3000 }),
+    ]
+    expect(computeSegments(steps)).toEqual([
+      { kind: 'warmup', weight: 1000 },
+      { kind: 'work', weight: 3000 },
+    ])
+  })
+
+  it('converts distance to pseudo-seconds when time and distance steps are mixed', () => {
+    // A 600s warmup vs a 3000m rep is ~1:5 by raw numbers (600 vs 3000) but
+    // should land close to 600:990 once the rep converts via the 330 s/km
+    // reference pace (3000m -> 3 * 330 = 990).
+    const steps: WorkoutStep[] = [
+      step({ step_type: 'warmup', end_condition: 'time', end_condition_value: 600 }),
+      step({ step_type: 'interval', end_condition: 'distance', end_condition_value: 3000 }),
+    ]
+    const segments = computeSegments(steps)
+    expect(segments).toEqual([
+      { kind: 'warmup', weight: 600 },
+      { kind: 'work', weight: 990 },
+    ])
+    // Sanity check: proportions are now within the same order of magnitude,
+    // not the raw ~5x (600 vs 3000) or ~30x (90s vs 3000m) distortion.
+    const ratio = segments[1].weight / segments[0].weight
+    expect(ratio).toBeGreaterThan(1)
+    expect(ratio).toBeLessThan(2)
+  })
+
+  it('falls back to weight 1 for a step with neither a time nor distance end_condition when units are mixed', () => {
+    const steps: WorkoutStep[] = [
+      step({ step_type: 'warmup', end_condition: 'time', end_condition_value: 600 }),
+      step({ step_type: 'interval', end_condition: 'distance', end_condition_value: 3000 }),
+      step({ step_type: 'cooldown', end_condition: 'lap_button', end_condition_value: 5 }),
+    ]
+    const segments = computeSegments(steps)
+    expect(segments[2]).toEqual({ kind: 'cooldown', weight: 1 })
+  })
 })
 
 describe('WorkoutStructureBar', () => {

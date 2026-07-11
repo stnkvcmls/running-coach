@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Loader, Trophy, ChevronDown } from 'lucide-react'
 import { useActivity, useTriggerAnalysis, useJobStatus } from '../../api/hooks'
-import { getActivityColor, colorMap } from '../../utils/colors'
+import { getActivityColor, getActivityAccent } from '../../utils/colors'
 import { formatDistance, formatDuration, formatPace } from '../../utils/formatting'
 import { format, parseISO } from '../../utils/date'
 import StatGrid from './StatGrid'
@@ -80,7 +80,7 @@ export default function ActivityDetailView() {
   if (!activity) return <div className="empty-state">Activity not found</div>
 
   const colorType = getActivityColor(activity.name, activity.activity_type)
-  const color = colorMap[colorType]
+  const color = getActivityAccent(activity.name, activity.activity_type)
   const typeLabel = colorType === 'default'
     ? (activity.activity_type || 'Activity')
     : colorType.charAt(0).toUpperCase() + colorType.slice(1)
@@ -309,7 +309,7 @@ export default function ActivityDetailView() {
           <section className="detail-section detail-section-generating">
             <div className="card" style={{ textAlign: 'center', padding: '24px 16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                <Loader size={18} style={{ animation: 'feedback-spin 1s linear infinite' }} />
+                <Loader size={18} className="spin" />
                 <span>Generating insights...</span>
               </div>
             </div>

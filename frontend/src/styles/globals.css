@@ -211,6 +211,12 @@ button {
   to { transform: rotate(360deg); }
 }
 
+/* Shared spin animation for inline loading icons (e.g. lucide RefreshCw) —
+   one definition instead of a per-component copy in each card's CSS. */
+.spin {
+  animation: spin 1s linear infinite;
+}
+
 /* Badge */
 .badge {
   display: inline-block;
@@ -220,6 +226,17 @@ button {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+/* PB trophy badge modifier — shared by ActivityDetailView's header and
+   ActivityListItem's rows so a new PB reads the same wherever it appears. */
+.pr-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  background: #f0a50022;
+  color: #f0a500;
 }
 
 /* Shared button primitives */

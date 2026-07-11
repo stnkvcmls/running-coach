@@ -36,10 +36,6 @@ const STATE_GLYPH: Record<PlanDayState, string> = {
   rest: '—',
 }
 
-function today(): string {
-  return todayStr()
-}
-
 function formatDistance(m: number | null): string {
   if (m == null) return ''
   return `${(m / 1000).toFixed(1)} km`
@@ -161,7 +157,9 @@ function DayRow({ day }: { day: TrainingPlanDay }) {
   const state = dayState(day)
   const color = WORKOUT_COLORS[day.workout_type] ?? 'var(--color-default)'
   const label = WORKOUT_LABELS[day.workout_type] ?? day.workout_type
-  const pushable = day.workout_type !== 'rest' && day.workout_type !== 'cross'
+  // Send-to-watch only makes sense for a session still ahead — a rest day
+  // has nothing to push and a past (done/missed) day is stale noise.
+  const pushable = (state === 'today' || state === 'upcoming') && day.workout_type !== 'cross'
 
   return (
     <div
@@ -323,7 +321,7 @@ export default function PlanView() {
   // snap them back.
   useEffect(() => {
     if (weekIndexInitialized || !plan) return
-    const t = today()
+    const t = todayStr()
     const idx = plan.weeks.findIndex(w => w.week_start <= t && t <= w.week_end)
     setWeekIndex(idx >= 0 ? idx : 0)
     setWeekIndexInitialized(true)

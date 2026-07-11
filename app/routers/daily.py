@@ -36,7 +36,12 @@ from app.schemas import (
 )
 from app import training_load
 from app import plan_adaptation as plan_adaptation_mod
-from app.routers._shared import _categorize_activity_type, _enrich_event_with_steps, _parse_date
+from app.routers._shared import (
+    _categorize_activity_type,
+    _enrich_event_with_steps,
+    _parse_date,
+    _personal_records_by_activity,
+)
 
 router = APIRouter()
 
@@ -174,6 +179,9 @@ def api_today(
     # a scheduled workout (same day, same sport category), drop that workout from
     # the "Scheduled" list and tag the activity so the UI shows a "workout" badge.
     activity_summaries = [ActivitySummary.model_validate(a) for a in activities]
+    records_by_id = _personal_records_by_activity(db, uid, [a.id for a in activities])
+    for s in activity_summaries:
+        s.personal_records = records_by_id.get(s.id) or None
     summary_by_id = {s.id: s for s in activity_summaries}
     claimed_activity_ids: set[int] = set()
     remaining_events = []

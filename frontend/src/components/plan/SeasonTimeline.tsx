@@ -1,5 +1,6 @@
 import { Flag } from 'lucide-react'
 import { useSeasonPlan } from '../../api/hooks'
+import { todayStr } from '../../utils/planDayState'
 import './SeasonTimeline.css'
 
 const PHASE_COLORS: Record<string, string> = {
@@ -20,10 +21,6 @@ const PHASE_LABELS: Record<string, string> = {
   recovery: 'Recovery',
 }
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
 function addDays(dateStr: string, days: number): string {
   const d = new Date(dateStr + 'T00:00:00')
   d.setDate(d.getDate() + days)
@@ -40,7 +37,7 @@ export default function SeasonTimeline() {
   const { data: plan } = useSeasonPlan()
   if (!plan || plan.weeks.length === 0) return null
 
-  const t = today()
+  const t = todayStr()
   const daysUntil = daysBetween(t, plan.goal_race_date)
   const phasesPresent = Array.from(new Set(plan.weeks.map(w => w.phase)))
 

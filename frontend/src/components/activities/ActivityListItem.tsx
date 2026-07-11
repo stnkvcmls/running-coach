@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
-import { ChevronRight, CheckCircle } from 'lucide-react'
+import { ChevronRight, CheckCircle, Trophy } from 'lucide-react'
 import type { ActivitySummary } from '../../api/types'
-import { getActivityColor, colorMap } from '../../utils/colors'
+import { getActivityAccent } from '../../utils/colors'
 import { getSportIcon } from '../../utils/sportIcon'
 import { formatDistance, formatDuration, formatPace } from '../../utils/formatting'
 import { format, parseISO } from '../../utils/date'
@@ -12,8 +12,7 @@ interface Props {
 }
 
 export default function ActivityListItem({ activity }: Props) {
-  const colorType = getActivityColor(activity.name, activity.activity_type)
-  const color = colorMap[colorType]
+  const color = getActivityAccent(activity.name, activity.activity_type)
   const SportIcon = getSportIcon(activity.activity_type)
 
   return (
@@ -30,6 +29,14 @@ export default function ActivityListItem({ activity }: Props) {
               Workout
             </span>
           )}
+          {activity.personal_records && activity.personal_records.length > 0 && (
+            <span
+              className="badge pr-badge"
+              title={activity.personal_records.map(r => `${r.label}: ${r.display_value}`).join(', ')}
+            >
+              <Trophy size={11} /> PB
+            </span>
+          )}
         </div>
         <div className="ali-meta">
           {activity.started_at && (
@@ -43,6 +50,12 @@ export default function ActivityListItem({ activity }: Props) {
           <span>{formatDuration(activity.duration_sec)}</span>
           <span className="ali-sep">&middot;</span>
           <span>{formatPace(activity.avg_pace_min_km)} /km</span>
+          {activity.avg_hr != null && (
+            <>
+              <span className="ali-sep">&middot;</span>
+              <span>&hearts; {activity.avg_hr}</span>
+            </>
+          )}
         </div>
       </div>
       <ChevronRight size={16} className="ali-chevron" />

@@ -14,6 +14,7 @@ from app.models import (
     DailySummary,
     GarminCalendarEvent,
     Insight,
+    PersonalRecord,
     SyncStatus,
     TrainingPlan,
     TrainingPlanDay,
@@ -56,6 +57,25 @@ def test_list_activities_pagination_and_filter(client, db):
 
     page2 = client.get("/api/v1/activities?page=2&limit=2")
     assert len(page2.json()) == 2
+
+
+def test_list_activities_reports_personal_records(client, db):
+    base = datetime(2026, 6, 1, 7, 0)
+    with_pr = _add_activity(db, base)
+    without_pr = _add_activity(db, base + timedelta(days=1))
+    db.add(PersonalRecord(
+        user_id=1, record_type="distance", distance_label="5K",
+        value=1200.0, activity_id=with_pr.id, achieved_at=base,
+    ))
+    db.commit()
+
+    resp = client.get("/api/v1/activities")
+    assert resp.status_code == 200
+    by_id = {a["id"]: a for a in resp.json()}
+    prs = by_id[with_pr.id]["personal_records"]
+    assert prs is not None and len(prs) == 1
+    assert prs[0]["distance_label"] == "5K"
+    assert by_id[without_pr.id]["personal_records"] is None
 
 
 def test_activity_detail_includes_parsed_json(client, db):
@@ -764,6 +784,24 @@ def test_today_matched_workout_drops_scheduled_and_tags_activity(client, db):
     # The activity carries the workout tag.
     assert len(body["activities"]) == 1
     assert body["activities"][0]["workout_tag"] == "Tempo 8K"
+
+
+def test_today_reports_personal_records_for_matched_activity(client, db):
+    day = date(2026, 6, 17)
+    act = _add_activity(db, datetime(2026, 6, 17, 8, 0), name="Tempo Run")
+    db.add(PersonalRecord(
+        user_id=1, record_type="distance", distance_label="5K",
+        value=1200.0, activity_id=act.id, achieved_at=datetime(2026, 6, 17, 8, 0),
+    ))
+    db.commit()
+
+    resp = client.get(f"/api/v1/today?date={day.isoformat()}")
+    assert resp.status_code == 200
+    activities = resp.json()["activities"]
+    assert len(activities) == 1
+    prs = activities[0]["personal_records"]
+    assert prs is not None and len(prs) == 1
+    assert prs[0]["distance_label"] == "5K"
 
 
 def test_today_unmatched_workout_stays_scheduled(client, db):

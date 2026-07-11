@@ -59,11 +59,3 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
-
-.alert-banner .spin {
-  animation: alert-banner-spin 1s linear infinite;
-}
-
-@keyframes alert-banner-spin {
-  to { transform: rotate(360deg); }
-}

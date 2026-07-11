@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useActivities, useGarminStatus } from '../../api/hooks'
 import { format, parseISO, weeksSinceCurrentWeek, getWeekNumber, startOfWeek } from '../../utils/date'
 import type { ActivitySummary } from '../../api/types'
+import { celebrateNewRecords } from '../../utils/records'
 import ActivityListItem from './ActivityListItem'
 import './ActivitiesView.css'
 
@@ -54,6 +55,10 @@ export default function ActivitiesView() {
   const sentinelRef = useRef<HTMLDivElement>(null)
 
   const activities = useMemo(() => data?.pages.flat() ?? [], [data])
+
+  useEffect(() => {
+    celebrateNewRecords(activities.flatMap(a => a.personal_records ?? []))
+  }, [activities])
 
   // Chips grow to include every distinct activity_type seen across any filter,
   // so switching filters never makes previously-discovered chips disappear.

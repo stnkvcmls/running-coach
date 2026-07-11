@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getActivityColor, getColorHex, colorMap } from './colors'
+import { getActivityColor, getColorHex, getActivityAccent, colorMap, SPORT_COLORS } from './colors'
 
 describe('getActivityColor', () => {
   it('identifies interval workouts by name', () => {
@@ -63,5 +63,28 @@ describe('getColorHex', () => {
 
   it('returns the default color for unknown activities', () => {
     expect(getColorHex(null, null)).toBe(colorMap.default)
+  })
+})
+
+describe('getActivityAccent', () => {
+  it('keeps the workout-intensity tint for running activities', () => {
+    expect(getActivityAccent('Interval Session', 'running')).toBe(colorMap.interval)
+    expect(getActivityAccent('Easy Run', 'running')).toBe(colorMap.easy)
+    expect(getActivityAccent(null, 'trail_running')).toBe(colorMap.easy)
+  })
+
+  it('routes non-running sports through SPORT_COLORS instead of the default purple', () => {
+    expect(getActivityAccent('Morning Ride', 'cycling')).toBe(SPORT_COLORS.bike)
+    expect(getActivityAccent('Road Biking', 'road_biking')).toBe(SPORT_COLORS.bike)
+    expect(getActivityAccent('Pool Session', 'lap_swimming')).toBe(SPORT_COLORS.swim)
+    expect(getActivityAccent('Evening Walk', 'walking')).toBe(SPORT_COLORS.walk)
+    expect(getActivityAccent('Leg Day', 'strength_training')).toBe(SPORT_COLORS.strength)
+    expect(getActivityAccent(null, 'yoga')).toBe(SPORT_COLORS.other)
+  })
+
+  it('tints a non-running activity by sport even when its name contains an intensity keyword', () => {
+    // A "Tempo Ride" is still fundamentally a bike activity — sport wins over
+    // a coincidental name match so the tint stays predictable per sport.
+    expect(getActivityAccent('Tempo Ride', 'cycling')).toBe(SPORT_COLORS.bike)
   })
 })

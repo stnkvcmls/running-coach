@@ -107,4 +107,47 @@ describe('PlanView', () => {
     expect(await screen.findByText('Missed')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /view run/i })).not.toBeInTheDocument()
   })
+
+  it('shows Send to watch for today and upcoming rows', async () => {
+    const weeks = [
+      week(1, '2026-07-06', '2026-07-12', [
+        day({ id: 20, day_date: '2026-07-10', workout_type: 'tempo', description: 'Today tempo' }),
+        day({ id: 21, day_date: '2026-07-11', workout_type: 'easy', description: 'Tomorrow easy' }),
+      ]),
+    ]
+    vi.stubGlobal('fetch', mockFetch(plan(weeks)))
+    renderWithProviders(<PlanView />)
+
+    await screen.findByText('Today tempo')
+    expect(screen.getByText('Tomorrow easy')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /send to watch/i })).toHaveLength(2)
+  })
+
+  it('hides Send to watch for done and missed (past) rows', async () => {
+    const weeks = [
+      week(1, '2026-07-06', '2026-07-12', [
+        day({ id: 22, day_date: '2026-07-08', workout_type: 'tempo', matched_activity_id: 5, description: 'Done tempo' }),
+        day({ id: 23, day_date: '2026-07-09', workout_type: 'easy', matched_activity_id: null, description: 'Missed easy' }),
+      ]),
+    ]
+    vi.stubGlobal('fetch', mockFetch(plan(weeks)))
+    renderWithProviders(<PlanView />)
+
+    await screen.findByText('Done tempo')
+    expect(screen.getByText('Missed easy')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /send to watch/i })).not.toBeInTheDocument()
+  })
+
+  it('hides Send to watch for a cross-training day even when it is today', async () => {
+    const weeks = [
+      week(1, '2026-07-06', '2026-07-12', [
+        day({ id: 24, day_date: '2026-07-10', workout_type: 'cross', description: 'Today cross' }),
+      ]),
+    ]
+    vi.stubGlobal('fetch', mockFetch(plan(weeks)))
+    renderWithProviders(<PlanView />)
+
+    await screen.findByText('Today cross')
+    expect(screen.queryByRole('button', { name: /send to watch/i })).not.toBeInTheDocument()
+  })
 })
