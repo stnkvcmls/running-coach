@@ -2,6 +2,14 @@
 
 _Last updated: 2026-07-11_
 
+> **Owner scope decision (2026-07-11):** this deployment is private and
+> deliberately **Garmin-first**. Garmin Connect remains the single source of
+> truth for activities, races, and gear, and the app stays **metric-only**.
+> Multi-source import, manual activity entry, manual race CRUD, in-app gear
+> management, and imperial units are therefore **out of scope** — the
+> competitive analysis below still records those gaps for honesty, but no
+> plan items address them.
+
 This plan benchmarks the app **as it exists today** (post-v5, post-UI/UX
 redesign + follow-ups — see [`CURRENT_STATE.md`](./CURRENT_STATE.md),
 [`IMPROVEMENT_PLAN.md`](./IMPROVEMENT_PLAN.md) and
@@ -33,33 +41,33 @@ on the *coaching intelligence* axis:
   boundary, and 212 frontend + ~1000 backend tests.
 
 - **Where the field has moved past us** is no longer intelligence — it is
-  **platform openness, athlete control, and lifecycle coverage**:
+  **athlete control, lifecycle coverage, and motivation**:
 
-  1. **The app is a Garmin-only silo.** There is no manual activity entry, no
-     FIT/GPX/TCX import, no per-activity file export (`app/routers/export.py`
-     exposes exactly two CSV/JSON summary endpoints), and no second data
-     source. Every competitor ingests from multiple sources and lets data out
-     again. A broken Garmin sync (a real, monitored fragility — see the schema
-     canary) currently means *no data at all*, and a treadmill/track session
-     with no watch simply doesn't exist.
-  2. **The athlete can't touch the plan.** `app/routers/plan.py` has
+  1. **The athlete can't touch the plan.** `app/routers/plan.py` has
      regenerate / adapt-day / realign / push-to-Garmin — but no way to *move* a
      workout to Tuesday, swap two days, skip one with a reason, or build a
      custom workout. Runna, HumanGO, and TrainingPeaks all treat
      move/edit/drag-drop as table stakes; our only lever is "regenerate the
      whole plan via AI".
-  3. **Races are read-only and end at the finish line.** The `Race` model
-     exists but has **no CRUD endpoints** — races exist only if Garmin's
-     calendar has them. And nothing happens after a race: no goal-vs-actual
-     report, no plan-vs-executed pacing comparison, no automatic recovery
-     reset. Runna's 2026 cycle shipped exactly this (race-day guidance +
-     post-race recovery setup).
-  4. **Motivation mechanics stop at PRs.** No goals, no streaks, no
+  2. **Coaching ends at the finish line.** Races sync from Garmin's calendar
+     (the source of truth by design), but nothing happens after one: no
+     goal-vs-actual report, no plan-vs-executed pacing comparison, no
+     automatic recovery reset. Runna's 2026 cycle shipped exactly this
+     (race-day guidance + post-race recovery setup).
+  3. **Motivation mechanics stop at PRs.** No goals, no streaks, no
      weekly/monthly recap, no shareable summary. Strava and Garmin have made
      these the retention baseline.
-  5. **Everything is metric.** No unit preference exists anywhere in
-     `app/schemas.py` or the frontend — a US athlete cannot use the app in
-     miles (pacing splits are the sole km/mi-aware surface).
+  4. **The athlete's own data can't leave the app.** `app/routers/export.py`
+     exposes exactly two CSV/JSON summary endpoints; the detail streams stay
+     locked in `detail_json`, and the single SQLite file — holding
+     irreplaceable chat/memory/insight history — has no backup story. For a
+     private self-hosted app this is the one "openness" gap that still
+     matters.
+
+  (The remaining openness gaps in the matrix — multi-source import, manual
+  entry, manual races, gear management, imperial units — are real relative to
+  the competition but **deliberately accepted** for this private, Garmin-first
+  deployment; see the scope decision above.)
 
 ---
 
@@ -73,11 +81,12 @@ on the *coaching intelligence* axis:
 | **HumanGO ("Hugo")** | AI-native multi-sport planner | **Recalibration/benchmark tests** (1–2-day fitness assessments that update thresholds & zones automatically), schedule-aware auto-rescheduling ("knows when you're slacking and reschedules"), genuinely multi-sport goal stacking, coach dashboards |
 | **TrainingPeaks Premium** | Analytical + structured training | **Drag-and-drop workout builder + personal workout library**, calendar-level plan editing, HRV-modulated plan variants, Peak Performances (we match), the PMC (we match), universal import/export, coach marketplace |
 
-**Central finding (v6):** the coaching brain is competitive; the *chassis*
-around it is not. The highest-leverage work is no longer another model or
-metric — it is **letting data in and out, letting the athlete steer the plan,
-closing the race lifecycle, and finishing the motivation loop**. Almost all of
-it reuses machinery that already exists (`workout_translator`, `streams.py`,
+**Central finding (v6):** the coaching brain is competitive. With the
+platform-openness gaps deliberately accepted (private, Garmin-first,
+metric-only), the highest-leverage work is **letting the athlete steer the
+plan, closing the race-and-fitness lifecycle, finishing the motivation loop,
+and making the athlete's own data exportable/safe**. Almost all of it reuses
+machinery that already exists (`workout_translator`, `streams.py`,
 `adherence.py`, `season_plan.py`, the AI job queue, the push channel, the
 threshold-review flow).
 
@@ -110,12 +119,15 @@ Legend: ✓ full · ◑ partial · ✗ absent
 | Conditions + terrain race pacing → watch | **✓** | ◑ | ✗ | ◑ | ✗ | ✗ |
 | Proactive push coaching | **✓** | ✓ | ◑ | ◑ | ◑ | ◑ |
 
-Deliberately **out of scope** (unchanged from v5, re-affirmed): social
-feed/segments/clubs/leaderboards (needs a user network we don't have), live
-tracking & audio cues during a run (needs a native app; the watch itself covers
-in-run guidance via pushed structured workouts), food logging/macros, native
-iOS/Android apps, a coach marketplace, and language i18n (units yes — see
-U-1 — translations no).
+Deliberately **out of scope**: social feed/segments/clubs/leaderboards (needs
+a user network we don't have), live tracking & audio cues during a run (needs
+a native app; the watch itself covers in-run guidance via pushed structured
+workouts), food logging/macros, native iOS/Android apps, a coach marketplace,
+and i18n — all unchanged from v5. **Newly out of scope by owner decision
+(2026-07-11):** multi-source / manual activity import, manual race CRUD
+(Garmin's calendar stays the race source of truth), in-app gear management
+(gear lives in Garmin), and imperial units. The matrix rows above stay for
+honesty, but no plan item targets them.
 
 ---
 
@@ -125,86 +137,30 @@ Ordered by **impact ÷ effort** within four themes. Effort key: **S** ≈ <1 day
 **M** ≈ 1–3 days · **L** ≈ several days. File paths reflect the post-P3-1
 layout (`app/routers/*`, `app/coach/*`).
 
-### Theme A — Own your data (import, export, races)
+### Theme A — Own your data (export & backup)
 
-#### A-1 · Activity file import (FIT/GPX/TCX) + manual activity entry
-**What:** Break the Garmin-only silo. (a) `POST /activities/import` accepts a
-FIT, GPX, or TCX file (multipart), parses it into the existing `Activity` +
-detail-stream shape, and runs the **same post-sync pipeline** live sync uses
-(mean-max curves, decoupling/EF, PR detection, training-load dirty-date, AI
-analysis enqueue) so an imported run is indistinguishable from a synced one.
-(b) `POST /activities` creates a minimal manual entry (sport, date, duration,
-distance, optional avg HR + RPE) for treadmill/track/no-watch sessions — sRPE
-TSS (P1-1, delivered) already makes these carry honest load. Add
-`Activity.source` (`garmin` / `file` / `manual`) so sync reconciliation can
-skip non-Garmin rows and the UI can label them. Dedupe on
-`(user_id, started_at ±2 min, distance ±2%)` to survive "imported the file,
-then Garmin synced it too."
-**Rationale:** Every competitor ingests from anywhere; we ingest from exactly
-one fragile API (the schema canary exists *because* it's fragile). Import is
-also the app's disaster-recovery story and its migration path for new users
-with non-Garmin history. The heavy machinery — stream parsing, curve compute,
-PRs, load — is already source-agnostic once the file is normalized; the new
-code is only the parsers and the endpoint.
-**Effort:** L (FIT is the bulk; GPX/TCX are simple XML).
-**Files:** `app/importers.py` (new — `fitdecode`/`gpxpy` parsing →
-normalized activity dict + samples), `app/routers/activities.py`
-(`POST /activities/import`, `POST /activities`), `app/models.py`
-(`Activity.source`) + migration, `app/schemas.py`, `app/garmin_sync.py`
-(extract the reusable post-ingest hook it currently owns), `requirements.txt`,
-`frontend/src/components/activities/ImportActivitySheet.tsx` + manual-entry
-form (new), `frontend/src/api/{client,types,hooks}.ts`,
-`tests/test_importers.py` (new, fixture files), `tests/test_api_endpoints.py`.
+_(Import, manual entry, manual races, and units were cut per the owner scope
+decision — Garmin stays the sole source and the app stays metric.)_
 
-#### A-2 · Per-activity GPX/TCX export + full-account archive
+#### A-1 · Per-activity GPX/TCX export + full-account archive
 **What:** (a) `GET /activities/{id}/export?format=gpx|tcx` reconstructs a track
 from the stored detail streams (time/lat-lon if present, else time/distance/HR)
 — streams are already parsed and aligned in `app/streams.py`. (b)
 `GET /export/archive` streams a ZIP: all activities (JSON + GPX where
 possible), daily summaries, insights, chat history, plans, PRs — the
-"leave with everything" guarantee a self-hosted app should be best at.
-**Rationale:** Data-out is the flip side of A-1 and philosophically core to a
-self-hosted product; today a user's own detail streams are locked in
-`detail_json`. Small, well-bounded, no new deps (stdlib `zipfile`,
-hand-rolled GPX/TCX templates).
+"leave with everything" guarantee a self-hosted app should be best at. Note
+this is about *this app's* data (especially the AI-generated history that
+exists nowhere else — insights, chat, memory, plans); Garmin still holds the
+raw originals.
+**Rationale:** Data-out is philosophically core to a self-hosted product;
+today the detail streams are locked in `detail_json` and the coach's
+accumulated output can't be taken anywhere. Small, well-bounded, no new deps
+(stdlib `zipfile`, hand-rolled GPX/TCX templates). Pairs with E-2 (backups) as
+the app's data-safety story.
 **Effort:** S–M.
 **Files:** `app/exporters.py` (new), `app/routers/export.py`,
 `frontend/src/components/activity-detail/ActivityDetailView.tsx` (export menu),
 `settings/DataSection` (archive button), `tests/test_exporters.py` (new).
-
-#### A-3 · Manual race management (CRUD + goal editing)
-**What:** `POST/PATCH/DELETE /races` over the existing `Race` model (name,
-date, distance, goal time, priority A/B/C), a "Add race" flow in the UI
-(Plan or Today → races strip), and merge manual races into every consumer that
-today reads only `GarminCalendarEvent`: race countdowns, season-plan goal-race
-selection (`season_plan.py`'s race resolution chain), pacing
-(`/races/{id}/pacing` already keys on the model), fuelling, race-week pushes.
-**Rationale:** The single most basic thing a running app does — "I'm racing a
-10K on Sept 20" — currently requires the athlete to own a Garmin *and* register
-the race in Garmin's calendar. The model, the pacing engine, and the season
-planner all exist; this is endpoints + a form + widening one selection query.
-**Effort:** S.
-**Files:** `app/routers/races.py` (CRUD), `app/season_plan.py` (include manual
-races in goal selection), `app/routers/daily.py` (countdowns), `app/schemas.py`,
-`frontend/src/components/plan/RaceFormSheet.tsx` (new), races strip edit
-affordances, `tests/test_api_endpoints.py`, `tests/test_season_plan.py`.
-
-#### A-4 · Unit preference (km ↔ miles)
-**What:** A per-user `units` preference (`metric` / `imperial`) on
-`AthleteProfile`, a Settings toggle, and frontend conversion at the formatting
-layer — `frontend/src/utils/formatting.ts` is already the single choke point
-(~16 consumer files use `formatPace`/`formatDistance`), so the API stays
-metric-native and only display converts. Pacing already supports mile splits
-(`pacing.py` takes a unit); wire the preference through as its default. Chart
-axes/tooltips read the same helpers via `chartTheme`.
-**Rationale:** Metric-only walls off the largest running market; every
-competitor handles this. Doing it now is much cheaper than after more surfaces
-accumulate.
-**Effort:** M (mechanical but wide; the utils centralization keeps it sane).
-**Files:** `app/models.py` (`AthleteProfile.units`) + migration,
-`app/routers/settings.py`, `frontend/src/utils/formatting.ts` (unit-aware),
-`frontend/src/api/types.ts`, Settings toggle, sweep of direct "km" literals,
-`frontend/src/utils/formatting.test.ts` (imperial cases).
 
 ### Theme B — Let the athlete steer the plan
 
@@ -289,8 +245,8 @@ steps), `app/workout_translator.py` (prefer structured steps),
 ### Theme C — Close the race & fitness lifecycle
 
 #### C-1 · Post-race report + recovery reset
-**What:** When a synced activity matches a race day (calendar event or A-3
-manual race, same-day + distance within tolerance): (a) enqueue a **race
+**What:** When a synced activity matches a race day (a Garmin calendar race,
+same-day + distance within tolerance): (a) enqueue a **race
 report** `AIJob` — goal vs actual, planned pacing splits (the stored pacing
 strategy) vs executed splits, positive/negative split analysis, conditions
 (the weather + heat model), new PRs set — persisted as a new `Insight` type
@@ -428,23 +384,7 @@ data — presentation + one mapping function.
 `frontend/src/components/today/TodayHero.tsx`, Progress,
 `tests/test_training_load.py`, `tests/test_threshold.py`.
 
-#### D-5 · Gear / shoe tracking
-**What:** A `Gear` model (name, type, start date, retired flag, alert-km),
-per-activity assignment (default shoe auto-assigns on ingest; editable on
-detail), cumulative mileage on a Settings/Progress panel, and a push when a
-shoe crosses its alert threshold (~700 km default). Include gear in the AI
-context only when a niggle is active (worn shoes + recurring shin note is a
-classic pattern the coach should see).
-**Rationale:** Garmin/Strava/TP staple; injury-relevant, not just bookkeeping.
-Cheap and self-contained.
-**Effort:** S–M.
-**Files:** `app/models.py` (`Gear`, `Activity.gear_id`) + migration, new
-router or `settings.py` (CRUD + assign), ingest default-assign hook,
-`app/coach/context.py` (conditional line), `app/schemas.py`,
-`frontend/src/components/settings/GearSection.tsx` (new), detail assignment,
-`tests/test_gear.py` (new).
-
-#### D-6 · Matched routes (repeated-run progress) — stretch
+#### D-5 · Matched routes (repeated-run progress) — stretch
 **What:** Fingerprint each activity's route (start/end proximity + downsampled
 polyline hash over stored lat/lon streams); group repeats; on Activity Detail
 show "you've run this route 14 times — 2nd fastest, 0:41 off your best" with a
@@ -484,16 +424,11 @@ frontend Routes view + detail strip, `tests/test_routes.py`.
   `app/notifications.py` (`notify()` already no-ops without VAPID keys) so the
   app and full test suite work without the package, with a skip-marker on the
   webpush tests when absent.
-- **E-4 · Import/source abstraction note.** A-1's `Activity.source` column and
-  post-ingest hook is deliberately the thin end of a source-adapter seam
-  (Strava/COROS/Polar APIs later, if ever). Don't build the abstraction now —
-  just keep `importers.py` free of Garmin-isms so a second adapter has a home.
-- **E-5 · Architecture: no change recommended.** FastAPI + SQLite (WAL) +
+- **E-4 · Architecture: no change recommended.** FastAPI + SQLite (WAL) +
   APScheduler + the `AIJob` table-queue remain right-sized (re-affirming v5's
   assessment post-P3-2 thread pool). Nothing in this plan needs Postgres,
-  Redis, or an external queue; A-1's file parsing runs in the existing job
-  worker. Revisit only if real multi-tenant use materializes (then: per-user
-  sync fan-out concurrency first, DB second).
+  Redis, or an external queue. Revisit only if real multi-tenant use
+  materializes (then: per-user sync fan-out concurrency first, DB second).
 
 ---
 
@@ -501,10 +436,9 @@ frontend Routes view + detail strip, `tests/test_routes.py`.
 
 Each phase is independently shippable; later phases compound on earlier ones.
 
-- **Phase 1 — Own your data:** A-3 (manual races — smallest, unblocks season
-  planning for non-Garmin-calendar users) → A-2 (export) → A-1 (import +
-  manual entry; the biggest single item, do it while the theme's context is
-  hot). E-2 and E-3 ride along (data-safety theme, tiny).
+- **Phase 1 — Data safety first (small):** E-2 (backups) → A-1 (export
+  archive) → E-3 (`pywebpush` fragility). All three are S/S–M and make
+  everything after safer to iterate on.
 - **Phase 2 — Steer the plan:** B-1 (move/skip/swap) → B-3 (structured steps +
   planned overlay) → B-2 (workout builder, which then benefits from B-3's step
   rendering everywhere).
@@ -512,11 +446,10 @@ Each phase is independently shippable; later phases compound on earlier ones.
   C-2 (benchmark tests) → C-3 (personal heat model, informs next summer's
   races).
 - **Phase 4 — Motivation & depth:** D-4 (status label — cheapest win first) →
-  D-1 (goals/streaks/recap) → D-2 (share cards) → D-5 (gear) → D-3 (structure
-  detection) → D-6 (matched routes, stretch).
-- **Throughout:** A-4 (units) whenever a formatting surface is already being
-  touched, at the latest before Phase 4's new surfaces multiply the sweep;
-  E-1 (Playwright CI) alongside the first frontend-heavy phase.
+  D-1 (goals/streaks/recap) → D-2 (share cards) → D-3 (structure detection) →
+  D-5 (matched routes, stretch).
+- **Throughout:** E-1 (Playwright CI) alongside the first frontend-heavy
+  phase.
 
 **Verification per phase** (per `CLAUDE.md` and the established playbook):
 `pytest` green, `cd frontend && npm run build && npm test` green, plus the
