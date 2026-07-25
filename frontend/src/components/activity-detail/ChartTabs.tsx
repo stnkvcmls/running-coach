@@ -4,8 +4,8 @@ import {
   ScatterChart, Scatter, ReferenceLine,
 } from 'recharts'
 import type { ChartSeries, MetricZone } from '../../api/types'
-import { useTheme } from '../../App'
-import { getAxisTick, getTooltipProps, getZoneColor, METRIC_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
+import { useTheme, useSkin } from '../../App'
+import { getAxisTick, getTooltipProps, getChartTickColor, getZoneColor, METRIC_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
 import './ChartTabs.css'
 
 const SCATTER_METRICS = new Set(['cadence', 'stride', 'gct', 'vert_osc', 'vert_ratio'])
@@ -19,6 +19,7 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
   const keys = Object.keys(chartData)
   const [activeKey, setActiveKey] = useState(keys[0] || '')
   const { theme } = useTheme()
+  const { skin } = useSkin()
   const reduceMotion = usePrefersReducedMotion()
 
   if (keys.length === 0) return null
@@ -33,7 +34,7 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
   // Reverse Y for pace metrics (lower value = faster = better)
   const reversed = activeKey === 'pace' || activeKey === 'gap_pace'
 
-  const { contentStyle: tooltipStyle, labelStyle: tooltipTextStyle } = getTooltipProps(theme)
+  const { contentStyle: tooltipStyle, labelStyle: tooltipTextStyle } = getTooltipProps(theme, skin)
 
   const yTickFormatter = (v: number) => {
     if (activeKey === 'pace' || activeKey === 'gap_pace') {
@@ -90,7 +91,7 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
                 domain={['auto', 'auto']}
                 tickCount={7}
                 tickFormatter={yTickFormatter}
-                tick={getAxisTick(theme)}
+                tick={getAxisTick(theme, undefined, skin)}
                 axisLine={false}
                 tickLine={false}
                 width={38}
@@ -104,7 +105,7 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
               />
               <ReferenceLine
                 y={average}
-                stroke="#888"
+                stroke={getChartTickColor(theme, skin)}
                 strokeDasharray="6 4"
                 strokeWidth={1.5}
               />
@@ -114,7 +115,7 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
                 isAnimationActive={!reduceMotion}
                 shape={(props: any) => {
                   const dotColor = zones && zones.length > 0
-                    ? getZoneColor(props.payload.y, zones)
+                    ? getZoneColor(props.payload.y, zones, skin)
                     : color
                   return <circle cx={props.cx} cy={props.cy} r={2.5} fill={dotColor} />
                 }}

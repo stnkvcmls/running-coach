@@ -9,8 +9,8 @@ import {
   CartesianGrid,
 } from 'recharts'
 import { usePerformanceCurve, type PerformanceCurveCompareParams } from '../../api/hooks'
-import { useTheme } from '../../App'
-import { getChartTickColor, getTooltipProps, getGridStroke, PERFORMANCE_CURVE_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
+import { useTheme, useSkin } from '../../App'
+import { getChartTickColor, getTooltipProps, getGridStroke, getSeriesColors, PERFORMANCE_CURVE_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
 import Skeleton from '../ui/Skeleton'
 import Numeral from '../ui/Numeral'
 import type { PerformanceCurveCompareMode, PerformanceCurvePoint } from '../../api/types'
@@ -34,8 +34,6 @@ const COMPARE_OPTIONS: { label: string; value: CompareChoice }[] = [
   { label: 'Vs. year ago', value: 'year_ago' },
   { label: 'Vs. custom range', value: 'custom' },
 ]
-
-const { actual: ACTUAL_COLOR, model: MODEL_COLOR, compare: COMPARE_COLOR } = PERFORMANCE_CURVE_COLORS
 
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10)
@@ -114,9 +112,11 @@ export default function PerformanceCurveView() {
 
   const { data, isLoading } = usePerformanceCurve(days, compareParams)
   const { theme } = useTheme()
-  const tickColor = getChartTickColor(theme)
-  const { contentStyle } = getTooltipProps(theme)
+  const { skin } = useSkin()
+  const tickColor = getChartTickColor(theme, skin)
+  const { contentStyle } = getTooltipProps(theme, skin)
   const reduceMotion = usePrefersReducedMotion()
+  const { actual: ACTUAL_COLOR, model: MODEL_COLOR, compare: COMPARE_COLOR } = getSeriesColors(theme, skin, PERFORMANCE_CURVE_COLORS)
 
   if (isLoading) {
     return (
@@ -335,7 +335,7 @@ export default function PerformanceCurveView() {
           >
             <ResponsiveContainer width="100%" height={200}>
               <ComposedChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={getGridStroke(theme)} />
+                <CartesianGrid strokeDasharray="3 3" stroke={getGridStroke(theme, skin)} />
                 <XAxis
                   dataKey="label"
                   tick={{ fill: tickColor, fontSize: 10 }}

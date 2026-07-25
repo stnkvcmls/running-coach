@@ -202,7 +202,7 @@ export default function TodayHero({ data }: Props) {
             aria-expanded={readinessExpanded}
             aria-label={`Training readiness ${readiness.score} out of 100 — tap for details`}
           >
-            <ScoreRing score={readiness.score} color={ringColor} size={64} subLabel={readiness.label} />
+            <ScoreRing score={readiness.score} color={ringColor} size={100} subLabel={readiness.label} />
           </button>
         )}
         <HeroSession

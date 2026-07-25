@@ -1,7 +1,6 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
-import { useTheme } from '../../App'
-import { getChartTooltipStyle, getChartTickColor, getChartTooltipTextStyle } from '../../utils/theme'
-import { usePrefersReducedMotion } from '../../utils/chartTheme'
+import { useTheme, useSkin } from '../../App'
+import { getTooltipProps, getChartTickColor, SIGNAL_ZONE_RAMP, usePrefersReducedMotion } from '../../utils/chartTheme'
 import './HrZonesChart.css'
 
 const ZONE_COLORS = ['#2ecc71', '#27ae60', '#f39c12', '#e67e22', '#e74c3c']
@@ -13,7 +12,10 @@ interface Props {
 
 export default function HrZonesChart({ zones }: Props) {
   const { theme } = useTheme()
+  const { skin } = useSkin()
   const reduceMotion = usePrefersReducedMotion()
+  const { contentStyle, labelStyle, itemStyle } = getTooltipProps(theme, skin)
+  const zoneFillColors = skin === 'nothing-signal' ? SIGNAL_ZONE_RAMP : ZONE_COLORS
 
   if (!zones || !Array.isArray(zones) || zones.length === 0) return null
 
@@ -46,20 +48,20 @@ export default function HrZonesChart({ zones }: Props) {
             <YAxis
               type="category"
               dataKey="zone"
-              tick={{ fontSize: 11, fill: getChartTickColor(theme) }}
+              tick={{ fontSize: 11, fill: getChartTickColor(theme, skin) }}
               axisLine={false}
               tickLine={false}
               width={48}
             />
             <Tooltip
-              contentStyle={getChartTooltipStyle(theme)}
-              labelStyle={getChartTooltipTextStyle(theme)}
-              itemStyle={getChartTooltipTextStyle(theme)}
+              contentStyle={contentStyle}
+              labelStyle={labelStyle}
+              itemStyle={itemStyle}
               formatter={(value: number) => [`${value} min`, 'Time']}
             />
             <Bar dataKey="minutes" radius={[0, 4, 4, 0]} barSize={20} isAnimationActive={!reduceMotion}>
               {data.map((_: any, i: number) => (
-                <Cell key={i} fill={ZONE_COLORS[i] || '#6c5ce7'} />
+                <Cell key={i} fill={zoneFillColors[i] || '#6c5ce7'} />
               ))}
             </Bar>
           </BarChart>

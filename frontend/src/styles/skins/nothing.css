@@ -1,6 +1,8 @@
 /* Nothing OS skin — Phase 1 (token layer) + Phase 2 (semantic ink tokens)
    + Phase 3 (structural restyle) + Phase 4 (dot-matrix numerals & ring).
-   See docs/NOTHING_OS_SKIN_PLAN.md Phase 5+ for the chart work still to come. */
+   Phase 5 (charts) lives in utils/chartTheme.ts, not here — Recharts takes
+   literal colour props, not var(), so there's no CSS-side token layer for it.
+   See docs/NOTHING_OS_SKIN_PLAN.md Phase 6 for the remaining QA pass. */
 
 /* ---- shared by both Nothing skins, both modes ---- */
 html[data-skin="nothing-signal"][data-theme="dark"],
@@ -328,6 +330,33 @@ html[data-skin^="nothing"] .alert-banner-icon {
   display: none;
 }
 
+/* ---- 3.5 Training-load form/risk badges: same hairline-not-fill treatment
+   as the alert banner above. Under app-inks the semantic colour-coding
+   (fresh/fatigued, low/high risk) stays in the text, just without the tinted
+   background; under signal-red it collapses to ink + the one accent, same as
+   every other status indicator in that skin. ---- */
+html[data-skin^="nothing"] .tl-form-badge {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xs);
+}
+
+html[data-skin="nothing-signal"] .tl-form-fresh,
+html[data-skin="nothing-signal"] .tl-risk-low {
+  color: var(--text);
+}
+
+html[data-skin="nothing-signal"] .tl-form-neutral {
+  color: var(--text-secondary);
+}
+
+html[data-skin="nothing-signal"] .tl-form-building,
+html[data-skin="nothing-signal"] .tl-form-fatigued,
+html[data-skin="nothing-signal"] .tl-risk-moderate,
+html[data-skin="nothing-signal"] .tl-risk-high {
+  color: var(--accent);
+}
+
 /* ---- 3.6 Perforated fills — apply via className="card perf" in TSX ---- */
 html[data-skin^="nothing"] .perf {
   background-image: radial-gradient(var(--dot-off) 1px, transparent 1px);
@@ -363,4 +392,19 @@ html[data-skin^="nothing"] .score-ring {
 
 html[data-skin^="nothing"] .score-ring-arc {
   stroke-dasharray: 1.5 6;
+}
+
+/* ---- 4.4 Numeral in a .stat-value: DotMatrix has no real text baseline (it's
+   a grid of <i> dots, line-height: 0), so plain inline baseline alignment
+   against a sibling .stat-unit synthesises the numeral's baseline at its
+   bottom edge — that lands it at a different height depending on whether a
+   unit span is present at all, which is why cells with a unit ("bpm", "ms")
+   and cells without one ("Sleep", "Body Battery") drift out of vertical sync
+   in a shared-row StatGrid. Flex + explicit center alignment removes the
+   font-metric guesswork entirely. ---- */
+html[data-skin^="nothing"] .stat-value,
+html[data-skin^="nothing"] .stat-value-lg {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
