@@ -8,6 +8,7 @@ import { WORKOUT_TYPE_COLORS } from '../../utils/colors'
 import { dayState, todayStr, type PlanDayState } from '../../utils/planDayState'
 import { toast } from '../ui/Toast'
 import AlertBanner from '../ui/AlertBanner'
+import Numeral from '../ui/Numeral'
 import SeasonTimeline from './SeasonTimeline'
 import './PlanView.css'
 
@@ -250,7 +251,7 @@ function WeekProgress({ week }: { week: TrainingPlanWeek }) {
         {week.theme && <span className="plan-week-progress-theme">{week.theme}</span>}
         {totalDistM > 0 && (
           <b className="plan-week-progress-value">
-            {(doneDistM / 1000).toFixed(1)} / {(totalDistM / 1000).toFixed(1)} km
+            <Numeral value={(doneDistM / 1000).toFixed(1)} /> / <Numeral value={(totalDistM / 1000).toFixed(1)} /> km
           </b>
         )}
       </div>
