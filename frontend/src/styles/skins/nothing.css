@@ -1,5 +1,6 @@
-/* Nothing OS skin — Phase 1 (token layer) + Phase 2 (semantic ink tokens).
-   No component rules here yet; see docs/NOTHING_OS_SKIN_PLAN.md Phase 3+. */
+/* Nothing OS skin — Phase 1 (token layer) + Phase 2 (semantic ink tokens)
+   + Phase 3 (structural restyle). See docs/NOTHING_OS_SKIN_PLAN.md Phase 4+
+   for the dot-matrix numerals, ring and chart work still to come. */
 
 /* ---- shared by both Nothing skins, both modes ---- */
 html[data-skin="nothing-signal"][data-theme="dark"],
@@ -122,4 +123,217 @@ html[data-skin="nothing-signal"][data-theme="light"] {
   --color-cross: var(--text);
   --color-strength: var(--text);
   --color-default: var(--text);
+}
+
+/* ==========================================================================
+   Phase 3 — structural restyle. Shared by both Nothing skins in both modes
+   (html[data-skin^="nothing"]) — geometry and typography never depend on
+   which ink set is active, only on the tokens defined above. Nothing here
+   edits a base rule; every block adds a skin-scoped override on top.
+   ========================================================================== */
+
+/* ---- 3.1 Micro-label typography ---- */
+html[data-skin^="nothing"] .stat-label,
+html[data-skin^="nothing"] .section-title {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* ---- 3.2 Buttons and chips ---- */
+html[data-skin^="nothing"] .btn-primary,
+html[data-skin^="nothing"] .btn-secondary,
+html[data-skin^="nothing"] .btn-ghost,
+html[data-skin^="nothing"] .chip {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  border-radius: 999px;
+}
+
+html[data-skin^="nothing"] .btn-primary,
+html[data-skin^="nothing"] .btn-secondary {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+html[data-skin^="nothing"] .btn-primary {
+  background: var(--text);
+  color: var(--bg);
+}
+
+html[data-skin^="nothing"] .btn-secondary {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+}
+
+html[data-skin^="nothing"] .btn-secondary:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--text);
+}
+
+html[data-skin^="nothing"] .chip {
+  background: transparent;
+  border: 1px solid var(--border);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+html[data-skin^="nothing"] .chip.active {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+
+/* ---- 3.3 Cards and tiles ---- */
+html[data-skin^="nothing"] .card {
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+
+/* ---- 3.4 Bottom nav glyph ---- */
+html[data-skin^="nothing"] .nav-item {
+  position: relative;
+}
+
+html[data-skin^="nothing"] .nav-item.active {
+  color: var(--text);
+}
+
+html[data-skin^="nothing"] .nav-item.active::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  width: 22px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+@media (min-width: 1024px) {
+  html[data-skin^="nothing"] .nav-item.active::after {
+    top: 50%;
+    left: 0;
+    width: 3px;
+    height: 22px;
+    transform: translateY(-50%);
+  }
+}
+
+/* ---- 3.5 Week strip ---- */
+html[data-skin^="nothing"] .week-day {
+  border-radius: var(--radius-xs);
+}
+
+html[data-skin^="nothing"] .week-day.selected {
+  background: var(--text);
+}
+
+html[data-skin^="nothing"] .week-day.selected .day-name,
+html[data-skin^="nothing"] .week-day.selected .day-number {
+  color: var(--bg);
+}
+
+html[data-skin^="nothing"] .week-day.selected .day-dot {
+  background: var(--bg);
+}
+
+html[data-skin^="nothing"] .week-day.today:not(.selected) {
+  border: 1px solid var(--accent);
+}
+
+html[data-skin^="nothing"] .week-day.today:not(.selected) .day-number {
+  color: var(--text);
+}
+
+/* ---- 3.5 Top bar ---- */
+html[data-skin^="nothing"] .top-bar-title {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+html[data-skin^="nothing"] .top-bar-icon-btn {
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border);
+}
+
+html[data-skin^="nothing"] .top-bar-icon-btn:hover,
+html[data-skin^="nothing"] .top-bar-icon-btn.active {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+html[data-skin^="nothing"] .top-bar-avatar {
+  border-radius: var(--radius-xs);
+  background: var(--text);
+  color: var(--bg);
+  font-family: var(--font-mono);
+}
+
+/* ---- 3.5 Bottom sheet ---- */
+html[data-skin^="nothing"] .bs-panel {
+  border-radius: 30px 30px 0 0;
+  border: 1px solid var(--border);
+  border-bottom: none;
+}
+
+html[data-skin^="nothing"] .bs-handle {
+  width: 42px;
+  background: var(--border-strong);
+}
+
+html[data-skin^="nothing"] .bs-title {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ---- 3.5 Alert banner: hairline + --c-alert dot, no tinted fill ---- */
+html[data-skin^="nothing"] .alert-banner {
+  background: transparent;
+  border: 1px solid var(--border);
+  position: relative;
+  padding-left: 28px;
+}
+
+html[data-skin^="nothing"] .alert-banner::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--c-alert);
+}
+
+html[data-skin^="nothing"] .alert-banner-icon {
+  display: none;
+}
+
+/* ---- 3.6 Perforated fills — apply via className="card perf" in TSX ---- */
+html[data-skin^="nothing"] .perf {
+  background-image: radial-gradient(var(--dot-off) 1px, transparent 1px);
+  background-size: 10px 10px;
+}
+
+/* ---- 3.7 Skeleton — static perforated block, not a shimmer sweep.
+   prefers-reduced-motion in globals.css still applies harmlessly since the
+   animated ::after is removed outright here, not just paused. ---- */
+html[data-skin^="nothing"] .skeleton {
+  background-color: var(--bg-card);
+  background-image: radial-gradient(var(--dot-off) 1.3px, transparent 1.3px);
+  background-size: 6px 6px;
+}
+
+html[data-skin^="nothing"] .skeleton::after {
+  content: none;
 }

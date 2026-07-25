@@ -122,7 +122,7 @@ export default function TrainingLoadChart({ current }: Props) {
   const hasCrossTraining = sportShares.length > 1
 
   return (
-    <div className="card training-load">
+    <div className="card training-load perf">
       <div className="tl-stats">
         <div className="tl-stat">
           <span className="tl-stat-label">Fitness</span>
