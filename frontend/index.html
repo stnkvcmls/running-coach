@@ -13,9 +13,14 @@
   </head>
   <body>
     <script>
-      (function() {
+      (function () {
         var t = localStorage.getItem('theme');
-        if (t === 'light') document.documentElement.setAttribute('data-theme', 'light');
+        var s = localStorage.getItem('skin');
+        document.documentElement.setAttribute('data-theme', t === 'light' ? 'light' : 'dark');
+        document.documentElement.setAttribute(
+          'data-skin',
+          s === 'nothing-signal' || s === 'nothing-app' ? s : 'default'
+        );
       })();
     </script>
     <div id="root"></div>
