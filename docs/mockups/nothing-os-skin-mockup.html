@@ -1,0 +1,1550 @@
+<!DOCTYPE html>
+<html lang="en" data-mode="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Running Coach — Nothing OS redesign mockups</title>
+<style>
+/* ============================================================
+   NOTHING OS DESIGN TOKENS
+   ============================================================ */
+:root {
+  --nt-red:      #d71921;
+  --nt-red-dim:  #7a0f14;
+  --nt-amber:    #e8a33d;
+
+  /* ---- SEMANTIC INKS ----------------------------------------
+     Signal mode: everything collapses to ink or the one red.
+     App-ink mode (below): the existing palette from globals.css
+     comes back, but only ever on strokes, dots and small fills. */
+  --c-easy:     var(--ink);
+  --c-tempo:    var(--nt-red);
+  --c-interval: var(--nt-red);
+  --c-long:     var(--ink);
+  --c-race:     var(--nt-red);
+  --c-cross:    var(--ink);
+  --c-strength: var(--ink);
+  --c-pb:       var(--nt-red);
+  --c-alert:    var(--nt-red);
+  --c-warn:     var(--nt-red);
+  --c-ring:     var(--ink);
+  --c-bar:      var(--ink);
+  --c-sleep:    var(--ink);
+  --c-hrv:      var(--ink);
+  --c-rhr:      var(--nt-red);
+
+  --bg:          #000000;
+  --surface:     #0b0b0b;
+  --surface-2:   #141414;
+  --line:        #232323;
+  --line-strong: #3a3a3a;
+  --ink:         #ffffff;
+  --ink-2:       #b4b4b4;
+  --ink-3:       #6e6e6e;
+  --dot-off:     rgba(255,255,255,.10);
+
+  --r-tile:  26px;
+  --r-card:  20px;
+  --r-pill:  999px;
+  --r-chip:  10px;
+
+  --mono: ui-monospace, "SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
+  --ui: "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+
+  --page: #08080a;
+}
+html[data-mode="light"] {
+  --bg:          #ffffff;
+  --surface:     #f4f4f4;
+  --surface-2:   #ebebeb;
+  --line:        #e0e0e0;
+  --line-strong: #c8c8c8;
+  --ink:         #000000;
+  --ink-2:       #4a4a4a;
+  --ink-3:       #8b8b8b;
+  --dot-off:     rgba(0,0,0,.10);
+  --page: #d8d8d6;
+}
+
+/* ============================================================
+   APP-INK MODE — Nothing geometry, existing globals.css palette.
+   Every value below is lifted verbatim from the current app, so
+   colors.ts / chartTheme.ts need no refactor at all.
+   ============================================================ */
+html[data-ink="app"] {
+  --nt-red:     #6c5ce7;   /* --accent */
+  --c-easy:     #2ecc71;   /* --color-easy */
+  --c-tempo:    #f39c12;   /* --color-tempo */
+  --c-interval: #e74c3c;   /* --color-interval */
+  --c-long:     #0984e3;   /* --color-long */
+  --c-race:     #e84393;   /* --color-race */
+  --c-cross:    #00cec9;   /* --color-cross */
+  --c-strength: #a29bfe;   /* --color-strength */
+  --c-pb:       #f0a500;   /* .pr-badge gold */
+  --c-alert:    #e74c3c;   /* --danger */
+  --c-warn:     #f39c12;   /* --warning */
+  --c-ring:     #2ecc71;   /* readiness band: good */
+  --c-bar:      #6c5ce7;
+  --c-sleep:    #6c5ce7;   /* WELLNESS_METRIC_COLORS.sleep */
+  --c-hrv:      #0984e3;   /* WELLNESS_METRIC_COLORS.hrv */
+  --c-rhr:      #e17055;   /* WELLNESS_METRIC_COLORS.restingHr */
+}
+/* Light mode needs darker variants of four inks — #f39c12 and #2ecc71 land at
+   ~2.2:1 and ~2.0:1 on white, below the 3:1 floor for non-text UI. These are
+   the only places the "keep the original palette" rule has to bend. */
+html[data-ink="app"][data-mode="light"] {
+  --nt-red: #5a4bd1;       /* --accent-light, already in globals.css */
+  --c-easy: #1a8f4c;
+  --c-tempo: #a86a06;
+  --c-strength: #6c5ce7;
+  --c-cross: #00908d;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-font-smoothing: antialiased; }
+body {
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--ui);
+  min-height: 100vh;
+  transition: background .25s ease, color .25s ease;
+}
+html[data-mode="light"] body { color: #111; }
+
+/* dot-grid page backdrop — the Nothing perforation motif */
+body::before {
+  content: "";
+  position: fixed; inset: 0;
+  background-image: radial-gradient(currentColor 1px, transparent 1px);
+  background-size: 24px 24px;
+  opacity: .06;
+  pointer-events: none;
+  color: #fff;
+}
+html[data-mode="light"] body::before { color: #000; opacity: .10; }
+
+/* ============================================================
+   PAGE CHROME
+   ============================================================ */
+.wrap { max-width: 1600px; margin: 0 auto; padding: 56px 28px 120px; position: relative; }
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: .28em; text-transform: uppercase;
+  color: var(--ink-3);
+}
+html[data-mode="light"] .eyebrow { color: #666; }
+
+h1 {
+  font-size: clamp(30px, 5vw, 58px);
+  line-height: .96;
+  letter-spacing: -.03em;
+  font-weight: 500;
+  margin: 14px 0 18px;
+  max-width: 20ch;
+}
+h1 em { font-style: normal; color: var(--nt-red); }
+
+.lede { max-width: 62ch; color: #8d8d8d; font-size: 15px; line-height: 1.6; }
+html[data-mode="light"] .lede { color: #4a4a4a; }
+
+.page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 40px; flex-wrap: wrap; }
+
+/* glyph strip decoration */
+.glyph-bars { display: flex; gap: 6px; align-items: flex-end; height: 46px; margin-top: 22px; }
+.glyph-bars i {
+  display: block; width: 6px; border-radius: 3px;
+  background: var(--nt-red);
+  box-shadow: 0 0 12px rgba(215,25,33,.75);
+  animation: glyph 2.6s ease-in-out infinite;
+}
+.glyph-bars i:nth-child(1){height:14px;animation-delay:0s}
+.glyph-bars i:nth-child(2){height:30px;animation-delay:.15s}
+.glyph-bars i:nth-child(3){height:46px;animation-delay:.3s}
+.glyph-bars i:nth-child(4){height:24px;animation-delay:.45s}
+.glyph-bars i:nth-child(5){height:36px;animation-delay:.6s}
+@keyframes glyph { 0%,100%{opacity:.28} 50%{opacity:1} }
+
+.mode-toggle {
+  display: inline-flex; border: 1px solid #3a3a3a; border-radius: var(--r-pill);
+  overflow: hidden; font-family: var(--mono); font-size: 10px; letter-spacing: .18em;
+  background: rgba(0,0,0,.35); backdrop-filter: blur(6px);
+}
+html[data-mode="light"] .mode-toggle { border-color: #a9a9a7; background: rgba(255,255,255,.6); }
+.mode-toggle button {
+  border: 0; background: transparent; color: #9a9a9a; padding: 11px 20px;
+  cursor: pointer; text-transform: uppercase; font-family: inherit; font-size: inherit; letter-spacing: inherit;
+}
+.mode-toggle button[aria-pressed="true"] { background: var(--nt-red); color: #fff; }
+
+/* section headers */
+.sec { margin-top: 84px; }
+.sec-head { display: flex; align-items: baseline; gap: 16px; border-top: 1px solid rgba(255,255,255,.14); padding-top: 16px; margin-bottom: 30px; }
+html[data-mode="light"] .sec-head { border-color: rgba(0,0,0,.16); }
+.sec-num { font-family: var(--mono); font-size: 11px; color: var(--nt-red); letter-spacing: .2em; }
+.sec-title { font-size: 13px; text-transform: uppercase; letter-spacing: .26em; font-family: var(--mono); }
+.sec-note { margin-left: auto; font-size: 12px; color: #7c7c7c; font-family: var(--mono); }
+html[data-mode="light"] .sec-note { color: #6a6a6a; }
+
+/* ============================================================
+   TOKEN SPECIMEN CARDS
+   ============================================================ */
+.specimens { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 18px; }
+.spec {
+  border: 1px solid rgba(255,255,255,.14); border-radius: var(--r-card);
+  padding: 20px; background: rgba(0,0,0,.30);
+}
+html[data-mode="light"] .spec { border-color: rgba(0,0,0,.14); background: rgba(255,255,255,.55); }
+.spec h4 { font-family: var(--mono); font-size: 10px; letter-spacing: .22em; text-transform: uppercase; color: #8a8a8a; font-weight: 400; margin-bottom: 16px; }
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.sw { width: 52px; }
+.sw span { display: block; height: 52px; border-radius: 12px; border: 1px solid rgba(255,255,255,.16); }
+html[data-mode="light"] .sw span { border-color: rgba(0,0,0,.16); }
+.sw b { display: block; font-family: var(--mono); font-size: 8px; color: #7a7a7a; margin-top: 6px; letter-spacing: .04em; font-weight: 400; }
+.type-row { display: flex; align-items: baseline; gap: 12px; padding: 7px 0; border-bottom: 1px dashed rgba(255,255,255,.10); }
+html[data-mode="light"] .type-row { border-color: rgba(0,0,0,.12); }
+.type-row:last-child { border-bottom: 0; }
+.type-row code { font-family: var(--mono); font-size: 9px; color: #6e6e6e; margin-left: auto; }
+.lbl-xs { font-family: var(--mono); font-size: 9px; letter-spacing: .26em; text-transform: uppercase; color: #9a9a9a; }
+.radius-demo { display: flex; gap: 10px; align-items: flex-end; }
+.radius-demo div { border: 1px solid rgba(255,255,255,.3); }
+html[data-mode="light"] .radius-demo div { border-color: rgba(0,0,0,.3); }
+
+/* ============================================================
+   PHONE FRAME
+   ============================================================ */
+.frames { display: grid; grid-template-columns: repeat(auto-fill, minmax(348px, 1fr)); gap: 46px 34px; }
+.frame-wrap { display: flex; flex-direction: column; }
+.frame-cap { margin-bottom: 14px; }
+.frame-cap h3 { font-size: 15px; font-weight: 500; letter-spacing: -.01em; display: flex; align-items: center; gap: 9px; }
+.frame-cap h3::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--nt-red); }
+.frame-cap p { font-size: 12px; color: #7f7f7f; margin-top: 6px; line-height: 1.55; }
+html[data-mode="light"] .frame-cap p { color: #5c5c5c; }
+.frame-cap .src { font-family: var(--mono); font-size: 9.5px; color: #5f5f5f; margin-top: 6px; letter-spacing: .02em; }
+
+.phone {
+  width: 100%; max-width: 372px; height: 762px;
+  background: var(--bg);
+  border: 1px solid var(--line-strong);
+  border-radius: 42px;
+  padding: 9px;
+  position: relative;
+  box-shadow: 0 30px 70px rgba(0,0,0,.55);
+}
+html[data-mode="light"] .phone { box-shadow: 0 24px 60px rgba(0,0,0,.18); }
+.screen {
+  width: 100%; height: 100%;
+  background: var(--bg);
+  border-radius: 34px;
+  overflow-y: auto; overflow-x: hidden;
+  position: relative;
+  color: var(--ink);
+  scrollbar-width: none;
+}
+.screen::-webkit-scrollbar { width: 0; }
+
+/* status bar */
+.statusbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 22px 6px; font-family: var(--mono); font-size: 10px; letter-spacing: .1em; color: var(--ink);
+  position: sticky; top: 0; z-index: 5; background: var(--bg);
+}
+.statusbar .sb-right { display: flex; gap: 7px; align-items: center; color: var(--ink-2); }
+.sb-bat { width: 20px; height: 10px; border: 1px solid currentColor; border-radius: 2px; position: relative; }
+.sb-bat::after { content:""; position:absolute; inset:1.5px; right: 6px; background: currentColor; }
+.sb-bat::before { content:""; position:absolute; right:-3px; top:3px; width:2px; height:4px; background: currentColor; }
+
+/* app top bar */
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 10px 20px 12px; }
+.topbar-title { display: flex; flex-direction: column; gap: 3px; }
+.topbar-title b {
+  font-family: var(--mono); font-weight: 400;
+  font-size: 21px; letter-spacing: .22em; text-transform: uppercase;
+}
+.topbar-title small { font-family: var(--mono); font-size: 9px; letter-spacing: .2em; color: var(--ink-3); }
+.topbar-actions { display: flex; align-items: center; gap: 8px; }
+.icon-btn {
+  width: 34px; height: 34px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--surface);
+  display: grid; place-items: center; color: var(--ink-2);
+}
+.avatar-btn {
+  width: 34px; height: 34px; border-radius: 12px; background: var(--ink); color: var(--bg);
+  display: grid; place-items: center; font-family: var(--mono); font-size: 13px; font-weight: 700;
+}
+.sync-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--line); border-radius: var(--r-pill);
+  padding: 6px 10px; font-family: var(--mono); font-size: 8.5px; letter-spacing: .14em; color: var(--ink-3);
+  text-transform: uppercase;
+}
+.sync-pill i { width: 5px; height: 5px; border-radius: 50%; background: var(--nt-red); box-shadow: 0 0 8px var(--nt-red); animation: glyph 2s infinite; }
+
+/* week strip */
+.weekstrip { display: flex; gap: 5px; padding: 4px 16px 14px; }
+.wday {
+  flex: 1; border: 1px solid var(--line); border-radius: 14px;
+  padding: 8px 0 7px; text-align: center; background: var(--surface);
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+}
+.wday em { font-style: normal; font-family: var(--mono); font-size: 8px; letter-spacing: .1em; color: var(--ink-3); text-transform: uppercase; }
+.wday b { font-family: var(--mono); font-size: 13px; font-weight: 400; }
+.wday .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--ink-3); }
+.wday .dot.done { background: var(--ink); }
+.wday .dot.race { background: var(--c-race); }
+.wday.sel { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.wday.sel em { color: rgba(0,0,0,.55); }
+html[data-mode="light"] .wday.sel em { color: rgba(255,255,255,.6); }
+.wday.sel .dot { background: var(--bg); }
+.wday.today { border-color: var(--nt-red); }
+
+/* body */
+.sbody { padding: 0 16px 108px; display: flex; flex-direction: column; gap: 12px; }
+
+/* tiles */
+.tile {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-tile); padding: 18px;
+}
+.tile.flat { background: transparent; }
+.tile.perf {
+  background-image: radial-gradient(var(--dot-off) 1px, transparent 1px);
+  background-size: 10px 10px;
+}
+.tile-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.tile-label {
+  font-family: var(--mono); font-size: 9px; letter-spacing: .24em; text-transform: uppercase; color: var(--ink-3);
+}
+.tile-label.red { color: var(--nt-red); }
+
+/* dot-matrix numerals */
+.dm { display: inline-flex; gap: var(--dm-gap, 4px); align-items: flex-start; line-height: 0; }
+.dm-char { display: grid; grid-template-columns: repeat(5, var(--dm-d, 3px)); grid-auto-rows: var(--dm-d, 3px); gap: var(--dm-s, 2px); }
+.dm-dot { border-radius: 50%; background: var(--dot-off); }
+.dm-dot.on { background: currentColor; }
+.dm.red { color: var(--nt-red); }
+
+/* readiness ring */
+.ring-wrap { position: relative; width: 96px; height: 96px; flex-shrink: 0; }
+.ring-wrap svg { transform: rotate(-90deg); }
+.ring-center { position: absolute; inset: 0; display: grid; place-items: center; }
+
+/* hero */
+.hero-top { display: flex; gap: 16px; align-items: center; }
+.hero-session { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.badge-out {
+  align-self: flex-start; border: 1px solid currentColor; border-radius: var(--r-pill);
+  padding: 4px 11px; font-family: var(--mono); font-size: 9px; letter-spacing: .18em; text-transform: uppercase;
+}
+.badge-red { color: var(--c-tempo); }
+.hero-metrics { display: flex; align-items: baseline; gap: 8px; }
+.unit { font-family: var(--mono); font-size: 9px; letter-spacing: .16em; color: var(--ink-3); text-transform: uppercase; }
+.sep-line { height: 1px; background: var(--line); margin: 14px 0; }
+.sep-dot { height: 1px; background-image: linear-gradient(90deg, var(--line-strong) 40%, transparent 0); background-size: 5px 1px; margin: 14px 0; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 40px; padding: 0 18px; border-radius: var(--r-pill);
+  font-family: var(--mono); font-size: 10px; letter-spacing: .18em; text-transform: uppercase;
+  border: 1px solid var(--line-strong); color: var(--ink); background: transparent;
+}
+.btn.solid { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.btn.red { background: var(--nt-red); color: #fff; border-color: var(--nt-red); }
+.btn.sm { height: 30px; padding: 0 12px; font-size: 8.5px; }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.brief { font-size: 12.5px; line-height: 1.65; color: var(--ink-2); }
+.brief b { color: var(--ink); font-weight: 500; }
+.brief .more { color: var(--nt-red); font-family: var(--mono); font-size: 9px; letter-spacing: .16em; text-transform: uppercase; }
+
+/* stat grid */
+.statgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.statgrid.c4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.statcell { padding: 12px 10px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 7px; align-items: flex-start; }
+.statcell:nth-child(2n) { border-right: 0; }
+.statgrid.c4 .statcell { border-right: 1px solid var(--line); }
+.statgrid.c4 .statcell:nth-child(4n) { border-right: 0; }
+.statgrid.c4 .statcell:nth-last-child(-n+4) { border-bottom: 0; }
+.statgrid:not(.c4) .statcell:nth-last-child(-n+2) { border-bottom: 0; }
+
+/* check-in scale */
+.scale-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 0; }
+.scale-taps { display: flex; gap: 5px; }
+.scale-taps b {
+  width: 26px; height: 26px; border-radius: 9px; border: 1px solid var(--line);
+  display: grid; place-items: center; font-family: var(--mono); font-size: 10px; font-weight: 400; color: var(--ink-3);
+}
+.scale-taps b.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.scale-taps b.on.red { background: var(--nt-red); border-color: var(--nt-red); color: #fff; }
+
+/* bars / charts */
+.bars { display: flex; align-items: flex-end; gap: 6px; height: 76px; }
+.bars > div { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 6px; height: 100%; }
+.bars i { display: block; width: 100%; border-radius: 4px 4px 2px 2px; background: var(--line-strong); }
+.bars i.on { background: var(--c-bar); }
+.bars i.red { background: var(--c-warn); }
+.bars em { font-style: normal; font-family: var(--mono); font-size: 7.5px; color: var(--ink-3); letter-spacing: .1em; }
+
+.legend { display: flex; gap: 14px; flex-wrap: wrap; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 8.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+.legend i { width: 10px; height: 3px; border-radius: 2px; background: var(--ink); }
+.legend i.red { background: var(--c-rhr); }
+.legend i.hrv { background: var(--c-hrv); }
+.bars.t-sleep i.on { background: var(--c-sleep); }
+.legend i.dim { background: var(--line-strong); }
+
+/* plan rows */
+.plan-row { display: flex; align-items: center; gap: 13px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.plan-row:last-child { border-bottom: 0; }
+.state {
+  width: 26px; height: 26px; border-radius: 9px; border: 1px solid var(--line);
+  display: grid; place-items: center; font-family: var(--mono); font-size: 11px; color: var(--ink-3); flex-shrink: 0;
+}
+.state.done { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.state.today { border-color: var(--nt-red); color: var(--nt-red); }
+.state.missed { border-color: var(--line-strong); color: var(--line-strong); }
+.plan-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.plan-name { font-family: var(--mono); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; }
+.plan-meta { font-family: var(--mono); font-size: 9.5px; color: var(--ink-3); letter-spacing: .06em; }
+.plan-day { font-family: var(--mono); font-size: 8.5px; color: var(--ink-3); letter-spacing: .18em; width: 24px; }
+
+/* progress bar */
+.pbar { height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+.pbar i { display: block; height: 100%; background: var(--ink); border-radius: 2px; }
+.pbar i.red { background: var(--c-warn); }
+
+/* chat */
+.msg { max-width: 84%; padding: 13px 15px; border-radius: 18px; font-size: 12.5px; line-height: 1.6; }
+.msg.coach { background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 6px; align-self: flex-start; color: var(--ink-2); }
+.msg.me { background: var(--ink); color: var(--bg); border-bottom-right-radius: 6px; align-self: flex-end; }
+.msg-row { display: flex; flex-direction: column; gap: 6px; }
+.msg-who { font-family: var(--mono); font-size: 8px; letter-spacing: .22em; text-transform: uppercase; color: var(--ink-3); display: flex; align-items: center; gap: 6px; }
+.msg-who i { width: 5px; height: 5px; border-radius: 50%; background: var(--nt-red); }
+.action-chip {
+  display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
+  border: 1px dashed var(--nt-red); color: var(--nt-red); border-radius: var(--r-chip);
+  padding: 6px 10px; font-family: var(--mono); font-size: 8.5px; letter-spacing: .14em; text-transform: uppercase;
+}
+.chatbar {
+  position: sticky; bottom: 0; display: flex; gap: 8px; align-items: center;
+  background: var(--bg); padding: 10px 0 0;
+}
+.chatinput {
+  flex: 1; height: 44px; border-radius: var(--r-pill); border: 1px solid var(--line-strong);
+  display: flex; align-items: center; padding: 0 16px; color: var(--ink-3);
+  font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+}
+.send-btn { width: 44px; height: 44px; border-radius: 50%; background: var(--nt-red); display: grid; place-items: center; color: #fff; }
+
+/* chips row */
+.chips { display: flex; gap: 7px; overflow: hidden; padding-bottom: 2px; }
+.chip {
+  border: 1px solid var(--line); border-radius: var(--r-pill); padding: 7px 13px;
+  font-family: var(--mono); font-size: 9px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3);
+  white-space: nowrap;
+}
+.chip.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+/* activity list item */
+.ali { display: flex; align-items: center; gap: 13px; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--surface); }
+.ali-icon { width: 40px; height: 40px; border-radius: 13px; border: 1px solid var(--line-strong); display: grid; place-items: center; flex-shrink: 0; color: var(--ink); }
+.ali-icon.red { border-color: var(--c-interval); color: var(--c-interval); }
+.ali-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.ali-name { font-size: 12.5px; font-weight: 500; display: flex; align-items: center; gap: 7px; }
+.pb {
+  font-family: var(--mono); font-size: 7.5px; letter-spacing: .16em; text-transform: uppercase;
+  border: 1px solid var(--c-pb); color: var(--c-pb); border-radius: 5px; padding: 2px 5px;
+}
+.ali-meta { font-family: var(--mono); font-size: 9px; color: var(--ink-3); letter-spacing: .05em; }
+
+/* bottom nav */
+.bottomnav {
+  position: sticky; bottom: 0; margin: 0 -16px; display: grid; grid-template-columns: repeat(5, 1fr);
+  background: var(--bg); border-top: 1px solid var(--line); padding: 10px 6px calc(10px + env(safe-area-inset-bottom));
+}
+.nav-item { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--ink-3); position: relative; }
+.nav-item b { font-family: var(--mono); font-size: 7.5px; letter-spacing: .14em; text-transform: uppercase; font-weight: 400; }
+.nav-item.on { color: var(--ink); }
+.nav-item.on::after {
+  content: ""; position: absolute; top: -11px; width: 22px; height: 3px; border-radius: 2px;
+  background: var(--nt-red); box-shadow: 0 0 10px rgba(215,25,33,.9);
+}
+.nav-fab {
+  position: absolute; right: 16px; bottom: 96px; width: 54px; height: 54px; border-radius: 50%;
+  background: var(--nt-red); display: grid; place-items: center; color: #fff;
+  box-shadow: 0 0 24px rgba(215,25,33,.45);
+}
+
+/* bottom sheet */
+.sheet-scrim { position: absolute; inset: 0; background: rgba(0,0,0,.62); border-radius: 34px; }
+html[data-mode="light"] .sheet-scrim { background: rgba(0,0,0,.35); }
+.sheet {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  background: var(--surface); border: 1px solid var(--line); border-bottom: 0;
+  border-radius: 30px 30px 34px 34px; padding: 14px 18px 24px;
+}
+.sheet-grab { width: 42px; height: 4px; border-radius: 2px; background: var(--line-strong); margin: 0 auto 16px; }
+
+/* map + splits */
+.mapbox {
+  height: 132px; border-radius: var(--r-card); border: 1px solid var(--line);
+  background-image: radial-gradient(var(--dot-off) 1px, transparent 1px); background-size: 9px 9px;
+  position: relative; overflow: hidden;
+}
+.split-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.split-row em { font-style: normal; font-family: var(--mono); font-size: 9px; color: var(--ink-3); width: 16px; }
+.split-bar { flex: 1; height: 12px; border-radius: 3px; background: var(--surface-2); position: relative; }
+.split-bar i { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--ink); }
+.split-bar i.red { background: var(--c-interval); }
+.split-row b { font-family: var(--mono); font-size: 9.5px; font-weight: 400; }
+
+/* component sheet grid */
+.comp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+.comp {
+  border: 1px solid rgba(255,255,255,.14); border-radius: var(--r-card); overflow: hidden;
+  background: rgba(0,0,0,.3);
+}
+html[data-mode="light"] .comp { border-color: rgba(0,0,0,.14); background: rgba(255,255,255,.55); }
+.comp > h4 {
+  font-family: var(--mono); font-size: 9px; letter-spacing: .22em; text-transform: uppercase;
+  color: #8a8a8a; font-weight: 400; padding: 13px 16px; border-bottom: 1px solid rgba(255,255,255,.1);
+}
+html[data-mode="light"] .comp > h4 { border-color: rgba(0,0,0,.1); }
+.comp-body { padding: 18px 16px; background: var(--bg); color: var(--ink); display: flex; flex-direction: column; gap: 12px; }
+
+/* mapping table */
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+th, td { text-align: left; padding: 13px 14px; border-bottom: 1px solid rgba(255,255,255,.10); vertical-align: top; }
+html[data-mode="light"] th, html[data-mode="light"] td { border-color: rgba(0,0,0,.10); }
+th { font-family: var(--mono); font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: #7d7d7d; font-weight: 400; }
+td code { font-family: var(--mono); font-size: 10.5px; color: var(--nt-red); }
+td.was { color: #8a8a8a; }
+html[data-mode="light"] td.was { color: #5c5c5c; }
+
+.footnote {
+  margin-top: 70px; border: 1px dashed rgba(255,255,255,.2); border-radius: var(--r-card);
+  padding: 20px 22px; font-size: 12.5px; color: #8d8d8d; line-height: 1.7; max-width: 90ch;
+}
+html[data-mode="light"] .footnote { border-color: rgba(0,0,0,.22); color: #4d4d4d; }
+.footnote b { color: var(--ink); }
+html[data-mode="light"] .footnote b { color: #000; }
+
+svg { display: block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ==================== HEADER ==================== -->
+  <header class="page-head">
+    <div>
+      <div class="eyebrow">Running Coach · UI Redesign Study · v1</div>
+      <h1>Nothing OS for a <em>training</em> app.</h1>
+      <p class="lede">
+        Dot-matrix, hairline, deliberately un-decorative. The Nothing look is carried by geometry
+        and type, not hue — so it works with two different palettes, and you can flip every screen
+        below between them: <b style="color:#d71921">signal red</b>, which spends colour once per
+        screen, or <b style="color:#8b7dff">app inks</b>, which keeps the palette already in
+        <code style="font-family:var(--mono);font-size:12px">globals.css</code> but moves it off
+        surfaces onto strokes, labels and chart series. Below: the token set, seven screens, the
+        component sheet, and a direct mapping from what the app renders today.
+      </p>
+      <div class="glyph-bars"><i></i><i></i><i></i><i></i><i></i></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px;align-items:flex-end">
+      <div class="mode-toggle" role="group" aria-label="Colour mode">
+        <button data-mode-btn="dark" aria-pressed="true">Black</button>
+        <button data-mode-btn="light" aria-pressed="false">White</button>
+      </div>
+      <div class="mode-toggle" role="group" aria-label="Ink set">
+        <button data-ink-btn="signal" aria-pressed="true">Signal red</button>
+        <button data-ink-btn="app" aria-pressed="false">App inks</button>
+      </div>
+      <span style="font-family:var(--mono);font-size:9px;letter-spacing:.14em;color:#7a7a7a;text-transform:uppercase;max-width:22ch;text-align:right;line-height:1.6">
+        Both toggles apply to every screen below
+      </span>
+    </div>
+  </header>
+
+  <!-- ==================== 01 TOKENS ==================== -->
+  <section class="sec">
+    <div class="sec-head">
+      <span class="sec-num">01</span>
+      <span class="sec-title">Design Language</span>
+      <span class="sec-note">tokens · type · geometry</span>
+    </div>
+
+    <div class="specimens">
+      <div class="spec">
+        <h4>Signal red — 3 inks, 1 signal</h4>
+        <div class="swatches">
+          <div class="sw"><span style="background:#000"></span><b>#000</b></div>
+          <div class="sw"><span style="background:#0b0b0b"></span><b>#0B0B0B</b></div>
+          <div class="sw"><span style="background:#232323"></span><b>#232323</b></div>
+          <div class="sw"><span style="background:#6e6e6e"></span><b>#6E6E6E</b></div>
+          <div class="sw"><span style="background:#fff"></span><b>#FFF</b></div>
+          <div class="sw"><span style="background:#d71921;border-color:#d71921"></span><b>#D71921</b></div>
+        </div>
+        <div style="height:1px;background:rgba(255,255,255,.12);margin:16px 0"></div>
+        <h4 style="margin-bottom:12px">App inks — existing globals.css</h4>
+        <div class="swatches">
+          <div class="sw"><span style="background:#6c5ce7"></span><b>accent</b></div>
+          <div class="sw"><span style="background:#2ecc71"></span><b>easy</b></div>
+          <div class="sw"><span style="background:#f39c12"></span><b>tempo</b></div>
+          <div class="sw"><span style="background:#e74c3c"></span><b>interval</b></div>
+          <div class="sw"><span style="background:#0984e3"></span><b>long</b></div>
+          <div class="sw"><span style="background:#e84393"></span><b>race</b></div>
+        </div>
+        <p style="font-size:11.5px;color:#7f7f7f;line-height:1.6;margin-top:14px">
+          Two strategies, one geometry. <b style="color:#d71921">Signal red</b> spends colour once per screen.
+          <b style="color:#6c5ce7">App inks</b> keeps the palette you already have but demotes it to strokes,
+          dots and labels — never a filled surface. Toggle at the top of the page.
+        </p>
+      </div>
+
+      <div class="spec">
+        <h4>Dot-matrix numerals</h4>
+        <div style="display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap">
+          <div class="dm" data-dm="78" data-d="4" data-s="2.5"></div>
+          <div class="dm red" data-dm="4:45" data-d="3" data-s="2"></div>
+          <div class="dm" data-dm="12.4" data-d="2.5" data-s="1.8"></div>
+        </div>
+        <p style="font-size:11.5px;color:#7f7f7f;line-height:1.6;margin-top:16px">
+          Every headline metric renders on a 5×7 perforated grid — unlit dots stay visible at 10%,
+          the way a Glyph panel reads when it's off. Body copy stays in a plain grotesque.
+        </p>
+      </div>
+
+      <div class="spec">
+        <h4>Type scale</h4>
+        <div class="type-row"><span class="lbl-xs">Micro label</span><code>10 / .24em / upper</code></div>
+        <div class="type-row"><span style="font-family:var(--mono);font-size:12px;letter-spacing:.16em">SESSION ROW</span><code>12 / .16em / mono</code></div>
+        <div class="type-row"><span style="font-size:13px">Body / briefing copy</span><code>13 / 1.65</code></div>
+        <div class="type-row"><span style="font-family:var(--mono);font-size:21px;letter-spacing:.22em">TODAY</span><code>21 / .22em</code></div>
+        <div class="type-row"><span class="dm" data-dm="00" data-d="4" data-s="2.5"></span><code>dot-matrix 5×7</code></div>
+      </div>
+
+      <div class="spec">
+        <h4>Geometry</h4>
+        <div class="radius-demo">
+          <div style="width:56px;height:56px;border-radius:26px"></div>
+          <div style="width:46px;height:46px;border-radius:20px"></div>
+          <div style="width:36px;height:36px;border-radius:12px"></div>
+          <div style="width:28px;height:28px;border-radius:999px"></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:12px;font-family:var(--mono);font-size:8px;color:#6e6e6e;letter-spacing:.06em">
+          <span style="width:56px">26 tile</span><span style="width:46px">20 card</span><span style="width:36px">12 icon</span><span>pill</span>
+        </div>
+        <p style="font-size:11.5px;color:#7f7f7f;line-height:1.6;margin-top:14px">
+          Flat surfaces, <b>zero shadow</b>, 1px hairlines instead. Elevation is communicated by
+          border contrast, not blur. Perforated dot fills replace gradients.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 02 SCREENS ==================== -->
+  <section class="sec">
+    <div class="sec-head">
+      <span class="sec-num">02</span>
+      <span class="sec-title">Screens</span>
+      <span class="sec-note">372 × 762 · both modes</span>
+    </div>
+
+    <div class="frames">
+
+      <!-- ---------- TODAY ---------- -->
+      <div class="frame-wrap">
+        <div class="frame-cap">
+          <h3>Today</h3>
+          <p>Readiness ring becomes a perforated arc with a dot-matrix score — monochrome on signal red, band-coloured on app inks. The session stays the loudest thing on screen.</p>
+          <div class="src">TodayView · TodayHero · DailyCheckinCard · TrainingLoadChart</div>
+        </div>
+        <div class="phone"><div class="screen">
+          <div class="statusbar"><span>09:41</span><span class="sb-right"><svg width="14" height="10" viewBox="0 0 14 10" fill="currentColor"><rect x="0" y="7" width="2.4" height="3" rx=".6"/><rect x="3.8" y="5" width="2.4" height="5" rx=".6"/><rect x="7.6" y="2.5" width="2.4" height="7.5" rx=".6"/><rect x="11.4" y="0" width="2.4" height="10" rx=".6"/></svg><span class="sb-bat"></span></span></div>
+
+          <div class="topbar">
+            <div class="topbar-title"><b>Today</b><small>Week 30 / 52 · Thu 24 Jul</small></div>
+            <div class="topbar-actions">
+              <span class="sync-pill"><i></i>Sync</span>
+              <span class="avatar-btn">S</span>
+            </div>
+          </div>
+
+          <div class="weekstrip">
+            <div class="wday"><em>M</em><b>21</b><span class="dot done"></span></div>
+            <div class="wday"><em>T</em><b>22</b><span class="dot done"></span></div>
+            <div class="wday"><em>W</em><b>23</b><span class="dot"></span></div>
+            <div class="wday sel today"><em>T</em><b>24</b><span class="dot"></span></div>
+            <div class="wday"><em>F</em><b>25</b><span class="dot"></span></div>
+            <div class="wday"><em>S</em><b>26</b><span class="dot"></span></div>
+            <div class="wday"><em>S</em><b>27</b><span class="dot race"></span></div>
+          </div>
+
+          <div class="sbody">
+            <!-- hero -->
+            <div class="tile">
+              <div class="hero-top">
+                <div class="ring-wrap" style="color:var(--c-ring)">
+                  <svg width="96" height="96" viewBox="0 0 96 96">
+                    <circle cx="48" cy="48" r="42" fill="none" stroke="var(--line)" stroke-width="4" stroke-dasharray="1.5 6" stroke-linecap="round"/>
+                    <circle cx="48" cy="48" r="42" fill="none" stroke="currentColor" stroke-width="4" stroke-dasharray="1.5 6" stroke-linecap="round" stroke-dashoffset="0" pathLength="100" style="stroke-dasharray: 78 100"/>
+                  </svg>
+                  <div class="ring-center" style="flex-direction:column;gap:6px">
+                    <span class="dm" data-dm="78" data-d="2.6" data-s="1.8"></span>
+                    <span style="font-family:var(--mono);font-size:6.5px;letter-spacing:.2em;color:var(--ink-3)">PRIMED</span>
+                  </div>
+                </div>
+                <div class="hero-session">
+                  <span class="tile-label">Today's session</span>
+                  <span class="badge-out badge-red">Tempo</span>
+                  <span style="font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:var(--ink-3);line-height:1.5">
+                    THRESHOLD · WEEK 30<br>2 WK TO RACE
+                  </span>
+                </div>
+              </div>
+
+              <div class="sep-dot"></div>
+              <div style="display:flex;gap:14px">
+                <span style="flex:1;display:flex;flex-direction:column;gap:9px">
+                  <span class="tile-label">Distance</span>
+                  <span style="display:flex;align-items:center;gap:6px">
+                    <span class="dm" data-dm="12.0" data-d="2.6" data-s="1.8"></span><span class="unit">km</span>
+                  </span>
+                </span>
+                <span style="width:1px;background:var(--line)"></span>
+                <span style="flex:1;display:flex;flex-direction:column;gap:9px">
+                  <span class="tile-label">Target pace</span>
+                  <span style="display:flex;align-items:center;gap:6px">
+                    <span class="dm" data-dm="4:45" data-d="2.6" data-s="1.8"></span><span class="unit">/km</span>
+                  </span>
+                </span>
+              </div>
+
+              <div class="sep-dot"></div>
+              <div class="btn-row">
+                <button class="btn solid" style="flex:1">Send to watch</button>
+                <button class="btn">Plan</button>
+              </div>
+
+              <div class="sep-line"></div>
+              <p class="brief"><b>Two weeks out from race day — hold tempo at threshold, not above.</b>
+                <span class="more">More →</span></p>
+            </div>
+
+            <!-- check-in -->
+            <div class="tile">
+              <div class="tile-head"><span class="tile-label">Daily check-in</span><span class="tile-label" style="color:var(--c-warn)">Not logged</span></div>
+              <div class="scale-row">
+                <span style="font-size:12px">Soreness</span>
+                <span class="scale-taps"><b>1</b><b class="on">2</b><b>3</b><b>4</b><b>5</b></span>
+              </div>
+              <div class="scale-row" style="border-top:1px solid var(--line)">
+                <span style="font-size:12px">Energy</span>
+                <span class="scale-taps"><b>1</b><b>2</b><b>3</b><b class="on">4</b><b>5</b></span>
+              </div>
+              <div class="scale-row" style="border-top:1px solid var(--line)">
+                <span style="font-size:12px">Mood</span>
+                <span class="scale-taps"><b>1</b><b>2</b><b>3</b><b>4</b><b class="on red">5</b></span>
+              </div>
+            </div>
+
+            <!-- at a glance -->
+            <div class="tile" style="padding:0;overflow:hidden">
+              <div style="padding:16px 18px 10px"><span class="tile-label">At a glance</span></div>
+              <div class="statgrid c4">
+                <div class="statcell"><span class="tile-label">RHR</span><span class="dm" data-dm="48" data-d="2.4" data-s="1.7"></span></div>
+                <div class="statcell"><span class="tile-label">Sleep</span><span class="dm" data-dm="82" data-d="2.4" data-s="1.7"></span></div>
+                <div class="statcell"><span class="tile-label">Batt</span><span class="dm" data-dm="76" data-d="2.4" data-s="1.7"></span></div>
+                <div class="statcell"><span class="tile-label">HRV</span><span class="dm" data-dm="61" data-d="2.4" data-s="1.7"></span></div>
+              </div>
+            </div>
+
+            <!-- training load -->
+            <div class="tile perf">
+              <div class="tile-head"><span class="tile-label">Training load</span><span class="tile-label">ACWR 1.08</span></div>
+              <div class="bars">
+                <div><i class="on" style="height:34%"></i><em>M</em></div>
+                <div><i class="on" style="height:52%"></i><em>T</em></div>
+                <div><i class="on" style="height:26%"></i><em>W</em></div>
+                <div><i class="red" style="height:70%"></i><em>T</em></div>
+                <div><i style="height:18%"></i><em>F</em></div>
+                <div><i style="height:44%"></i><em>S</em></div>
+                <div><i style="height:88%"></i><em>S</em></div>
+              </div>
+              <div class="sep-line"></div>
+              <div class="legend"><span><i class="dim"></i>Chronic 41</span><span><i></i>Acute 44</span><span><i class="red"></i>Today</span></div>
+            </div>
+          </div>
+
+          <div class="bottomnav" style="margin:0 16px">
+            <span class="nav-item on"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg><b>Today</b></span>
+            <span class="nav-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h5"/></svg><b>Plan</b></span>
+            <span class="nav-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 12a8 8 0 1 1-3.2-6.4"/><circle cx="12" cy="12" r="2.5"/></svg><b>Coach</b></span>
+            <span class="nav-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><b>Runs</b></span>
+            <span class="nav-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg><b>Trend</b></span>
+          </div>
+        </div></div>
+      </div>
+
+      <!-- ---------- PLAN ---------- -->
+      <div class="frame-wrap">
+        <div class="frame-cap">
+          <h3>Plan</h3>
+          <p>State lives in the glyph box — filled = done, outlined = today, dim = missed, dash = rest — so it survives either ink set. Signal red drops the six workout hues; app inks keep them on the type label only.</p>
+          <div class="src">PlanView · SeasonTimeline · plan-row states</div>
+        </div>
+        <div class="phone"><div class="screen">
+          <div class="statusbar"><span>09:41</span><span class="sb-right"><svg width="14" height="10" viewBox="0 0 14 10" fill="currentColor"><rect x="0" y="7" width="2.4" height="3" rx=".6"/><rect x="3.8" y="5" width="2.4" height="5" rx=".6"/><rect x="7.6" y="2.5" width="2.4" height="7.5" rx=".6"/><rect x="11.4" y="0" width="2.4" height="10" rx=".6"/></svg><span class="sb-bat"></span></span></div>
+
+          <div class="topbar">
+            <div class="topbar-title"><b>Plan</b><small>Marathon block · 18 weeks</small></div>
+            <div class="topbar-actions"><span class="icon-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M20 11A8 8 0 1 0 12 20"/><path d="M20 4v7h-7"/></svg></span><span class="icon-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h16M4 12h16M4 18h10"/></svg></span></div>
+          </div>
+
+          <div class="sbody">
+            <!-- season timeline -->
+            <div class="tile perf">
+              <div class="tile-head"><span class="tile-label">Season</span><span class="tile-label" style="color:var(--c-race)">Race in 24 d</span></div>
+              <div style="display:flex;gap:3px;height:30px;align-items:stretch">
+                <div style="flex:3;border-radius:6px;background:var(--line-strong)"></div>
+                <div style="flex:4;border-radius:6px;background:var(--c-bar)"></div>
+                <div style="flex:2;border-radius:6px;background:var(--surface-2);border:1px solid var(--line)"></div>
+                <div style="flex:.5;border-radius:6px;background:var(--c-race)"></div>
+              </div>
+              <div style="display:flex;gap:3px;margin-top:8px;font-family:var(--mono);font-size:7.5px;letter-spacing:.14em;color:var(--ink-3);text-transform:uppercase">
+                <span style="flex:3">Base</span><span style="flex:4">Build</span><span style="flex:2">Taper</span><span style="flex:.5">•</span>
+              </div>
+            </div>
+
+            <!-- week header -->
+            <div class="tile">
+              <div class="tile-head" style="margin-bottom:10px">
+                <span style="display:flex;align-items:center;gap:9px">
+                  <span class="tile-label">Week</span><span class="dm" data-dm="30" data-d="2.6" data-s="1.8"></span>
+                </span>
+                <span style="display:flex;gap:6px">
+                  <span class="icon-btn" style="width:26px;height:26px;border-radius:9px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6l-6 6 6 6"/></svg></span>
+                  <span class="icon-btn" style="width:26px;height:26px;border-radius:9px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></span>
+                </span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+                <span class="dm" data-dm="42.5" data-d="3" data-s="2"></span><span class="unit">of 58 km</span>
+              </div>
+              <div class="pbar"><i style="width:73%"></i></div>
+            </div>
+
+            <!-- day rows -->
+            <div class="tile" style="padding:6px 18px">
+              <div class="plan-row">
+                <span class="plan-day">MON</span>
+                <span class="state done">✓</span>
+                <span class="plan-main"><span class="plan-name" style="color:var(--c-easy)">Easy</span><span class="plan-meta">8.0 km · 5:40 /km · done 8.2</span></span>
+              </div>
+              <div class="plan-row">
+                <span class="plan-day">TUE</span>
+                <span class="state done">✓</span>
+                <span class="plan-main"><span class="plan-name" style="color:var(--c-interval)">Intervals</span><span class="plan-meta">6 × 800 m · 3:58 /km</span></span>
+              </div>
+              <div class="plan-row">
+                <span class="plan-day">WED</span>
+                <span class="state missed">✗</span>
+                <span class="plan-main"><span class="plan-name" style="color:var(--ink-3)">Easy</span><span class="plan-meta">6.0 km · missed</span></span>
+              </div>
+              <div class="plan-row">
+                <span class="plan-day">THU</span>
+                <span class="state today">▶</span>
+                <span class="plan-main"><span class="plan-name" style="color:var(--c-tempo)">Tempo</span><span class="plan-meta">12.0 km · 4:45 /km</span></span>
+                <button class="btn sm">Watch</button>
+              </div>
+              <div class="plan-row">
+                <span class="plan-day">FRI</span>
+                <span class="state">—</span>
+                <span class="plan-main"><span class="plan-name" style="color:var(--ink-3)">Rest</span><span class="plan-meta">Absorb the block</span></span>
+              </div>
+              <div class="plan-row">
+                <span class="plan-day">SAT</span>
+                <span class="state">○</span>
+                <span class="plan-main"><span class="plan-name" style="color:var(--c-strength)">Strength</span><span class="plan-meta">Posterior chain · ~35 min</span></span>
+              </div>
+              <div class="plan-row">
+                <span class="plan-day">SUN</span>
+                <span class="state">○</span>
+                <span class="plan-main"><span class="plan-name" style="color:var(--c-long)">Long</span><span class="plan-meta">24.0 km · 5:20 /km</span></span>
+                <button class="btn sm">Watch</button>
+              </div>
+            </div>
+
+            <button class="btn" style="width:100%">Regenerate plan</button>
+          </div>
+
+          <div class="bottomnav" style="margin:0 16px">
+            <span class="nav-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg><b>Today</b></span>
+            <span class="nav-item on"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h5"/></svg><b>Plan</b></span>
+            <span class="nav-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 12a8 8 0 1 1-3.2-6.4"/><circle cx="12" cy="12" r="2.5"/></svg><b>Coach</b></span>
+            <span class="nav-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><b>Runs</b></span>
+            <span class="nav-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg><b>Trend</b></span>
+          </div>
+        </div></div>
+      </div>
+
+      <!-- ---------- COACH ---------- -->
+      <div class="frame-wrap">
+        <div class="frame-cap">
+          <h3>Coach</h3>
+          <p>The AI never gets a face or a gradient. It gets a red pilot dot, a hairline bubble, and dashed chips for actions it took on your plan.</p>
+          <div class="src">ChatView · ActionChips · HINT_PROMPTS</div>
+        </div>
+        <div class="phone"><div class="screen">
+          <div class="statusbar"><span>09:41</span><span class="sb-right"><svg width="14" height="10" viewBox="0 0 14 10" fill="currentColor"><rect x="0" y="7" width="2.4" height="3" rx=".6"/><rect x="3.8" y="5" width="2.4" height="5" rx=".6"/><rect x="7.6" y="2.5" width="2.4" height="7.5" rx=".6"/><rect x="11.4" y="0" width="2.4" height="10" rx=".6"/></svg><span class="sb-bat"></span></span></div>
+
+          <div class="topbar">
+            <div class="topbar-title"><b>Coach</b><small>Context: week 30 · 4 sessions</small></div>
+            <div class="topbar-actions"><span class="icon-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/></svg></span></div>
+          </div>
+
+          <div class="sbody" style="gap:16px">
+            <div class="msg-row" style="align-items:flex-end">
+              <div class="msg me">How was my training this week?</div>
+            </div>
+
+            <div class="msg-row">
+              <span class="msg-who"><i></i>Coach</span>
+              <div class="msg coach">
+                Solid week. You hit 42.5 of 58 km with Wednesday dropped — that's fine, the tempo
+                mattered more. Your acute load sits at 44 against a chronic 41, so you're loading
+                progressively, not spiking.
+              </div>
+              <span class="action-chip">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L4 14h6l-1 8 9-12h-6z"/></svg>
+                Moved Wed easy → Fri
+              </span>
+            </div>
+
+            <div class="msg-row" style="align-items:flex-end">
+              <div class="msg me">Am I ready for the race?</div>
+            </div>
+
+            <div class="msg-row">
+              <span class="msg-who"><i></i>Coach</span>
+              <div class="msg coach">
+                On current fitness, a 3:28 marathon is realistic — call it 3:25 if the taper lands well.
+                Your threshold pace has come down 11 s/km since May.
+                <div class="sep-line" style="margin:12px 0"></div>
+                <div style="display:flex;gap:20px">
+                  <span style="display:flex;flex-direction:column;gap:6px"><span class="tile-label">Predicted</span><span class="dm red" data-dm="3:28" data-d="2.4" data-s="1.7"></span></span>
+                  <span style="display:flex;flex-direction:column;gap:6px"><span class="tile-label">Goal</span><span class="dm" data-dm="3:30" data-d="2.4" data-s="1.7"></span></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="chips" style="flex-wrap:wrap;gap:7px">
+              <span class="chip">Why is easy pace slower?</span>
+              <span class="chip">Focus tomorrow?</span>
+            </div>
+
+            <div class="chatbar">
+              <span class="chatinput">Ask your coach</span>
+              <span class="send-btn"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12h15M13 6l6 6-6 6"/></svg></span>
+            </div>
+          </div>
+        </div></div>
+      </div>
+
+      <!-- ---------- ACTIVITIES ---------- -->
+      <div class="frame-wrap">
+        <div class="frame-cap">
+          <h3>Activities</h3>
+          <p>Icons become hairline squircles. On signal red the only accent is a PB; on app inks each row keeps its intensity tint from <code style="font-family:var(--mono);font-size:10px">getActivityAccent</code>.</p>
+          <div class="src">ActivitiesView · ActivityListItem · pr-badge</div>
+        </div>
+        <div class="phone"><div class="screen">
+          <div class="statusbar"><span>09:41</span><span class="sb-right"><svg width="14" height="10" viewBox="0 0 14 10" fill="currentColor"><rect x="0" y="7" width="2.4" height="3" rx=".6"/><rect x="3.8" y="5" width="2.4" height="5" rx=".6"/><rect x="7.6" y="2.5" width="2.4" height="7.5" rx=".6"/><rect x="11.4" y="0" width="2.4" height="10" rx=".6"/></svg><span class="sb-bat"></span></span></div>
+
+          <div class="topbar">
+            <div class="topbar-title"><b>Runs</b><small>July · 14 activities</small></div>
+            <div class="topbar-actions"><span class="icon-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg></span></div>
+          </div>
+
+          <div class="sbody">
+            <div class="tile perf">
+              <div class="tile-head" style="margin-bottom:12px"><span class="tile-label">Month total</span><span class="tile-label">Jul 2026</span></div>
+              <span style="display:flex;align-items:center;gap:8px">
+                <span class="dm" data-dm="186.4" data-d="3.2" data-s="2.1"></span><span class="unit">km</span>
+              </span>
+              <div class="sep-line"></div>
+              <div style="display:flex;gap:14px">
+                <span style="flex:1;display:flex;flex-direction:column;gap:8px">
+                  <span class="tile-label">Time</span><span class="dm" data-dm="15:42" data-d="2.2" data-s="1.6"></span>
+                </span>
+                <span style="width:1px;background:var(--line)"></span>
+                <span style="flex:1;display:flex;flex-direction:column;gap:8px">
+                  <span class="tile-label">Elev m</span><span class="dm" data-dm="2140" data-d="2.2" data-s="1.6"></span>
+                </span>
+              </div>
+            </div>
+
+            <div class="chips">
+              <span class="chip on">All</span><span class="chip">Run</span><span class="chip">Long</span><span class="chip">Race</span><span class="chip">Cross</span>
+            </div>
+
+            <span class="tile-label" style="padding:6px 2px 0">Thu 24 Jul</span>
+            <div class="ali">
+              <span class="ali-icon" style="border-color:var(--c-tempo);color:var(--c-tempo)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M13 4a1.6 1.6 0 1 0 0-.1M9 20l2.5-5 3-2-1-4-4 2-1.5 3M14.5 13l2.5 3 1 4"/></svg></span>
+              <span class="ali-main">
+                <span class="ali-name">Morning Tempo</span>
+                <span class="ali-meta">07:12 · 12.1 KM · 57:31 · 4:45 /KM · ♥ 162</span>
+              </span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+            </div>
+
+            <span class="tile-label" style="padding:6px 2px 0">Tue 22 Jul</span>
+            <div class="ali">
+              <span class="ali-icon red"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M13 4a1.6 1.6 0 1 0 0-.1M9 20l2.5-5 3-2-1-4-4 2-1.5 3M14.5 13l2.5 3 1 4"/></svg></span>
+              <span class="ali-main">
+                <span class="ali-name">6 × 800 m<span class="pb">PB 5K</span></span>
+                <span class="ali-meta">18:04 · 10.4 KM · 48:20 · 4:38 /KM · ♥ 171</span>
+              </span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+            </div>
+
+            <span class="tile-label" style="padding:6px 2px 0">Mon 21 Jul</span>
+            <div class="ali">
+              <span class="ali-icon" style="border-color:var(--c-easy);color:var(--c-easy)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M13 4a1.6 1.6 0 1 0 0-.1M9 20l2.5-5 3-2-1-4-4 2-1.5 3M14.5 13l2.5 3 1 4"/></svg></span>
+              <span class="ali-main">
+                <span class="ali-name">Easy Shakeout</span>
+                <span class="ali-meta">18:40 · 8.2 KM · 46:11 · 5:38 /KM · ♥ 138</span>
+              </span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+            </div>
+
+            <div class="ali">
+              <span class="ali-icon" style="border-color:var(--c-strength);color:var(--c-strength)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 18V9M12 18V5M18 18v-6"/></svg></span>
+              <span class="ali-main">
+                <span class="ali-name">Strength · Posterior</span>
+                <span class="ali-meta">20:05 · 34:00 · 6 exercises</span>
+              </span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+            </div>
+
+            <span class="tile-label" style="padding:6px 2px 0">Sun 20 Jul</span>
+            <div class="ali">
+              <span class="ali-icon" style="border-color:var(--c-long);color:var(--c-long)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M13 4a1.6 1.6 0 1 0 0-.1M9 20l2.5-5 3-2-1-4-4 2-1.5 3M14.5 13l2.5 3 1 4"/></svg></span>
+              <span class="ali-main">
+                <span class="ali-name">Long Run</span>
+                <span class="ali-meta">08:00 · 22.6 KM · 2:04:18 · 5:30 /KM · ♥ 149</span>
+              </span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+            </div>
+          </div>
+
+          <div class="bottomnav" style="margin:0 16px">
+            <span class="nav-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg><b>Today</b></span>
+            <span class="nav-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h5"/></svg><b>Plan</b></span>
+            <span class="nav-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 12a8 8 0 1 1-3.2-6.4"/><circle cx="12" cy="12" r="2.5"/></svg><b>Coach</b></span>
+            <span class="nav-item on"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><b>Runs</b></span>
+            <span class="nav-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg><b>Trend</b></span>
+          </div>
+        </div></div>
+      </div>
+
+      <!-- ---------- PROGRESS ---------- -->
+      <div class="frame-wrap">
+        <div class="frame-cap">
+          <h3>Progress</h3>
+          <p>Charts drop fills and grid noise; dotted baselines replace gridlines. On app inks the existing <code style="font-family:var(--mono);font-size:10px">chartTheme.ts</code> palettes come through untouched — no refactor at all.</p>
+          <div class="src">TrendsView · WellnessTrendsView · chartTheme.ts</div>
+        </div>
+        <div class="phone"><div class="screen">
+          <div class="statusbar"><span>09:41</span><span class="sb-right"><svg width="14" height="10" viewBox="0 0 14 10" fill="currentColor"><rect x="0" y="7" width="2.4" height="3" rx=".6"/><rect x="3.8" y="5" width="2.4" height="5" rx=".6"/><rect x="7.6" y="2.5" width="2.4" height="7.5" rx=".6"/><rect x="11.4" y="0" width="2.4" height="10" rx=".6"/></svg><span class="sb-bat"></span></span></div>
+
+          <div class="topbar">
+            <div class="topbar-title"><b>Trend</b><small>Last 90 days</small></div>
+            <div class="topbar-actions"><span class="icon-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h16M7 12h10M10 18h4"/></svg></span></div>
+          </div>
+
+          <div style="padding:0 16px 12px"><div class="chips">
+            <span class="chip on">Wellness</span><span class="chip">Perf</span><span class="chip">Intensity</span><span class="chip">Aerobic</span><span class="chip">PBs</span>
+          </div></div>
+
+          <div class="sbody">
+            <div class="tile">
+              <div class="tile-head"><span class="tile-label">HRV · RHR</span><span class="tile-label">90 d</span></div>
+              <svg viewBox="0 0 300 110" width="100%" height="110" preserveAspectRatio="none">
+                <line x1="0" y1="28" x2="300" y2="28" stroke="var(--line)" stroke-width="1" stroke-dasharray="2 5"/>
+                <line x1="0" y1="62" x2="300" y2="62" stroke="var(--line)" stroke-width="1" stroke-dasharray="2 5"/>
+                <line x1="0" y1="96" x2="300" y2="96" stroke="var(--line)" stroke-width="1" stroke-dasharray="2 5"/>
+                <polyline fill="none" stroke="var(--c-hrv)" stroke-width="2" stroke-linejoin="round"
+                  points="0,72 25,66 50,74 75,58 100,63 125,49 150,55 175,44 200,50 225,38 250,45 275,32 300,36"/>
+                <polyline fill="none" stroke="var(--c-rhr)" stroke-width="2" stroke-linejoin="round"
+                  points="0,86 25,88 50,84 75,89 100,83 125,86 150,80 175,84 200,78 225,81 250,76 275,79 300,74"/>
+                <circle cx="300" cy="36" r="3.5" fill="var(--c-hrv)"/>
+                <circle cx="300" cy="74" r="3.5" fill="var(--c-rhr)"/>
+              </svg>
+              <div class="sep-line"></div>
+              <div class="legend"><span><i class="hrv"></i>HRV 61 ms · +9</span><span><i class="red"></i>RHR 48 · −3</span></div>
+            </div>
+
+            <div class="tile" style="padding:0;overflow:hidden">
+              <div style="padding:16px 18px 10px"><span class="tile-label">Sleep · 7 d</span></div>
+              <div style="padding:0 18px 16px">
+                <div class="bars t-sleep" style="height:64px">
+                  <div><i class="on" style="height:70%"></i><em>M</em></div>
+                  <div><i class="on" style="height:86%"></i><em>T</em></div>
+                  <div><i class="red" style="height:44%"></i><em>W</em></div>
+                  <div><i class="on" style="height:78%"></i><em>T</em></div>
+                  <div><i class="on" style="height:92%"></i><em>F</em></div>
+                  <div><i class="on" style="height:66%"></i><em>S</em></div>
+                  <div><i class="on" style="height:82%"></i><em>S</em></div>
+                </div>
+              </div>
+              <div class="statgrid">
+                <div class="statcell"><span class="tile-label">Avg score</span><span class="dm" data-dm="79" data-d="2.4" data-s="1.7"></span></div>
+                <div class="statcell"><span class="tile-label">Avg dur</span><span class="dm" data-dm="7:12" data-d="2.4" data-s="1.7"></span></div>
+              </div>
+            </div>
+
+            <div class="tile perf">
+              <div class="tile-head"><span class="tile-label">Threshold pace</span><span class="tile-label" style="color:var(--c-easy)">−11 s/km</span></div>
+              <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">
+                <span class="dm" data-dm="4:21" data-d="3.4" data-s="2.2"></span><span class="unit">/km</span>
+              </div>
+              <svg viewBox="0 0 300 60" width="100%" height="60" preserveAspectRatio="none">
+                <polyline fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"
+                  points="0,12 40,16 80,14 120,24 160,22 200,32 240,30 300,44"/>
+              </svg>
+            </div>
+
+            <div class="tile" style="padding:6px 18px">
+              <div class="plan-row"><span class="state done">1</span><span class="plan-main"><span class="plan-name">5 km</span><span class="plan-meta">22 Jul · 6 × 800 m session</span></span><span class="dm" data-dm="21:48" data-d="2" data-s="1.4"></span></div>
+              <div class="plan-row"><span class="state">2</span><span class="plan-main"><span class="plan-name">10 km</span><span class="plan-meta">14 Jun · Sunday long</span></span><span class="dm" data-dm="45:12" data-d="2" data-s="1.4"></span></div>
+              <div class="plan-row"><span class="state">3</span><span class="plan-main"><span class="plan-name">Half</span><span class="plan-meta">04 May · Spring Half</span></span><span class="dm" data-dm="1:38" data-d="2" data-s="1.4"></span></div>
+            </div>
+          </div>
+
+          <div class="bottomnav" style="margin:0 16px">
+            <span class="nav-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg><b>Today</b></span>
+            <span class="nav-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h5"/></svg><b>Plan</b></span>
+            <span class="nav-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 12a8 8 0 1 1-3.2-6.4"/><circle cx="12" cy="12" r="2.5"/></svg><b>Coach</b></span>
+            <span class="nav-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><b>Runs</b></span>
+            <span class="nav-item on"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg><b>Trend</b></span>
+          </div>
+        </div></div>
+      </div>
+
+      <!-- ---------- ACTIVITY DETAIL ---------- -->
+      <div class="frame-wrap">
+        <div class="frame-cap">
+          <h3>Activity detail</h3>
+          <p>Route renders as a perforated plot, not a map tile. Splits are bars against target pace — over-target goes red, and that's the only red on the screen.</p>
+          <div class="src">ActivityDetailView · StatGrid · SplitsBars · AdherenceCard · AiInsightCard</div>
+        </div>
+        <div class="phone"><div class="screen">
+          <div class="statusbar"><span>09:41</span><span class="sb-right"><svg width="14" height="10" viewBox="0 0 14 10" fill="currentColor"><rect x="0" y="7" width="2.4" height="3" rx=".6"/><rect x="3.8" y="5" width="2.4" height="5" rx=".6"/><rect x="7.6" y="2.5" width="2.4" height="7.5" rx=".6"/><rect x="11.4" y="0" width="2.4" height="10" rx=".6"/></svg><span class="sb-bat"></span></span></div>
+
+          <div class="topbar">
+            <div class="topbar-title" style="flex-direction:row;align-items:center;gap:12px">
+              <span class="icon-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6l-6 6 6 6"/></svg></span>
+              <span style="display:flex;flex-direction:column;gap:3px">
+                <b style="font-size:15px;letter-spacing:.18em">Tempo</b>
+                <small>Thu 24 Jul · 07:12</small>
+              </span>
+            </div>
+            <div class="topbar-actions"><span class="icon-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></span></div>
+          </div>
+
+          <div class="sbody">
+            <div class="mapbox">
+              <svg viewBox="0 0 300 132" width="100%" height="132" preserveAspectRatio="none">
+                <path d="M24,104 C60,96 52,58 88,52 C122,46 130,88 168,80 C204,72 196,30 236,26 C262,23 272,44 278,60"
+                      fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+                <circle cx="24" cy="104" r="4.5" fill="currentColor"/>
+                <circle cx="278" cy="60" r="4.5" fill="var(--nt-red)"/>
+              </svg>
+            </div>
+
+            <div class="tile" style="padding:0;overflow:hidden">
+              <div class="statgrid">
+                <div class="statcell"><span class="tile-label">Distance km</span><span class="dm" data-dm="12.1" data-d="2.4" data-s="1.7"></span></div>
+                <div class="statcell"><span class="tile-label">Moving time</span><span class="dm" data-dm="57:31" data-d="2.4" data-s="1.7"></span></div>
+                <div class="statcell"><span class="tile-label">Avg pace /km</span><span class="dm" data-dm="4:45" data-d="2.4" data-s="1.7"></span></div>
+                <div class="statcell"><span class="tile-label">Avg HR bpm</span><span class="dm" data-dm="162" data-d="2.4" data-s="1.7"></span></div>
+                <div class="statcell"><span class="tile-label">Elev gain m</span><span class="dm" data-dm="184" data-d="2.4" data-s="1.7"></span></div>
+                <div class="statcell"><span class="tile-label">Cadence spm</span><span class="dm" data-dm="180" data-d="2.4" data-s="1.7"></span></div>
+                <div class="statcell"><span class="tile-label">Load</span><span class="dm" data-dm="112" data-d="2.4" data-s="1.7"></span></div>
+                <div class="statcell"><span class="tile-label">Power w</span><span class="dm" data-dm="288" data-d="2.4" data-s="1.7"></span></div>
+              </div>
+            </div>
+
+            <div class="tile">
+              <div class="tile-head"><span class="tile-label">Adherence</span><span class="tile-label">vs. planned tempo</span></div>
+              <div style="display:flex;align-items:center;gap:16px">
+                <span class="dm" data-dm="92" data-d="4" data-s="2.6"></span>
+                <div style="flex:1;display:flex;flex-direction:column;gap:9px">
+                  <div style="display:flex;justify-content:space-between"><span class="tile-label">Pace</span><span class="tile-label">on target</span></div>
+                  <div class="pbar"><i style="width:94%"></i></div>
+                  <div style="display:flex;justify-content:space-between"><span class="tile-label">Duration</span><span class="tile-label">+3 min</span></div>
+                  <div class="pbar"><i class="red" style="width:86%"></i></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tile">
+              <div class="tile-head"><span class="tile-label">Splits</span><span class="tile-label">target 4:45</span></div>
+              <div class="split-row"><em>1</em><div class="split-bar"><i style="width:72%"></i></div><b>4:58</b></div>
+              <div class="split-row"><em>2</em><div class="split-bar"><i style="width:80%"></i></div><b>4:49</b></div>
+              <div class="split-row"><em>3</em><div class="split-bar"><i style="width:86%"></i></div><b>4:44</b></div>
+              <div class="split-row"><em>4</em><div class="split-bar"><i style="width:88%"></i></div><b>4:42</b></div>
+              <div class="split-row"><em>5</em><div class="split-bar"><i class="red" style="width:97%"></i></div><b>4:31</b></div>
+              <div class="split-row"><em>6</em><div class="split-bar"><i style="width:84%"></i></div><b>4:46</b></div>
+            </div>
+
+            <div class="tile perf">
+              <div class="tile-head"><span class="tile-label" style="color:var(--c-tempo)">Coach note</span></div>
+              <p class="brief">You went 14 s/km hot on km 5 and paid for it on 6. Tempo is a
+                <b>discipline session</b> — the win is holding, not surging. Everything else was clean.</p>
+              <div class="sep-dot"></div>
+              <div class="btn-row"><button class="btn sm">Helpful</button><button class="btn sm">Not useful</button></div>
+            </div>
+          </div>
+        </div></div>
+      </div>
+
+      <!-- ---------- PLAN SETUP SHEET ---------- -->
+      <div class="frame-wrap">
+        <div class="frame-cap">
+          <h3>Plan setup — bottom sheet</h3>
+          <p>The setup flow's sheets get a grab handle, a dot-matrix readout of the value you're dragging, and a slider that is literally a perforated track.</p>
+          <div class="src">PlanSetupView · BottomSheet · TrainingVolumeSheet · RangeSlider</div>
+        </div>
+        <div class="phone"><div class="screen" style="overflow:hidden">
+          <div class="statusbar"><span>09:41</span><span class="sb-right"><svg width="14" height="10" viewBox="0 0 14 10" fill="currentColor"><rect x="0" y="7" width="2.4" height="3" rx=".6"/><rect x="3.8" y="5" width="2.4" height="5" rx=".6"/><rect x="7.6" y="2.5" width="2.4" height="7.5" rx=".6"/><rect x="11.4" y="0" width="2.4" height="10" rx=".6"/></svg><span class="sb-bat"></span></span></div>
+
+          <div class="topbar">
+            <div class="topbar-title"><b>Setup</b><small>Step 3 of 6</small></div>
+            <div class="topbar-actions"><span class="icon-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></span></div>
+          </div>
+
+          <div class="sbody" style="padding-bottom:20px">
+            <div class="pbar" style="margin:0 0 6px"><i style="width:50%"></i></div>
+            <div class="tile" style="opacity:.45">
+              <div class="tile-head"><span class="tile-label">Goal race</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+              <span style="font-family:var(--mono);font-size:12px;letter-spacing:.14em">MARATHON · 17 AUG</span>
+            </div>
+            <div class="tile" style="opacity:.45">
+              <div class="tile-head"><span class="tile-label">Ability</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+              <span style="font-family:var(--mono);font-size:12px;letter-spacing:.14em">INTERMEDIATE · 3 YRS</span>
+            </div>
+            <div class="tile" style="border-color:var(--nt-red)">
+              <div class="tile-head"><span class="tile-label red">Training volume</span></div>
+              <span style="font-family:var(--mono);font-size:12px;letter-spacing:.14em">52 KM / WEEK</span>
+            </div>
+          </div>
+
+          <div class="sheet-scrim"></div>
+          <div class="sheet">
+            <div class="sheet-grab"></div>
+            <div class="tile-head" style="margin-bottom:22px">
+              <span class="tile-label">Weekly volume</span>
+              <span class="tile-label">Peak week 68 km</span>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:9px;justify-content:center;margin-bottom:26px">
+              <span class="dm" data-dm="52" data-d="6" data-s="3.6"></span><span class="unit" style="font-size:11px">km / wk</span>
+            </div>
+
+            <!-- perforated slider -->
+            <div style="position:relative;height:28px;margin:0 4px 8px">
+              <div style="position:absolute;left:0;right:0;top:12px;height:4px;border-radius:2px;background-image:radial-gradient(var(--line-strong) 1.4px, transparent 1.4px);background-size:8px 4px"></div>
+              <div style="position:absolute;left:0;width:58%;top:12px;height:4px;border-radius:2px;background-image:radial-gradient(var(--nt-red) 1.6px, transparent 1.6px);background-size:8px 4px"></div>
+              <div style="position:absolute;left:58%;top:0;width:28px;height:28px;margin-left:-14px;border-radius:50%;background:var(--ink);border:4px solid var(--bg);box-shadow:0 0 0 1px var(--line-strong)"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:22px">
+              <span class="tile-label">30</span><span class="tile-label">90</span>
+            </div>
+
+            <div class="tile flat" style="padding:0;margin-bottom:20px">
+              <div class="tile-head"><span class="tile-label">Projected build</span></div>
+              <div class="bars" style="height:56px">
+                <div><i class="on" style="height:44%"></i><em>W1</em></div>
+                <div><i class="on" style="height:52%"></i><em>W2</em></div>
+                <div><i class="on" style="height:60%"></i><em>W3</em></div>
+                <div><i class="on" style="height:38%"></i><em>W4</em></div>
+                <div><i class="on" style="height:66%"></i><em>W5</em></div>
+                <div><i class="on" style="height:78%"></i><em>W6</em></div>
+                <div><i class="on" style="height:90%"></i><em>W7</em></div>
+                <div><i class="red" style="height:46%"></i><em>W8</em></div>
+              </div>
+            </div>
+
+            <button class="btn solid" style="width:100%">Confirm</button>
+          </div>
+        </div></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ==================== 03 COMPONENTS ==================== -->
+  <section class="sec">
+    <div class="sec-head">
+      <span class="sec-num">03</span>
+      <span class="sec-title">Component sheet</span>
+      <span class="sec-note">maps 1:1 to globals.css primitives</span>
+    </div>
+
+    <div class="comp-grid">
+      <div class="comp">
+        <h4>Buttons — .btn-primary / secondary / ghost</h4>
+        <div class="comp-body">
+          <div class="btn-row"><button class="btn solid">Primary</button><button class="btn">Secondary</button><button class="btn red">Destructive</button></div>
+          <div class="btn-row"><button class="btn sm">Small</button><button class="btn sm" style="opacity:.4">Disabled</button></div>
+          <p style="font-size:11.5px;color:var(--ink-3);line-height:1.6">Pill, mono, uppercase, .18em tracking. Primary is an ink fill — the purple fill disappears entirely.</p>
+        </div>
+      </div>
+
+      <div class="comp">
+        <h4>Chips & badges — .chip / .badge / .pr-badge</h4>
+        <div class="comp-body">
+          <div class="chips" style="flex-wrap:wrap"><span class="chip on">Active</span><span class="chip">Idle</span><span class="chip">Idle</span></div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <span class="badge-out">Easy</span><span class="badge-out badge-red">Tempo</span><span class="pb">PB 5K</span>
+            <span class="sync-pill"><i></i>Syncing</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="comp">
+        <h4>Score ring — ScoreRing.tsx</h4>
+        <div class="comp-body" style="flex-direction:row;gap:22px;align-items:center;justify-content:center">
+          <div class="ring-wrap" style="width:80px;height:80px">
+            <svg width="80" height="80" viewBox="0 0 96 96" style="width:80px;height:80px">
+              <circle cx="48" cy="48" r="42" fill="none" stroke="var(--line)" stroke-width="4" stroke-dasharray="1.5 6" stroke-linecap="round"/>
+              <circle cx="48" cy="48" r="42" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-dasharray="1.5 6" pathLength="100" style="stroke-dasharray:88 100"/>
+            </svg>
+            <div class="ring-center"><span class="dm" data-dm="88" data-d="3" data-s="2"></span></div>
+          </div>
+          <div class="ring-wrap" style="width:80px;height:80px;color:var(--c-interval)">
+            <svg width="80" height="80" viewBox="0 0 96 96" style="width:80px;height:80px">
+              <circle cx="48" cy="48" r="42" fill="none" stroke="var(--line)" stroke-width="4" stroke-dasharray="1.5 6" stroke-linecap="round"/>
+              <circle cx="48" cy="48" r="42" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-dasharray="1.5 6" pathLength="100" style="stroke-dasharray:34 100"/>
+            </svg>
+            <div class="ring-center"><span class="dm" data-dm="34" data-d="3" data-s="2"></span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="comp">
+        <h4>Alert banner — AlertBanner.tsx</h4>
+        <div class="comp-body">
+          <div class="tile" style="border-color:var(--c-alert);display:flex;align-items:center;gap:12px;padding:14px 16px">
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--c-alert);flex-shrink:0"></span>
+            <span style="flex:1;font-size:12px;line-height:1.5">2 sessions missed this week</span>
+            <button class="btn sm red">Fix</button>
+          </div>
+          <div class="tile" style="display:flex;align-items:center;gap:12px;padding:14px 16px">
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--ink-3);flex-shrink:0"></span>
+            <span style="flex:1;font-size:12px;line-height:1.5">Garmin synced 4 min ago</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="comp">
+        <h4>Workout structure bar — WorkoutStructureBar.tsx</h4>
+        <div class="comp-body">
+          <div style="display:flex;gap:2px;height:34px">
+            <div style="flex:2;background:var(--line-strong);border-radius:6px 2px 2px 6px"></div>
+            <div style="flex:1;background:var(--ink)"></div>
+            <div style="flex:.5;background:var(--surface-2)"></div>
+            <div style="flex:1;background:var(--ink)"></div>
+            <div style="flex:.5;background:var(--surface-2)"></div>
+            <div style="flex:1;background:var(--c-tempo)"></div>
+            <div style="flex:2;background:var(--line-strong);border-radius:2px 6px 6px 2px"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between"><span class="tile-label">Warm-up</span><span class="tile-label">3 × 2 km</span><span class="tile-label">Cool</span></div>
+        </div>
+      </div>
+
+      <div class="comp">
+        <h4>Toast & skeleton — Toast.tsx / Skeleton.tsx</h4>
+        <div class="comp-body">
+          <div style="display:flex;align-items:center;gap:10px;border:1px solid var(--line-strong);border-radius:var(--r-pill);padding:11px 16px">
+            <span style="width:5px;height:5px;border-radius:50%;background:var(--nt-red)"></span>
+            <span style="font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase">Sent "Tempo" to watch</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="height:10px;width:45%;border-radius:3px;background-image:radial-gradient(var(--dot-off) 1.3px,transparent 1.3px);background-size:6px 6px;border:1px solid var(--line)"></div>
+            <div style="height:10px;width:80%;border-radius:3px;background-image:radial-gradient(var(--dot-off) 1.3px,transparent 1.3px);background-size:6px 6px;border:1px solid var(--line)"></div>
+          </div>
+          <p style="font-size:11.5px;color:var(--ink-3);line-height:1.6">Loading states are perforated blocks, not shimmer gradients.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 04 MAPPING ==================== -->
+  <section class="sec">
+    <div class="sec-head">
+      <span class="sec-num">04</span>
+      <span class="sec-title">What changes</span>
+      <span class="sec-note">current app → Nothing OS treatment</span>
+    </div>
+
+    <table>
+      <thead>
+        <tr><th style="width:20%">Token / element</th><th style="width:34%">Today</th><th>Proposed</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>--bg / --bg-card</code></td>
+          <td class="was">#0f0f1a navy, #1a1a2e cards, drop shadows on every card</td>
+          <td>True #000 with #0B0B0B tiles and 1px #232323 hairlines. Shadows removed — <code>--shadow-sm/md</code> become <code>none</code>.</td>
+        </tr>
+        <tr>
+          <td><code>--accent</code></td>
+          <td class="was">#6c5ce7 purple on buttons, chips, links, rings, nav — everywhere</td>
+          <td><b>Both ink sets:</b> ink (#FFF/#000) carries every default state, so buttons, chips and links stop being purple. <b>Signal red</b> repoints <code>--accent</code> to #D71921; <b>app inks</b> keeps #6c5ce7 but rations it to alerts, today's marker and the nav glyph.</td>
+        </tr>
+        <tr>
+          <td>Workout colours</td>
+          <td class="was">Six hues — easy/tempo/interval/long/race/cross/strength — on fills, borders and text</td>
+          <td><b>Signal red:</b> one ink plus fill weight; colour-blind-safe but the plan loses a scanning cue. <b>App inks:</b> all six survive, moved off surfaces and onto the type label + icon stroke only. Same geometry either way.</td>
+        </tr>
+        <tr>
+          <td>Numerals</td>
+          <td class="was"><code>.stat-value</code> — system sans, tabular-nums</td>
+          <td>5×7 dot-matrix rendering for hero metrics only (readiness, distance, pace, adherence, PB times). Unlit dots stay at 10% opacity.</td>
+        </tr>
+        <tr>
+          <td>Typography</td>
+          <td class="was">-apple-system stack throughout</td>
+          <td>Monospace-grotesque for all labels, values and nav (uppercase, .16–.26em tracking); plain sans reserved for briefing and coach prose.</td>
+        </tr>
+        <tr>
+          <td><code>BottomNav</code></td>
+          <td class="was">Purple icon + label on active tab</td>
+          <td>Ink icon plus a red glyph bar above the active tab — the light-strip cue from the phone's Glyph interface.</td>
+        </tr>
+        <tr>
+          <td><code>ScoreRing</code></td>
+          <td class="was">Solid arc, score in sans, colour by band</td>
+          <td>Perforated dotted arc, dot-matrix score, band expressed as arc length and one mono sub-label rather than hue.</td>
+        </tr>
+        <tr>
+          <td><code>Skeleton</code> / spinner</td>
+          <td class="was">Shimmer gradient, purple-topped spinner</td>
+          <td>Perforated blocks; the spinner becomes a rotating dot ring on the same 5×7 grid.</td>
+        </tr>
+        <tr>
+          <td>Radii</td>
+          <td class="was">12 / 8 / 6 px</td>
+          <td>26 tile · 20 card · 12 icon · pill controls. Larger, squarer squircles read as OS surfaces.</td>
+        </tr>
+        <tr>
+          <td>Chart palettes</td>
+          <td class="was">8 hardcoded constants in <code>chartTheme.ts</code> + <code>colorMap</code>/<code>SPORT_COLORS</code>; none read CSS vars</td>
+          <td><b>Signal red</b> needs all of them rewritten as skin-aware functions and a client-side override for API-supplied <code>zone_color</code>. <b>App inks</b> needs none of it — the constants stay exactly as they are.</td>
+        </tr>
+        <tr>
+          <td>Light theme</td>
+          <td class="was">#f5f5f7 grey-blue with the same purple accent</td>
+          <td>Nothing's white mode: pure #FFF, #F4F4F4 surfaces, black ink, identical red. Toggle at the top of this page shows both.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <div class="footnote">
+    <b>Scope note.</b> This is a visual study only — nothing in <code>frontend/src</code> was modified.
+    Every screen above is redrawn from the real component tree (<code>TodayView</code>, <code>TodayHero</code>,
+    <code>PlanView</code>, <code>ChatView</code>, <code>ActivityListItem</code>, <code>TrendsView</code>,
+    <code>ActivityDetailView</code>, <code>BottomSheet</code>) with the same data shapes the API returns, so the
+    mapping table is directly actionable: the bulk of it lands in <code>styles/globals.css</code> tokens plus
+    <code>utils/colors.ts</code> and <code>utils/chartTheme.ts</code>. The dot-matrix numeral renderer is the one
+    genuinely new primitive and would ship as a small <code>&lt;DotMatrix&gt;</code> component.
+    <br><br>
+    <b>On the two ink sets.</b> The Nothing look is carried by geometry, not hue: flat black/white surfaces,
+    1px hairlines, no shadows, mono uppercase micro-labels, perforated fills and 5×7 dot-matrix numerals.
+    All of that is orthogonal to the palette — which is why <b>app inks</b> reads as Nothing OS while keeping
+    every colour the app already ships. The rule that makes it work: colour never touches a surface, only
+    strokes, dots, type labels and chart series. Sample data is illustrative.
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   5×7 DOT-MATRIX GLYPH RENDERER
+   ============================================================ */
+const GLYPHS = {
+  '0': ['01110','10001','10011','10101','11001','10001','01110'],
+  '1': ['00100','01100','00100','00100','00100','00100','01110'],
+  '2': ['01110','10001','00001','00010','00100','01000','11111'],
+  '3': ['11111','00010','00100','00010','00001','10001','01110'],
+  '4': ['00010','00110','01010','10010','11111','00010','00010'],
+  '5': ['11111','10000','11110','00001','00001','10001','01110'],
+  '6': ['00110','01000','10000','11110','10001','10001','01110'],
+  '7': ['11111','00001','00010','00100','01000','01000','01000'],
+  '8': ['01110','10001','10001','01110','10001','10001','01110'],
+  '9': ['01110','10001','10001','01111','00001','00010','01100'],
+  ':': ['00000','00110','00110','00000','00110','00110','00000'],
+  '.': ['00000','00000','00000','00000','00000','01100','01100'],
+  '-': ['00000','00000','00000','11111','00000','00000','00000'],
+  '/': ['00001','00001','00010','00100','01000','10000','10000'],
+  '%': ['11001','11010','00010','00100','01000','01011','10011'],
+  ' ': ['00000','00000','00000','00000','00000','00000','00000'],
+};
+
+function renderDotMatrix(el) {
+  const text = el.dataset.dm || '';
+  const d = el.dataset.d || '3';
+  const s = el.dataset.s || '2';
+  el.style.setProperty('--dm-d', d + 'px');
+  el.style.setProperty('--dm-s', s + 'px');
+  el.style.setProperty('--dm-gap', (parseFloat(d) + parseFloat(s) * 1.5) + 'px');
+  el.innerHTML = '';
+  for (const ch of text) {
+    const rows = GLYPHS[ch] || GLYPHS[' '];
+    const wrap = document.createElement('span');
+    wrap.className = 'dm-char';
+    // narrow glyphs (punctuation) still occupy a 5-wide cell for grid alignment
+    for (const row of rows) {
+      for (const bit of row) {
+        const dot = document.createElement('i');
+        dot.className = 'dm-dot' + (bit === '1' ? ' on' : '');
+        wrap.appendChild(dot);
+      }
+    }
+    el.appendChild(wrap);
+  }
+}
+
+document.querySelectorAll('.dm').forEach(renderDotMatrix);
+
+/* ============================================================
+   BLACK / WHITE MODE
+   ============================================================ */
+document.querySelectorAll('[data-mode-btn]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const mode = btn.dataset.modeBtn;
+    document.documentElement.setAttribute('data-mode', mode);
+    document.querySelectorAll('[data-mode-btn]').forEach(b =>
+      b.setAttribute('aria-pressed', String(b.dataset.modeBtn === mode))
+    );
+  });
+});
+
+/* ============================================================
+   SIGNAL RED / APP INKS
+   ============================================================ */
+document.querySelectorAll('[data-ink-btn]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const ink = btn.dataset.inkBtn;
+    document.documentElement.setAttribute('data-ink', ink);
+    document.querySelectorAll('[data-ink-btn]').forEach(b =>
+      b.setAttribute('aria-pressed', String(b.dataset.inkBtn === ink))
+    );
+  });
+});
+</script>
+</body>
+</html>
