@@ -1,0 +1,62 @@
+/* Nothing OS skin — Phase 1: token layer only.
+   No component rules here yet; see docs/NOTHING_OS_SKIN_PLAN.md Phase 3+. */
+
+/* ---- shared by both Nothing skins, both modes ---- */
+html[data-skin="nothing-signal"][data-theme="dark"],
+html[data-skin="nothing-signal"][data-theme="light"],
+html[data-skin="nothing-app"][data-theme="dark"],
+html[data-skin="nothing-app"][data-theme="light"] {
+  --radius: 26px;
+  --radius-sm: 20px;
+  --radius-xs: 12px;
+
+  --shadow-sm: none;
+  --shadow-md: none;
+
+  --font-ui: "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
+}
+
+/* ---- dark (black) ---- */
+html[data-skin="nothing-signal"][data-theme="dark"],
+html[data-skin="nothing-app"][data-theme="dark"] {
+  --bg: #000000;
+  --bg-card: #0b0b0b;
+  --bg-input: #141414;
+  --bg-hover: #1a1a1a;
+  --surface: var(--bg-card);
+  --text: #ffffff;
+  --text-muted: #6e6e6e;
+  --text-secondary: #b4b4b4;
+  --border: #232323;
+  --border-strong: #3a3a3a;
+  --dot-off: rgba(255, 255, 255, 0.10);
+}
+
+/* ---- light (white) ---- */
+html[data-skin="nothing-signal"][data-theme="light"],
+html[data-skin="nothing-app"][data-theme="light"] {
+  --bg: #ffffff;
+  --bg-card: #f4f4f4;
+  --bg-input: #ebebeb;
+  --bg-hover: #e4e4e4;
+  --surface: var(--bg-card);
+  --text: #000000;
+  --text-muted: #8b8b8b;
+  --text-secondary: #4a4a4a;
+  --border: #e0e0e0;
+  --border-strong: #c8c8c8;
+  --dot-off: rgba(0, 0, 0, 0.10);
+}
+
+/* ---- accent per skin ---- */
+html[data-skin="nothing-signal"][data-theme="dark"],
+html[data-skin="nothing-signal"][data-theme="light"] {
+  --accent: #d71921;
+  --accent-light: #d71921;
+}
+
+/* app inks keeps the existing accent, unchanged from globals.css */
+html[data-skin="nothing-app"][data-theme="light"] {
+  --accent-light: #5a4bd1;
+}
