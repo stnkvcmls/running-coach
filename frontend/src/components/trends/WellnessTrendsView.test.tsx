@@ -49,7 +49,7 @@ describe('WellnessTrendsView', () => {
   it('renders without error under the light theme (themed tooltip/tick colours)', async () => {
     vi.stubGlobal('fetch', mockFetch([summary()]))
     renderWithProviders(
-      <ThemeContext.Provider value={{ theme: 'light', toggleTheme: () => {} }}>
+      <ThemeContext.Provider value={{ theme: 'light', toggleTheme: () => {}, skin: 'default', setSkin: () => {} }}>
         <WellnessTrendsView />
       </ThemeContext.Provider>,
     )

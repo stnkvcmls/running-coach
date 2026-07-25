@@ -1,0 +1,115 @@
+.appearance-card {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.appearance-group-label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+  padding: 0;
+}
+
+.appearance-segmented {
+  display: flex;
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+  padding: 3px;
+  gap: 3px;
+}
+
+.appearance-segment {
+  flex: 1;
+  min-height: 44px;
+  border-radius: calc(var(--radius-sm) - 3px);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.appearance-segment.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.appearance-style {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.appearance-skin-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 8px 4px;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.appearance-skin-row:hover {
+  background: var(--bg-hover);
+}
+
+.appearance-skin-row input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+
+.appearance-skin-swatch {
+  display: flex;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.swatch-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: block;
+  border: 1px solid var(--border);
+}
+
+.appearance-skin-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.appearance-skin-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.appearance-skin-desc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Static preview colours for each style row — deliberately independent of
+   the currently active skin, so a row always previews what selecting it
+   would look like. */
+[data-skin-preview="default"] .swatch-surface { background: #1a1a2e; }
+[data-skin-preview="default"] .swatch-ink { background: #e0e0e0; }
+[data-skin-preview="default"] .swatch-accent { background: #6c5ce7; }
+
+[data-skin-preview="nothing-signal"] .swatch-surface { background: #000; }
+[data-skin-preview="nothing-signal"] .swatch-ink { background: #fff; }
+[data-skin-preview="nothing-signal"] .swatch-accent { background: #d71921; }
+
+[data-skin-preview="nothing-app"] .swatch-surface { background: #000; }
+[data-skin-preview="nothing-app"] .swatch-ink { background: #fff; }
+[data-skin-preview="nothing-app"] .swatch-accent { background: #0984e3; }

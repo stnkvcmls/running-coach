@@ -12,6 +12,7 @@ import {
   useSubmitGarminMfa,
   useDisconnectGarmin,
 } from '../../api/hooks'
+import AppearanceSection from './AppearanceSection'
 import AthleteProfileSection from './AthleteProfileSection'
 import CoachMemorySection from './CoachMemorySection'
 import NotificationsSection from './NotificationsSection'
@@ -269,6 +270,9 @@ export default function SettingsView() {
       </header>
 
       <div className="settings-body">
+      {/* Appearance: mode + visual style */}
+      <AppearanceSection />
+
       {/* Signed-in account */}
       <AccountSection />
 
