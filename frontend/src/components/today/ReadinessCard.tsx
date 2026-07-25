@@ -39,7 +39,7 @@ export default function ReadinessCard({ readiness }: Props) {
   return (
     <div className="card readiness-card">
       <div className="readiness-header">
-        <ScoreRing score={readiness.score} color={color} size={72} />
+        <ScoreRing score={readiness.score} color={color} size={100} />
         <div className="readiness-label-block">
           <span className="readiness-label" style={{ color }}>{readiness.label}</span>
           <span className="readiness-sub">Training Readiness</span>
