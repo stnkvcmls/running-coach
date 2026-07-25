@@ -184,7 +184,7 @@ export default function TodayHero({ data }: Props) {
     : null
 
   return (
-    <div className="card hero">
+    <div className="card hero perf">
       <div className="hero-top">
         {readiness && (
           <button
