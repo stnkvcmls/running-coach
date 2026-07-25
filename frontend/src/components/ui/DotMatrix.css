@@ -1,0 +1,27 @@
+.dot-matrix {
+  display: inline-block;
+  line-height: 0;
+}
+
+.dot-matrix-grid {
+  display: inline-flex;
+  gap: var(--dm-gap, 4px);
+  align-items: flex-start;
+}
+
+.dm-char {
+  display: grid;
+  grid-template-columns: repeat(5, var(--dm-d, 3px));
+  grid-auto-rows: var(--dm-d, 3px);
+  gap: var(--dm-s, 2px);
+}
+
+.dm-dot {
+  display: block;
+  border-radius: 50%;
+  background: var(--dot-off, transparent);
+}
+
+.dm-dot.on {
+  background: currentColor;
+}

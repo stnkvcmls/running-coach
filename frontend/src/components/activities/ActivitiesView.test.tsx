@@ -55,7 +55,7 @@ describe('ActivitiesView grouping and filters', () => {
     renderWithProviders(<ActivitiesView />)
 
     expect(await screen.findByText('January 2020')).toBeInTheDocument()
-    expect(screen.getByText('2 runs · 29.0 km')).toBeInTheDocument()
+    expect(document.querySelector('.group-head b')?.textContent).toBe('2 runs · 29.0 km')
   })
 
   it('labels a mixed-sport group as "activities" rather than misreporting it as runs', async () => {
@@ -66,7 +66,8 @@ describe('ActivitiesView grouping and filters', () => {
 
     renderWithProviders(<ActivitiesView />)
 
-    expect(await screen.findByText('2 activities · 23.0 km')).toBeInTheDocument()
+    await screen.findByText('January 2020')
+    expect(document.querySelector('.group-head b')?.textContent).toBe('2 activities · 23.0 km')
   })
 
   it('adds a chip for an activity_type outside the fixed filter list, without dropping the fixed ones', async () => {

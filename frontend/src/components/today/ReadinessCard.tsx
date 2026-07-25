@@ -8,10 +8,10 @@ interface Props {
 }
 
 export function scoreColor(score: number): string {
-  if (score >= 71) return '#00b894'   // green
-  if (score >= 51) return '#fdcb6e'   // yellow
-  if (score >= 31) return '#e17055'   // orange
-  return '#d63031'                    // red
+  if (score >= 71) return 'var(--score-high)'
+  if (score >= 51) return 'var(--score-mid)'
+  if (score >= 31) return 'var(--score-low)'
+  return 'var(--score-poor)'
 }
 
 export function ComponentBar({ label, value }: { label: string; value: number | null }) {

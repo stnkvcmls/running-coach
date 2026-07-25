@@ -6,6 +6,7 @@ import type { ActivitySummary, TodayResponse, TrainingPlanDay } from '../../api/
 import { formatDistance, formatDuration } from '../../utils/formatting'
 import { scoreColor, ComponentBar } from './ReadinessCard'
 import ScoreRing from '../ui/ScoreRing'
+import Numeral from '../ui/Numeral'
 import WorkoutStructureBar from '../ui/WorkoutStructureBar'
 import BriefingCard from './BriefingCard'
 import { toast } from '../ui/Toast'
@@ -72,7 +73,7 @@ function HeroSession({ data, planDay, planLoading, hasPlan, matchedActivity }: H
           Done — {matchedActivity.name || matchedActivity.workout_tag}
         </div>
         <div className="hero-session-meta">
-          {formatDistance(matchedActivity.distance_m)} km · {formatDuration(matchedActivity.duration_sec)}
+          <Numeral value={formatDistance(matchedActivity.distance_m)} /> km · {formatDuration(matchedActivity.duration_sec)}
           {adherenceScore != null && ` · ${Math.round(adherenceScore)}% adherence`}
         </div>
       </Link>
@@ -99,9 +100,17 @@ function HeroSession({ data, planDay, planLoading, hasPlan, matchedActivity }: H
         <span className="hero-session-badge" style={{ background: badgeColor }}>{label}</span>
         {(planDay.target_distance_m != null || planDay.target_pace_display) && (
           <div className="hero-session-meta">
-            {planDay.target_distance_m != null && `${formatDistance(planDay.target_distance_m)} km`}
+            {planDay.target_distance_m != null && (
+              <>
+                <Numeral value={formatDistance(planDay.target_distance_m)} /> km
+              </>
+            )}
             {planDay.target_distance_m != null && planDay.target_pace_display && ' · '}
-            {planDay.target_pace_display}
+            {planDay.target_pace_display && (
+              <>
+                <Numeral value={planDay.target_pace_display.replace(/\/km$/, '')} />/km
+              </>
+            )}
           </div>
         )}
         <div className="hero-actions">

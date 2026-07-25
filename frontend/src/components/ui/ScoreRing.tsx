@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react'
+import Numeral from './Numeral'
 import './ScoreRing.css'
 
 interface Props {
@@ -15,10 +16,41 @@ export default function ScoreRing({ score, color, size = 72, subLabel = '/100' }
     width: size,
     height: size,
   } as CSSProperties
+  const progress = Math.max(0, Math.min(100, score))
+
   return (
     <div className="score-ring" style={style}>
-      <span className="score-ring-number" style={{ color }}>{score}</span>
-      <span className="score-ring-sub">{subLabel}</span>
+      <svg className="score-ring-svg" viewBox="0 0 96 96" width={size} height={size} aria-hidden="true">
+        <circle
+          className="score-ring-arc"
+          cx="48"
+          cy="48"
+          r="42"
+          fill="none"
+          stroke="var(--border)"
+          strokeWidth="4"
+          strokeLinecap="round"
+          pathLength={100}
+        />
+        <circle
+          className="score-ring-arc"
+          cx="48"
+          cy="48"
+          r="42"
+          fill="none"
+          stroke={color}
+          strokeWidth="4"
+          strokeLinecap="round"
+          pathLength={100}
+          style={{ strokeDasharray: `${progress} 100` }}
+        />
+      </svg>
+      <div className="score-ring-center">
+        <span className="score-ring-number" style={{ color }}>
+          <Numeral value={String(Math.round(score))} />
+        </span>
+        <span className="score-ring-sub">{subLabel}</span>
+      </div>
     </div>
   )
 }

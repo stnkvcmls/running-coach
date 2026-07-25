@@ -45,6 +45,11 @@
   --c-series-1: var(--color-long);
   --c-series-2: #e17055;
 
+  --score-high: #00b894;
+  --score-mid: #fdcb6e;
+  --score-low: #e17055;
+  --score-poor: #d63031;
+
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
 

@@ -1,6 +1,6 @@
 /* Nothing OS skin — Phase 1 (token layer) + Phase 2 (semantic ink tokens)
-   + Phase 3 (structural restyle). See docs/NOTHING_OS_SKIN_PLAN.md Phase 4+
-   for the dot-matrix numerals, ring and chart work still to come. */
+   + Phase 3 (structural restyle) + Phase 4 (dot-matrix numerals & ring).
+   See docs/NOTHING_OS_SKIN_PLAN.md Phase 5+ for the chart work still to come. */
 
 /* ---- shared by both Nothing skins, both modes ---- */
 html[data-skin="nothing-signal"][data-theme="dark"],
@@ -123,6 +123,15 @@ html[data-skin="nothing-signal"][data-theme="light"] {
   --color-cross: var(--text);
   --color-strength: var(--text);
   --color-default: var(--text);
+}
+
+/* scoreColor()'s bands (ReadinessCard) — nothing-app inherits the originals */
+html[data-skin="nothing-signal"][data-theme="dark"],
+html[data-skin="nothing-signal"][data-theme="light"] {
+  --score-high: var(--text);
+  --score-mid: var(--text-secondary);
+  --score-low: var(--accent);
+  --score-poor: var(--accent);
 }
 
 /* ==========================================================================
@@ -336,4 +345,22 @@ html[data-skin^="nothing"] .skeleton {
 
 html[data-skin^="nothing"] .skeleton::after {
   content: none;
+}
+
+/* ==========================================================================
+   Phase 4 — dot-matrix numerals & ring. Numeral/DotMatrix are pure-CSS
+   components that render inline wherever a screen already places a value, so
+   they need no skin-scoped override here beyond the ring's own geometry.
+   ========================================================================== */
+
+/* ---- 4.3 ScoreRing: no filled backdrop under Nothing, track dots
+   perforate. The progress circle's dasharray is always set inline (it
+   expresses the score), so it always wins over this class rule regardless
+   of skin. ---- */
+html[data-skin^="nothing"] .score-ring {
+  background: none;
+}
+
+html[data-skin^="nothing"] .score-ring-arc {
+  stroke-dasharray: 1.5 6;
 }

@@ -14,6 +14,7 @@ import { useTheme } from '../../App'
 import { getChartTickColor, getTooltipProps, WELLNESS_METRIC_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
 import RangeSelector, { DEFAULT_RANGE_OPTIONS, type RangeDays } from '../ui/RangeSelector'
 import Skeleton from '../ui/Skeleton'
+import Numeral from '../ui/Numeral'
 import './WellnessTrendsView.css'
 
 const {
@@ -137,7 +138,7 @@ export default function WellnessTrendsView() {
           <div className="wellness-metric-title">Sleep Score</div>
           {avgSleepScore != null && (
             <div className="wellness-metric-value" style={{ color: SLEEP_COLOR }}>
-              {avgSleepScore.toFixed(0)}
+              <Numeral value={avgSleepScore.toFixed(0)} />
               <span className="wellness-metric-unit"> / 100</span>
             </div>
           )}
@@ -183,7 +184,7 @@ export default function WellnessTrendsView() {
           <div className="wellness-metric-title">Resting Heart Rate</div>
           {avgRhr != null && (
             <div className="wellness-metric-value" style={{ color: RHR_COLOR }}>
-              {avgRhr.toFixed(0)}
+              <Numeral value={avgRhr.toFixed(0)} />
               <span className="wellness-metric-unit"> bpm avg · 7-day</span>
             </div>
           )}
@@ -219,7 +220,7 @@ export default function WellnessTrendsView() {
           <div className="wellness-metric-title">Avg Stress</div>
           {avgStress != null && (
             <div className="wellness-metric-value" style={{ color: STRESS_COLOR }}>
-              {avgStress.toFixed(0)}
+              <Numeral value={avgStress.toFixed(0)} />
               <span className="wellness-metric-unit"> / 100 avg · 7-day</span>
             </div>
           )}
@@ -262,7 +263,7 @@ export default function WellnessTrendsView() {
           <div className="wellness-metric-title">Body Battery</div>
           {avgBatteryHigh != null && (
             <div className="wellness-metric-value" style={{ color: BATTERY_COLOR }}>
-              {avgBatteryHigh.toFixed(0)}
+              <Numeral value={avgBatteryHigh.toFixed(0)} />
               <span className="wellness-metric-unit"> high avg · 7-day</span>
             </div>
           )}
@@ -317,7 +318,7 @@ export default function WellnessTrendsView() {
             <div className="wellness-metric-title">HRV (overnight)</div>
             {avgHrv != null && (
               <div className="wellness-metric-value" style={{ color: HRV_COLOR }}>
-                {avgHrv.toFixed(0)}
+                <Numeral value={avgHrv.toFixed(0)} />
                 <span className="wellness-metric-unit"> ms avg · 7-day</span>
               </div>
             )}
