@@ -33,7 +33,7 @@ export default function WorkoutDetailView() {
           <ArrowLeft size={20} />
         </button>
         <div className="detail-header-info">
-          <span className="badge" style={{ background: 'rgba(243,156,18,0.15)', color: 'var(--warning)' }}>
+          <span className="badge" style={{ background: 'color-mix(in srgb, var(--warning) 15%, transparent)', color: 'var(--warning)' }}>
             {workoutType}
           </span>
           <h1 className="detail-title">{event.title || 'Workout'}</h1>

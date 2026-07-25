@@ -29,7 +29,7 @@ html[data-skin="nothing-app"][data-theme="dark"] {
   --bg-hover: #1a1a1a;
   --surface: var(--bg-card);
   --text: #ffffff;
-  --text-muted: #6e6e6e;
+  --text-muted: #7c7c7c;
   --text-secondary: #b4b4b4;
   --border: #232323;
   --border-strong: #3a3a3a;
@@ -45,7 +45,7 @@ html[data-skin="nothing-app"][data-theme="light"] {
   --bg-hover: #e4e4e4;
   --surface: var(--bg-card);
   --text: #000000;
-  --text-muted: #8b8b8b;
+  --text-muted: #6f6f6f;
   --text-secondary: #4a4a4a;
   --border: #e0e0e0;
   --border-strong: #c8c8c8;
@@ -112,6 +112,19 @@ html[data-skin="nothing-app"][data-theme="light"] {
   --c-strength: #6c5ce7;
 }
 
+/* Phase 6 contrast sweep: scoreColor()'s bands (ReadinessCard's rc-value text
+   and bar fill) inherit :root's defaults unchanged in nothing-app, and two of
+   the four fall below the 4.5:1 text floor on white (#fdcb6e 1.5:1, #e17055
+   2.9:1) — the same failure mode Phase 2.1 already fixed for the workout
+   colours above, just not extended to this token set. nothing-signal is
+   unaffected; it already replaces all four with monochrome tokens. */
+html[data-skin="nothing-app"][data-theme="light"] {
+  --score-high: #007d65;
+  --score-mid:  #9a6502;
+  --score-low:  #c64323;
+  --score-poor: #d52c2d;
+}
+
 /* Monochromes every var(--color-*) consumer (Plan rows, hero badge, activity
    icons) for free under signal red, since utils/colors.ts maps workout type to
    --color-* directly. app-inks needs no rule — it keeps the originals. */
@@ -125,6 +138,35 @@ html[data-skin="nothing-signal"][data-theme="light"] {
   --color-cross: var(--text);
   --color-strength: var(--text);
   --color-default: var(--text);
+}
+
+/* Phase 6 fix: the generic status tokens power ~13 shared components (Toast,
+   SyncStatusPill, AiInsightCard, ErrorBoundary, checkin state, etc.) that
+   Phase 2's workout-colour and score-band tokens never touched. Left alone
+   they leaked green/amber/red on every screen — a PB toast on Activities, a
+   sync pill on Today — the same violation of "one accent only" that the
+   --color-* and --sport-* blocks above already fix for workout/sport tints.
+   nothing-app is intentionally left alone — it keeps the app's status colours. */
+html[data-skin="nothing-signal"][data-theme="dark"],
+html[data-skin="nothing-signal"][data-theme="light"] {
+  --success: var(--text);
+  --warning: var(--accent);
+  --danger: var(--accent);
+}
+
+/* Phase 6 fix: getActivityAccent() returned literal hex for every non-running
+   sport (bike/swim/walk/strength/other) until this branch — a full rainbow
+   leak on Activities, the Activity list icon and WorkoutCard, in violation of
+   Phase 2's "the only non-ink colour is the red accent" rule. Routed through
+   --sport-* tokens now (see utils/colors.ts and globals.css); nothing-app
+   needs no rule here since it keeps the app's sport colours unchanged. */
+html[data-skin="nothing-signal"][data-theme="dark"],
+html[data-skin="nothing-signal"][data-theme="light"] {
+  --sport-bike: var(--text);
+  --sport-swim: var(--text);
+  --sport-walk: var(--text);
+  --sport-strength: var(--text);
+  --sport-other: var(--text);
 }
 
 /* scoreColor()'s bands (ReadinessCard) — nothing-app inherits the originals */
@@ -354,6 +396,30 @@ html[data-skin="nothing-signal"] .tl-form-building,
 html[data-skin="nothing-signal"] .tl-form-fatigued,
 html[data-skin="nothing-signal"] .tl-risk-moderate,
 html[data-skin="nothing-signal"] .tl-risk-high {
+  color: var(--accent);
+}
+
+/* ---- 3.5 PB accents (Phase 6 fix): globals.css's .pr-badge and
+   PeakPerformancesView's gold accents (.pr-recent-icon, .pr-new-badge,
+   .pr-effort-medal-1) are literal #f0a500 — Phase 2 defined --c-pb for
+   exactly this but no component was ever wired to read it, so the gold
+   badge leaked through as a second colour under signal red. nothing-app is
+   deliberately left alone; keeping the app's gold is the point of that
+   skin. ---- */
+html[data-skin="nothing-signal"] .pr-badge,
+html[data-skin="nothing-signal"] .pr-new-badge {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+}
+
+html[data-skin="nothing-signal"] .pr-recent-icon {
+  color: var(--accent);
+}
+
+html[data-skin="nothing-signal"] .pr-effort-medal-1 {
+  background: transparent;
+  border: 1px solid var(--accent);
   color: var(--accent);
 }
 

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Loader, Trophy, ChevronDown } from 'lucide-react'
 import { useActivity, useTriggerAnalysis, useJobStatus } from '../../api/hooks'
-import { getActivityColor, getActivityAccent } from '../../utils/colors'
+import { getActivityColor, getActivityAccent, getActivityAccentHex } from '../../utils/colors'
 import { formatDistance, formatDuration, formatPace } from '../../utils/formatting'
 import { format, parseISO } from '../../utils/date'
 import StatGrid from './StatGrid'
@@ -152,7 +152,7 @@ export default function ActivityDetailView() {
           <ArrowLeft size={20} />
         </button>
         <div className="detail-header-info">
-          <span className="badge" style={{ background: `${color}22`, color }}>{typeLabel}</span>
+          <span className="badge" style={{ background: `color-mix(in srgb, ${color} 13.333%, transparent)`, color }}>{typeLabel}</span>
           {activity.personal_records && activity.personal_records.length > 0 && (
             <span
               className="badge pr-badge"
@@ -179,7 +179,7 @@ export default function ActivityDetailView() {
         <div className="detail-columns">
           <div className="detail-col detail-col-left">
             {/* Route silhouette (animated; only when GPS data is present) */}
-            <RouteMap route={activity.route} activityColor={color} />
+            <RouteMap route={activity.route} activityColor={getActivityAccentHex(activity.name, activity.activity_type)} />
 
             {/* Workout Description */}
             {activity.scheduled_workout?.workout_steps && activity.scheduled_workout.workout_steps.length > 0 && (

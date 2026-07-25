@@ -1,6 +1,6 @@
 # Running Coach — Current State
 
-_Last updated: 2026-07-01_
+_Last updated: 2026-07-25_
 
 A multi-user running analytics and AI-coaching app. It syncs data from Garmin
 Connect, computes sports-science training metrics (training load, readiness,
@@ -266,6 +266,42 @@ Mobile-first SPA with bottom navigation and an expandable calendar. Routes:
 - **Info** — contextual stat-explanation pages.
 - **Dark/light theme** toggle persisted to `localStorage`. PWA manifest +
   service worker under `static/`.
+
+### Appearance: Default Theme + Nothing OS Skin
+- Two independent settings, both in **Settings → Appearance**: **Mode**
+  (dark/light, unchanged) and **Style** — `default`, `nothing-signal`, or
+  `nothing-app` — set via `document.documentElement`'s `data-skin` attribute
+  and persisted to `localStorage`, mirroring the theme mechanism (`App.tsx`'s
+  `useSkin()`). A blocking inline script in `index.html`'s `<head>` applies
+  both attributes before first paint to avoid a flash of the wrong
+  theme/skin.
+- **`nothing-signal`** and **`nothing-app`** share one structural/typographic
+  layer (`frontend/src/styles/skins/nothing.css`, imported after
+  `globals.css`): pure black/white surfaces, hairline borders, no shadows,
+  larger radii, mono/uppercase micro-labels, perforated dot-grid fills, and
+  5×7 dot-matrix numerals (`components/ui/DotMatrix.tsx` + `Numeral.tsx`,
+  the latter the only skin-conditional switch any screen touches) for
+  headline metrics and the readiness ring (`ScoreRing.tsx`, an SVG dashed
+  arc under Nothing, a solid CSS border under `default`).
+- They differ only in ink: `nothing-signal` collapses every workout colour,
+  sport tint, and generic status colour (`--color-*`, `--sport-*`,
+  `--success`/`--warning`/`--danger`, readiness score bands) to
+  ink-or-the-one-red-accent; `nothing-app` keeps the app's existing palette
+  (with four light-mode contrast corrections). Both remaps live in
+  `nothing.css`, keyed off `--color-*`/`--sport-*` custom properties that
+  `utils/colors.ts`'s `getActivityAccent()`/`WORKOUT_TYPE_COLORS` resolve to
+  at render time (`getActivityAccentHex()` is the literal-hex twin for the
+  one canvas consumer, `RouteMap`, which resolves skin colour via
+  `getComputedStyle` instead). Chart theming (series palette, zone ramp,
+  tick/grid colour) is skin-aware through `utils/chartTheme.ts`.
+- `data-skin="default"` is required to render byte-identical to the
+  pre-skin app — verified with a screenshot pixel-diff against `main`, not
+  just by inspection — so every skin rule is written under an explicit
+  `html[data-skin="…"][data-theme="…"]` (or `html[data-skin^="nothing"]`)
+  selector; nothing in `nothing.css` edits a base rule.
+- See `docs/NOTHING_OS_SKIN_PLAN.md` for the full phase-by-phase
+  implementation plan (now fully delivered, phases 0–6) and the mockup it
+  references.
 
 ### User-Defined Custom Charts
 - `GET /custom-charts/metrics` exposes the queryable metric catalog (activity and

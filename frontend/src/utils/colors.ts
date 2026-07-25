@@ -50,20 +50,6 @@ function getSport(activityType: string | null): Sport {
   return 'other'
 }
 
-/**
- * Accent colour for an activity icon/dot/border. Running activities keep the
- * workout-*intensity* tint (easy/tempo/interval/long/race via
- * `getActivityColor`) since it encodes more information than a flat "run"
- * colour would — the sport icon already disambiguates running from
- * everything else. Every other sport is tinted by its `SPORT_COLORS` entry
- * instead of falling through to the generic `default` purple.
- */
-export function getActivityAccent(name: string | null, activityType: string | null): string {
-  const sport = getSport(activityType)
-  if (sport === 'run') return colorMap[getActivityColor(name, activityType)]
-  return SPORT_COLORS[sport]
-}
-
 /** Re-export of the `--color-*` workout-type palette in globals.css, for TSX that needs the value as data rather than a CSS rule. */
 export const WORKOUT_TYPE_COLORS: Record<string, string> = {
   easy: 'var(--color-easy)',
@@ -74,4 +60,47 @@ export const WORKOUT_TYPE_COLORS: Record<string, string> = {
   cross: 'var(--color-cross)',
   strength: 'var(--color-strength)',
   default: 'var(--color-default)',
+}
+
+/** `--sport-*` counterpart to `SPORT_COLORS`, for TSX that renders the accent
+ * via inline `style` (`WORKOUT_TYPE_COLORS`'s sibling for non-running sports).
+ * Skin-scoped like every other token so nothing-signal can monochrome it. */
+const SPORT_COLOR_VARS: Record<Exclude<Sport, 'run'>, string> = {
+  bike: 'var(--sport-bike)',
+  swim: 'var(--sport-swim)',
+  walk: 'var(--sport-walk)',
+  strength: 'var(--sport-strength)',
+  other: 'var(--sport-other)',
+}
+
+/**
+ * Accent colour for an activity icon/dot/border. Running activities keep the
+ * workout-*intensity* tint (easy/tempo/interval/long/race via
+ * `getActivityColor`) since it encodes more information than a flat "run"
+ * colour would — the sport icon already disambiguates running from
+ * everything else. Every other sport is tinted by its `SPORT_COLOR_VARS`
+ * entry instead of falling through to the generic `default` purple.
+ *
+ * Returns a `var(--…)` reference, not a literal hex, so the accent can be
+ * skinned (see nothing.css) — callers use it in inline `style`, where a CSS
+ * variable resolves like any other colour. `colorMap`/`SPORT_COLORS` (the
+ * literal-hex tables) stay separate for the two things that truly need a raw
+ * hex string: Recharts props (`chartTheme.ts`) and this file's own tests.
+ */
+export function getActivityAccent(name: string | null, activityType: string | null): string {
+  const sport = getSport(activityType)
+  if (sport === 'run') return WORKOUT_TYPE_COLORS[getActivityColor(name, activityType)]
+  return SPORT_COLOR_VARS[sport]
+}
+
+/**
+ * Literal-hex twin of `getActivityAccent`, for the one consumer that draws to
+ * a `<canvas>` instead of CSS — `RouteMap.tsx` can't resolve `var()` there
+ * (see its own skin-aware `getComputedStyle` workaround) and needs an actual
+ * colour string.
+ */
+export function getActivityAccentHex(name: string | null, activityType: string | null): string {
+  const sport = getSport(activityType)
+  if (sport === 'run') return colorMap[getActivityColor(name, activityType)]
+  return SPORT_COLORS[sport]
 }

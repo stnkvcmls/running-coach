@@ -17,7 +17,7 @@ export default function ActivityListItem({ activity }: Props) {
 
   return (
     <Link to={`/activities/${activity.id}`} className="activity-list-item card">
-      <div className="ali-icon" style={{ background: `${color}22`, color }}>
+      <div className="ali-icon" style={{ background: `color-mix(in srgb, ${color} 13.333%, transparent)`, color }}>
         <SportIcon size={18} />
       </div>
       <div className="ali-main">

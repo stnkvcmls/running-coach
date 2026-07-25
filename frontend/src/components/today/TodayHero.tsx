@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CheckCircle2, RefreshCw, Watch } from 'lucide-react'
+import { useSkin } from '../../App'
 import { useTrainingPlan, useActivity, usePushWorkoutToGarmin } from '../../api/hooks'
 import type { ActivitySummary, TodayResponse, TrainingPlanDay } from '../../api/types'
 import { formatDistance, formatDuration } from '../../utils/formatting'
@@ -175,9 +176,14 @@ export default function TodayHero({ data }: Props) {
   const [readinessExpanded, setReadinessExpanded] = useState(false)
   const [briefingExpanded, setBriefingExpanded] = useState(false)
   const { data: plan, isLoading: planLoading } = useTrainingPlan()
+  const { skin } = useSkin()
 
   const readiness = data.readiness
   const ringColor = readiness ? scoreColor(readiness.score) : 'var(--accent)'
+  // The 100px ring only exists to fit DotMatrix's normal-size digits under
+  // the Nothing skins (see ScoreRing) — the default skin's plain numeral
+  // never needed the extra room, so it keeps its original 64px size.
+  const ringSize = skin.startsWith('nothing') ? 100 : 64
 
   const planDay = data.plan_day_id != null
     ? plan?.weeks.flatMap(w => w.days).find(d => d.id === data.plan_day_id) ?? null
@@ -202,7 +208,7 @@ export default function TodayHero({ data }: Props) {
             aria-expanded={readinessExpanded}
             aria-label={`Training readiness ${readiness.score} out of 100 — tap for details`}
           >
-            <ScoreRing score={readiness.score} color={ringColor} size={100} subLabel={readiness.label} />
+            <ScoreRing score={readiness.score} color={ringColor} size={ringSize} subLabel={readiness.label} />
           </button>
         )}
         <HeroSession

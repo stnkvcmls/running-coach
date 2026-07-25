@@ -145,3 +145,87 @@ Visual target per phase: docs/mockups/ui-redesign-mockup.html (toggle
   Fixture-driven Playwright screenshots at 390×844 for every phase's
   user-visible change (detail order, sticky header, hero states, races,
   activities list icons/HR/PB badge, AdherenceCard wrap, Plan row gating).
+
+# Nothing OS skin — Phase 6 (QA, accessibility & docs)
+
+Goal: close out `docs/NOTHING_OS_SKIN_PLAN.md` (phases 0–5 already merged on
+`feature/theme`) with the QA pass its own checklist demands: contrast sweep,
+focus/motion checks, a full regression walk in all six theme×skin
+combinations, and a pixel-diffed default-skin comparison against `main`.
+
+## Tasks
+- [x] Contrast sweep (WCAG AA, all six combinations) — computed ratios for
+      every text/UI token pair, not eyeballed.
+- [x] Focus-ring visibility check (accent vs. bg, all six combinations).
+- [x] Reduced-motion check (`nothing.css` adds zero animations; existing
+      global neutralizer covers it).
+- [x] Full regression walk: Today, Plan, Activities, Activity detail,
+      Progress, Plan setup, Settings — all six combinations, via a local
+      backend + seeded activity/PR + headless-Chromium screenshots.
+- [x] Default-skin diff: pixel-diffed against `origin/main` (not just this
+      branch's own earlier commits) for Today/Plan/Activities in both modes.
+- [x] `tsc --noEmit`, `vitest run`, `npm run build` all clean.
+- [x] `docs/CURRENT_STATE.md` updated with the skin system.
+
+## Review
+
+**The contrast sweep found four real gaps, all fixed in `nothing.css`:**
+1. `--text-muted` (both Nothing skins, both modes) sat at 3.4–4.1:1 against
+   its own card background — under the 4.5:1 floor for the 9px mono labels
+   it's used for (`.stat-label`, `.section-title`, used app-wide). Darkened/
+   lightened to `#7c7c7c` / `#6f6f6f`.
+2. `nothing-app`'s light-mode `--score-high`/`--score-mid`/`--score-low`
+   inherited `:root`'s defaults unchanged and two fell as low as 1.4:1 as
+   *text* (ReadinessCard's `rc-value`) — Phase 2.1 corrected four workout
+   colours for this exact failure mode but never extended it to the score
+   bands. Added the same style of correction.
+3. The PB badge/medal/toast accents (`.pr-badge`, `.pr-recent-icon`,
+   `.pr-new-badge`, `.pr-effort-medal-1`) hardcode `#f0a500` — Phase 2 defined
+   `--c-pb` for exactly this but no component ever read it, so a gold badge
+   leaked through under `nothing-signal`. Added a skin-scoped override.
+
+**The regression walk found a much bigger, structural gap:** `getActivityAccent()`
+— the function behind the Activity list icon, the activity-detail header
+badge/border, `WorkoutCard`, and `MonthCalendar` dots — returned **literal
+hex**, not a CSS token, for every non-running sport and was reached by
+`${color}22`/`rgba(...)` string-concatenation for translucent badge fills.
+Neither path can be skinned. A seeded activity + personal record made this
+visible immediately: a green cycling icon and an orange PB badge on an
+otherwise all-red `nothing-signal` Activities screen, plus a green PB-toast
+border and a green "Reconnect" pill — the generic `--success`/`--warning`/
+`--danger` tokens (13+ shared components) had the identical gap. Fixed by:
+- `getActivityAccent()` now returns `var(--color-*)`/`var(--sport-*)`
+  (new `--sport-*` tokens, mirroring `--color-*`); a new
+  `getActivityAccentHex()` literal-hex twin covers the one consumer that
+  can't use `var()` — `RouteMap`'s canvas draw.
+- The three `${color}22` alpha-suffix call sites became
+  `color-mix(in srgb, ${color} 13.333%, transparent)` (the precise fraction
+  reproducing `0x22`'s alpha byte exactly, verified with a pixel diff) —
+  `var()` doesn't support hex-alpha string concatenation but composes fine
+  inside `color-mix()`. Same fix for `WorkoutDetailView`'s hardcoded
+  `rgba(243,156,18,0.15)` warning badge.
+- `--success`/`--warning`/`--danger` collapse to ink/accent under
+  `nothing-signal` only, one token block, ~13 components fixed at once.
+
+**The default-skin diff caught the most consequential bug of the pass.**
+Phase 5's follow-up commit ("size the ring to the numeral, not the numeral
+to the ring") enlarged `ScoreRing` from 64/72px to 100px at both call sites
+*unconditionally* — but the reason (DotMatrix's normal-size digits need more
+room than a small ring) only applies when `Numeral` is actually rendering
+DotMatrix, i.e. under a Nothing skin; `default`'s plain-text numeral never
+needed it. The unconditional change silently grew the readiness ring in the
+**default skin**, shifting every card below it down by ~15px — a "default
+skin is sacred" violation invisible without an actual pixel diff against
+`main` (6.8%/8.6% of the frame differed on Today). Fixed by gating the size
+on `useSkin()` in both `TodayHero` and `ReadinessCard` (64/72px default,
+100px Nothing); residual diff after the fix is 0.155%, concentrated in one
+ring stroke's anti-aliasing — sub-pixel rendering noise, not a layout bug.
+Plan/Activities were already exact.
+
+**Verification:** `npx tsc --noEmit` and `npx vitest run` (235 tests, +3 new)
+clean; `npm run build` clean. Manual QA used a local FastAPI backend (fresh
+SQLite, `AUTH_ENABLED=false`) + Vite dev server, a seeded athlete profile,
+one activity with a personal record, and headless-Chromium screenshots
+(390×844) across all six theme×skin combinations and the routes listed
+above, plus a `pixelmatch` diff against an `origin/main` worktree for the
+default-skin acceptance criterion.

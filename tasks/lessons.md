@@ -238,3 +238,70 @@ plausible-looking spot." Sample the element's `getBoundingClientRect()`
 across a *sweep* of scroll positions and look for a flat plateau at the
 sticky offset — a real clamp holds constant across a range; unstuck content
 decreases linearly with scroll at every point.
+
+## Frontend: a themeable colour returned as a `var()` string breaks any caller that concatenates onto it
+
+**Symptom:** Nothing-skin QA (`tasks/todo.md`'s Phase 6) found that
+`getActivityAccent()` — the function behind the Activity list icon, the
+activity-detail badge, `WorkoutCard`, and `MonthCalendar` — still returned
+**literal hex** for every non-running sport, so under `nothing-signal` a
+cycling activity's icon stayed hard-coded green instead of collapsing to the
+one red accent like everything else on the screen.
+
+**Cause:** Three of the four call sites build a translucent badge background
+with `` `${color}22` `` — appending a hex alpha byte directly onto the colour
+string. That trick requires an actual hex string; it silently produces
+invalid CSS (`"var(--color-easy)22"`) if the function is changed to return a
+themeable `var(--…)` reference instead, which is exactly why it had been left
+as literal hex despite every sibling token (`--color-*`, `--score-*`) already
+being skin-aware. The one genuinely unfixable case is different in kind:
+`RouteMap` draws to `<canvas>`, and a 2D context's `fillStyle`/`strokeStyle`
+never resolves a `var()` reference at all (canvas isn't part of the CSS
+cascade) — no string trick fixes that; it has to read the resolved value via
+`getComputedStyle()` instead (already done, correctly, for this file).
+
+**Fix:** Switched `getActivityAccent()` to return `var(--color-*)` /
+`var(--sport-*)` (new `--sport-*` tokens mirroring the existing `--color-*`
+ones), added a literal-hex twin `getActivityAccentHex()` for the canvas
+consumer only, and replaced the `` `${color}22` `` sites with
+`` `color-mix(in srgb, ${color} 13.333%, transparent)` `` — `color-mix()`
+accepts a `var()` as its colour argument and composes fine, unlike string
+concatenation. The percentage (not `13%`) was chosen to reproduce `0x22`'s
+alpha byte (34/255 = 13.333…%) exactly, verified with a pixel diff against
+the pre-change render — an approximate percentage would have been an
+invisible-until-diffed regression in the very skin ("default") that's
+supposed to stay byte-identical. General rule: before making any colour
+value themeable, grep every call site for string interpolation on that
+value, not just direct assignment — `background: ${x}` is safe to swap for
+`var()`, `` `${x}22` `` or `rgba(...)`-from-parts is not, and a canvas
+`fillStyle` never accepts `var()` regardless.
+
+## Frontend: "this must be unaffected" needs a diff against the actual baseline, not a re-check of your own branch
+
+**Symptom:** The Nothing-skin plan's Global Rule 1 ("default skin is sacred
+— `data-skin="default"` must render byte-identical to `main`") had been
+verified after every phase by re-screenshotting the branch and eyeballing
+it. Phase 6's QA pass did the rule literally — screenshotted `origin/main`
+in a separate worktree against a live pixel-diff of this branch — and found
+Today's default-skin render differed from `main` by ~7–8% of the frame.
+Eyeballing alone had missed it across five merged phases.
+
+**Cause:** A Phase 5 follow-up commit ("size the ring to the numeral, not
+the numeral to the ring") enlarged `ScoreRing` from 64/72px to 100px at
+both call sites (`TodayHero`, `ReadinessCard`) *unconditionally*. The
+reasoning was skin-specific — DotMatrix's normal-size digits need a bigger
+ring than `default`'s plain-text numeral ever did — but the fix wasn't
+gated on skin, so it silently grew the ring (and shifted every card below
+it) in the default skin too. A same-branch screenshot never catches this
+class of bug: comparing the branch to itself confirms internal consistency,
+not fidelity to the untouched baseline.
+
+**Fix:** Gated the ring size on `useSkin()` in both call sites (`size =
+skin.startsWith('nothing') ? 100 : 64/72`), restoring the default skin's
+original geometry. Verified with `pixelmatch` against an `origin/main` git
+worktree running the same backend/data — 6.8%/8.6% of the frame down to
+0.155% (a single ring stroke's anti-aliasing, not a layout difference).
+When a spec says "X must be unaffected," diff X against the thing it must
+match — a worktree of the actual baseline branch is cheap; a re-check of
+your own prior screenshots only proves you didn't regress *since your last
+screenshot*, which is a much weaker claim.

@@ -26,7 +26,7 @@ export default function WorkoutCard({ activity }: Props) {
     >
       <div className="workout-header">
         <div className="workout-header-left">
-          <span className="badge" style={{ background: `${color}22`, color }}>{typeLabel}</span>
+          <span className="badge" style={{ background: `color-mix(in srgb, ${color} 13.333%, transparent)`, color }}>{typeLabel}</span>
           {activity.workout_tag && (
             <span className="workout-tag" title={activity.workout_tag}>
               <CheckCircle size={12} />

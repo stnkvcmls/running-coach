@@ -31,6 +31,15 @@
   --color-strength: #a29bfe;
   --color-default: #6c5ce7;
 
+  /* Non-running sport tints (getActivityAccent's SPORT_COLOR_VARS) — same
+     values as utils/colors.ts's SPORT_COLORS, kept in sync manually since
+     one feeds inline styles via var() and the other feeds Recharts literals. */
+  --sport-bike: #00b894;
+  --sport-swim: #0984e3;
+  --sport-walk: #fdcb6e;
+  --sport-strength: #a29bfe;
+  --sport-other: #b2bec3;
+
   --c-easy: var(--color-easy);
   --c-tempo: var(--color-tempo);
   --c-interval: var(--color-interval);

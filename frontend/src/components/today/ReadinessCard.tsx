@@ -1,3 +1,4 @@
+import { useSkin } from '../../App'
 import type { TrainingReadiness } from '../../api/types'
 import StatHelpButton from '../info/StatHelpButton'
 import ScoreRing from '../ui/ScoreRing'
@@ -34,12 +35,17 @@ export function ComponentBar({ label, value }: { label: string; value: number | 
 }
 
 export default function ReadinessCard({ readiness }: Props) {
+  const { skin } = useSkin()
   const color = scoreColor(readiness.score)
+  // The 100px ring only exists to fit DotMatrix's normal-size digits under
+  // the Nothing skins (see ScoreRing) — the default skin's plain numeral
+  // never needed the extra room, so it keeps its original 72px size.
+  const ringSize = skin.startsWith('nothing') ? 100 : 72
 
   return (
     <div className="card readiness-card">
       <div className="readiness-header">
-        <ScoreRing score={readiness.score} color={color} size={100} />
+        <ScoreRing score={readiness.score} color={color} size={ringSize} />
         <div className="readiness-label-block">
           <span className="readiness-label" style={{ color }}>{readiness.label}</span>
           <span className="readiness-sub">Training Readiness</span>

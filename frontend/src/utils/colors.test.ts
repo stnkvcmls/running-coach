@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getActivityColor, getColorHex, getActivityAccent, colorMap, SPORT_COLORS } from './colors'
+import { getActivityColor, getColorHex, getActivityAccent, getActivityAccentHex, colorMap, SPORT_COLORS } from './colors'
 
 describe('getActivityColor', () => {
   it('identifies interval workouts by name', () => {
@@ -68,23 +68,31 @@ describe('getColorHex', () => {
 
 describe('getActivityAccent', () => {
   it('keeps the workout-intensity tint for running activities', () => {
-    expect(getActivityAccent('Interval Session', 'running')).toBe(colorMap.interval)
-    expect(getActivityAccent('Easy Run', 'running')).toBe(colorMap.easy)
-    expect(getActivityAccent(null, 'trail_running')).toBe(colorMap.easy)
+    expect(getActivityAccent('Interval Session', 'running')).toBe('var(--color-interval)')
+    expect(getActivityAccent('Easy Run', 'running')).toBe('var(--color-easy)')
+    expect(getActivityAccent(null, 'trail_running')).toBe('var(--color-easy)')
   })
 
-  it('routes non-running sports through SPORT_COLORS instead of the default purple', () => {
-    expect(getActivityAccent('Morning Ride', 'cycling')).toBe(SPORT_COLORS.bike)
-    expect(getActivityAccent('Road Biking', 'road_biking')).toBe(SPORT_COLORS.bike)
-    expect(getActivityAccent('Pool Session', 'lap_swimming')).toBe(SPORT_COLORS.swim)
-    expect(getActivityAccent('Evening Walk', 'walking')).toBe(SPORT_COLORS.walk)
-    expect(getActivityAccent('Leg Day', 'strength_training')).toBe(SPORT_COLORS.strength)
-    expect(getActivityAccent(null, 'yoga')).toBe(SPORT_COLORS.other)
+  it('routes non-running sports through --sport-* tokens instead of the default purple', () => {
+    expect(getActivityAccent('Morning Ride', 'cycling')).toBe('var(--sport-bike)')
+    expect(getActivityAccent('Road Biking', 'road_biking')).toBe('var(--sport-bike)')
+    expect(getActivityAccent('Pool Session', 'lap_swimming')).toBe('var(--sport-swim)')
+    expect(getActivityAccent('Evening Walk', 'walking')).toBe('var(--sport-walk)')
+    expect(getActivityAccent('Leg Day', 'strength_training')).toBe('var(--sport-strength)')
+    expect(getActivityAccent(null, 'yoga')).toBe('var(--sport-other)')
   })
 
   it('tints a non-running activity by sport even when its name contains an intensity keyword', () => {
     // A "Tempo Ride" is still fundamentally a bike activity — sport wins over
     // a coincidental name match so the tint stays predictable per sport.
-    expect(getActivityAccent('Tempo Ride', 'cycling')).toBe(SPORT_COLORS.bike)
+    expect(getActivityAccent('Tempo Ride', 'cycling')).toBe('var(--sport-bike)')
+  })
+})
+
+describe('getActivityAccentHex', () => {
+  it('returns the same literal hex getActivityAccent used to return, for canvas consumers', () => {
+    expect(getActivityAccentHex('Interval Session', 'running')).toBe(colorMap.interval)
+    expect(getActivityAccentHex('Morning Ride', 'cycling')).toBe(SPORT_COLORS.bike)
+    expect(getActivityAccentHex(null, 'yoga')).toBe(SPORT_COLORS.other)
   })
 })
