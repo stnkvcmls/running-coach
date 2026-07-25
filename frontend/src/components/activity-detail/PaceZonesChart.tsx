@@ -1,9 +1,8 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { useZoneConfigs } from '../../api/hooks'
 import type { ChartSeries } from '../../api/types'
-import { useTheme } from '../../App'
-import { getChartTooltipStyle, getChartTickColor, getChartTooltipTextStyle } from '../../utils/theme'
-import { usePrefersReducedMotion } from '../../utils/chartTheme'
+import { useTheme, useSkin } from '../../App'
+import { getTooltipProps, getChartTickColor, SIGNAL_ZONE_RAMP, usePrefersReducedMotion } from '../../utils/chartTheme'
 import './PaceZonesChart.css'
 
 interface Props {
@@ -19,7 +18,9 @@ function formatPace(minPerKm: number): string {
 export default function PaceZonesChart({ paceSeries }: Props) {
   const { data: zoneData, isLoading } = useZoneConfigs()
   const { theme } = useTheme()
+  const { skin } = useSkin()
   const reduceMotion = usePrefersReducedMotion()
+  const { contentStyle, labelStyle, itemStyle } = getTooltipProps(theme, skin)
 
   if (isLoading || !zoneData) return null
 
@@ -56,7 +57,7 @@ export default function PaceZonesChart({ paceSeries }: Props) {
 
   if (total === 0) return null
 
-  const chartData = zones.map(z => {
+  const chartData = zones.map((z, i) => {
     const count = counts.get(z.zone_number) ?? 0
     const pct = total > 0 ? Math.round((count / total) * 100) : 0
     const minPace = z.min_pct !== null ? threshold * z.min_pct / 100 : null
@@ -68,7 +69,7 @@ export default function PaceZonesChart({ paceSeries }: Props) {
     return {
       zone: `Z${z.zone_number}: ${z.zone_name}`,
       pct,
-      color: z.zone_color,
+      color: skin === 'nothing-signal' ? SIGNAL_ZONE_RAMP[i % SIGNAL_ZONE_RAMP.length] : z.zone_color,
       rangeLabel,
     }
   })
@@ -92,15 +93,15 @@ export default function PaceZonesChart({ paceSeries }: Props) {
             <YAxis
               type="category"
               dataKey="zone"
-              tick={{ fontSize: 11, fill: getChartTickColor(theme) }}
+              tick={{ fontSize: 11, fill: getChartTickColor(theme, skin) }}
               axisLine={false}
               tickLine={false}
               width={90}
             />
             <Tooltip
-              contentStyle={getChartTooltipStyle(theme)}
-              labelStyle={getChartTooltipTextStyle(theme)}
-              itemStyle={getChartTooltipTextStyle(theme)}
+              contentStyle={contentStyle}
+              labelStyle={labelStyle}
+              itemStyle={itemStyle}
               formatter={(value: number, _name: string, props: any) => [
                 `${value}% (${props.payload.rangeLabel})`,
                 'Time',

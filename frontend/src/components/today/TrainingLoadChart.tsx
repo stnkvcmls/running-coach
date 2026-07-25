@@ -11,20 +11,22 @@ import {
 } from 'recharts'
 import { useTrainingLoad } from '../../api/hooks'
 import type { TrainingLoadPoint } from '../../api/types'
-import { useTheme } from '../../App'
-import { getAxisTick, getGridStroke, getTooltipProps, usePrefersReducedMotion } from '../../utils/chartTheme'
+import { useTheme, useSkin } from '../../App'
+import { getAxisTick, getGridStroke, getTooltipProps, getSeriesColors, usePrefersReducedMotion } from '../../utils/chartTheme'
 import './TrainingLoadChart.css'
 
 interface Props {
   current: TrainingLoadPoint
 }
 
-const CTL_COLOR = '#6c5ce7' // Fitness — purple
-const ATL_COLOR = '#e17055' // Fatigue — orange
-const TSB_COLOR = '#00b894' // Form — green
-const ACWR_COLOR = '#fdcb6e' // ACWR — amber
+const LOAD_COLORS_DEFAULT = {
+  ctl: '#6c5ce7', // Fitness — purple
+  atl: '#e17055', // Fatigue — orange
+  tsb: '#00b894', // Form — green
+  acwr: '#fdcb6e', // ACWR — amber
+}
 
-const SPORT_COLORS: Record<string, string> = {
+const SPORT_COLORS_DEFAULT: Record<string, string> = {
   run: '#6c5ce7',
   ride: '#0984e3',
   swim: '#00cec9',
@@ -38,10 +40,6 @@ const SPORT_LABELS: Record<string, string> = {
   swim: 'Swim',
   strength: 'Strength',
   other: 'Other',
-}
-
-function sportColor(sport: string): string {
-  return SPORT_COLORS[sport] ?? SPORT_COLORS.other
 }
 
 function sportLabel(sport: string): string {
@@ -67,9 +65,15 @@ function rsbTone(zone: string | null): string {
 export default function TrainingLoadChart({ current }: Props) {
   const { data } = useTrainingLoad(90)
   const { theme } = useTheme()
-  const { contentStyle } = getTooltipProps(theme)
-  const refLineColor = getGridStroke(theme)
+  const { skin } = useSkin()
+  const { contentStyle } = getTooltipProps(theme, skin)
+  const refLineColor = getGridStroke(theme, skin)
   const reduceMotion = usePrefersReducedMotion()
+  const { ctl: CTL_COLOR, atl: ATL_COLOR, tsb: TSB_COLOR, acwr: ACWR_COLOR } = getSeriesColors(skin, LOAD_COLORS_DEFAULT)
+  const SPORT_COLORS = getSeriesColors(skin, SPORT_COLORS_DEFAULT)
+  function sportColor(sport: string): string {
+    return SPORT_COLORS[sport] ?? SPORT_COLORS.other
+  }
 
   function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) {
     if (!active || !payload || !payload.length) return null
@@ -174,12 +178,12 @@ export default function TrainingLoadChart({ current }: Props) {
               </defs>
               <XAxis
                 dataKey="label"
-                tick={getAxisTick(theme)}
+                tick={getAxisTick(theme, undefined, skin)}
                 axisLine={false}
                 tickLine={false}
                 minTickGap={28}
               />
-              <YAxis yAxisId="load" tick={getAxisTick(theme)} axisLine={false} tickLine={false} width={28} />
+              <YAxis yAxisId="load" tick={getAxisTick(theme, undefined, skin)} axisLine={false} tickLine={false} width={28} />
               <YAxis yAxisId="form" orientation="right" hide />
               {hasAcwr && (
                 <YAxis yAxisId="acwr" orientation="right" domain={[0, 2.5]} hide />

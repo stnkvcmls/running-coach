@@ -9,8 +9,8 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { useCustomChartMetrics, useCustomChartData } from '../../api/hooks'
-import { useTheme } from '../../App'
-import { getChartTickColor, getTooltipProps, CHART_SERIES_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
+import { useTheme, useSkin } from '../../App'
+import { getChartTickColor, getTooltipProps, getSeriesColors, getSeriesDash, CHART_SERIES_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
 import Skeleton from '../ui/Skeleton'
 import type { CustomChartMetric, CustomChartMetricGroup } from '../../api/types'
 import './CustomChartsView.css'
@@ -31,8 +31,6 @@ const GROUP_LABELS: Record<CustomChartMetricGroup, string> = {
 }
 
 const GROUP_ORDER: CustomChartMetricGroup[] = ['activity', 'wellness', 'load']
-
-const SERIES_COLORS = CHART_SERIES_COLORS
 
 const MAX_METRICS = 4
 const CONFIG_KEY = 'runningCoach.customChart.config'
@@ -86,9 +84,11 @@ export default function CustomChartsView() {
   const [config, setConfig] = useState<ChartConfig>(loadConfig)
   const [presets, setPresets] = useState<ChartPreset[]>(loadPresets)
   const { theme } = useTheme()
-  const tickColor = getChartTickColor(theme)
-  const { contentStyle: tooltipStyle } = getTooltipProps(theme)
+  const { skin } = useSkin()
+  const tickColor = getChartTickColor(theme, skin)
+  const { contentStyle: tooltipStyle } = getTooltipProps(theme, skin)
   const reduceMotion = usePrefersReducedMotion()
+  const SERIES_COLORS = getSeriesColors(skin, CHART_SERIES_COLORS)
 
   const { metricIds, days, compare = false } = config
   const { data: chartData, isLoading: dataLoading } = useCustomChartData(metricIds, days, compare)
@@ -287,6 +287,7 @@ export default function CustomChartsView() {
                   yAxisId={id}
                   stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
                   strokeWidth={2}
+                  strokeDasharray={getSeriesDash(skin, i)}
                   dot={false}
                   connectNulls
                   name={metricsById.get(id)?.label ?? id}

@@ -1,8 +1,8 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import type { WeeklyMileage } from '../../api/types'
-import { useTheme } from '../../App'
-import { getAxisTick, getGridStroke, getTooltipProps, usePrefersReducedMotion } from '../../utils/chartTheme'
-import { SPORT_COLORS } from '../../utils/colors'
+import { useTheme, useSkin } from '../../App'
+import { getAxisTick, getGridStroke, getTooltipProps, getSeriesColors, getHoverFill, usePrefersReducedMotion } from '../../utils/chartTheme'
+import { SPORT_COLORS as SPORT_COLORS_DEFAULT } from '../../utils/colors'
 import './WeekOverview.css'
 
 interface Props {
@@ -32,10 +32,12 @@ export default function WeekOverview({ data }: Props) {
   const maxKm = Math.max(...data.map(d => d.km), 1)
   const activityTypes = getActivityTypes(data)
   const { theme } = useTheme()
-  const { contentStyle } = getTooltipProps(theme)
-  const borderColor = getGridStroke(theme)
+  const { skin } = useSkin()
+  const { contentStyle } = getTooltipProps(theme, skin)
+  const borderColor = getGridStroke(theme, skin)
   const reduceMotion = usePrefersReducedMotion()
   const totalKm = data.reduce((s, d) => s + d.km, 0)
+  const SPORT_COLORS = getSeriesColors(skin, SPORT_COLORS_DEFAULT)
 
   function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) {
     if (active && payload && payload.length) {
@@ -88,12 +90,12 @@ export default function WeekOverview({ data }: Props) {
           <BarChart data={data} barCategoryGap="20%">
             <XAxis
               dataKey="label"
-              tick={getAxisTick(theme, 11)}
+              tick={getAxisTick(theme, 11, skin)}
               axisLine={false}
               tickLine={false}
             />
             <YAxis hide domain={[0, maxKm * 1.15]} />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(108, 92, 231, 0.1)' }} />
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: getHoverFill(theme, skin) }} />
             {activityTypes.map((type, index) => (
               <Bar
                 key={type}

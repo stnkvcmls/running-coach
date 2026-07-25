@@ -1,6 +1,8 @@
 /* Nothing OS skin — Phase 1 (token layer) + Phase 2 (semantic ink tokens)
    + Phase 3 (structural restyle) + Phase 4 (dot-matrix numerals & ring).
-   See docs/NOTHING_OS_SKIN_PLAN.md Phase 5+ for the chart work still to come. */
+   Phase 5 (charts) lives in utils/chartTheme.ts, not here — Recharts takes
+   literal colour props, not var(), so there's no CSS-side token layer for it.
+   See docs/NOTHING_OS_SKIN_PLAN.md Phase 6 for the remaining QA pass. */
 
 /* ---- shared by both Nothing skins, both modes ---- */
 html[data-skin="nothing-signal"][data-theme="dark"],

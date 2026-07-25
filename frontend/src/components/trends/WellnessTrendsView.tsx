@@ -10,20 +10,12 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { useWellnessTrends } from '../../api/hooks'
-import { useTheme } from '../../App'
-import { getChartTickColor, getTooltipProps, WELLNESS_METRIC_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
+import { useTheme, useSkin } from '../../App'
+import { getChartTickColor, getTooltipProps, getSeriesColors, WELLNESS_METRIC_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
 import RangeSelector, { DEFAULT_RANGE_OPTIONS, type RangeDays } from '../ui/RangeSelector'
 import Skeleton from '../ui/Skeleton'
 import Numeral from '../ui/Numeral'
 import './WellnessTrendsView.css'
-
-const {
-  sleep: SLEEP_COLOR,
-  restingHr: RHR_COLOR,
-  stress: STRESS_COLOR,
-  bodyBattery: BATTERY_COLOR,
-  hrv: HRV_COLOR,
-} = WELLNESS_METRIC_COLORS
 
 function avg7(data: any[], key: string): number | null {
   const vals = data.slice(-7).map(d => d[key]).filter((v: any) => v != null) as number[]
@@ -53,9 +45,17 @@ export default function WellnessTrendsView() {
   const [days, setDays] = useState<RangeDays>(30)
   const { data, isLoading } = useWellnessTrends(days)
   const { theme } = useTheme()
-  const tickColor = getChartTickColor(theme)
-  const { contentStyle } = getTooltipProps(theme)
+  const { skin } = useSkin()
+  const tickColor = getChartTickColor(theme, skin)
+  const { contentStyle } = getTooltipProps(theme, skin)
   const reduceMotion = usePrefersReducedMotion()
+  const {
+    sleep: SLEEP_COLOR,
+    restingHr: RHR_COLOR,
+    stress: STRESS_COLOR,
+    bodyBattery: BATTERY_COLOR,
+    hrv: HRV_COLOR,
+  } = getSeriesColors(skin, WELLNESS_METRIC_COLORS)
 
   function MetricTooltip({ active, payload, label, unit }: { active?: boolean; payload?: any[]; label?: string; unit: string }) {
     if (!active || !payload?.length) return null

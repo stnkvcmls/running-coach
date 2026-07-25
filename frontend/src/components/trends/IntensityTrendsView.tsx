@@ -9,8 +9,13 @@ import {
   Legend,
 } from 'recharts'
 import { useIntensityTrends } from '../../api/hooks'
-import { useTheme } from '../../App'
-import { getChartTickColor, getTooltipProps, INTENSITY_ZONE_COLORS, INTENSITY_BUCKET_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
+import { useTheme, useSkin } from '../../App'
+import {
+  getChartTickColor, getTooltipProps, getSeriesColors,
+  INTENSITY_ZONE_COLORS as INTENSITY_ZONE_COLORS_DEFAULT,
+  INTENSITY_BUCKET_COLORS as INTENSITY_BUCKET_COLORS_DEFAULT,
+  usePrefersReducedMotion,
+} from '../../utils/chartTheme'
 import RangeSelector, { DEFAULT_RANGE_OPTIONS, type RangeDays } from '../ui/RangeSelector'
 import Skeleton from '../ui/Skeleton'
 import type { IntensityWeek } from '../../api/types'
@@ -50,6 +55,8 @@ function buildChartData(weeks: IntensityWeek[]) {
 }
 
 function PolarizationBar({ easy, moderate, hard }: { easy: number; moderate: number; hard: number }) {
+  const { skin } = useSkin()
+  const INTENSITY_BUCKET_COLORS = getSeriesColors(skin, INTENSITY_BUCKET_COLORS_DEFAULT)
   return (
     <div style={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', gap: 1 }}>
       <div style={{ flex: easy, background: INTENSITY_BUCKET_COLORS.easy }} title={`Easy ${easy.toFixed(0)}%`} />
@@ -80,9 +87,12 @@ export default function IntensityTrendsView() {
   const [zoneType, setZoneType] = useState<ZoneType>('hr')
   const { data, isLoading } = useIntensityTrends(days, zoneType)
   const { theme } = useTheme()
-  const tickColor = getChartTickColor(theme)
-  const { contentStyle } = getTooltipProps(theme)
+  const { skin } = useSkin()
+  const tickColor = getChartTickColor(theme, skin)
+  const { contentStyle } = getTooltipProps(theme, skin)
   const reduceMotion = usePrefersReducedMotion()
+  const INTENSITY_ZONE_COLORS = getSeriesColors(skin, INTENSITY_ZONE_COLORS_DEFAULT)
+  const INTENSITY_BUCKET_COLORS = getSeriesColors(skin, INTENSITY_BUCKET_COLORS_DEFAULT)
 
   const allZones = ['1', '2', '3', '4', '5']
 
