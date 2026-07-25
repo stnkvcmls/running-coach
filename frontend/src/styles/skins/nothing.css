@@ -1,4 +1,4 @@
-/* Nothing OS skin — Phase 1: token layer only.
+/* Nothing OS skin — Phase 1 (token layer) + Phase 2 (semantic ink tokens).
    No component rules here yet; see docs/NOTHING_OS_SKIN_PLAN.md Phase 3+. */
 
 /* ---- shared by both Nothing skins, both modes ---- */
@@ -59,4 +59,67 @@ html[data-skin="nothing-signal"][data-theme="light"] {
 /* app inks keeps the existing accent, unchanged from globals.css */
 html[data-skin="nothing-app"][data-theme="light"] {
   --accent-light: #5a4bd1;
+}
+
+/* ---- Phase 2: semantic ink tokens ---- */
+
+/* signal red — colour is spent once per screen */
+html[data-skin="nothing-signal"][data-theme="dark"],
+html[data-skin="nothing-signal"][data-theme="light"] {
+  --c-easy:     var(--text);
+  --c-tempo:    var(--accent);
+  --c-interval: var(--accent);
+  --c-long:     var(--text);
+  --c-race:     var(--accent);
+  --c-cross:    var(--text);
+  --c-strength: var(--text);
+  --c-pb:       var(--accent);
+  --c-alert:    var(--accent);
+  --c-warn:     var(--accent);
+  --c-ring:     var(--text);
+  --c-series-1: var(--text);
+  --c-series-2: var(--accent);
+}
+
+/* app inks — the existing globals.css palette, demoted to strokes and labels */
+html[data-skin="nothing-app"][data-theme="dark"],
+html[data-skin="nothing-app"][data-theme="light"] {
+  --c-easy:     var(--color-easy);
+  --c-tempo:    var(--color-tempo);
+  --c-interval: var(--color-interval);
+  --c-long:     var(--color-long);
+  --c-race:     var(--color-race);
+  --c-cross:    var(--color-cross);
+  --c-strength: var(--color-strength);
+  --c-pb:       #f0a500;
+  --c-alert:    var(--danger);
+  --c-warn:     var(--warning);
+  --c-ring:     var(--success);
+  --c-series-1: var(--color-long);
+  --c-series-2: #e17055;
+}
+
+/* Light-mode contrast corrections. #f39c12 (2.2:1) and #2ecc71 (2.0:1) fall
+   below the 3:1 floor for non-text UI on white. These four are the only places
+   the "keep the original palette" rule bends. */
+html[data-skin="nothing-app"][data-theme="light"] {
+  --c-easy:     #1a8f4c;
+  --c-tempo:    #a86a06;
+  --c-cross:    #00908d;
+  --c-strength: #6c5ce7;
+}
+
+/* Monochromes every var(--color-*) consumer (Plan rows, hero badge, activity
+   icons) for free under signal red, since utils/colors.ts maps workout type to
+   --color-* directly. app-inks needs no rule — it keeps the originals. */
+html[data-skin="nothing-signal"][data-theme="dark"],
+html[data-skin="nothing-signal"][data-theme="light"] {
+  --color-easy: var(--text);
+  --color-tempo: var(--accent);
+  --color-interval: var(--accent);
+  --color-long: var(--text);
+  --color-race: var(--accent);
+  --color-cross: var(--text);
+  --color-strength: var(--text);
+  --color-default: var(--text);
 }
