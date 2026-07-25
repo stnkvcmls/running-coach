@@ -31,6 +31,20 @@
   --color-strength: #a29bfe;
   --color-default: #6c5ce7;
 
+  --c-easy: var(--color-easy);
+  --c-tempo: var(--color-tempo);
+  --c-interval: var(--color-interval);
+  --c-long: var(--color-long);
+  --c-race: var(--color-race);
+  --c-cross: var(--color-cross);
+  --c-strength: var(--color-strength);
+  --c-pb: #f0a500;
+  --c-alert: var(--danger);
+  --c-warn: var(--warning);
+  --c-ring: var(--success);
+  --c-series-1: var(--color-long);
+  --c-series-2: #e17055;
+
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
 
