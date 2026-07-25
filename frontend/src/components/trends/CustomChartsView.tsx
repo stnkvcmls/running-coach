@@ -88,7 +88,7 @@ export default function CustomChartsView() {
   const tickColor = getChartTickColor(theme, skin)
   const { contentStyle: tooltipStyle } = getTooltipProps(theme, skin)
   const reduceMotion = usePrefersReducedMotion()
-  const SERIES_COLORS = getSeriesColors(skin, CHART_SERIES_COLORS)
+  const SERIES_COLORS = getSeriesColors(theme, skin, CHART_SERIES_COLORS)
 
   const { metricIds, days, compare = false } = config
   const { data: chartData, isLoading: dataLoading } = useCustomChartData(metricIds, days, compare)

@@ -69,8 +69,8 @@ export default function TrainingLoadChart({ current }: Props) {
   const { contentStyle } = getTooltipProps(theme, skin)
   const refLineColor = getGridStroke(theme, skin)
   const reduceMotion = usePrefersReducedMotion()
-  const { ctl: CTL_COLOR, atl: ATL_COLOR, tsb: TSB_COLOR, acwr: ACWR_COLOR } = getSeriesColors(skin, LOAD_COLORS_DEFAULT)
-  const SPORT_COLORS = getSeriesColors(skin, SPORT_COLORS_DEFAULT)
+  const { ctl: CTL_COLOR, atl: ATL_COLOR, tsb: TSB_COLOR, acwr: ACWR_COLOR } = getSeriesColors(theme, skin, LOAD_COLORS_DEFAULT)
+  const SPORT_COLORS = getSeriesColors(theme, skin, SPORT_COLORS_DEFAULT)
   function sportColor(sport: string): string {
     return SPORT_COLORS[sport] ?? SPORT_COLORS.other
   }

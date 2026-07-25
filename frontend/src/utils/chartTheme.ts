@@ -136,21 +136,30 @@ export const PERFORMANCE_CURVE_COLORS = {
 export const CHART_SERIES_COLORS = ['#6c5ce7', '#00b894', '#e17055', '#0984e3']
 
 /** Monochrome + one-accent palette every `nothing-signal` series maps onto,
- * ordinally, regardless of how many named colours the default palette has. */
-const NOTHING_SIGNAL_SERIES = ['#ffffff', '#d71921', '#8a8a8a', '#4a4a4a']
+ * ordinally, regardless of how many named colours the default palette has.
+ * Reuses `nothing.css`'s own --text/--text-secondary/--text-muted/--accent
+ * hex values per theme (Recharts needs literal hex, not var()) — the same
+ * label-hierarchy grays already used everywhere else in the skin, chosen to
+ * stay legible and mutually distinct against a pure black/white surface,
+ * rather than a made-up gray pair that reads flat on either background. */
+const NOTHING_SIGNAL_SERIES: Record<Theme, string[]> = {
+  dark: ['#ffffff', '#d71921', '#b4b4b4', '#6e6e6e'],
+  light: ['#000000', '#d71921', '#4a4a4a', '#8b8b8b'],
+}
 
 /** Resolves a palette to its `nothing-signal` monochrome equivalent, ordinally
  * by key/index — `default` and `nothing-app` return `fallback` unchanged, so
  * those two skins need no palette maintenance beyond this call. */
-export function getSeriesColors(skin: ChartSkin, fallback: string[]): string[]
-export function getSeriesColors<T extends Record<string, string>>(skin: ChartSkin, fallback: T): T
-export function getSeriesColors(skin: ChartSkin, fallback: string[] | Record<string, string>): string[] | Record<string, string> {
+export function getSeriesColors(theme: Theme, skin: ChartSkin, fallback: string[]): string[]
+export function getSeriesColors<T extends Record<string, string>>(theme: Theme, skin: ChartSkin, fallback: T): T
+export function getSeriesColors(theme: Theme, skin: ChartSkin, fallback: string[] | Record<string, string>): string[] | Record<string, string> {
   if (skin !== 'nothing-signal') return fallback
+  const ramp = NOTHING_SIGNAL_SERIES[theme]
   if (Array.isArray(fallback)) {
-    return fallback.map((_, i) => NOTHING_SIGNAL_SERIES[i % NOTHING_SIGNAL_SERIES.length])
+    return fallback.map((_, i) => ramp[i % ramp.length])
   }
   const keys = Object.keys(fallback)
-  return Object.fromEntries(keys.map((k, i) => [k, NOTHING_SIGNAL_SERIES[i % NOTHING_SIGNAL_SERIES.length]]))
+  return Object.fromEntries(keys.map((k, i) => [k, ramp[i % ramp.length]]))
 }
 
 /** Dash pattern for the 3rd+ series in a `nothing-signal` chart where more

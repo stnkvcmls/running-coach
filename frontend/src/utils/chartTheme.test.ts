@@ -78,16 +78,20 @@ describe('getSeriesColors', () => {
   const fallbackRecord = { sleep: '#6c5ce7', hrv: '#0984e3' }
 
   it('returns the fallback unchanged for default and nothing-app', () => {
-    expect(getSeriesColors('default', fallbackArray)).toBe(fallbackArray)
-    expect(getSeriesColors('nothing-app', fallbackRecord)).toBe(fallbackRecord)
+    expect(getSeriesColors('dark', 'default', fallbackArray)).toBe(fallbackArray)
+    expect(getSeriesColors('dark', 'nothing-app', fallbackRecord)).toBe(fallbackRecord)
   })
 
   it('maps an array onto the monochrome ramp, ordinally, for nothing-signal', () => {
-    expect(getSeriesColors('nothing-signal', fallbackArray)).toEqual(['#ffffff', '#d71921', '#8a8a8a', '#4a4a4a'])
+    expect(getSeriesColors('dark', 'nothing-signal', fallbackArray)).toEqual(['#ffffff', '#d71921', '#b4b4b4', '#6e6e6e'])
   })
 
   it('maps a record onto the monochrome ramp, preserving keys, for nothing-signal', () => {
-    expect(getSeriesColors('nothing-signal', fallbackRecord)).toEqual({ sleep: '#ffffff', hrv: '#d71921' })
+    expect(getSeriesColors('dark', 'nothing-signal', fallbackRecord)).toEqual({ sleep: '#ffffff', hrv: '#d71921' })
+  })
+
+  it('uses a darker ramp under light theme, matching --text/--text-secondary/--text-muted', () => {
+    expect(getSeriesColors('light', 'nothing-signal', fallbackArray)).toEqual(['#000000', '#d71921', '#4a4a4a', '#8b8b8b'])
   })
 })
 

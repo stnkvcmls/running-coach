@@ -6,6 +6,7 @@
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.15);
   flex-shrink: 0;
+  overflow: hidden;
 }
 
 .score-ring-svg {

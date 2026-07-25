@@ -37,7 +37,7 @@ export default function WeekOverview({ data }: Props) {
   const borderColor = getGridStroke(theme, skin)
   const reduceMotion = usePrefersReducedMotion()
   const totalKm = data.reduce((s, d) => s + d.km, 0)
-  const SPORT_COLORS = getSeriesColors(skin, SPORT_COLORS_DEFAULT)
+  const SPORT_COLORS = getSeriesColors(theme, skin, SPORT_COLORS_DEFAULT)
 
   function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) {
     if (active && payload && payload.length) {

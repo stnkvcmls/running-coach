@@ -61,7 +61,7 @@ export default function AerobicTrendsView() {
   const tickColor = getChartTickColor(theme, skin)
   const tooltipProps = getTooltipProps(theme, skin)
   const reduceMotion = usePrefersReducedMotion()
-  const AEROBIC_COLORS = getSeriesColors(skin, AEROBIC_COLORS_DEFAULT)
+  const AEROBIC_COLORS = getSeriesColors(theme, skin, AEROBIC_COLORS_DEFAULT)
 
   if (isLoading) {
     return <AerobicSkeleton />

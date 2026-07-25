@@ -116,7 +116,7 @@ export default function PerformanceCurveView() {
   const tickColor = getChartTickColor(theme, skin)
   const { contentStyle } = getTooltipProps(theme, skin)
   const reduceMotion = usePrefersReducedMotion()
-  const { actual: ACTUAL_COLOR, model: MODEL_COLOR, compare: COMPARE_COLOR } = getSeriesColors(skin, PERFORMANCE_CURVE_COLORS)
+  const { actual: ACTUAL_COLOR, model: MODEL_COLOR, compare: COMPARE_COLOR } = getSeriesColors(theme, skin, PERFORMANCE_CURVE_COLORS)
 
   if (isLoading) {
     return (

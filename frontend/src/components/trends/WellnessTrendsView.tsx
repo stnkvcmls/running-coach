@@ -55,7 +55,7 @@ export default function WellnessTrendsView() {
     stress: STRESS_COLOR,
     bodyBattery: BATTERY_COLOR,
     hrv: HRV_COLOR,
-  } = getSeriesColors(skin, WELLNESS_METRIC_COLORS)
+  } = getSeriesColors(theme, skin, WELLNESS_METRIC_COLORS)
 
   function MetricTooltip({ active, payload, label, unit }: { active?: boolean; payload?: any[]; label?: string; unit: string }) {
     if (!active || !payload?.length) return null

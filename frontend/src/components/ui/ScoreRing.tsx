@@ -17,6 +17,12 @@ export default function ScoreRing({ score, color, size = 72, subLabel = '/100' }
     height: size,
   } as CSSProperties
   const progress = Math.max(0, Math.min(100, score))
+  // DotMatrix renders at a fixed pixel size by default — scale it down with
+  // the ring so a 2-3 digit score never outgrows the circle it sits in
+  // (Numeral/DotMatrix's own default is sized for looser contexts like
+  // StatGrid cells, not a tight circular one).
+  const numeralDot = Math.max(1.3, size * 0.021)
+  const numeralGap = numeralDot * 0.6
 
   return (
     <div className="score-ring" style={style}>
@@ -47,7 +53,7 @@ export default function ScoreRing({ score, color, size = 72, subLabel = '/100' }
       </svg>
       <div className="score-ring-center">
         <span className="score-ring-number" style={{ color }}>
-          <Numeral value={String(Math.round(score))} />
+          <Numeral value={String(Math.round(score))} dot={numeralDot} gap={numeralGap} />
         </span>
         <span className="score-ring-sub">{subLabel}</span>
       </div>

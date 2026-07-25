@@ -55,8 +55,9 @@ function buildChartData(weeks: IntensityWeek[]) {
 }
 
 function PolarizationBar({ easy, moderate, hard }: { easy: number; moderate: number; hard: number }) {
+  const { theme } = useTheme()
   const { skin } = useSkin()
-  const INTENSITY_BUCKET_COLORS = getSeriesColors(skin, INTENSITY_BUCKET_COLORS_DEFAULT)
+  const INTENSITY_BUCKET_COLORS = getSeriesColors(theme, skin, INTENSITY_BUCKET_COLORS_DEFAULT)
   return (
     <div style={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', gap: 1 }}>
       <div style={{ flex: easy, background: INTENSITY_BUCKET_COLORS.easy }} title={`Easy ${easy.toFixed(0)}%`} />
@@ -91,8 +92,8 @@ export default function IntensityTrendsView() {
   const tickColor = getChartTickColor(theme, skin)
   const { contentStyle } = getTooltipProps(theme, skin)
   const reduceMotion = usePrefersReducedMotion()
-  const INTENSITY_ZONE_COLORS = getSeriesColors(skin, INTENSITY_ZONE_COLORS_DEFAULT)
-  const INTENSITY_BUCKET_COLORS = getSeriesColors(skin, INTENSITY_BUCKET_COLORS_DEFAULT)
+  const INTENSITY_ZONE_COLORS = getSeriesColors(theme, skin, INTENSITY_ZONE_COLORS_DEFAULT)
+  const INTENSITY_BUCKET_COLORS = getSeriesColors(theme, skin, INTENSITY_BUCKET_COLORS_DEFAULT)
 
   const allZones = ['1', '2', '3', '4', '5']
 
