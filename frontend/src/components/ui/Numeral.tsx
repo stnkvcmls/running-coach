@@ -1,5 +1,5 @@
 import { useSkin } from '../../App'
-import DotMatrix from './DotMatrix'
+import DotMatrix, { DOT_MATRIX_CHARS } from './DotMatrix'
 
 interface Props {
   /** Digits, ':', '.', '-', '/', '%' and space are supported. */
@@ -21,7 +21,8 @@ interface Props {
  */
 export default function Numeral({ value, dot, gap, label, className }: Props) {
   const { skin } = useSkin()
-  if (skin.startsWith('nothing')) {
+  const isSupported = [...value].every(ch => DOT_MATRIX_CHARS.has(ch))
+  if (skin.startsWith('nothing') && isSupported) {
     return <DotMatrix value={value} dot={dot} gap={gap} label={label} />
   }
   return <span className={className}>{value}</span>

@@ -17,6 +17,12 @@ export default function ScoreRing({ score, color, size = 72, subLabel = '/100' }
     height: size,
   } as CSSProperties
   const progress = Math.max(0, Math.min(100, score))
+  const scoreText = String(Math.round(score))
+  // A 3-digit score (100) at the default dot=3/gap=2 renders 81px wide —
+  // wider than the ring's inner chord — and gets clipped by .score-ring's
+  // overflow: hidden. Shrink the dot grid so 3 digits fit comfortably.
+  const numeralDot = scoreText.length >= 3 ? 2 : 3
+  const numeralGap = scoreText.length >= 3 ? 1 : 2
 
   return (
     <div className="score-ring" style={style}>
@@ -47,7 +53,7 @@ export default function ScoreRing({ score, color, size = 72, subLabel = '/100' }
       </svg>
       <div className="score-ring-center">
         <span className="score-ring-number" style={{ color }}>
-          <Numeral value={String(Math.round(score))} />
+          <Numeral value={scoreText} dot={numeralDot} gap={numeralGap} />
         </span>
         <span className="score-ring-sub">{subLabel}</span>
       </div>

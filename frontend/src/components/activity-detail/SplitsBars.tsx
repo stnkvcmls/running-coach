@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { MetricZone } from '../../api/types'
-import { useSkin } from '../../App'
+import { useSkin, useTheme } from '../../App'
 import { getZoneColor, getZoneSwatchColor, findZone } from '../../utils/chartTheme'
 import { formatPace } from '../../utils/formatting'
 import LapsTable from './LapsTable'
@@ -28,6 +28,7 @@ function lapHr(lap: any): number | null {
 
 export default function SplitsBars({ splits, paceZones, color }: Props) {
   const { skin } = useSkin()
+  const { theme } = useTheme()
   const list = Array.isArray(splits) ? splits : []
   const [mode, setMode] = useState<'bars' | 'table'>(list.length >= 3 ? 'bars' : 'table')
 
@@ -44,7 +45,7 @@ export default function SplitsBars({ splits, paceZones, color }: Props) {
   }
 
   function barColor(pace: number | null): string {
-    if (pace != null && paceZones && paceZones.length > 0) return getZoneColor(pace, paceZones, skin)
+    if (pace != null && paceZones && paceZones.length > 0) return getZoneColor(pace, paceZones, theme, skin)
     return color
   }
 
@@ -105,7 +106,7 @@ export default function SplitsBars({ splits, paceZones, color }: Props) {
               <div className="split-legend">
                 {usedZones.map(z => (
                   <span key={z.zone_name}>
-                    <i style={{ background: getZoneSwatchColor(z, paceZones!, skin) }} />
+                    <i style={{ background: getZoneSwatchColor(z, paceZones!, theme, skin) }} />
                     {z.zone_name}
                   </span>
                 ))}

@@ -147,6 +147,29 @@ const NOTHING_SIGNAL_SERIES: Record<Theme, string[]> = {
   light: ['#000000', '#d71921', '#4a4a4a', '#8b8b8b'],
 }
 
+function grayHex(lightness: number): string {
+  const h = Math.round(lightness).toString(16).padStart(2, '0')
+  return `#${h}${h}${h}`
+}
+
+/** Builds an N-colour ramp for `theme`: index 0/1 are always the primary text
+ * colour and the red accent, and the remaining N-2 slots are grayscale steps
+ * evenly spaced between the curated text-secondary/text-muted anchors — so
+ * every series gets a mutually-distinct colour no matter how many keys the
+ * caller's palette has, instead of wrapping a fixed 4-entry array with `%`.
+ * At N=4 this reproduces `NOTHING_SIGNAL_SERIES` exactly. */
+function buildSignalRamp(theme: Theme, count: number): string[] {
+  const [primary, accent, grayFrom, grayTo] = NOTHING_SIGNAL_SERIES[theme]
+  if (count <= 2) return [primary, accent].slice(0, count)
+  const from = parseInt(grayFrom.slice(1, 3), 16)
+  const to = parseInt(grayTo.slice(1, 3), 16)
+  const grayCount = count - 2
+  const grays = Array.from({ length: grayCount }, (_, i) =>
+    grayHex(grayCount === 1 ? from : from + (to - from) * (i / (grayCount - 1)))
+  )
+  return [primary, accent, ...grays]
+}
+
 /** Resolves a palette to its `nothing-signal` monochrome equivalent, ordinally
  * by key/index — `default` and `nothing-app` return `fallback` unchanged, so
  * those two skins need no palette maintenance beyond this call. */
@@ -154,12 +177,13 @@ export function getSeriesColors(theme: Theme, skin: ChartSkin, fallback: string[
 export function getSeriesColors<T extends Record<string, string>>(theme: Theme, skin: ChartSkin, fallback: T): T
 export function getSeriesColors(theme: Theme, skin: ChartSkin, fallback: string[] | Record<string, string>): string[] | Record<string, string> {
   if (skin !== 'nothing-signal') return fallback
-  const ramp = NOTHING_SIGNAL_SERIES[theme]
   if (Array.isArray(fallback)) {
-    return fallback.map((_, i) => ramp[i % ramp.length])
+    const ramp = buildSignalRamp(theme, fallback.length)
+    return fallback.map((_, i) => ramp[i])
   }
   const keys = Object.keys(fallback)
-  return Object.fromEntries(keys.map((k, i) => [k, ramp[i % ramp.length]]))
+  const ramp = buildSignalRamp(theme, keys.length)
+  return Object.fromEntries(keys.map((k, i) => [k, ramp[i]]))
 }
 
 /** Dash pattern for the 3rd+ series in a `nothing-signal` chart where more
@@ -172,8 +196,32 @@ export function getSeriesDash(skin: ChartSkin, index: number): string | undefine
 
 /** Ordinal grayscale ramp `nothing-signal` zone bars/dots map onto, replacing
  * the API-supplied `zone_color` rainbow — index is the zone's position in its
- * `zones` array (ordinal data → a monochrome ramp is the correct encoding). */
-export const SIGNAL_ZONE_RAMP = ['#3a3a3a', '#5c5c5c', '#8a8a8a', '#c4c4c4', '#ffffff']
+ * `zones` array (ordinal data → a monochrome ramp is the correct encoding).
+ * Keyed by theme: the dark ramp runs dark→white for a black card surface: the
+ * light ramp runs light→black for the `#f4f4f4` light card surface — reusing
+ * the dark ramp in light mode put white-on-#f4f4f4 at ~1:1 contrast. */
+export const SIGNAL_ZONE_RAMP: Record<Theme, string[]> = {
+  dark: ['#3a3a3a', '#5c5c5c', '#8a8a8a', '#c4c4c4', '#ffffff'],
+  light: ['#c9c9c9', '#a0a0a0', '#767676', '#454545', '#000000'],
+}
+
+function hexToRgb(hex: string): [number, number, number] {
+  const v = parseInt(hex.slice(1), 16)
+  return [(v >> 16) & 255, (v >> 8) & 255, v & 255]
+}
+
+/** Continuous version of `SIGNAL_ZONE_RAMP`, for canvas-drawn gradients (e.g.
+ * RouteMap) that can't index a discrete array — interpolates linearly between
+ * the ramp's own low/high endpoints so it stays theme-correct and consistent
+ * with the discrete zone ramp. */
+export function signalRampColor(theme: Theme, t: number): string {
+  const clamped = Math.max(0, Math.min(1, t))
+  const ramp = SIGNAL_ZONE_RAMP[theme]
+  const from = hexToRgb(ramp[0])
+  const to = hexToRgb(ramp[ramp.length - 1])
+  const rgb = from.map((c, i) => c + (to[i] - c) * clamped)
+  return `#${rgb.map(c => Math.round(c).toString(16).padStart(2, '0')).join('')}`
+}
 
 /** Which zone a value falls into. */
 export function findZone(value: number, zones: MetricZone[]): MetricZone | undefined {
@@ -193,18 +241,19 @@ export function findZone(value: number, zones: MetricZone[]): MetricZone | undef
 }
 
 /** Which zone a value falls into, by colour — shared by scatter-chart dots and SplitsBars. */
-export function getZoneColor(value: number, zones: MetricZone[], skin: ChartSkin = 'default'): string {
+export function getZoneColor(value: number, zones: MetricZone[], theme: Theme = 'dark', skin: ChartSkin = 'default'): string {
   const zone = findZone(value, zones)
-  if (!zone) return '#6c5ce7'
-  return getZoneSwatchColor(zone, zones, skin)
+  if (!zone) return skin === 'nothing-signal' ? NOTHING_SIGNAL_SERIES[theme][0] : '#6c5ce7'
+  return getZoneSwatchColor(zone, zones, theme, skin)
 }
 
 /** Display colour for a zone the caller already has (e.g. a legend entry) —
  * same ramp mapping as `getZoneColor`, keyed off the zone itself rather than
  * a value, so callers that need zone *identity* (not just colour) can use
  * `findZone`/`indexOf` themselves and still land on the same swatch. */
-export function getZoneSwatchColor(zone: MetricZone, zones: MetricZone[], skin: ChartSkin = 'default'): string {
+export function getZoneSwatchColor(zone: MetricZone, zones: MetricZone[], theme: Theme = 'dark', skin: ChartSkin = 'default'): string {
   if (skin !== 'nothing-signal') return zone.zone_color
   const idx = zones.indexOf(zone)
-  return SIGNAL_ZONE_RAMP[idx % SIGNAL_ZONE_RAMP.length]
+  const ramp = SIGNAL_ZONE_RAMP[theme]
+  return ramp[idx % ramp.length]
 }

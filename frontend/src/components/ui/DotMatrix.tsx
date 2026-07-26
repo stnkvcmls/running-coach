@@ -18,10 +18,15 @@ const GLYPHS: Record<string, string[]> = {
   '-': ['00000', '00000', '00000', '11111', '00000', '00000', '00000'],
   '/': ['00001', '00001', '00010', '00100', '01000', '10000', '10000'],
   '%': ['11001', '11010', '00010', '00100', '01000', '01011', '10011'],
+  '+': ['00000', '00100', '00100', '11111', '00100', '00100', '00000'],
+  ',': ['00000', '00000', '00000', '00000', '00000', '01100', '01000'],
   ' ': ['00000', '00000', '00000', '00000', '00000', '00000', '00000'],
 }
 
 const BLANK = GLYPHS[' ']
+
+/** Characters DotMatrix can render as dots. Numeral uses this to decide whether to fall back to plain text. */
+export const DOT_MATRIX_CHARS = new Set(Object.keys(GLYPHS))
 
 interface Props {
   /** Digits, ':', '.', '-', '/', '%' and space are supported. */
