@@ -1,6 +1,13 @@
+/* inline-block has no text baseline (no inline content of its own), so plain
+   inline layout would sit it on its bottom edge against sibling text —
+   vertical-align: middle centers it against the sibling's x-height instead.
+   This travels with every consumer automatically; no per-selector skin CSS
+   needed to align a Numeral against text next to it. */
 .dot-matrix {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   line-height: 0;
+  vertical-align: middle;
 }
 
 .dot-matrix-grid {

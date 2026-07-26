@@ -3,7 +3,7 @@ import { renderHook, act } from '@testing-library/react'
 import {
   getTooltipProps, getChartTickColor, getAxisTick, getGridStroke, getHoverFill,
   getSeriesColors, getSeriesDash, getZoneColor, getZoneSwatchColor, findZone,
-  usePrefersReducedMotion,
+  usePrefersReducedMotion, SIGNAL_ZONE_RAMP, signalRampColor,
 } from './chartTheme'
 import type { MetricZone } from '../api/types'
 
@@ -93,6 +93,19 @@ describe('getSeriesColors', () => {
   it('uses a darker ramp under light theme, matching --text/--text-secondary/--text-muted', () => {
     expect(getSeriesColors('light', 'nothing-signal', fallbackArray)).toEqual(['#000000', '#d71921', '#4a4a4a', '#8b8b8b'])
   })
+
+  it('returns mutually distinct colours for a 6-key palette instead of wrapping the 4-entry ramp', () => {
+    const sixKeys = { run: '', bike: '', swim: '', walk: '', strength: '', other: '' }
+    const dark = getSeriesColors('dark', 'nothing-signal', sixKeys)
+    const light = getSeriesColors('light', 'nothing-signal', sixKeys)
+    expect(new Set(Object.values(dark)).size).toBe(6)
+    expect(new Set(Object.values(light)).size).toBe(6)
+  })
+
+  it('is still mutually distinct for a 5-key palette (the zone-colour collision case)', () => {
+    const fiveKeys = ['1', '2', '3', '4', '5']
+    expect(new Set(getSeriesColors('dark', 'nothing-signal', fiveKeys)).size).toBe(5)
+  })
 })
 
 describe('getSeriesDash', () => {
@@ -108,6 +121,23 @@ describe('getSeriesDash', () => {
   })
 })
 
+describe('SIGNAL_ZONE_RAMP / signalRampColor', () => {
+  it('is a distinct ramp per theme, not a single dark-only ramp reused in light mode', () => {
+    expect(SIGNAL_ZONE_RAMP.dark).not.toEqual(SIGNAL_ZONE_RAMP.light)
+    // The dark ramp runs dark -> white (for a black card surface); the light
+    // ramp must not put a near-white colour on the light `#f4f4f4` surface.
+    expect(SIGNAL_ZONE_RAMP.dark[SIGNAL_ZONE_RAMP.dark.length - 1]).toBe('#ffffff')
+    expect(SIGNAL_ZONE_RAMP.light[SIGNAL_ZONE_RAMP.light.length - 1]).toBe('#000000')
+  })
+
+  it('interpolates continuously between the ramp endpoints, per theme', () => {
+    expect(signalRampColor('dark', 0)).toBe(SIGNAL_ZONE_RAMP.dark[0])
+    expect(signalRampColor('dark', 1)).toBe(SIGNAL_ZONE_RAMP.dark[SIGNAL_ZONE_RAMP.dark.length - 1])
+    expect(signalRampColor('light', 0)).toBe(SIGNAL_ZONE_RAMP.light[0])
+    expect(signalRampColor('light', 1)).toBe(SIGNAL_ZONE_RAMP.light[SIGNAL_ZONE_RAMP.light.length - 1])
+  })
+})
+
 describe('getZoneColor / getZoneSwatchColor / findZone', () => {
   const zones: MetricZone[] = [
     { metric_key: 'pace', zone_name: 'Fast', zone_color: '#fab1a0', percentile_label: '', min_value: null, max_value: 4.5 },
@@ -120,14 +150,19 @@ describe('getZoneColor / getZoneSwatchColor / findZone', () => {
   })
 
   it('maps the matched zone\'s index onto SIGNAL_ZONE_RAMP under nothing-signal', () => {
-    expect(getZoneColor(4, zones, 'nothing-signal')).toBe('#3a3a3a')
-    expect(getZoneColor(5, zones, 'nothing-signal')).toBe('#5c5c5c')
+    expect(getZoneColor(4, zones, 'dark', 'nothing-signal')).toBe('#3a3a3a')
+    expect(getZoneColor(5, zones, 'dark', 'nothing-signal')).toBe('#5c5c5c')
+  })
+
+  it('uses the light-theme SIGNAL_ZONE_RAMP under nothing-signal light mode', () => {
+    expect(getZoneColor(4, zones, 'light', 'nothing-signal')).toBe('#c9c9c9')
+    expect(getZoneColor(5, zones, 'light', 'nothing-signal')).toBe('#a0a0a0')
   })
 
   it('findZone returns the zone object so callers can compare by identity', () => {
     const zone = findZone(4, zones)
     expect(zone).toBe(zones[0])
-    expect(getZoneSwatchColor(zone!, zones, 'nothing-signal')).toBe('#3a3a3a')
+    expect(getZoneSwatchColor(zone!, zones, 'dark', 'nothing-signal')).toBe('#3a3a3a')
     expect(getZoneSwatchColor(zone!, zones)).toBe('#fab1a0')
   })
 

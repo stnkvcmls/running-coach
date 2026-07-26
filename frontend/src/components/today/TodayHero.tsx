@@ -144,7 +144,7 @@ function HeroSession({ data, planDay, planLoading, hasPlan, matchedActivity }: H
         <span className="hero-session-label">Today's session</span>
         <span className="hero-session-badge hero-session-badge-neutral">{event.workout_type || 'Workout'}</span>
         {event.distance_m != null && (
-          <div className="hero-session-meta">{formatDistance(event.distance_m)} km</div>
+          <div className="hero-session-meta"><Numeral value={formatDistance(event.distance_m)} /> km</div>
         )}
       </Link>
     )

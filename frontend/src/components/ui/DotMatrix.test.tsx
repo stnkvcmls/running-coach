@@ -25,4 +25,10 @@ describe('DotMatrix', () => {
     expect(container.querySelectorAll('.dm-dot.on')).toHaveLength(0)
     expect(container.querySelectorAll('.dm-char')).toHaveLength(1)
   })
+
+  it('supports + and , (H1: heat penalty signs and thousands separators)', () => {
+    const { container } = render(<DotMatrix value="+1,2" />)
+    expect(container.querySelectorAll('.dm-char')).toHaveLength(4)
+    expect(container.querySelectorAll('.dm-dot.on').length).toBeGreaterThan(0)
+  })
 })

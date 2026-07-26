@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { useState, useEffect } from 'react'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, within } from '@testing-library/react'
 import { ThemeContext, type Skin } from '../../App'
 import AppearanceSection from './AppearanceSection'
 
@@ -43,9 +43,10 @@ describe('AppearanceSection', () => {
     localStorage.setItem('skin', 'nothing-app')
     render(<Harness />)
 
-    expect(screen.getAllByRole('radio')).toHaveLength(3)
-    expect(screen.getByRole('radio', { name: /nothing — app inks/i })).toBeChecked()
-    expect(screen.getByRole('radio', { name: /^default/i })).not.toBeChecked()
+    const styleGroup = screen.getByRole('group', { name: 'Style' })
+    expect(within(styleGroup).getAllByRole('radio')).toHaveLength(3)
+    expect(within(styleGroup).getByRole('radio', { name: /nothing — app inks/i })).toBeChecked()
+    expect(within(styleGroup).getByRole('radio', { name: /^default/i })).not.toBeChecked()
   })
 
   it('sets data-skin and persists to localStorage when "Nothing — app inks" is clicked', () => {

@@ -69,7 +69,7 @@ export default function PaceZonesChart({ paceSeries }: Props) {
     return {
       zone: `Z${z.zone_number}: ${z.zone_name}`,
       pct,
-      color: skin === 'nothing-signal' ? SIGNAL_ZONE_RAMP[i % SIGNAL_ZONE_RAMP.length] : z.zone_color,
+      color: skin === 'nothing-signal' ? SIGNAL_ZONE_RAMP[theme][i % SIGNAL_ZONE_RAMP[theme].length] : z.zone_color,
       rangeLabel,
     }
   })

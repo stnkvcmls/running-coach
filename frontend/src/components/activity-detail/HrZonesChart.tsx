@@ -15,7 +15,7 @@ export default function HrZonesChart({ zones }: Props) {
   const { skin } = useSkin()
   const reduceMotion = usePrefersReducedMotion()
   const { contentStyle, labelStyle, itemStyle } = getTooltipProps(theme, skin)
-  const zoneFillColors = skin === 'nothing-signal' ? SIGNAL_ZONE_RAMP : ZONE_COLORS
+  const zoneFillColors = skin === 'nothing-signal' ? SIGNAL_ZONE_RAMP[theme] : ZONE_COLORS
 
   if (!zones || !Array.isArray(zones) || zones.length === 0) return null
 
@@ -61,7 +61,7 @@ export default function HrZonesChart({ zones }: Props) {
             />
             <Bar dataKey="minutes" radius={[0, 4, 4, 0]} barSize={20} isAnimationActive={!reduceMotion}>
               {data.map((_: any, i: number) => (
-                <Cell key={i} fill={zoneFillColors[i] || '#6c5ce7'} />
+                <Cell key={i} fill={zoneFillColors[i] || (skin === 'nothing-signal' ? zoneFillColors[zoneFillColors.length - 1] : '#6c5ce7')} />
               ))}
             </Bar>
           </BarChart>

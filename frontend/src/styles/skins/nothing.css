@@ -394,14 +394,10 @@ html[data-skin^="nothing"] .score-ring-arc {
   stroke-dasharray: 1.5 6;
 }
 
-/* ---- 4.4 Numeral in a .stat-value: DotMatrix has no real text baseline (it's
-   a grid of <i> dots, line-height: 0), so plain inline baseline alignment
-   against a sibling .stat-unit synthesises the numeral's baseline at its
-   bottom edge — that lands it at a different height depending on whether a
-   unit span is present at all, which is why cells with a unit ("bpm", "ms")
-   and cells without one ("Sleep", "Body Battery") drift out of vertical sync
-   in a shared-row StatGrid. Flex + explicit center alignment removes the
-   font-metric guesswork entirely. ---- */
+/* ---- 4.4 Numeral in a .stat-value: vertical alignment against the sibling
+   .stat-unit is handled by `.dot-matrix { vertical-align: middle }` in
+   DotMatrix.css itself, so every consumer gets it for free. This rule now
+   only adds the small gap between the numeral and its unit. ---- */
 html[data-skin^="nothing"] .stat-value,
 html[data-skin^="nothing"] .stat-value-lg {
   display: inline-flex;

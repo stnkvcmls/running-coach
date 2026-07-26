@@ -5,7 +5,7 @@ import {
 } from 'recharts'
 import type { ChartSeries, MetricZone } from '../../api/types'
 import { useTheme, useSkin } from '../../App'
-import { getAxisTick, getTooltipProps, getChartTickColor, getZoneColor, METRIC_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
+import { getAxisTick, getTooltipProps, getChartTickColor, getZoneColor, getSeriesColors, METRIC_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
 import './ChartTabs.css'
 
 const SCATTER_METRICS = new Set(['cadence', 'stride', 'gct', 'vert_osc', 'vert_ratio'])
@@ -27,7 +27,8 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
   const series = chartData[activeKey]
   if (!series) return null
 
-  const color = METRIC_COLORS[activeKey] || '#6c5ce7'
+  const seriesColors = getSeriesColors(theme, skin, METRIC_COLORS)
+  const color = seriesColors[activeKey] || '#6c5ce7'
   const isScatter = SCATTER_METRICS.has(activeKey)
   const zones = metricZones?.[activeKey]
 
@@ -115,7 +116,7 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
                 isAnimationActive={!reduceMotion}
                 shape={(props: any) => {
                   const dotColor = zones && zones.length > 0
-                    ? getZoneColor(props.payload.y, zones, skin)
+                    ? getZoneColor(props.payload.y, zones, theme, skin)
                     : color
                   return <circle cx={props.cx} cy={props.cy} r={2.5} fill={dotColor} />
                 }}
@@ -166,7 +167,7 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
               domain={['auto', 'auto']}
               tickCount={7}
               tickFormatter={yTickFormatter}
-              tick={getAxisTick(theme)}
+              tick={getAxisTick(theme, undefined, skin)}
               axisLine={false}
               tickLine={false}
               width={38}

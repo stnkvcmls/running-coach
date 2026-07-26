@@ -22,16 +22,18 @@ export default function AppearanceSection() {
           <div className="appearance-segmented" role="radiogroup" aria-label="Mode">
             <button
               type="button"
+              role="radio"
               className={`appearance-segment ${theme === 'dark' ? 'active' : ''}`}
-              aria-pressed={theme === 'dark'}
+              aria-checked={theme === 'dark'}
               onClick={() => theme !== 'dark' && toggleTheme()}
             >
               Dark
             </button>
             <button
               type="button"
+              role="radio"
               className={`appearance-segment ${theme === 'light' ? 'active' : ''}`}
-              aria-pressed={theme === 'light'}
+              aria-checked={theme === 'light'}
               onClick={() => theme !== 'light' && toggleTheme()}
             >
               Light
