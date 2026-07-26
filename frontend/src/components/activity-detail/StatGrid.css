@@ -1,5 +1,6 @@
 .stat-grid {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 12px;
 }
@@ -12,4 +13,10 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  /* Equal-share width, same math as an `fr` grid column — but as a flex-basis
+     with min-width: max-content as a floor, so a numeral wider than its share
+     (e.g. a dot-matrix "56:33") wraps onto a new row instead of overlapping
+     the next cell, which a CSS grid's implicit minmax(auto, 1fr) track can't do. */
+  flex: 1 1 calc((100% - (var(--stat-cols, 3) - 1) * 12px) / var(--stat-cols, 3));
+  min-width: max-content;
 }

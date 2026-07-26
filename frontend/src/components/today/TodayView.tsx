@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import { Flag, ChevronRight } from 'lucide-react'
 import { useDateContext } from '../../App'
@@ -94,7 +94,7 @@ function TodaySkeleton() {
         <Skeleton height={13} width="85%" />
       </div>
       <Skeleton height={44} radius={22} />
-      <div className="stat-grid card" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+      <div className="stat-grid card" style={{ '--stat-cols': 4 } as CSSProperties}>
         {[0, 1, 2, 3].map(i => (
           <div key={i} className="stat-cell">
             <Skeleton height={10} width="60%" />

@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import Numeral from '../ui/Numeral'
 import './StatGrid.css'
 
@@ -14,8 +15,9 @@ interface Props {
 }
 
 export default function StatGrid({ stats, columns = 3, large = false }: Props) {
+  const style = { '--stat-cols': Math.min(columns, stats.length) } as CSSProperties
   return (
-    <div className={`stat-grid card ${large ? 'stat-grid-large' : ''}`} style={{ gridTemplateColumns: `repeat(${Math.min(columns, stats.length)}, 1fr)` }}>
+    <div className={`stat-grid card ${large ? 'stat-grid-large' : ''}`} style={style}>
       {stats.map((s, i) => (
         <div key={i} className="stat-cell">
           <span className="stat-label">{s.label}</span>
