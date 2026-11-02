@@ -238,3 +238,27 @@ plausible-looking spot." Sample the element's `getBoundingClientRect()`
 across a *sweep* of scroll positions and look for a flat plateau at the
 sticky offset — a real clamp holds constant across a range; unstuck content
 decreases linearly with scroll at every point.
+
+## Process: a "plan only" doc on `main` may already be implemented on an unmerged branch
+
+**Symptom:** A UI/UX critique was written against `main`, treating
+`docs/NOTHING_OS_SKIN_PLAN.md` as "planned, not implemented" because `main`'s
+last commit was "Add Nothing OS skin mockup and implementation plan" and
+`frontend/src/styles/` had no `skins/` folder. The owner replied that the skin
+"should already be in place". It was: phases 0–6 plus two fix rounds lived on
+`origin/claude/activity-nothing-theme-ui-4qgdfo`, 19 commits ahead of `main`
+and never merged. Half the visual critique (default-skin identity, uppercase
+labels) was moot, and four real S1 defects introduced by the skin were missed.
+
+**Cause:** Work here is done as stacked `claude/*` phase branches merged into
+each other, with the integration branch merged into `main` later (or not yet).
+`main` alone isn't the state the owner has in mind.
+
+**Fix:** Before reviewing or planning anything that a `docs/*_PLAN.md` touches,
+run `git fetch --all` and then
+`git log --all --oneline -i --grep="<plan keyword>"` and
+`git branch -r --contains <latest matching commit>`. If an implementation
+branch exists, review that branch (scratch `git worktree add --detach`; link
+`frontend/node_modules` with a junction when `package*.json` is unchanged,
+and `rmdir` the junction **before** `git worktree remove`) and state the
+baseline explicitly at the top of the document.

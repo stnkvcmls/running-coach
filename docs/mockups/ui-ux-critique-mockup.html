@@ -1,0 +1,1068 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Running Coach critique mockups</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap" rel="stylesheet">
+<style>
+/* ------------------------------------------------------------------
+   Tokens. Companion to docs/UI_UX_CRITIQUE.md, section 5.
+   Neutrals carry the interface; the only chroma is the effort scale
+   (Garmin zone order) so the app and the watch agree.
+   ------------------------------------------------------------------ */
+:root {
+  --page: #DCE0E3;
+  --ground: #ECEEF0;
+  --surface: #FFFFFF;
+  --surface-2: #F2F4F5;
+  --ink: #121518;
+  --ink-2: #525B64;
+  --ink-3: #8A939B;
+  --rule: #D8DDE1;
+  --on-ink: #FFFFFF;
+
+  --z1: #8A96A3;
+  --z2: #2D7BCB;
+  --z3: #2B9156;
+  --z4: #DD7A1E;
+  --z5: #D0353A;
+
+  --note: #B5179E; /* annotation colour for change IDs: never part of the UI */
+
+  --font: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #08090A;
+    --ground: #111416;
+    --surface: #1A1E21;
+    --surface-2: #22272B;
+    --ink: #E8EBED;
+    --ink-2: #A3ACB4;
+    --ink-3: #6D767E;
+    --rule: #2C3338;
+    --on-ink: #111416;
+    --z1: #8F9BA8;
+    --z2: #4B96E2;
+    --z3: #3DAE6B;
+    --z4: #EF8F37;
+    --z5: #EC5459;
+    --note: #F06BD8;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --page: #08090A;
+  --ground: #111416;
+  --surface: #1A1E21;
+  --surface-2: #22272B;
+  --ink: #E8EBED;
+  --ink-2: #A3ACB4;
+  --ink-3: #6D767E;
+  --rule: #2C3338;
+  --on-ink: #111416;
+  --z1: #8F9BA8;
+  --z2: #4B96E2;
+  --z3: #3DAE6B;
+  --z4: #EF8F37;
+  --z5: #EC5459;
+  --note: #F06BD8;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.45;
+  background: var(--page);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+a { color: inherit; }
+:where(button, a):focus-visible { outline: 2px solid var(--z2); outline-offset: 2px; border-radius: 6px; }
+svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+.num { font-stretch: 75%; font-weight: 700; font-variant-numeric: tabular-nums lining-nums; letter-spacing: -0.005em; }
+.muted { color: var(--ink-2); }
+
+/* ---------------- document chrome ---------------- */
+.doc { max-width: 1240px; margin: 0 auto; padding: 32px 16px 80px; }
+.doc-head { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-end; justify-content: space-between; margin-bottom: 40px; }
+.doc-head h1 { font-size: 34px; font-stretch: 85%; font-weight: 750; line-height: 1.05; letter-spacing: -0.01em; }
+.doc-head p { max-width: 62ch; color: var(--ink-2); margin-top: 8px; }
+.doc-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+.seg-ctl { display: inline-flex; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 3px; }
+.seg-ctl button { padding: 6px 12px; border-radius: 7px; font-size: 13.5px; font-weight: 550; color: var(--ink-2); }
+.seg-ctl button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
+
+.screen-row { display: grid; grid-template-columns: minmax(0, 1fr) 300px 390px; gap: 28px; align-items: start; padding: 40px 0; border-top: 1px solid var(--rule); }
+.screen-notes h2 { font-size: 24px; font-stretch: 85%; font-weight: 720; line-height: 1.1; margin-bottom: 8px; }
+.screen-notes > p { color: var(--ink-2); max-width: 52ch; }
+.screen-notes ul { list-style: none; margin-top: 16px; display: grid; gap: 10px; max-width: 52ch; }
+.screen-notes li { display: grid; grid-template-columns: 38px 1fr; gap: 8px; font-size: 14px; }
+.screen-notes li b { color: var(--note); font-weight: 700; font-size: 12.5px; padding-top: 1px; }
+.before figcaption, .after-cap { font-size: 13px; color: var(--ink-2); margin-bottom: 8px; }
+.before img { width: 300px; border-radius: 18px; border: 1px solid var(--rule); display: block; }
+@media (max-width: 1100px) {
+  .screen-row { grid-template-columns: 1fr; }
+  .before img { width: min(300px, 100%); }
+}
+
+/* change-ID markers (annotation layer) */
+.id { display: none; font-size: 10.5px; font-weight: 700; color: var(--note); border: 1.5px dashed var(--note); border-radius: 6px; padding: 0 4px; line-height: 16px; margin-left: 6px; vertical-align: 2px; font-stretch: 100%; letter-spacing: 0; white-space: nowrap; }
+body.show-ids .id { display: inline-block; }
+
+/* ---------------- phone frame ---------------- */
+.phone { position: relative; width: 390px; max-width: 100%; background: var(--ground); border: 1px solid var(--rule); border-radius: 34px; overflow: hidden; display: flex; flex-direction: column; }
+.appbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 20px 16px 12px; }
+.appbar h1 { font-size: 22px; font-weight: 720; line-height: 1.15; letter-spacing: -0.01em; }
+.appbar p { font-size: 13.5px; color: var(--ink-2); margin-top: 1px; }
+.appbar .lead { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.icon-btn { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; color: var(--ink); flex-shrink: 0; }
+.avatar { width: 38px; height: 38px; border-radius: 50%; background: var(--ink); color: var(--on-ink); font-weight: 700; font-size: 15px; display: grid; place-items: center; flex-shrink: 0; }
+.screen { padding: 0 12px 16px; display: flex; flex-direction: column; gap: 12px; }
+.panel { background: var(--surface); border-radius: 16px; padding: 16px; }
+.panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.panel-head h3 { font-size: 16px; font-weight: 680; line-height: 1.25; }
+.panel-head a { font-size: 13.5px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--ink-3); white-space: nowrap; }
+.btn { height: 48px; padding: 0 18px; border-radius: 12px; font-weight: 650; font-size: 15px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; }
+.btn-ink { background: var(--ink); color: var(--on-ink); }
+.btn-quiet { background: var(--surface-2); color: var(--ink); }
+.btn svg.i { width: 19px; height: 19px; }
+
+.tabbar { margin-top: auto; display: grid; grid-template-columns: repeat(5, 1fr); background: var(--surface); border-top: 1px solid var(--rule); padding: 6px 4px 22px; }
+.tabbar a { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; font-size: 11.5px; font-weight: 550; color: var(--ink-3); text-decoration: none; }
+.tabbar a.on { color: var(--ink); font-weight: 700; }
+.tabbar a.on svg.i { stroke-width: 2.2; }
+
+/* week rail (Today only) */
+.rail { padding: 12px 8px 12px; }
+.rail ol { list-style: none; display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.rail li { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.rail .dl { font-size: 12px; color: var(--ink-2); font-weight: 550; }
+.rail .dn { font-size: 15px; font-weight: 650; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; font-variant-numeric: tabular-nums; }
+.rail li.today .dn { background: var(--ink); color: var(--on-ink); }
+.rail .col { height: 44px; width: 20px; display: flex; align-items: flex-end; margin-top: 2px; }
+.rail .bar { width: 100%; height: var(--h); border-radius: 4px; background: color-mix(in srgb, var(--c) 22%, transparent); box-shadow: inset 0 0 0 1.5px var(--c); }
+.rail li.done .bar { background: var(--c); box-shadow: none; }
+.rail li.missed .bar { background: none; box-shadow: none; outline: 1.5px dashed var(--ink-3); outline-offset: -1.5px; }
+.rail li.rest .bar { height: 2px; background: var(--ink-3); box-shadow: none; }
+.rail-sum { display: flex; justify-content: space-between; align-items: baseline; font-size: 13.5px; color: var(--ink-2); margin-top: 10px; padding: 0 8px; }
+.rail-sum b { color: var(--ink); font-size: 17px; }
+.rail-sum a { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--ink-3); }
+
+/* session hero */
+.session { padding: 0; overflow: hidden; }
+.readiness { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 2px 10px; width: 100%; text-align: left; padding: 14px 16px 13px; border-bottom: 1px solid var(--rule); }
+.readiness .r-label { font-size: 13.5px; color: var(--ink-2); grid-column: 1; }
+.readiness .r-score { font-size: 26px; line-height: 1; }
+.readiness .r-meter { grid-column: 2; height: 6px; border-radius: 3px; background: var(--surface-2); position: relative; overflow: hidden; }
+.readiness .r-meter i { position: absolute; inset: 0 auto 0 0; width: var(--v); background: var(--ink); border-radius: 3px; }
+.readiness .r-word { grid-column: 3; font-weight: 650; font-size: 14px; }
+.readiness .r-why { grid-column: 1 / -1; font-size: 13.5px; color: var(--ink-2); margin-top: 4px; }
+.readiness .r-top { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 8px; }
+.session-body { padding: 16px; }
+.kind { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--ink-2); }
+.kind i { width: 10px; height: 10px; border-radius: 50%; background: var(--c); }
+.notation { font-size: 44px; line-height: 1; margin: 8px 0 6px; }
+.notation-sub { font-size: 15px; color: var(--ink-2); }
+.strip { display: flex; gap: 2px; height: 16px; margin: 18px 0 6px; }
+.strip span { border-radius: 3px; background: var(--c); }
+.strip.thin { height: 6px; margin: 8px 0 0; gap: 1.5px; }
+.strip.thin span { border-radius: 2px; }
+.strip-ends { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--ink-2); }
+.figs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 16px 0 0; padding-top: 14px; border-top: 1px solid var(--rule); }
+.figs dt { font-size: 12.5px; color: var(--ink-2); }
+.figs dd { font-size: 26px; line-height: 1.1; }
+.figs dd small { font-size: 13px; font-weight: 500; color: var(--ink-2); font-stretch: 100%; margin-left: 2px; }
+.coach-line { font-size: 15px; line-height: 1.5; margin-top: 16px; }
+.coach-line b { font-weight: 700; }
+.coach-line a { color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--ink-3); white-space: nowrap; }
+.actions { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 16px; }
+
+/* done state */
+.done-head { display: flex; align-items: center; gap: 8px; font-weight: 650; font-size: 14px; }
+.done-head .tick { width: 22px; height: 22px; border-radius: 50%; background: var(--ink); color: var(--on-ink); display: grid; place-items: center; }
+.done-head .tick svg.i { width: 14px; height: 14px; stroke-width: 2.6; }
+.reps { position: relative; display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; height: 104px; align-items: end; margin: 18px 0 4px; padding: 0 2px; }
+.reps .rep { height: var(--h); background: var(--z5); border-radius: 4px 4px 2px 2px; position: relative; }
+.reps .target { position: absolute; left: 0; right: 0; bottom: var(--t); border-top: 1.5px dashed var(--ink); }
+.reps .target span { position: absolute; right: 0; top: -20px; font-size: 12px; color: var(--ink-2); background: var(--surface); padding: 0 0 0 6px; }
+.rep-labels { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; padding: 0 2px; text-align: center; font-size: 13px; }
+.rep-labels small { display: block; color: var(--ink-2); font-size: 11.5px; font-weight: 500; font-stretch: 100%; }
+.scale10 { display: grid; grid-template-columns: repeat(10, 1fr); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; margin-top: 8px; }
+.scale10 button { height: 40px; font-weight: 600; font-variant-numeric: tabular-nums; border-left: 1px solid var(--rule); }
+.scale10 button:first-child { border-left: 0; }
+.scale10 button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
+
+/* check-in */
+.scale-row { display: grid; grid-template-columns: 78px 1fr; align-items: center; gap: 8px; }
+.scale-row + .scale-row { margin-top: 10px; }
+.scale-name { font-size: 14.5px; font-weight: 600; }
+.seg5 { display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; }
+.seg5 button { height: 42px; font-weight: 600; font-variant-numeric: tabular-nums; border-left: 1px solid var(--rule); }
+.seg5 button:first-child { border-left: 0; }
+.seg5 button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
+.scale-ends { grid-column: 2; display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-2); margin-top: 3px; }
+.panel-foot { font-size: 13px; color: var(--ink-2); margin-top: 12px; }
+
+/* body metrics */
+.metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 12px; }
+.metric dt { font-size: 13px; color: var(--ink-2); }
+.metric dd { font-size: 28px; line-height: 1.1; }
+.metric dd small { font-size: 13px; font-weight: 500; color: var(--ink-2); font-stretch: 100%; margin-left: 2px; }
+.metric p { font-size: 13px; color: var(--ink-2); }
+.metric p.flag { color: var(--ink); font-weight: 600; }
+.metric p.flag::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--ink); margin-right: 6px; vertical-align: 1px; }
+
+/* form */
+.form-line { font-size: 15px; line-height: 1.5; }
+.chart { width: 100%; display: block; margin-top: 12px; overflow: visible; }
+.chart text { font-family: var(--font); font-size: 11px; fill: var(--ink-2); font-variant-numeric: tabular-nums; }
+.legend { display: flex; gap: 16px; font-size: 12.5px; color: var(--ink-2); margin-top: 6px; }
+.legend span::before { content: ""; display: inline-block; width: 14px; height: 0; border-top: 2px solid var(--ink); margin-right: 6px; vertical-align: 3px; }
+.legend span.dash::before { border-top: 2px dashed var(--ink-2); }
+
+/* lists */
+.rows { list-style: none; }
+.rows > li { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 11px 0; border-top: 1px solid var(--rule); align-items: baseline; }
+.rows > li:first-child { border-top: 0; padding-top: 0; }
+.rows > li:last-child { padding-bottom: 0; }
+.rows .t { font-weight: 600; }
+.rows .s { font-size: 13.5px; color: var(--ink-2); grid-column: 1; }
+.rows .r { text-align: right; font-size: 15px; }
+.rows .r .num { font-size: 20px; }
+.note-text { font-size: 14px; line-height: 1.5; grid-column: 1 / -1; margin-top: 2px; }
+
+/* plan */
+.phase { position: relative; }
+.phase-bar { display: flex; gap: 3px; height: 10px; }
+.phase-bar span { border-radius: 3px; background: var(--rule); }
+.phase-bar span.past { background: var(--ink-3); }
+.phase-bar span.now { background: var(--ink); }
+.phase-labels { display: flex; gap: 3px; font-size: 12px; color: var(--ink-2); margin-top: 6px; }
+.phase-labels span.now { color: var(--ink); font-weight: 700; }
+.phase-mark { position: absolute; top: -9px; width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid var(--ink); }
+.block-sum { font-size: 14.5px; line-height: 1.5; margin-top: 14px; color: var(--ink); }
+.weeks { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.week-btn { background: var(--surface); border-radius: 12px; padding: 10px 8px 9px; text-align: left; border: 1.5px solid transparent; }
+.week-btn[aria-pressed="true"] { border-color: var(--ink); }
+.week-btn b { display: block; font-size: 13px; font-weight: 650; }
+.week-btn .num { font-size: 18px; }
+.week-btn .num small { font-size: 11.5px; font-weight: 500; color: var(--ink-2); font-stretch: 100%; margin-left: 2px; }
+.mini { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; height: 22px; align-items: end; margin-top: 6px; }
+.mini i { display: block; background: var(--ink-3); border-radius: 1.5px; height: var(--h); min-height: 2px; }
+.week-btn[aria-pressed="true"] .mini i { background: var(--ink); }
+.progress { height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+.progress i { display: block; height: 100%; width: var(--v); background: var(--ink); }
+.days { list-style: none; background: var(--surface); border-radius: 16px; overflow: hidden; }
+.day { display: grid; grid-template-columns: 46px 1fr auto; gap: 0 10px; padding: 13px 14px 13px 12px; border-top: 1px solid var(--rule); position: relative; }
+.day:first-child { border-top: 0; }
+.day .when { font-size: 13px; color: var(--ink-2); line-height: 1.25; }
+.day .when b { display: block; font-size: 15px; color: var(--ink); font-weight: 650; }
+.day .what { min-width: 0; }
+.day .what .k { display: flex; align-items: center; gap: 7px; font-weight: 650; }
+.day .what .k i { width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
+.day .what .d { font-size: 14px; color: var(--ink-2); margin-top: 1px; }
+.day .side { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.day .side .num { font-size: 20px; line-height: 1.1; }
+.day .side .num small { font-size: 12px; font-weight: 500; color: var(--ink-2); font-stretch: 100%; margin-left: 1px; }
+.day .status { font-size: 12.5px; color: var(--ink-2); display: inline-flex; align-items: center; gap: 4px; }
+.day .status svg.i { width: 14px; height: 14px; stroke-width: 2.4; }
+.day.today { background: var(--surface-2); }
+.day.today::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--ink); }
+.day.missed .what .k, .day.missed .what .d { color: var(--ink-3); }
+.day.missed .what .k i { background: none; box-shadow: inset 0 0 0 1.5px var(--ink-3); }
+.day.rest .what .k { color: var(--ink-2); font-weight: 550; }
+.day .watch { width: 40px; height: 40px; border-radius: 10px; background: var(--ink); color: var(--on-ink); display: grid; place-items: center; }
+.day .watch svg.i { width: 19px; height: 19px; }
+.day .fuel { grid-column: 2 / -1; font-size: 13px; color: var(--ink-2); margin-top: 6px; }
+
+/* activities */
+.chips { display: flex; gap: 6px; overflow: hidden; padding: 0 0 2px; }
+.chip { height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--rule); background: var(--surface); font-size: 14px; font-weight: 550; color: var(--ink-2); display: inline-flex; align-items: center; white-space: nowrap; }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+.group-head { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 4px 6px; }
+.group-head h3 { font-size: 15px; font-weight: 680; }
+.group-head span { font-size: 13.5px; color: var(--ink-2); }
+.acts { list-style: none; background: var(--surface); border-radius: 16px; overflow: hidden; }
+.act { display: grid; grid-template-columns: 4px 1fr 62px 58px; gap: 0 12px; align-items: center; padding: 12px 14px 12px 0; border-top: 1px solid var(--rule); }
+.act:first-child { border-top: 0; }
+.act .tick { align-self: stretch; background: var(--c); border-radius: 0 3px 3px 0; margin: 2px 0; }
+.act .name { font-weight: 640; font-size: 15px; min-width: 0; }
+.act .when { font-size: 13px; color: var(--ink-2); }
+.act .dist, .act .pace { text-align: right; line-height: 1.15; }
+.act .dist .num { font-size: 22px; }
+.act .pace .num { font-size: 17px; }
+.act small { font-size: 11.5px; color: var(--ink-2); font-weight: 500; display: block; }
+.pb { display: inline-block; font-size: 11.5px; font-weight: 700; border: 1.5px solid var(--ink); border-radius: 5px; padding: 0 4px; margin-left: 6px; line-height: 16px; vertical-align: 1px; }
+
+/* detail */
+.verdict { font-size: 16px; line-height: 1.5; }
+.verdict b { font-weight: 700; }
+.zonebar { display: flex; height: 18px; gap: 2px; margin-top: 4px; }
+.zonebar span { background: var(--c); border-radius: 3px; }
+.zonelegend { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-top: 10px; }
+.zonelegend div { font-size: 12px; color: var(--ink-2); }
+.zonelegend div::before { content: ""; display: block; width: 100%; height: 3px; background: var(--c); border-radius: 2px; margin-bottom: 5px; }
+.zonelegend b { display: block; font-size: 16px; color: var(--ink); }
+.statgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px 8px; }
+.statgrid dt { font-size: 12.5px; color: var(--ink-2); }
+.statgrid dd { font-size: 20px; }
+.statgrid dd small { font-size: 12px; font-weight: 500; color: var(--ink-2); font-stretch: 100%; margin-left: 2px; }
+.tabs-line { display: flex; gap: 18px; border-bottom: 1px solid var(--rule); margin: -2px 0 12px; }
+.tabs-line button { padding: 8px 0 9px; font-size: 14px; font-weight: 600; color: var(--ink-2); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tabs-line button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+
+/* progress */
+.segtabs { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--surface); border-radius: 12px; padding: 3px; }
+.segtabs button { height: 38px; border-radius: 9px; font-weight: 600; font-size: 14.5px; color: var(--ink-2); }
+.segtabs button[aria-selected="true"] { background: var(--ink); color: var(--on-ink); }
+.ranges { display: flex; gap: 6px; }
+.trend { display: grid; grid-template-columns: 1fr auto; gap: 0 12px; padding: 14px 0; border-top: 1px solid var(--rule); }
+.trend:first-of-type { border-top: 0; padding-top: 0; }
+.trend h4 { font-size: 14.5px; font-weight: 640; }
+.trend .val { text-align: right; font-size: 24px; line-height: 1.05; }
+.trend .val small { font-size: 12px; font-weight: 500; color: var(--ink-2); font-stretch: 100%; margin-left: 2px; }
+.trend .st { font-size: 13px; color: var(--ink-2); }
+.trend .st.flag { color: var(--ink); font-weight: 600; }
+.trend svg { grid-column: 1 / -1; width: 100%; height: 56px; margin-top: 8px; display: block; overflow: visible; }
+
+/* settings */
+.set-group h3 { font-size: 13.5px; font-weight: 600; color: var(--ink-2); padding: 0 4px 6px; }
+.set-list { list-style: none; background: var(--surface); border-radius: 16px; overflow: hidden; }
+.set-list li a { display: grid; grid-template-columns: 1fr auto 18px; align-items: center; gap: 10px; padding: 13px 14px; border-top: 1px solid var(--rule); text-decoration: none; min-height: 52px; }
+.set-list li:first-child a { border-top: 0; }
+.set-list .lbl { font-weight: 600; }
+.set-list .v { font-size: 14px; color: var(--ink-2); text-align: right; }
+.set-list svg.i { width: 18px; height: 18px; color: var(--ink-3); }
+.set-list .ok::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--z3); margin-right: 6px; vertical-align: 1px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body class="show-ids">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-today" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol>
+  <symbol id="i-plan" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></symbol>
+  <symbol id="i-coach" viewBox="0 0 24 24"><path d="M4 5.5h16v10.5H10l-6 4.5z"/></symbol>
+  <symbol id="i-acts" viewBox="0 0 24 24"><path d="M3 12h4l3-7 4 14 3-7h4"/></symbol>
+  <symbol id="i-prog" viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></symbol>
+  <symbol id="i-watch" viewBox="0 0 24 24"><rect x="6.5" y="6" width="11" height="12" rx="3"/><path d="M9 6l1-3h4l1 3M9 18l1 3h4l1-3M12 10v2.5l1.5 1"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
+  <symbol id="i-miss" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/></symbol>
+</svg>
+
+<div class="doc">
+  <header class="doc-head">
+    <div>
+      <h1>Running Coach: proposed screens</h1>
+      <p>Mockups for <code>docs/UI_UX_CRITIQUE.md</code>. Each row shows the current screen on <code>main</code> (default skin, seeded data, 23 June 2026) beside the proposal. Pink tags are change IDs from the document; they are not part of the design.</p>
+    </div>
+    <div class="doc-controls">
+      <div class="seg-ctl" role="group" aria-label="Theme">
+        <button type="button" data-theme-set="system" aria-pressed="true">System</button>
+        <button type="button" data-theme-set="light" aria-pressed="false">Light</button>
+        <button type="button" data-theme-set="dark" aria-pressed="false">Dark</button>
+      </div>
+      <div class="seg-ctl" role="group" aria-label="Change IDs">
+        <button type="button" data-ids="on" aria-pressed="true">Show IDs</button>
+        <button type="button" data-ids="off" aria-pressed="false">Hide IDs</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============================ TODAY: MORNING ============================ -->
+  <section class="screen-row" id="today">
+    <div class="screen-notes">
+      <h2>Today, before the run</h2>
+      <p>The screen answers one question first: what am I running, and is my body up for it? Everything else moves below or into other tabs.</p>
+      <ul>
+        <li><b>X1</b><span>The week strip appears only here, as a rail that also shows each day's planned session, so it does real work instead of sitting inert on every tab.</span></li>
+        <li><b>X2</b><span>"Week 26/53" becomes the training block: "Build block, week 1 of 4".</span></li>
+        <li><b>X3 X4</b><span>Theme toggle and the empty sync pill leave the top bar. Theme follows the system; sync problems surface only when something is wrong.</span></li>
+        <li><b>T2</b><span>The hero names the workout in the coach's notation and draws its structure, coloured by effort.</span></li>
+        <li><b>T3</b><span>One primary action. The briefing is a sentence inside the hero, not a second card with a second purple button.</span></li>
+        <li><b>T4</b><span>Check-in drops from about 330px to about 190px: one row per question, with the end labels under the scale.</span></li>
+        <li><b>T6 T7</b><span>Body numbers come with a comparison: Garmin's own status for HRV, your 90-day range for the rest. Training load becomes one sentence and a two-line chart.</span></li>
+      </ul>
+    </div>
+    <figure class="before">
+      <figcaption>Current</figcaption>
+      <img src="ui-ux-critique/before-today.jpg" alt="Current Today screen: score ring, intervals badge, two purple buttons, large check-in card">
+    </figure>
+    <div>
+      <p class="after-cap">Proposed</p>
+      <div class="phone" data-shot="after-today">
+        <header class="appbar">
+          <div>
+            <h1>Tuesday 23 June</h1>
+            <p>Build block, week 1 of 4<span class="id">X2</span></p>
+          </div>
+          <span class="avatar" aria-label="Settings">A</span>
+        </header>
+        <main class="screen">
+          <div class="panel rail" aria-label="This week">
+            <ol>
+              <li class="missed"><span class="dl">Mon</span><span class="dn">22</span><span class="col"><span class="bar" style="--h:40%;--c:var(--z2)"></span></span></li>
+              <li class="today"><span class="dl">Tue</span><span class="dn">23</span><span class="col"><span class="bar" style="--h:39%;--c:var(--z5)"></span></span></li>
+              <li><span class="dl">Wed</span><span class="dn">24</span><span class="col"><span class="bar" style="--h:40%;--c:var(--z2)"></span></span></li>
+              <li><span class="dl">Thu</span><span class="dn">25</span><span class="col"><span class="bar" style="--h:48%;--c:var(--z4)"></span></span></li>
+              <li class="rest"><span class="dl">Fri</span><span class="dn">26</span><span class="col"><span class="bar"></span></span></li>
+              <li><span class="dl">Sat</span><span class="dn">27</span><span class="col"><span class="bar" style="--h:40%;--c:var(--z2)"></span></span></li>
+              <li><span class="dl">Sun</span><span class="dn">28</span><span class="col"><span class="bar" style="--h:100%;--c:var(--z2)"></span></span></li>
+            </ol>
+            <p class="rail-sum"><span><b class="num">0</b> of 73 km this week<span class="id">X1</span></span><a href="#plan">Plan</a></p>
+          </div>
+
+          <section class="panel session">
+            <button class="readiness" type="button" aria-expanded="false">
+              <span class="r-top"><span class="r-label">Readiness</span><span class="r-score num">55</span><span class="id">T7</span></span>
+              <span class="r-meter" style="--v:55%"><i></i></span>
+              <span class="r-word">Good</span>
+              <span class="r-why">Short sleep is holding it back. Tap for the breakdown.</span>
+            </button>
+            <div class="session-body">
+              <p class="kind" style="--c:var(--z5)"><i></i>Intervals<span class="id">T2</span></p>
+              <h2 class="notation num">6 × 800 m</h2>
+              <p class="notation-sub">at 4:00 /km with 400 m jog between</p>
+              <div class="strip" aria-label="Structure: 1.5 km warm-up, six 800 m reps with 400 m jogs, 1 km cool-down">
+                <span style="flex:1.5;--c:var(--z1)"></span>
+                <span style="flex:.8;--c:var(--z5)"></span><span style="flex:.4;--c:var(--z1)"></span>
+                <span style="flex:.8;--c:var(--z5)"></span><span style="flex:.4;--c:var(--z1)"></span>
+                <span style="flex:.8;--c:var(--z5)"></span><span style="flex:.4;--c:var(--z1)"></span>
+                <span style="flex:.8;--c:var(--z5)"></span><span style="flex:.4;--c:var(--z1)"></span>
+                <span style="flex:.8;--c:var(--z5)"></span><span style="flex:.4;--c:var(--z1)"></span>
+                <span style="flex:.8;--c:var(--z5)"></span>
+                <span style="flex:1;--c:var(--z1)"></span>
+              </div>
+              <div class="strip-ends"><span>1.5 km warm-up</span><span>1 km cool-down</span></div>
+              <dl class="figs">
+                <div><dt>Distance</dt><dd class="num">9.3<small>km</small></dd></div>
+                <div><dt>Time</dt><dd class="num">≈45<small>min</small></dd></div>
+                <div><dt>Rep pace</dt><dd class="num">4:00<small>/km</small></dd></div>
+              </dl>
+              <p class="coach-line"><b>Coach:</b> Readiness is 55 after a short night. Hold the reps at 4:00 to 4:05 and stop after five if they drift past 4:10. <a href="#">Full briefing</a><span class="id">T3</span></p>
+              <div class="actions">
+                <a class="btn btn-ink" href="#"><svg class="i"><use href="#i-watch"/></svg>Send to watch</a>
+                <a class="btn btn-quiet" href="#">Change</a>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><h3>How do you feel this morning?<span class="id">T4</span></h3></div>
+            <div class="scale-row">
+              <span class="scale-name">Soreness</span>
+              <div class="seg5" role="group" aria-label="Soreness"><button aria-pressed="false">1</button><button aria-pressed="false">2</button><button aria-pressed="false">3</button><button aria-pressed="true">4</button><button aria-pressed="false">5</button></div>
+              <span class="scale-ends"><span>Very sore</span><span>None</span></span>
+            </div>
+            <div class="scale-row">
+              <span class="scale-name">Energy</span>
+              <div class="seg5" role="group" aria-label="Energy"><button aria-pressed="false">1</button><button aria-pressed="false">2</button><button aria-pressed="true">3</button><button aria-pressed="false">4</button><button aria-pressed="false">5</button></div>
+              <span class="scale-ends"><span>Drained</span><span>Full</span></span>
+            </div>
+            <div class="scale-row">
+              <span class="scale-name">Mood</span>
+              <div class="seg5" role="group" aria-label="Mood"><button aria-pressed="false">1</button><button aria-pressed="false">2</button><button aria-pressed="false">3</button><button aria-pressed="false">4</button><button aria-pressed="false">5</button></div>
+              <span class="scale-ends"><span>Low</span><span>Great</span></span>
+            </div>
+            <p class="panel-foot">Saves when all three are set. Your coach folds it into readiness.</p>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><h3>Body<span class="id">T7 Q3</span></h3><a href="#">Daily history</a></div>
+            <dl class="metrics">
+              <div class="metric"><dt>Resting HR</dt><dd class="num">49<small>bpm</small></dd><p>2 below your usual</p></div>
+              <div class="metric"><dt>HRV overnight</dt><dd class="num">42<small>ms</small></dd><p class="flag">Low, per Garmin</p></div>
+              <div class="metric"><dt>Sleep score</dt><dd class="num">56</dd><p class="flag">Below your range</p></div>
+              <div class="metric"><dt>Body battery</dt><dd class="num">74</dd><p>In your usual range</p></div>
+            </dl>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><h3>Form<span class="id">T6</span></h3><a href="#progress">Progress</a></div>
+            <p class="form-line"><b>Fresh, +17.</b> Fitness is holding at 62 and fatigue has dropped to 44 after a lighter week, so this week's 73 km is well within reach.</p>
+            <svg class="chart" id="form-chart" viewBox="0 0 358 110" role="img" aria-label="Fitness steady near 62 over six weeks; fatigue falling from 70 to 44"></svg>
+            <div class="legend"><span>Fitness</span><span class="dash">Fatigue</span></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><h3>Races</h3><a href="#">All races</a></div>
+            <ul class="rows">
+              <li><span class="t">Spring 10K Tune-up</span><span class="r"><span class="num">18</span> days</span><span class="s">Goal 40:00</span></li>
+              <li><span class="t">Half Marathon Championship</span><span class="r"><span class="num">45</span> days</span><span class="s">Goal 1:30:00</span></li>
+              <li><span class="t">Berlin Marathon</span><span class="r"><span class="num">90</span> days</span><span class="s">Goal race of the season</span></li>
+            </ul>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><h3>From your coach<span class="id">T8</span></h3><a href="#">All notes</a></div>
+            <ul class="rows">
+              <li><span class="t">Recovery is trending well</span><span class="r muted" style="font-size:13px">Mon 22</span><span class="note-text muted">Resting HR is back to 48 after last week's tempo. Keep Wednesday genuinely easy.</span></li>
+              <li><span class="t">Saturday's easy run</span><span class="r muted" style="font-size:13px">Sat 20</span><span class="note-text muted">Controlled effort at 5:43 /km and HR 143. Aerobic decoupling stayed low.</span></li>
+            </ul>
+          </section>
+        </main>
+        <nav class="tabbar" aria-label="Main">
+          <a class="on" href="#today"><svg class="i"><use href="#i-today"/></svg>Today</a>
+          <a href="#plan"><svg class="i"><use href="#i-plan"/></svg>Plan</a>
+          <a href="#"><svg class="i"><use href="#i-coach"/></svg>Coach</a>
+          <a href="#activities"><svg class="i"><use href="#i-acts"/></svg>Activities</a>
+          <a href="#progress"><svg class="i"><use href="#i-prog"/></svg>Progress</a>
+        </nav>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ TODAY: DONE ============================ -->
+  <section class="screen-row" id="today-done">
+    <div class="screen-notes">
+      <h2>Today, after the run</h2>
+      <p>Today the 10:20 interval run shows up at the bottom under "Also today", while the hero still offers to send the same workout to the watch. The proposal matches the run to the plan day and turns the hero into the result.</p>
+      <ul>
+        <li><b>T1</b><span>A run of the planned type on the planned day completes the session, with or without a Garmin calendar event. If the match is ambiguous, ask once: "Was this today's intervals?"</span></li>
+        <li><b>T1</b><span>The rail fills Tuesday in and the week total updates to 9.2 of 73 km. Plan shows the same state (P6).</span></li>
+        <li><b>D5</b><span>The rep chart replaces the 13-row adherence table as the first read: six bars against a target line.</span></li>
+        <li><b>D7</b><span>The effort rating is asked here, right after the run (decided). The run page keeps it for edits.</span></li>
+      </ul>
+    </div>
+    <figure class="before">
+      <figcaption>Current: same screen after the run (hero unchanged)</figcaption>
+      <img src="ui-ux-critique/before-today-done.jpg" alt="Current Today screen after the run: hero still offers Send to watch while the completed run appears at the bottom">
+    </figure>
+    <div>
+      <p class="after-cap">Proposed</p>
+      <div class="phone" data-shot="after-today-done">
+        <header class="appbar">
+          <div>
+            <h1>Tuesday 23 June</h1>
+            <p>Build block, week 1 of 4</p>
+          </div>
+          <span class="avatar">A</span>
+        </header>
+        <main class="screen">
+          <div class="panel rail">
+            <ol>
+              <li class="missed"><span class="dl">Mon</span><span class="dn">22</span><span class="col"><span class="bar" style="--h:40%;--c:var(--z2)"></span></span></li>
+              <li class="today done"><span class="dl">Tue</span><span class="dn">23</span><span class="col"><span class="bar" style="--h:39%;--c:var(--z5)"></span></span></li>
+              <li><span class="dl">Wed</span><span class="dn">24</span><span class="col"><span class="bar" style="--h:40%;--c:var(--z2)"></span></span></li>
+              <li><span class="dl">Thu</span><span class="dn">25</span><span class="col"><span class="bar" style="--h:48%;--c:var(--z4)"></span></span></li>
+              <li class="rest"><span class="dl">Fri</span><span class="dn">26</span><span class="col"><span class="bar"></span></span></li>
+              <li><span class="dl">Sat</span><span class="dn">27</span><span class="col"><span class="bar" style="--h:40%;--c:var(--z2)"></span></span></li>
+              <li><span class="dl">Sun</span><span class="dn">28</span><span class="col"><span class="bar" style="--h:100%;--c:var(--z2)"></span></span></li>
+            </ol>
+            <p class="rail-sum"><span><b class="num">9.2</b> of 73 km this week</span><a href="#plan">Plan</a></p>
+          </div>
+
+          <section class="panel">
+            <p class="done-head"><span class="tick"><svg class="i"><use href="#i-check"/></svg></span>Done at 10:20<span class="id">T1</span></p>
+            <p class="kind" style="--c:var(--z5);margin-top:12px"><i></i>Intervals</p>
+            <h2 class="notation num">6 × 800 m</h2>
+            <p class="notation-sub">All six reps within 5 s of 4:00. The last one was the slowest.</p>
+            <div class="reps" aria-label="Rep paces against a 4:00 target: 4:02, 3:58, 4:01, 3:59, 4:03, 4:05">
+              <span class="rep" style="--h:53%"></span><span class="rep" style="--h:80%"></span><span class="rep" style="--h:60%"></span><span class="rep" style="--h:73%"></span><span class="rep" style="--h:47%"></span><span class="rep" style="--h:33%"></span>
+              <span class="target" style="--t:67%"><span>Target 4:00</span></span>
+            </div>
+            <div class="rep-labels num"><span>4:02</span><span>3:58</span><span>4:01</span><span>3:59</span><span>4:03</span><span>4:05</span></div>
+            <dl class="figs">
+              <div><dt>Distance</dt><dd class="num">9.22<small>km</small></dd></div>
+              <div><dt>Time</dt><dd class="num">44:17</dd></div>
+              <div><dt>Avg HR</dt><dd class="num">161<small>bpm</small></dd></div>
+            </dl>
+            <div style="margin-top:16px">
+              <p style="font-weight:650">How hard did it feel?<span class="id">D7</span></p>
+              <div class="scale10" role="group" aria-label="Effort, 1 easy to 10 all out">
+                <button aria-pressed="false">1</button><button aria-pressed="false">2</button><button aria-pressed="false">3</button><button aria-pressed="false">4</button><button aria-pressed="false">5</button><button aria-pressed="false">6</button><button aria-pressed="false">7</button><button aria-pressed="false">8</button><button aria-pressed="false">9</button><button aria-pressed="false">10</button>
+              </div>
+              <div class="strip-ends" style="margin-top:4px"><span>Easy</span><span>All out</span></div>
+            </div>
+            <div class="actions" style="grid-template-columns:1fr">
+              <a class="btn btn-ink" href="#detail">Open run analysis</a>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><h3>Tomorrow</h3><a href="#plan">Plan</a></div>
+            <ul class="rows">
+              <li><span class="t">Easy 9.5 km</span><span class="r"><span class="num">5:42</span> /km</span><span class="s">Keep it conversational after today's reps</span></li>
+            </ul>
+          </section>
+        </main>
+        <nav class="tabbar" aria-label="Main">
+          <a class="on" href="#today"><svg class="i"><use href="#i-today"/></svg>Today</a>
+          <a href="#plan"><svg class="i"><use href="#i-plan"/></svg>Plan</a>
+          <a href="#"><svg class="i"><use href="#i-coach"/></svg>Coach</a>
+          <a href="#activities"><svg class="i"><use href="#i-acts"/></svg>Activities</a>
+          <a href="#progress"><svg class="i"><use href="#i-prog"/></svg>Progress</a>
+        </nav>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ PLAN ============================ -->
+  <section class="screen-row" id="plan">
+    <div class="screen-notes">
+      <h2>Plan</h2>
+      <p>Three week navigators (global strip, week tabs, day cards) collapse into one. The page reads as a schedule: day, session, distance, state.</p>
+      <ul>
+        <li><b>P1</b><span>No global week strip. The week selector is the only week control, and each tile shows the week's shape, not just a km figure.</span></li>
+        <li><b>P2</b><span>Preferences and Regenerate move into the overflow menu. They are occasional actions and shouldn't sit above the plan.</span></li>
+        <li><b>P7</b><span>Season phases become one monochrome ribbon with a "you are here" mark. The five-colour legend goes.</span></li>
+        <li><b>P3</b><span>Send to watch appears on the next session only. Notes show only when they say something specific to that day.</span></li>
+        <li><b>P4</b><span>One effort dot per row instead of a coloured border, a coloured badge and a glyph all saying the same thing.</span></li>
+        <li><b>P6</b><span>Today's completed run counts toward the week (9.2 of 73 km), the same as Today.</span></li>
+      </ul>
+    </div>
+    <figure class="before">
+      <figcaption>Current</figcaption>
+      <img src="ui-ux-critique/before-plan.jpg" alt="Current Plan screen with week strip, phase legend, week tabs and day cards">
+    </figure>
+    <div>
+      <p class="after-cap">Proposed</p>
+      <div class="phone" data-shot="after-plan">
+        <header class="appbar">
+          <div>
+            <h1>Plan</h1>
+            <p>Berlin Marathon in 90 days</p>
+          </div>
+          <button class="icon-btn" aria-label="Plan options: preferences, regenerate"><svg class="i"><use href="#i-more"/></svg></button>
+          <span class="id" style="position:absolute;right:14px;top:62px">P2</span>
+        </header>
+        <main class="screen">
+          <section class="panel">
+            <div class="phase" aria-label="Season: base 4 weeks done, build 4 weeks current, peak 3, taper 2, race week">
+              <span class="phase-mark" style="left:calc(28.5% + 1px)"></span>
+              <div class="phase-bar"><span class="past" style="flex:4"></span><span class="now" style="flex:4"></span><span style="flex:3"></span><span style="flex:2"></span><span style="flex:1"></span></div>
+              <div class="phase-labels"><span style="flex:4">Base</span><span class="now" style="flex:4">Build</span><span style="flex:3">Peak</span><span style="flex:2">Taper</span><span style="flex:1">Race</span></div>
+            </div>
+            <p class="block-sum">Four weeks sharpening marathon endurance: controlled tempo volume and a long run that builds through the block.<span class="id">P7</span></p>
+          </section>
+
+          <div class="weeks" role="group" aria-label="Weeks in this block">
+            <button class="week-btn" aria-pressed="true"><b>Week 1</b><span class="num">73<small>km</small></span><span class="mini"><i style="--h:40%"></i><i style="--h:38%"></i><i style="--h:40%"></i><i style="--h:48%"></i><i style="--h:0"></i><i style="--h:40%"></i><i style="--h:100%"></i></span></button>
+            <button class="week-btn" aria-pressed="false"><b>Week 2</b><span class="num">77<small>km</small></span><span class="mini"><i style="--h:40%"></i><i style="--h:40%"></i><i style="--h:40%"></i><i style="--h:50%"></i><i style="--h:0"></i><i style="--h:42%"></i><i style="--h:100%"></i></span></button>
+            <button class="week-btn" aria-pressed="false"><b>Week 3</b><span class="num">81<small>km</small></span><span class="mini"><i style="--h:40%"></i><i style="--h:42%"></i><i style="--h:40%"></i><i style="--h:54%"></i><i style="--h:0"></i><i style="--h:42%"></i><i style="--h:100%"></i></span></button>
+            <button class="week-btn" aria-pressed="false"><b>Week 4</b><span class="num">60<small>km</small></span><span class="mini"><i style="--h:34%"></i><i style="--h:34%"></i><i style="--h:34%"></i><i style="--h:40%"></i><i style="--h:0"></i><i style="--h:34%"></i><i style="--h:76%"></i></span></button>
+          </div>
+          <div style="padding:0 4px">
+            <div style="display:flex;justify-content:space-between;font-size:13.5px"><span><b>Aerobic build</b></span><span class="muted"><b class="num" style="color:var(--ink);font-size:15px">9.2</b> of 73 km<span class="id">P6</span></span></div>
+            <div class="progress" style="--v:12.6%"><i></i></div>
+          </div>
+
+          <ol class="days">
+            <li class="day missed">
+              <span class="when"><b>Mon</b>22 Jun</span>
+              <div class="what"><p class="k" style="--c:var(--z2)"><i></i>Easy</p><p class="d">9.5 km at 5:42 /km</p></div>
+              <div class="side"><span class="status"><svg class="i"><use href="#i-miss"/></svg>Missed</span></div>
+            </li>
+            <li class="day today">
+              <span class="when"><b>Tue</b>23 Jun</span>
+              <div class="what"><p class="k" style="--c:var(--z5)"><i></i>Intervals<span class="id">P4</span></p><p class="d">6 × 800 m at 4:00 /km</p>
+                <div class="strip thin"><span style="flex:1.5;--c:var(--z1)"></span><span style="flex:.8;--c:var(--z5)"></span><span style="flex:.4;--c:var(--z1)"></span><span style="flex:.8;--c:var(--z5)"></span><span style="flex:.4;--c:var(--z1)"></span><span style="flex:.8;--c:var(--z5)"></span><span style="flex:.4;--c:var(--z1)"></span><span style="flex:.8;--c:var(--z5)"></span><span style="flex:.4;--c:var(--z1)"></span><span style="flex:.8;--c:var(--z5)"></span><span style="flex:.4;--c:var(--z1)"></span><span style="flex:.8;--c:var(--z5)"></span><span style="flex:1;--c:var(--z1)"></span></div>
+              </div>
+              <div class="side"><span class="num">9.22<small>km</small></span><span class="status"><svg class="i"><use href="#i-check"/></svg>Done, 96%</span></div>
+            </li>
+            <li class="day">
+              <span class="when"><b>Wed</b>24 Jun</span>
+              <div class="what"><p class="k" style="--c:var(--z2)"><i></i>Easy</p><p class="d">9.5 km at 5:42 /km</p></div>
+              <div class="side"><button class="watch" aria-label="Send Wednesday's easy run to watch"><svg class="i"><use href="#i-watch"/></svg></button><span class="id">P3</span></div>
+            </li>
+            <li class="day">
+              <span class="when"><b>Thu</b>25 Jun</span>
+              <div class="what"><p class="k" style="--c:var(--z4)"><i></i>Tempo</p><p class="d">11.5 km at 4:35 /km</p></div>
+              <div class="side"><span class="num">11.5<small>km</small></span></div>
+            </li>
+            <li class="day rest">
+              <span class="when"><b>Fri</b>26 Jun</span>
+              <div class="what"><p class="k">Rest</p></div>
+              <div class="side"></div>
+            </li>
+            <li class="day">
+              <span class="when"><b>Sat</b>27 Jun</span>
+              <div class="what"><p class="k" style="--c:var(--z2)"><i></i>Easy</p><p class="d">9.5 km at 5:42 /km</p></div>
+              <div class="side"><span class="num">9.5<small>km</small></span></div>
+            </li>
+            <li class="day">
+              <span class="when"><b>Sun</b>28 Jun</span>
+              <div class="what"><p class="k" style="--c:var(--z2)"><i></i>Long run</p><p class="d">24 km at 5:35 /km</p></div>
+              <div class="side"><span class="num">24<small>km</small></span></div>
+              <p class="fuel">Fuelling: a gel at 8, 14 and 20 km, water every 5 km.</p>
+            </li>
+          </ol>
+        </main>
+        <nav class="tabbar" aria-label="Main">
+          <a href="#today"><svg class="i"><use href="#i-today"/></svg>Today</a>
+          <a class="on" href="#plan"><svg class="i"><use href="#i-plan"/></svg>Plan</a>
+          <a href="#"><svg class="i"><use href="#i-coach"/></svg>Coach</a>
+          <a href="#activities"><svg class="i"><use href="#i-acts"/></svg>Activities</a>
+          <a href="#progress"><svg class="i"><use href="#i-prog"/></svg>Progress</a>
+        </nav>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ ACTIVITIES ============================ -->
+  <section class="screen-row" id="activities">
+    <div class="screen-notes">
+      <h2>Activities</h2>
+      <p>Rows lead with distance, the figure runners scan for. Values sit in aligned columns, so nothing gets cut off at phone width.</p>
+      <ul>
+        <li><b>A1</b><span>The one-line meta string ("Tue · 10:20 · 9.22 km · 44:17 · 4:48 /km · ♥ 1…") gets cut off on most rows. It becomes two right-aligned columns: distance, then pace over HR.</span></li>
+        <li><b>A2</b><span>The coloured shoe tile becomes a thin effort tick. Every Garmin run is called "Easy Run" or "Interval Run", so the name is not where the difference lies.</span></li>
+        <li><b>A3</b><span>This week's header compares against the plan ("9.2 of 73 km"); past weeks keep runs and km.</span></li>
+        <li><b>X1</b><span>No week strip. It currently changes nothing on this screen.</span></li>
+      </ul>
+    </div>
+    <figure class="before">
+      <figcaption>Current</figcaption>
+      <img src="ui-ux-critique/before-activities.jpg" alt="Current Activities list with truncated meta lines">
+    </figure>
+    <div>
+      <p class="after-cap">Proposed</p>
+      <div class="phone" data-shot="after-activities">
+        <header class="appbar">
+          <div><h1>Activities</h1></div>
+          <span class="avatar">A</span>
+        </header>
+        <main class="screen">
+          <div class="chips" role="group" aria-label="Filter by sport">
+            <button class="chip" aria-pressed="true">All</button><button class="chip" aria-pressed="false">Running</button><button class="chip" aria-pressed="false">Trail</button><button class="chip" aria-pressed="false">Cycling</button><button class="chip" aria-pressed="false">Walking</button>
+          </div>
+          <div>
+            <div class="group-head"><h3>This week</h3><span><b class="num" style="color:var(--ink);font-size:15px">9.2</b> of 73 km planned<span class="id">A3</span></span></div>
+            <ul class="acts">
+              <li class="act" style="--c:var(--z5)"><span class="tick"></span><div class="name">Interval Run<span class="id">A2</span><div class="when">Tue 23, 10:20<span class="id">A1</span></div></div><div class="dist"><span class="num">9.22</span><small>km</small></div><div class="pace"><span class="num">4:48</span><small>161 bpm</small></div></li>
+            </ul>
+          </div>
+          <div>
+            <div class="group-head"><h3>15–21 June</h3><span>4 runs, 35.9 km</span></div>
+            <ul class="acts">
+              <li class="act" style="--c:var(--z2)"><span class="tick"></span><div class="name">Easy Run<div class="when">Sat 20, 16:43</div></div><div class="dist"><span class="num">8.22</span><small>km</small></div><div class="pace"><span class="num">5:43</span><small>143 bpm</small></div></li>
+              <li class="act" style="--c:var(--z2)"><span class="tick"></span><div class="name">Easy Run<div class="when">Wed 17, 17:42</div></div><div class="dist"><span class="num">9.77</span><small>km</small></div><div class="pace"><span class="num">5:49</span><small>141 bpm</small></div></li>
+              <li class="act" style="--c:var(--z5)"><span class="tick"></span><div class="name">Interval Run<span class="pb">PB</span><div class="when">Tue 16, 06:34</div></div><div class="dist"><span class="num">8.80</span><small>km</small></div><div class="pace"><span class="num">4:46</span><small>165 bpm</small></div></li>
+              <li class="act" style="--c:var(--z2)"><span class="tick"></span><div class="name">Easy Run<div class="when">Mon 15, 07:55</div></div><div class="dist"><span class="num">9.08</span><small>km</small></div><div class="pace"><span class="num">5:32</span><small>146 bpm</small></div></li>
+            </ul>
+          </div>
+          <div>
+            <div class="group-head"><h3>8–14 June</h3><span>6 runs, 72.9 km</span></div>
+            <ul class="acts">
+              <li class="act" style="--c:var(--z2)"><span class="tick"></span><div class="name">Long Run<div class="when">Sun 14, 14:04</div></div><div class="dist"><span class="num">23.5</span><small>km</small></div><div class="pace"><span class="num">5:28</span><small>148 bpm</small></div></li>
+              <li class="act" style="--c:var(--z4)"><span class="tick"></span><div class="name">Tempo Run<div class="when">Thu 11, 12:35</div></div><div class="dist"><span class="num">12.0</span><small>km</small></div><div class="pace"><span class="num">4:29</span><small>160 bpm</small></div></li>
+              <li class="act" style="--c:var(--z2)"><span class="tick"></span><div class="name">Easy Run<div class="when">Wed 10, 18:32</div></div><div class="dist"><span class="num">8.41</span><small>km</small></div><div class="pace"><span class="num">5:35</span><small>142 bpm</small></div></li>
+              <li class="act" style="--c:var(--z5)"><span class="tick"></span><div class="name">Interval Run<div class="when">Tue 9, 13:51</div></div><div class="dist"><span class="num">9.49</span><small>km</small></div><div class="pace"><span class="num">4:46</span><small>165 bpm</small></div></li>
+            </ul>
+          </div>
+        </main>
+        <nav class="tabbar" aria-label="Main">
+          <a href="#today"><svg class="i"><use href="#i-today"/></svg>Today</a>
+          <a href="#plan"><svg class="i"><use href="#i-plan"/></svg>Plan</a>
+          <a href="#"><svg class="i"><use href="#i-coach"/></svg>Coach</a>
+          <a class="on" href="#activities"><svg class="i"><use href="#i-acts"/></svg>Activities</a>
+          <a href="#progress"><svg class="i"><use href="#i-prog"/></svg>Progress</a>
+        </nav>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ ACTIVITY DETAIL ============================ -->
+  <section class="screen-row" id="detail">
+    <div class="screen-notes">
+      <h2>Run analysis</h2>
+      <p>For a structured session the question is "did I hit the reps?". The page answers that first, then explains it through heart rate and effort.</p>
+      <ul>
+        <li><b>D2</b><span>One coach verdict at the top, with the full analysis behind a link. Today the same text appears twice: once as a chip, once as a card at the bottom.</span></li>
+        <li><b>D1 D5</b><span>"Description" with a bare structure bar, plus a 13-row adherence table, becomes one rep chart with pace and HR for each rep.</span></li>
+        <li><b>D3</b><span>Time in zone shows minutes on the page, not only in a hover tooltip, and uses the same effort colours as the rest of the app.</span></li>
+        <li><b>D4</b><span>The HR chart gets a distance axis, rep shading and a y-axis that starts at a sensible floor instead of zooming 160 to 170.</span></li>
+      </ul>
+    </div>
+    <figure class="before">
+      <figcaption>Current</figcaption>
+      <img src="ui-ux-critique/before-detail.jpg" alt="Current activity detail with coach chip, bare structure bar, adherence table, zone bars without values">
+    </figure>
+    <div>
+      <p class="after-cap">Proposed</p>
+      <div class="phone" data-shot="after-detail">
+        <header class="appbar">
+          <div class="lead">
+            <button class="icon-btn" aria-label="Back" style="margin-left:-10px"><svg class="i"><use href="#i-back"/></svg></button>
+            <div><h1>Interval Run</h1><p>Tuesday 23 June, 10:20</p></div>
+          </div>
+        </header>
+        <main class="screen">
+          <section class="panel">
+            <dl class="figs" style="margin:0;padding:0;border:0">
+              <div><dt>Distance</dt><dd class="num">9.22<small>km</small></dd></div>
+              <div><dt>Time</dt><dd class="num">44:17</dd></div>
+              <div><dt>Avg pace</dt><dd class="num">4:48<small>/km</small></dd></div>
+            </dl>
+            <p class="verdict" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--rule)"><b>Coach:</b> Six reps on target and HR settled quickly in every jog, so the aerobic base is doing its job. <a href="#" class="muted" style="text-decoration:underline;text-underline-offset:3px">Full analysis</a><span class="id">D2</span></p>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><h3>Reps<span class="id">D5</span></h3><a href="#">All laps</a></div>
+            <p class="muted" style="font-size:13.5px">6 × 800 m, target 4:00 /km, 96% adherence</p>
+            <div class="reps" style="height:120px" aria-label="Rep paces against a 4:00 target">
+              <span class="rep" style="--h:53%"></span><span class="rep" style="--h:80%"></span><span class="rep" style="--h:60%"></span><span class="rep" style="--h:73%"></span><span class="rep" style="--h:47%"></span><span class="rep" style="--h:33%"></span>
+              <span class="target" style="--t:67%"><span>4:00</span></span>
+            </div>
+            <div class="rep-labels num"><span>4:02<small>164</small></span><span>3:58<small>166</small></span><span>4:01<small>167</small></span><span>3:59<small>168</small></span><span>4:03<small>168</small></span><span>4:05<small>169</small></span></div>
+            <p class="muted" style="font-size:12.5px;margin-top:6px">Pace, with peak HR beneath. Faster reps are taller.</p>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><h3>Heart rate<span class="id">D4</span></h3></div>
+            <div class="tabs-line" role="tablist"><button role="tab" aria-selected="true">Heart rate</button><button role="tab" aria-selected="false">Pace</button><button role="tab" aria-selected="false">Elevation</button><button role="tab" aria-selected="false">Cadence</button></div>
+            <svg class="chart" id="hr-chart" viewBox="0 0 358 150" role="img" aria-label="Heart rate over 9.2 km: warm-up near 140, six peaks between 164 and 169 during reps, recoveries back to about 148"></svg>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><h3>Time in zone<span class="id">D3</span></h3></div>
+            <div class="zonebar" aria-hidden="true"><span style="flex:370;--c:var(--z1)"></span><span style="flex:520;--c:var(--z2)"></span><span style="flex:320;--c:var(--z3)"></span><span style="flex:595;--c:var(--z4)"></span><span style="flex:852;--c:var(--z5)"></span></div>
+            <div class="zonelegend">
+              <div style="--c:var(--z1)"><b class="num">6:10</b>Zone 1</div>
+              <div style="--c:var(--z2)"><b class="num">8:40</b>Zone 2</div>
+              <div style="--c:var(--z3)"><b class="num">5:20</b>Zone 3</div>
+              <div style="--c:var(--z4)"><b class="num">9:55</b>Zone 4</div>
+              <div style="--c:var(--z5)"><b class="num">14:12</b>Zone 5</div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><h3>More stats</h3><a href="#">Show all</a></div>
+            <dl class="statgrid">
+              <div><dt>Max HR</dt><dd class="num">169<small>bpm</small></dd></div>
+              <div><dt>Elevation</dt><dd class="num">174<small>m</small></dd></div>
+              <div><dt>Cadence</dt><dd class="num">174<small>spm</small></dd></div>
+              <div><dt>Stride</dt><dd class="num">1.18<small>m</small></dd></div>
+              <div><dt>Calories</dt><dd class="num">599</dd></div>
+              <div><dt>Effort</dt><dd class="num">7<small>of 10</small></dd></div>
+            </dl>
+          </section>
+        </main>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ PROGRESS ============================ -->
+  <section class="screen-row" id="progress">
+    <div class="screen-notes">
+      <h2>Progress</h2>
+      <p>Wellness numbers only mean something against your own normal. Each trend shades your usual range and says in words whether today is inside it.</p>
+      <ul>
+        <li><b>G1</b><span>The y-axis is 28px wide, so "100" renders as "00" on Sleep score and Body battery. Small multiples here have no y-axis; the band and the value say enough.</span></li>
+        <li><b>G2</b><span>Five charts in five different colours become one ink. Colour is kept for effort.</span></li>
+        <li><b>Q3</b><span>HRV's band and verdict come from Garmin's own baseline and status, so the app and the watch agree. The other four use your middle 80% of the last 90 days.</span></li>
+        <li><b>G3</b><span>Six tabs (Wellness, Performance, Intensity, Aerobic, Records, Custom) become three: Body, Fitness, Records. Custom charts move to the end of Fitness.</span></li>
+      </ul>
+    </div>
+    <figure class="before">
+      <figcaption>Current</figcaption>
+      <img src="ui-ux-critique/before-progress.jpg" alt="Current Progress screen with coloured area charts and clipped y-axis labels">
+    </figure>
+    <div>
+      <p class="after-cap">Proposed</p>
+      <div class="phone" data-shot="after-progress">
+        <header class="appbar">
+          <div><h1>Progress</h1></div>
+          <span class="avatar">A</span>
+        </header>
+        <main class="screen">
+          <div class="segtabs" role="tablist"><button role="tab" aria-selected="true">Body</button><button role="tab" aria-selected="false">Fitness</button><button role="tab" aria-selected="false">Records</button></div>
+          <div class="ranges" role="group" aria-label="Range"><button class="chip" aria-pressed="true">30 days</button><button class="chip" aria-pressed="false">90 days</button><button class="chip" aria-pressed="false">1 year</button><span class="id" style="align-self:center">G3</span></div>
+          <section class="panel" id="trends">
+            <!-- filled by script -->
+          </section>
+          <p class="muted" style="font-size:13px;padding:0 4px">Bands: Garmin's baseline for HRV; your middle 80% of the last 90 days for the rest.</p>
+        </main>
+        <nav class="tabbar" aria-label="Main">
+          <a href="#today"><svg class="i"><use href="#i-today"/></svg>Today</a>
+          <a href="#plan"><svg class="i"><use href="#i-plan"/></svg>Plan</a>
+          <a href="#"><svg class="i"><use href="#i-coach"/></svg>Coach</a>
+          <a href="#activities"><svg class="i"><use href="#i-acts"/></svg>Activities</a>
+          <a class="on" href="#progress"><svg class="i"><use href="#i-prog"/></svg>Progress</a>
+        </nav>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ SETTINGS ============================ -->
+  <section class="screen-row" id="settings">
+    <div class="screen-notes">
+      <h2>Settings</h2>
+      <p>Today, Settings is one 4,600px scroll of fourteen sections. The proposal is an index of grouped rows, each showing its current value and opening its own page.</p>
+      <ul>
+        <li><b>S1</b><span>Group by what the athlete is trying to do: you, connections, coach, app, data.</span></li>
+        <li><b>X3</b><span>Appearance (System, Light, Dark) lives here, not in the top bar. System is the default.</span></li>
+        <li><b>X4</b><span>Garmin sync status gets a real row with its last-sync time; the top-bar pill goes.</span></li>
+        <li><b>S2</b><span>The zones editor gets its own page, wide enough that zone names aren't cut to "Rec", "Aer", "Ten".</span></li>
+      </ul>
+    </div>
+    <figure class="before">
+      <figcaption>Current (top of the page)</figcaption>
+      <img src="ui-ux-critique/before-settings.jpg" alt="Current Settings page top: account, Garmin form, long athlete profile form">
+    </figure>
+    <div>
+      <p class="after-cap">Proposed</p>
+      <div class="phone" data-shot="after-settings">
+        <header class="appbar">
+          <div class="lead">
+            <button class="icon-btn" aria-label="Back" style="margin-left:-10px"><svg class="i"><use href="#i-back"/></svg></button>
+            <div><h1>Settings</h1></div>
+          </div>
+        </header>
+        <main class="screen" style="gap:18px">
+          <div class="set-group"><h3>You<span class="id">S1</span></h3>
+            <ul class="set-list">
+              <li><a href="#"><span class="lbl">Athlete profile</span><span class="v">Alex, 36</span><svg class="i"><use href="#i-chev"/></svg></a></li>
+              <li><a href="#"><span class="lbl">Zones and thresholds<span class="id">S2</span></span><span class="v">4:18 /km, 170 bpm</span><svg class="i"><use href="#i-chev"/></svg></a></li>
+            </ul>
+          </div>
+          <div class="set-group"><h3>Connections</h3>
+            <ul class="set-list">
+              <li><a href="#"><span class="lbl">Garmin Connect<span class="id">X4</span></span><span class="v ok">Synced 18:12</span><svg class="i"><use href="#i-chev"/></svg></a></li>
+            </ul>
+          </div>
+          <div class="set-group"><h3>Coach</h3>
+            <ul class="set-list">
+              <li><a href="#"><span class="lbl">What the coach remembers</span><span class="v">None yet</span><svg class="i"><use href="#i-chev"/></svg></a></li>
+              <li><a href="#"><span class="lbl">Notifications</span><span class="v">8 of 8 on</span><svg class="i"><use href="#i-chev"/></svg></a></li>
+              <li><a href="#"><span class="lbl">AI model</span><span class="v">Claude Sonnet 4.6</span><svg class="i"><use href="#i-chev"/></svg></a></li>
+            </ul>
+          </div>
+          <div class="set-group"><h3>App</h3>
+            <ul class="set-list">
+              <li><a href="#"><span class="lbl">Appearance<span class="id">X3</span></span><span class="v">System</span><svg class="i"><use href="#i-chev"/></svg></a></li>
+            </ul>
+          </div>
+          <div class="set-group"><h3>Data</h3>
+            <ul class="set-list">
+              <li><a href="#"><span class="lbl">Sync now</span><span class="v">Activities, health, calendar</span><svg class="i"><use href="#i-chev"/></svg></a></li>
+              <li><a href="#"><span class="lbl">Export</span><span class="v">CSV, JSON</span><svg class="i"><use href="#i-chev"/></svg></a></li>
+              <li><a href="#"><span class="lbl">System health</span><span class="v ok">All checks pass</span><svg class="i"><use href="#i-chev"/></svg></a></li>
+            </ul>
+          </div>
+          <p class="muted" style="font-size:13px;padding:0 4px">Signed in as dev@localhost</p>
+        </main>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  // Deterministic PRNG so charts render identically every time.
+  function rng(seed) { return function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; var t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  var NS = 'http://www.w3.org/2000/svg';
+  function el(tag, attrs, parent) { var e = document.createElementNS(NS, tag); for (var k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+  function path(points) { return points.map(function (p, i) { return (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1); }).join(' '); }
+
+  // Form chart: fitness (solid, area) and fatigue (dashed), six weeks.
+  (function () {
+    var svg = document.getElementById('form-chart'); if (!svg) return;
+    var W = 358, H = 110, top = 6, bottom = 92, n = 42, r = rng(7);
+    var fit = [], fat = [];
+    for (var i = 0; i < n; i++) {
+      fit.push(60 + Math.sin(i / 9) * 1.6 + i * 0.03 + (r() - .5) * .6);
+      fat.push(66 + Math.sin(i / 3.2) * 6 - (i > 30 ? (i - 30) * 1.9 : 0) + (r() - .5) * 4);
+    }
+    fat[n - 1] = 44; fit[n - 1] = 62;
+    function y(v) { return bottom - (v - 30) / (80 - 30) * (bottom - top); }
+    function x(i) { return i / (n - 1) * W; }
+    [40, 60].forEach(function (g) { el('line', { x1: 0, x2: W, y1: y(g), y2: y(g), stroke: 'var(--rule)', 'stroke-width': 1 }, svg); var t = el('text', { x: 0, y: y(g) - 4 }, svg); t.textContent = g; });
+    var fp = fit.map(function (v, i) { return [x(i), y(v)]; });
+    el('path', { d: path(fp) + ' L ' + W + ' ' + bottom + ' L 0 ' + bottom + ' Z', fill: 'var(--ink)', opacity: .07 }, svg);
+    el('path', { d: path(fp), fill: 'none', stroke: 'var(--ink)', 'stroke-width': 2 }, svg);
+    el('path', { d: path(fat.map(function (v, i) { return [x(i), y(v)]; })), fill: 'none', stroke: 'var(--ink-2)', 'stroke-width': 1.6, 'stroke-dasharray': '4 3' }, svg);
+    ['12 May', '26 May', '9 Jun', '23 Jun'].forEach(function (l, i) { var t = el('text', { x: [0, 120, 240, W][i], y: H - 2, 'text-anchor': i === 0 ? 'start' : i === 3 ? 'end' : 'middle' }, svg); t.textContent = l; });
+  })();
+
+  // HR over distance with rep shading.
+  (function () {
+    var svg = document.getElementById('hr-chart'); if (!svg) return;
+    var W = 358, H = 150, left = 26, top = 6, bottom = 128, km = 9.3;
+    function x(d) { return left + d / km * (W - left); }
+    function y(v) { return bottom - (v - 110) / (180 - 110) * (bottom - top); }
+    var reps = [], d = 1.5, peaks = [164, 166, 167, 168, 168, 169];
+    for (var i = 0; i < 6; i++) { reps.push([d, d + .8, peaks[i]]); d += .8 + (i < 5 ? .4 : 0); }
+    reps.forEach(function (rp) { el('rect', { x: x(rp[0]), y: top, width: x(rp[1]) - x(rp[0]), height: bottom - top, fill: 'var(--z5)', opacity: .1 }, svg); });
+    [120, 140, 160, 180].forEach(function (g) { el('line', { x1: left, x2: W, y1: y(g), y2: y(g), stroke: 'var(--rule)', 'stroke-width': 1 }, svg); var t = el('text', { x: 0, y: y(g) + 4 }, svg); t.textContent = g; });
+    var r = rng(11), pts = [], hr = 118;
+    for (var s = 0; s <= 300; s++) {
+      var dist = s / 300 * km, target, inRep = null;
+      reps.forEach(function (rp) { if (dist >= rp[0] && dist <= rp[1]) inRep = rp; });
+      if (dist < 1.5) target = 120 + dist / 1.5 * 22;
+      else if (inRep) target = inRep[2] - 6 + (dist - inRep[0]) / .8 * 8;
+      else if (dist > 8.3) target = 146 - (dist - 8.3) * 8;
+      else target = 147;
+      hr += (target - hr) * .18 + (r() - .5) * 1.4;
+      pts.push([x(dist), y(hr)]);
+    }
+    el('path', { d: path(pts), fill: 'none', stroke: 'var(--ink)', 'stroke-width': 1.8, 'stroke-linejoin': 'round' }, svg);
+    [0, 2, 4, 6, 8].forEach(function (k) { var t = el('text', { x: x(k), y: H - 4, 'text-anchor': k === 0 ? 'start' : 'middle' }, svg); t.textContent = k + (k === 8 ? ' km' : ''); });
+  })();
+
+  // Progress small multiples with a personal-range band.
+  (function () {
+    var host = document.getElementById('trends'); if (!host) return;
+    var metrics = [
+      { name: 'Resting HR', unit: 'bpm', base: 48, amp: 2.2, lo: 46, hi: 51, last: 48, status: 'In your usual range', seed: 3, id: 'G1' },
+      { name: 'HRV overnight', unit: 'ms', base: 52, amp: 6, lo: 47, hi: 62, last: 42, status: 'Low, below Garmin’s baseline for 3 nights', flag: true, seed: 5, tail: [45, 43, 42], id: 'Q3' },
+      { name: 'Sleep score', unit: '', base: 72, amp: 9, lo: 62, hi: 84, last: 56, status: 'Below your range last night', flag: true, seed: 9, tail: [56], id: 'G2' },
+      { name: 'Body battery, daily high', unit: '', base: 80, amp: 7, lo: 70, hi: 90, last: 74, status: 'In your usual range', seed: 13 },
+      { name: 'Stress, daily average', unit: '', base: 28, amp: 5, lo: 22, hi: 35, last: 27, status: 'In your usual range', seed: 17 }
+    ];
+    metrics.forEach(function (m) {
+      var row = document.createElement('div'); row.className = 'trend';
+      var h = document.createElement('div');
+      h.innerHTML = '<h4>' + m.name + (m.id ? '<span class="id">' + m.id + '</span>' : '') + '</h4><p class="st' + (m.flag ? ' flag' : '') + '">' + m.status + '</p>';
+      var v = document.createElement('div'); v.className = 'val num'; v.innerHTML = m.last + (m.unit ? '<small>' + m.unit + '</small>' : '');
+      row.appendChild(h); row.appendChild(v);
+      var svg = el('svg', { viewBox: '0 0 326 56', preserveAspectRatio: 'none', role: 'img', 'aria-label': m.name + ' over 30 days; latest ' + m.last + ' ' + m.unit + '; ' + m.status.toLowerCase() }, row);
+      var r = rng(m.seed), n = 30, vals = [];
+      for (var i = 0; i < n; i++) vals.push(m.base + Math.sin(i / 2.6 + m.seed) * m.amp * .45 + (r() - .5) * m.amp * .8);
+      if (m.tail) for (var j = 0; j < m.tail.length; j++) vals[n - m.tail.length + j] = m.tail[j];
+      vals[n - 1] = m.last;
+      var pad = (m.hi - m.lo) * .3, mn = Math.min.apply(null, vals.concat([m.lo])) - pad, mx = Math.max.apply(null, vals.concat([m.hi])) + pad;
+      function y(val) { return 52 - (val - mn) / (mx - mn) * 48; }
+      function x(i) { return i / (n - 1) * 320; }
+      el('rect', { x: 0, y: y(m.hi), width: 320, height: y(m.lo) - y(m.hi), fill: 'var(--ink)', opacity: .07, rx: 3 }, svg);
+      el('path', { d: path(vals.map(function (val, i) { return [x(i), y(val)]; })), fill: 'none', stroke: 'var(--ink)', 'stroke-width': 1.7, 'vector-effect': 'non-scaling-stroke', 'stroke-linejoin': 'round' }, svg);
+      el('circle', { cx: x(n - 1), cy: y(m.last), r: 3.5, fill: m.flag ? 'var(--ink)' : 'var(--surface)', stroke: 'var(--ink)', 'stroke-width': 1.7 }, svg);
+      host.appendChild(row);
+    });
+  })();
+
+  // Page controls.
+  function setTheme(t) {
+    var root = document.documentElement;
+    if (t === 'system') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', t);
+    document.querySelectorAll('[data-theme-set]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.themeSet === t)); });
+    try { localStorage.setItem('mock-theme', t); } catch (e) {}
+  }
+  document.querySelectorAll('[data-theme-set]').forEach(function (b) { b.addEventListener('click', function () { setTheme(b.dataset.themeSet); }); });
+  document.querySelectorAll('[data-ids]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var on = b.dataset.ids === 'on';
+      document.body.classList.toggle('show-ids', on);
+      document.querySelectorAll('[data-ids]').forEach(function (o) { o.setAttribute('aria-pressed', String((o.dataset.ids === 'on') === on)); });
+    });
+  });
+  var saved = null; try { saved = localStorage.getItem('mock-theme'); } catch (e) {}
+  var forced = new URLSearchParams(location.search).get('theme');
+  setTheme(forced || saved || 'system');
+  if (new URLSearchParams(location.search).get('ids') === 'off') document.querySelector('[data-ids="off"]').click();
+})();
+</script>
+</body>
+</html>
