@@ -188,6 +188,24 @@ def _build_interval(dist_m: float, pace_min_km: float | None) -> list[dict]:
 # Public API
 # ---------------------------------------------------------------------------
 
+# Human label per plan workout type: the pushed Garmin workout's name, and
+# Today's workout tag on the run that completed a plan day.
+PLAN_WORKOUT_LABELS = {
+    "easy": "Easy Run",
+    "long": "Long Run",
+    "tempo": "Tempo Run",
+    "interval": "Intervals",
+    "strength": "Strength",
+    "cross": "Cross-training",
+}
+
+
+def plan_workout_label(workout_type: str | None) -> str:
+    """Human label for a plan day's workout type, e.g. "interval" -> "Intervals"."""
+    wtype = (workout_type or "").lower()
+    return PLAN_WORKOUT_LABELS.get(wtype) or wtype.title() or "Workout"
+
+
 def translate_plan_day(
     plan_day: TrainingPlanDay,
     profile: AthleteProfile | None = None,
@@ -220,14 +238,7 @@ def translate_plan_day(
     speed_mps = _pace_to_mps(pace) if pace else _DEFAULT_PACE_MPS
     est_duration_sec = int(dist_m / speed_mps)
 
-    type_labels = {
-        "easy": "Easy Run",
-        "long": "Long Run",
-        "tempo": "Tempo Run",
-        "interval": "Intervals",
-        "strength": "Strength",
-    }
-    label = type_labels.get(wtype, wtype.title())
+    label = plan_workout_label(wtype)
     km = dist_m / 1000.0
     workout_name = f"{label} — {km:.1f} km"
     if plan_day.description:

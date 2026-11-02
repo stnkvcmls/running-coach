@@ -1,11 +1,13 @@
 import json
-from datetime import date
+from datetime import date, datetime, timedelta
 
 import pytest
 
 from app import api
 from app import adherence as adh
-from app.models import GarminCalendarEvent
+from app.models import Activity, GarminCalendarEvent, TrainingPlanDay
+from app.routers._shared import PLAN_MATCH_MIN_DISTANCE_RATIO, _select_plan_day_activity
+from app.workout_translator import plan_workout_label
 
 
 # --- Formatters (now in app.adherence) ---
@@ -236,3 +238,73 @@ def test_parse_date_invalid_falls_back_to_today():
 
 def test_parse_date_none_falls_back_to_today():
     assert api._parse_date(None) == date.today()
+
+
+# --- _select_plan_day_activity (same-day plan matching, T1) ---
+
+def _plan_day(workout_type="interval", target_distance_m=9000.0, day=None):
+    return TrainingPlanDay(
+        id=1, day_date=day or date.today(), workout_type=workout_type,
+        target_distance_m=target_distance_m,
+    )
+
+
+def _activity(id_, distance_m, hour=7, activity_type="running"):
+    return Activity(
+        id=id_, activity_type=activity_type, distance_m=distance_m,
+        started_at=datetime.combine(date.today(), datetime.min.time().replace(hour=hour)),
+    )
+
+
+def test_select_plan_day_activity_distance_guard_boundary():
+    plan_day = _plan_day(target_distance_m=9000.0)
+    at_guard = _activity(1, 9000.0 * PLAN_MATCH_MIN_DISTANCE_RATIO)
+    below_guard = _activity(2, 9000.0 * PLAN_MATCH_MIN_DISTANCE_RATIO - 1)
+    no_distance = _activity(3, None)
+    assert _select_plan_day_activity(plan_day, [at_guard]) is at_guard
+    assert _select_plan_day_activity(plan_day, [below_guard, no_distance]) is None
+
+
+def test_select_plan_day_activity_prefers_closest_then_earliest():
+    plan_day = _plan_day(target_distance_m=9000.0)
+    over = _activity(1, 9500.0, hour=7)
+    under_earlier = _activity(2, 8800.0, hour=8)
+    under_later = _activity(3, 8800.0, hour=18)
+    assert _select_plan_day_activity(plan_day, [over, under_later, under_earlier]) is under_earlier
+
+
+def test_select_plan_day_activity_without_target_takes_earliest_run():
+    plan_day = _plan_day(workout_type="easy", target_distance_m=None)
+    ride = _activity(1, 30000.0, hour=6, activity_type="cycling")
+    short = _activity(2, 3000.0, hour=7)
+    later = _activity(3, 8000.0, hour=18)
+    assert _select_plan_day_activity(plan_day, [later, ride, short]) is short
+
+
+def test_select_plan_day_activity_cross_day_ignores_target_distance():
+    """A cross day's target can't be compared across sports; any bike, swim or
+    walk completes it, and a run doesn't."""
+    plan_day = _plan_day(workout_type="cross", target_distance_m=20000.0)
+    run = _activity(1, 20000.0, hour=6)
+    swim = _activity(2, 1500.0, hour=7, activity_type="lap_swimming")
+    assert _select_plan_day_activity(plan_day, [run, swim]) is swim
+
+
+def test_select_plan_day_activity_rest_and_future_never_match():
+    run = _activity(1, 9000.0)
+    assert _select_plan_day_activity(_plan_day(workout_type="rest", target_distance_m=None), [run]) is None
+    future = _plan_day(day=date.today() + timedelta(days=1))
+    assert _select_plan_day_activity(future, [run]) is None
+
+
+@pytest.mark.parametrize("workout_type,label", [
+    ("interval", "Intervals"),
+    ("easy", "Easy Run"),
+    ("long", "Long Run"),
+    ("tempo", "Tempo Run"),
+    ("cross", "Cross-training"),
+    ("race", "Race"),
+    (None, "Workout"),
+])
+def test_plan_workout_label(workout_type, label):
+    assert plan_workout_label(workout_type) == label

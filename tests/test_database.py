@@ -82,6 +82,12 @@ def test_init_db_is_idempotent():
     database.init_db()
 
 
+def test_init_db_adds_hrv_baseline_columns():
+    database.init_db()
+    columns = {c["name"] for c in inspect(database.engine).get_columns("daily_summaries")}
+    assert {"hrv_baseline_low", "hrv_baseline_high"} <= columns
+
+
 def test_alembic_version_table_exists():
     database.init_db()
     table_names = inspect(database.engine).get_table_names()

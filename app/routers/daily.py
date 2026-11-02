@@ -41,7 +41,9 @@ from app.routers._shared import (
     _enrich_event_with_steps,
     _parse_date,
     _personal_records_by_activity,
+    _select_plan_day_activity,
 )
+from app.workout_translator import plan_workout_label
 
 router = APIRouter()
 
@@ -236,6 +238,19 @@ def api_today(
         .filter(TrainingPlanDay.user_id == uid, TrainingPlanDay.day_date == selected)
         .first()
     )
+
+    # Mark the activity that completed the AI plan day. It is chosen from all
+    # of the day's activities, exactly as the training plan's
+    # matched_activity_id is, so Today and Plan always name the same run. If a
+    # Garmin calendar workout already claimed and tagged it above (typically
+    # the plan day pushed to the watch), its more specific title is kept.
+    plan_activity = _select_plan_day_activity(plan_day, activities) if plan_day is not None else None
+    if plan_activity is not None:
+        plan_summary = summary_by_id[plan_activity.id]
+        plan_summary.matched_plan_day_id = plan_day.id
+        if plan_summary.workout_tag is None:
+            plan_summary.workout_tag = plan_workout_label(plan_day.workout_type)
+
     active_niggle = plan_adaptation_mod.get_active_niggle(db, uid)
     plan_adaptation = plan_adaptation_mod.suggest_adaptation(
         plan_day,

@@ -40,6 +40,12 @@ def session_factory():
     engine.dispose()
 
 
+# Relative to the real clock: /today lists only races on or after date.today(),
+# so fixed calendar dates here eventually stop showing up (time-bomb).
+_DAY = date.today() - timedelta(days=30)
+_RACE_DAY = date.today() + timedelta(days=60)
+
+
 def _seed(session_factory):
     """Create two users, each with one activity / summary / insight / profile."""
     db = session_factory()
@@ -48,28 +54,28 @@ def _seed(session_factory):
     db.add_all([u1, u2])
     db.flush()
 
-    base = datetime(2026, 6, 1, 7, 0)
+    base = datetime.combine(_DAY, datetime.min.time().replace(hour=7))
     for uid in (1, 2):
         db.add(Activity(
             user_id=uid, garmin_id=1000 + uid, activity_type="running",
             name=f"Run U{uid}", started_at=base, duration_sec=3600, distance_m=10000,
         ))
-        db.add(DailySummary(user_id=uid, date=date(2026, 6, 1), steps=1000 * uid))
+        db.add(DailySummary(user_id=uid, date=_DAY, steps=1000 * uid))
         db.add(Insight(
             user_id=uid, created_at=base, trigger_type="weekly_review",
             content="c", summary=f"insight U{uid}", category="training_plan",
         ))
         db.add(AthleteProfile(user_id=uid, name=f"Athlete U{uid}", weekly_availability=str(uid)))
-        plan = TrainingPlan(user_id=uid, generated_at=base, week_start=date(2026, 6, 1), plan_weeks=1)
+        plan = TrainingPlan(user_id=uid, generated_at=base, week_start=_DAY, plan_weeks=1)
         db.add(plan)
         db.flush()
         db.add(TrainingPlanDay(
-            user_id=uid, plan_id=plan.id, day_date=date(2026, 6, 1),
-            day_of_week="Monday", week_number=1, workout_type="easy",
+            user_id=uid, plan_id=plan.id, day_date=_DAY,
+            day_of_week=_DAY.strftime("%A"), week_number=1, workout_type="easy",
         ))
         db.add(GarminCalendarEvent(
             user_id=uid, garmin_id=f"race_{uid}", event_type="race",
-            date=date(2026, 9, 1), title=f"Race U{uid}", distance_label="10K",
+            date=_RACE_DAY, title=f"Race U{uid}", distance_label="10K",
         ))
     db.commit()
     db.close()
@@ -157,7 +163,7 @@ def test_settings_counts_scoped_to_user(session_factory):
 
 def test_today_scoped_to_user(session_factory):
     _seed(session_factory)
-    body = _client_for(session_factory, 1).get("/api/v1/today?date=2026-06-01").json()
+    body = _client_for(session_factory, 1).get(f"/api/v1/today?date={_DAY.isoformat()}").json()
     assert len(body["activities"]) == 1
     assert body["activities"][0]["name"] == "Run U1"
     assert body["daily_summary"]["steps"] == 1000
