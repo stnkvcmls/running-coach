@@ -15,7 +15,7 @@
 }
 
 .plan-empty-icon {
-  color: var(--accent-light);
+  color: var(--text-muted);
   opacity: 0.7;
 }
 
@@ -49,12 +49,10 @@
 }
 
 .plan-phase-badge {
-  background: var(--accent);
-  color: #fff;
-  font-size: 0.7rem;
+  background: var(--text);
+  color: var(--on-ink);
+  font-size: 0.75rem;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   padding: 3px 8px;
   border-radius: 12px;
 }
@@ -69,7 +67,7 @@
   align-items: center;
   gap: 6px;
   font-size: 0.82rem;
-  color: var(--accent-light);
+  color: var(--text-muted);
   padding: 6px 12px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
@@ -153,8 +151,8 @@
 }
 
 .plan-week-tab.active {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--text);
+  border-color: var(--text);
 }
 
 .plan-week-tab:not(.active):hover {
@@ -168,7 +166,7 @@
 }
 
 .plan-week-tab.active .plan-week-tab-label {
-  color: #fff;
+  color: var(--on-ink);
 }
 
 .plan-week-tab-km {
@@ -177,7 +175,7 @@
 }
 
 .plan-week-tab.active .plan-week-tab-km {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--on-ink);
 }
 
 .plan-week-tab-dots {
@@ -192,13 +190,15 @@
   background: var(--border);
 }
 
-.plan-week-tab-dot-done { background: var(--success); }
-.plan-week-tab-dot-missed { background: var(--danger); }
-.plan-week-tab-dot-today { background: var(--accent-light); box-shadow: 0 0 0 1.5px var(--accent-light); }
+.plan-week-tab-dot-done { background: var(--text); }
+.plan-week-tab-dot-missed { background: var(--text-faint); }
+.plan-week-tab-dot-today { background: var(--text); box-shadow: 0 0 0 1.5px var(--text); }
 .plan-week-tab-dot-upcoming { background: transparent; box-shadow: inset 0 0 0 1px var(--text-muted); }
 .plan-week-tab-dot-rest { background: var(--border); opacity: 0.6; }
 
-.plan-week-tab.active .plan-week-tab-dot-upcoming { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6); }
+.plan-week-tab.active .plan-week-tab-dot-done { background: var(--on-ink); }
+.plan-week-tab.active .plan-week-tab-dot-today { background: var(--on-ink); box-shadow: 0 0 0 1.5px var(--on-ink); }
+.plan-week-tab.active .plan-week-tab-dot-upcoming { box-shadow: inset 0 0 0 1px var(--on-ink); }
 
 /* Week progress card */
 .plan-week-progress {
@@ -235,7 +235,7 @@
 .plan-week-progress-fill {
   height: 100%;
   border-radius: 3px;
-  background: var(--success);
+  background: var(--text);
   transition: width var(--transition-base, 0.2s ease);
 }
 
@@ -259,14 +259,21 @@
 }
 
 .plan-day-row-today {
-  border-color: var(--accent);
-  border-left-color: var(--plan-day-accent, var(--accent));
-  box-shadow: 0 0 0 1px var(--accent);
+  border-color: var(--text);
+  border-left-color: var(--plan-day-accent, var(--text));
+  box-shadow: 0 0 0 1px var(--text);
 }
 
+/* Missed and rest days recede by tone (they sit on the ground colour) rather
+   than opacity, so their text keeps 4.5:1. */
 .plan-day-row-missed,
 .plan-day-row-rest {
-  opacity: 0.6;
+  background: var(--bg);
+}
+
+.plan-day-row-missed .plan-day-distance,
+.plan-day-row-rest .plan-day-distance {
+  color: var(--text-muted);
 }
 
 .plan-day-leading {
@@ -285,16 +292,14 @@
   color: var(--text-muted);
 }
 
-.plan-day-row-done .plan-day-glyph { color: var(--success); }
-.plan-day-row-missed .plan-day-glyph { color: var(--danger); }
-.plan-day-row-today .plan-day-glyph { color: var(--accent); }
+.plan-day-row-done .plan-day-glyph { color: var(--text); }
+.plan-day-row-missed .plan-day-glyph { color: var(--text-muted); }
+.plan-day-row-today .plan-day-glyph { color: var(--text); }
 
 .plan-day-name {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 700;
-  text-transform: uppercase;
   color: var(--text-muted);
-  letter-spacing: 0.05em;
 }
 
 .plan-day-date {
@@ -314,13 +319,10 @@
 .plan-day-badge {
   display: inline-flex;
   align-self: flex-start;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   padding: 2px 8px;
   border-radius: 10px;
-  color: #fff;
   width: fit-content;
 }
 
@@ -348,16 +350,19 @@
 }
 
 .plan-day-state-line--done {
-  color: var(--success);
+  color: var(--text);
 }
 
 .plan-day-state-line--missed {
-  color: var(--danger);
+  color: var(--text);
 }
 
 .plan-day-view-run {
-  color: var(--accent-light);
+  color: var(--text-muted);
   font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--text-faint);
+  text-underline-offset: 3px;
 }
 
 .plan-day-desc {
@@ -388,7 +393,7 @@
   gap: 5px;
   font-size: 0.75rem;
   font-weight: 500;
-  color: var(--accent-light);
+  color: var(--text-muted);
   background: none;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -400,7 +405,7 @@
 
 .plan-send-watch:hover:not(:disabled) {
   background: var(--bg-hover);
-  border-color: var(--accent-light);
+  border-color: var(--text-muted);
 }
 
 .plan-send-watch:disabled {
@@ -409,14 +414,14 @@
 }
 
 .plan-send-watch--success {
-  color: var(--color-easy, #4caf50);
-  border-color: var(--color-easy, #4caf50);
+  color: var(--text);
+  border-color: var(--text);
 }
 
 .plan-send-watch--error {
-  color: var(--color-tempo, #e57373);
-  border-color: var(--color-tempo, #e57373);
-  font-size: 0.72rem;
+  color: var(--danger);
+  border-color: var(--danger);
+  font-size: 0.75rem;
 }
 
 /* Strength routine panel */
@@ -430,9 +435,9 @@
   gap: 5px;
   font-size: 0.78rem;
   font-weight: 600;
-  color: var(--color-strength, #9c7fe0);
+  color: var(--text);
   background: none;
-  border: 1px solid color-mix(in srgb, var(--color-strength, #9c7fe0) 35%, transparent);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 4px 9px;
   cursor: pointer;
@@ -442,7 +447,7 @@
 }
 
 .plan-routine-toggle:hover {
-  background: color-mix(in srgb, var(--color-strength, #9c7fe0) 10%, transparent);
+  background: var(--bg-hover);
 }
 
 .plan-routine-duration {
@@ -503,13 +508,13 @@
 }
 
 .plan-routine-ex-demo:hover {
-  color: var(--accent-light);
+  color: var(--text);
 }
 
 .plan-routine-ex-sets {
   grid-column: 2;
   grid-row: 1;
-  color: var(--accent-light);
+  color: var(--text);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -532,9 +537,9 @@
   gap: 5px;
   font-size: 0.78rem;
   font-weight: 600;
-  color: var(--color-long, #0984e3);
+  color: var(--text);
   background: none;
-  border: 1px solid color-mix(in srgb, var(--color-long, #0984e3) 35%, transparent);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 4px 9px;
   cursor: pointer;
@@ -544,7 +549,7 @@
 }
 
 .plan-fuelling-toggle:hover {
-  background: color-mix(in srgb, var(--color-long, #0984e3) 10%, transparent);
+  background: var(--bg-hover);
 }
 
 .plan-fuelling-body {

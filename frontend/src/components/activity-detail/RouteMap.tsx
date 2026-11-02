@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ActivityRoute } from '../../api/types'
+import { useTheme } from '../../App'
 import './RouteMap.css'
 
 type Mode = 'solid' | 'hr' | 'pace' | 'power' | 'elevation'
@@ -30,14 +31,41 @@ function easeTrace(t: number): number {
   return x * x * x * (x * (x * 6 - 15) + 10)
 }
 
-// Map a normalised value [0,1] to a blue -> red ramp.
-function rampColor(t: number): string {
+// Colour steps for a normalised value: HR/pace/power are efforts, so they band
+// onto the effort scale (low = Z1, high = Z5); elevation is not an effort, so
+// it steps through the neutral inks (low = ink-3, high = ink).
+const EFFORT_STEPS = ['var(--z1)', 'var(--z2)', 'var(--z3)', 'var(--z4)', 'var(--z5)']
+const ELEVATION_STEPS = ['var(--text-faint)', 'var(--text-muted)', 'var(--text)']
+
+function rampSteps(mode: Mode): string[] {
+  return mode === 'elevation' ? ELEVATION_STEPS : EFFORT_STEPS
+}
+
+function rampColor(steps: string[], t: number): string {
   const clamped = Math.max(0, Math.min(1, t))
-  const hue = 210 * (1 - clamped) // 210 (blue) -> 0 (red)
-  return `hsl(${hue}, 80%, 52%)`
+  return steps[Math.min(steps.length - 1, Math.floor(clamped * steps.length))]
+}
+
+/** Hard-stop CSS gradient across the steps, for the legend bar (CSS, unlike
+ * canvas, resolves var() itself). */
+function rampGradient(steps: string[], reverse = false): string {
+  const ordered = reverse ? [...steps].reverse() : steps
+  const w = 100 / ordered.length
+  return `linear-gradient(to right, ${ordered
+    .map((c, i) => `${c} ${(i * w).toFixed(2)}% ${((i + 1) * w).toFixed(2)}%`)
+    .join(', ')})`
+}
+
+/** Canvas can't resolve `var(--token)`; read the token's computed value off
+ * the element (which carries the active [data-theme]). Literals pass through. */
+function resolveColor(el: Element, color: string): string {
+  const m = /^var\((--[\w-]+)\)$/.exec(color.trim())
+  if (!m) return color
+  return getComputedStyle(el).getPropertyValue(m[1]).trim() || color
 }
 
 export default function RouteMap({ route, activityColor }: Props) {
+  const { theme } = useTheme()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [mode, setMode] = useState<Mode>('solid')
@@ -149,30 +177,37 @@ export default function RouteMap({ route, activityColor }: Props) {
 
     const segCount = projected.length - 1
 
+    // Resolve the theme tokens once per draw setup (re-run on theme change).
+    const lineColor = resolveColor(canvas, activityColor)
+    const steps = rampSteps(mode).map(c => resolveColor(canvas, c))
+    const ink = resolveColor(canvas, 'var(--text)')
+    const panel = resolveColor(canvas, 'var(--bg-card)')
+
     // Per-segment colour for the active metric (value at the segment's start
     // point, normalised across the activity's own range).
     const segColor = (i: number): string => {
-      if (mode === 'solid' || !activeMetric?.data || !range) return activityColor
+      if (mode === 'solid' || !activeMetric?.data || !range) return lineColor
       const v = activeMetric.data[projected[i].idx]
-      if (v === null || v === undefined) return activityColor
+      if (v === null || v === undefined) return lineColor
       const span = range.max - range.min || 1
       let t = (v - range.min) / span
       if (activeMetric.reverse) t = 1 - t
-      return rampColor(t)
+      return rampColor(steps, t)
     }
 
+    // Disc ringed in the panel colour so it lifts off the trace.
     const drawMarker = (x: number, y: number, fill: string, r = 5) => {
       ctx.beginPath()
       ctx.arc(x, y, r, 0, Math.PI * 2)
       ctx.fillStyle = fill
       ctx.fill()
       ctx.lineWidth = 2
-      ctx.strokeStyle = '#fff'
+      ctx.strokeStyle = panel
       ctx.stroke()
       ctx.lineWidth = LINE_WIDTH
     }
 
-    // Finish: a round checkered-flag disc with a dark edge ring.
+    // Finish: a round checkered-flag disc (ink/panel) with an ink edge ring.
     const drawFinishMarker = (x: number, y: number, r = 6) => {
       ctx.save()
       ctx.beginPath()
@@ -182,7 +217,7 @@ export default function RouteMap({ route, activityColor }: Props) {
       const cell = (r * 2) / cells
       for (let gy = 0; gy < cells; gy++) {
         for (let gx = 0; gx < cells; gx++) {
-          ctx.fillStyle = (gx + gy) % 2 === 0 ? '#fff' : '#111'
+          ctx.fillStyle = (gx + gy) % 2 === 0 ? panel : ink
           ctx.fillRect(x - r + gx * cell, y - r + gy * cell, cell + 0.5, cell + 0.5)
         }
       }
@@ -191,7 +226,7 @@ export default function RouteMap({ route, activityColor }: Props) {
       ctx.beginPath()
       ctx.arc(x, y, r, 0, Math.PI * 2)
       ctx.lineWidth = 2
-      ctx.strokeStyle = '#111'
+      ctx.strokeStyle = ink
       ctx.stroke()
       ctx.lineWidth = LINE_WIDTH
     }
@@ -201,7 +236,7 @@ export default function RouteMap({ route, activityColor }: Props) {
       const n = Math.min(count, segCount)
       if (mode === 'solid') {
         // Single stroke for the whole drawn portion.
-        ctx.strokeStyle = activityColor
+        ctx.strokeStyle = lineColor
         ctx.beginPath()
         ctx.moveTo(projected[0].x, projected[0].y)
         for (let i = 1; i <= n; i++) ctx.lineTo(projected[i].x, projected[i].y)
@@ -219,11 +254,11 @@ export default function RouteMap({ route, activityColor }: Props) {
       // Markers: start (always), then either the moving current position
       // (while tracing) or the finish marker (once the path is complete).
       const last = projected[segCount]
-      drawMarker(projected[0].x, projected[0].y, '#2ecc71') // start (green)
+      drawMarker(projected[0].x, projected[0].y, ink) // start
       if (n >= segCount) {
         drawFinishMarker(last.x, last.y) // finish (checkered flag)
       } else {
-        drawMarker(projected[n].x, projected[n].y, activityColor, 4.5) // current position
+        drawMarker(projected[n].x, projected[n].y, lineColor, 4.5) // current position
       }
     }
 
@@ -256,7 +291,7 @@ export default function RouteMap({ route, activityColor }: Props) {
       cancelAnimationFrame(raf)
       if (timer) clearTimeout(timer)
     }
-  }, [projected, width, mode, activeMetric, range, activityColor])
+  }, [projected, width, mode, activeMetric, range, activityColor, theme])
 
   if (!valid) return null
 
@@ -300,8 +335,8 @@ export default function RouteMap({ route, activityColor }: Props) {
               className="route-legend-bar"
               style={{
                 background: activeMetric.reverse
-                  ? `linear-gradient(to right, ${rampColor(1)}, ${rampColor(0)})`
-                  : `linear-gradient(to right, ${rampColor(0)}, ${rampColor(1)})`,
+                  ? rampGradient(rampSteps(activeMetric.mode), true)
+                  : rampGradient(rampSteps(activeMetric.mode)),
               }}
             />
             <span>{fmt(range.max)} {activeMetric.unit}</span>

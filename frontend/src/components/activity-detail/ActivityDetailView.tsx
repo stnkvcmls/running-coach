@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, type CSSProperties } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Loader, Trophy, ChevronDown } from 'lucide-react'
@@ -88,13 +88,13 @@ export default function ActivityDetailView() {
   const primaryStats = [
     { label: 'Distance', value: formatDistance(activity.distance_m), unit: 'km' },
     { label: 'Duration', value: formatDuration(activity.duration_sec) },
-    { label: 'Avg Pace', value: formatPace(activity.avg_pace_min_km), unit: '/km' },
+    { label: 'Avg pace', value: formatPace(activity.avg_pace_min_km), unit: '/km' },
   ]
 
   const secondaryStats = [
     activity.avg_hr ? { label: 'Avg HR', value: String(activity.avg_hr), unit: 'bpm' } : null,
     activity.max_hr ? { label: 'Max HR', value: String(activity.max_hr), unit: 'bpm' } : null,
-    activity.elevation_gain ? { label: 'Elev. Gain', value: `${Math.round(activity.elevation_gain)}`, unit: 'm' } : null,
+    activity.elevation_gain ? { label: 'Elev. gain', value: `${Math.round(activity.elevation_gain)}`, unit: 'm' } : null,
     activity.calories ? { label: 'Calories', value: String(Math.round(activity.calories)), unit: 'kcal' } : null,
     activity.avg_cadence ? { label: 'Cadence', value: String(Math.round(activity.avg_cadence)), unit: 'spm' } : null,
     activity.avg_stride ? { label: 'Stride', value: activity.avg_stride.toFixed(2), unit: 'm' } : null,
@@ -102,12 +102,12 @@ export default function ActivityDetailView() {
 
   const dynamicsStats = [
     activity.avg_ground_contact_time ? { label: 'GCT', value: String(Math.round(activity.avg_ground_contact_time)), unit: 'ms' } : null,
-    activity.avg_vertical_oscillation ? { label: 'Vert. Osc.', value: activity.avg_vertical_oscillation.toFixed(1), unit: 'cm' } : null,
-    activity.avg_vertical_ratio ? { label: 'Vert. Ratio', value: activity.avg_vertical_ratio.toFixed(1), unit: '%' } : null,
+    activity.avg_vertical_oscillation ? { label: 'Vert. osc.', value: activity.avg_vertical_oscillation.toFixed(1), unit: 'cm' } : null,
+    activity.avg_vertical_ratio ? { label: 'Vert. ratio', value: activity.avg_vertical_ratio.toFixed(1), unit: '%' } : null,
   ].filter(Boolean) as { label: string; value: string; unit?: string }[]
 
   const powerStats = [
-    activity.avg_power ? { label: 'Avg Power', value: String(Math.round(activity.avg_power)), unit: 'W' } : null,
+    activity.avg_power ? { label: 'Avg power', value: String(Math.round(activity.avg_power)), unit: 'W' } : null,
     activity.normalized_power ? { label: 'NP', value: String(Math.round(activity.normalized_power)), unit: 'W' } : null,
     activity.training_stress_score ? { label: 'TSS', value: activity.training_stress_score.toFixed(0) } : null,
     activity.intensity_factor ? { label: 'IF', value: activity.intensity_factor.toFixed(2) } : null,
@@ -123,10 +123,10 @@ export default function ActivityDetailView() {
 
   const weatherStats = [
     activity.weather_adjusted_pace_min_km != null
-      ? { label: 'Adj. Pace', value: formatPace(activity.weather_adjusted_pace_min_km), unit: '/km' }
+      ? { label: 'Adj. pace', value: formatPace(activity.weather_adjusted_pace_min_km), unit: '/km' }
       : null,
     activity.weather_penalty_sec_per_km != null
-      ? { label: 'Heat Penalty', value: `+${Math.round(activity.weather_penalty_sec_per_km)}`, unit: 's/km' }
+      ? { label: 'Heat penalty', value: `+${Math.round(activity.weather_penalty_sec_per_km)}`, unit: 's/km' }
       : null,
   ].filter(Boolean) as { label: string; value: string; unit?: string }[]
 
@@ -152,7 +152,7 @@ export default function ActivityDetailView() {
           <ArrowLeft size={20} />
         </button>
         <div className="detail-header-info">
-          <span className="badge" style={{ background: `${color}22`, color }}>{typeLabel}</span>
+          <span className="badge badge-effort" style={{ '--effort': color } as CSSProperties}>{typeLabel}</span>
           {activity.personal_records && activity.personal_records.length > 0 && (
             <span
               className="badge pr-badge"
@@ -220,7 +220,7 @@ export default function ActivityDetailView() {
             {verdict && (
               <a href="#ai-insight" className="verdict-chip">
                 <span className="verdict-tag">Coach</span>
-                <span>{firstSentence(verdict)} Full analysis ↓</span>
+                <span>{firstSentence(verdict)} Full analysis</span>
               </a>
             )}
 
@@ -245,7 +245,7 @@ export default function ActivityDetailView() {
                   <>
                     {dynamicsStats.length > 0 && (
                       <section className="detail-section">
-                        <h3 className="section-title">Running Dynamics</h3>
+                        <h3 className="section-title">Running dynamics</h3>
                         <StatGrid stats={dynamicsStats} columns={3} />
                       </section>
                     )}

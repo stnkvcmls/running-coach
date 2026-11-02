@@ -68,12 +68,12 @@ const SEGMENT_COLORS: Record<StructureSegmentKind, string> = {
   warmup: 'var(--text-muted)',
   cooldown: 'var(--text-muted)',
   recover: 'var(--bg-hover)',
-  work: 'var(--accent)',
+  work: 'var(--text)',
 }
 
 interface Props {
   steps: WorkoutStep[]
-  /** Accent for 'work' segments — pass the workout-type colour. Defaults to --accent. */
+  /** Accent for 'work' segments — pass the workout-type colour. Defaults to ink. */
   color?: string
 }
 

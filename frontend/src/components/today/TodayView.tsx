@@ -37,11 +37,12 @@ function TodayRealignmentBanner() {
   )
 }
 
+// Priority is importance, not effort, so it steps down the inks (A ink, B ink-2,
+// C ink-3) instead of taking a hue.
 function priorityColor(priority: string | null): string {
-  if (priority === 'A') return 'var(--color-race)'
-  if (priority === 'B') return 'var(--accent)'
-  if (priority === 'C') return 'var(--text-muted)'
-  return 'var(--color-race)'
+  if (priority === 'B') return 'var(--text-muted)'
+  if (priority === 'C') return 'var(--text-faint)'
+  return 'var(--text)'
 }
 
 function RaceStrip({ race }: { race: RaceInfo }) {
@@ -169,7 +170,7 @@ export default function TodayView() {
         <div className="today-col today-col-right">
           {data?.daily_summary && glanceStats.length > 0 && (
             <section className="today-section" style={{ order: 5 }}>
-              <h2 className="section-title">At a Glance</h2>
+              <h2 className="section-title">At a glance</h2>
               <Link to={`/daily/${data.daily_summary.id}`} className="daily-snapshot-link">
                 <StatGrid stats={glanceStats} columns={4} />
                 <ChevronRight size={16} className="daily-snapshot-chevron" />
@@ -180,8 +181,8 @@ export default function TodayView() {
           {data?.training_load && (
             <section className="today-section" style={{ order: 7 }}>
               <div className="section-title-row">
-                <h2 className="section-title">Training Load</h2>
-                <StatHelpButton topic="training-load" label="Training Load" />
+                <h2 className="section-title">Training load</h2>
+                <StatHelpButton topic="training-load" label="Training load" />
               </div>
               <TrainingLoadChart current={data.training_load} />
             </section>
@@ -189,7 +190,7 @@ export default function TodayView() {
 
           {data?.weekly_data && data.weekly_data.length > 0 && (
             <section className="today-section" style={{ order: 8 }}>
-              <h2 className="section-title">Week {format(selectedDate, 'I')} Overview</h2>
+              <h2 className="section-title">Week {format(selectedDate, 'I')} overview</h2>
               <WeekOverview data={data.weekly_data} />
             </section>
           )}
@@ -198,7 +199,7 @@ export default function TodayView() {
 
       {data?.insights && data.insights.length > 0 && (
         <section className="today-section" style={{ order: 9 }}>
-          <h2 className="section-title">My Insights</h2>
+          <h2 className="section-title">Insights</h2>
           <InsightsList insights={data.insights} />
         </section>
       )}

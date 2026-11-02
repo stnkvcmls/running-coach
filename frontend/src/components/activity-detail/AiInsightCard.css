@@ -1,5 +1,5 @@
 .ai-insight-card {
-  border-left: 3px solid var(--accent);
+  border-left: 3px solid var(--text);
 }
 
 .ai-header {
@@ -16,7 +16,7 @@
 }
 
 .ai-icon {
-  color: var(--warning);
+  color: var(--text);
 }
 
 .ai-summary {

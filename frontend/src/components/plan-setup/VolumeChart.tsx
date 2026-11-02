@@ -28,7 +28,7 @@ export default function VolumeChart({ active }: VolumeChartProps) {
       {ORDER.filter(k => k !== active).map(k => (
         <path key={k} d={CURVES[k]} fill="none" stroke="var(--border)" strokeWidth="2" strokeLinecap="round" />
       ))}
-      <path d={CURVES[active]} fill="none" stroke="var(--accent)" strokeWidth="3" strokeLinecap="round" />
+      <path d={CURVES[active]} fill="none" stroke="var(--text)" strokeWidth="3" strokeLinecap="round" />
     </svg>
   )
 }

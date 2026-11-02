@@ -11,12 +11,6 @@ function formatDistance(meters: number | null): string {
   return `${Math.round(meters)} m`
 }
 
-function scoreColor(score: number): string {
-  if (score >= 90) return '#10b981'  // green
-  if (score >= 70) return '#f59e0b'  // amber
-  return '#ef4444'                    // red
-}
-
 function scoreLabel(score: number): string {
   if (score >= 90) return 'Excellent'
   if (score >= 75) return 'Good'
@@ -25,7 +19,6 @@ function scoreLabel(score: number): string {
 }
 
 export default function AdherenceCard({ adherence }: Props) {
-  const color = scoreColor(adherence.adherence_score)
   const label = scoreLabel(adherence.adherence_score)
 
   const hasPaceComparison =
@@ -40,10 +33,10 @@ export default function AdherenceCard({ adherence }: Props) {
   return (
     <div className="card adherence-card">
       <div className="adherence-header">
-        <span className="adherence-title">Workout Adherence</span>
+        <span className="adherence-title">Workout adherence</span>
         <span className="adherence-score-badge">
-          <span className="adherence-score-value" style={{ color }}>{adherence.adherence_score.toFixed(0)}</span>
-          <span style={{ color, fontSize: '0.8rem' }}>{label}</span>
+          <span className="adherence-score-value num">{adherence.adherence_score.toFixed(0)}</span>
+          <span className="adherence-score-label">{label}</span>
         </span>
       </div>
 
@@ -134,7 +127,6 @@ export default function AdherenceCard({ adherence }: Props) {
                     {iv.interval_score !== null && iv.interval_score !== undefined && (
                       <span
                         className="adherence-interval-score"
-                        style={{ color: scoreColor(iv.interval_score) }}
                         title="Interval score (pace + distance)"
                       >
                         {iv.interval_score.toFixed(0)}
@@ -153,7 +145,7 @@ export default function AdherenceCard({ adherence }: Props) {
       <div className="adherence-bar-container">
         <div
           className="adherence-bar-fill"
-          style={{ width: `${adherence.adherence_score}%`, background: color }}
+          style={{ width: `${adherence.adherence_score}%` }}
         />
       </div>
     </div>

@@ -15,29 +15,33 @@ export function getActivityColor(name: string | null, activityType: string | nul
   return 'default'
 }
 
+/** Workout type → its effort-scale colour, as a `var(--color-*)` reference to
+ * the tokens in globals.css (easy/long Z2, tempo Z4, interval/race Z5). */
 export const colorMap: Record<ActivityColor, string> = {
-  easy: '#2ecc71',
-  tempo: '#f39c12',
-  interval: '#e74c3c',
-  long: '#0984e3',
-  race: '#e84393',
-  default: '#6c5ce7',
-}
-
-export function getColorHex(name: string | null, activityType: string | null): string {
-  return colorMap[getActivityColor(name, activityType)]
+  easy: 'var(--color-easy)',
+  tempo: 'var(--color-tempo)',
+  interval: 'var(--color-interval)',
+  long: 'var(--color-long)',
+  race: 'var(--color-race)',
+  default: 'var(--color-default)',
 }
 
 export type Sport = 'run' | 'bike' | 'swim' | 'walk' | 'strength' | 'other'
 
-/** Canonical per-sport colour, shared by every chart/legend keyed on sport type. */
+/**
+ * Per-sport series colour for charts and legends keyed on sport type. Sport
+ * is a category, not an effort, so it is drawn in the neutral inks (running
+ * in ink, cross-training in ink-2/ink-3) rather than a hue — colour stays
+ * reserved for effort. Only three neutral steps exist, so the rarer sports
+ * share a step; their labels (legend, tooltip) tell them apart.
+ */
 export const SPORT_COLORS: Record<Sport, string> = {
-  run: '#6c5ce7',
-  bike: '#00b894',
-  swim: '#0984e3',
-  walk: '#fdcb6e',
-  strength: '#a29bfe',
-  other: '#b2bec3',
+  run: 'var(--text)',
+  bike: 'var(--text-muted)',
+  swim: 'var(--text-faint)',
+  walk: 'var(--text-faint)',
+  strength: 'var(--text-muted)',
+  other: 'var(--text-faint)',
 }
 
 function getSport(activityType: string | null): Sport {
@@ -51,17 +55,15 @@ function getSport(activityType: string | null): Sport {
 }
 
 /**
- * Accent colour for an activity icon/dot/border. Running activities keep the
- * workout-*intensity* tint (easy/tempo/interval/long/race via
- * `getActivityColor`) since it encodes more information than a flat "run"
- * colour would — the sport icon already disambiguates running from
- * everything else. Every other sport is tinted by its `SPORT_COLORS` entry
- * instead of falling through to the generic `default` purple.
+ * Effort colour for an activity icon/dot/border. Running activities take the
+ * workout-*intensity* colour (easy/tempo/interval/long/race via
+ * `getActivityColor`); every other sport is cross-training, which sits at Z1
+ * on the effort scale (`--color-cross`). The sport icon already tells a ride
+ * from a swim.
  */
 export function getActivityAccent(name: string | null, activityType: string | null): string {
-  const sport = getSport(activityType)
-  if (sport === 'run') return colorMap[getActivityColor(name, activityType)]
-  return SPORT_COLORS[sport]
+  if (getSport(activityType) === 'run') return colorMap[getActivityColor(name, activityType)]
+  return 'var(--color-cross)'
 }
 
 /** Re-export of the `--color-*` workout-type palette in globals.css, for TSX that needs the value as data rather than a CSS rule. */
@@ -74,4 +76,10 @@ export const WORKOUT_TYPE_COLORS: Record<string, string> = {
   cross: 'var(--color-cross)',
   strength: 'var(--color-strength)',
   default: 'var(--color-default)',
+}
+
+/** A translucent tint of a colour (which may be a `var()` reference), for a
+ * soft background behind an effort-coloured mark. */
+export function tint(color: string, percent = 14): string {
+  return `color-mix(in srgb, ${color} ${percent}%, transparent)`
 }

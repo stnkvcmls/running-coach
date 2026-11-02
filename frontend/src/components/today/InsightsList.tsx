@@ -21,15 +21,6 @@ export default function InsightsList({ insights }: Props) {
 function InsightCard({ insight }: { insight: InsightResponse }) {
   const [expanded, setExpanded] = useState(false)
 
-  const categoryColors: Record<string, string> = {
-    workout_analysis: '#6c5ce7',
-    recovery: '#2ecc71',
-    training_plan: '#0984e3',
-    trend: '#f39c12',
-    recommendation: '#e84393',
-  }
-  const color = categoryColors[insight.category || ''] || '#6c5ce7'
-
   return (
     <div className="insight-card card">
       <button
@@ -38,7 +29,7 @@ function InsightCard({ insight }: { insight: InsightResponse }) {
         onClick={() => setExpanded(!expanded)}
         aria-expanded={expanded}
       >
-        <Lightbulb size={16} style={{ color, flexShrink: 0 }} />
+        <Lightbulb size={16} style={{ color: 'var(--text)', flexShrink: 0 }} />
         <span className="insight-summary">{insight.summary || 'AI Insight'}</span>
         {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
       </button>

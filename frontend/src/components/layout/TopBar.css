@@ -63,7 +63,7 @@
 .top-bar-icon-btn:hover,
 .top-bar-icon-btn.active {
   background: var(--bg-card);
-  color: var(--accent-light);
+  color: var(--text-muted);
 }
 
 .top-bar-avatar {
@@ -73,8 +73,8 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: var(--accent);
-  color: #fff;
+  background: var(--text);
+  color: var(--on-ink);
   font-size: 0.75rem;
   font-weight: 700;
   flex-shrink: 0;

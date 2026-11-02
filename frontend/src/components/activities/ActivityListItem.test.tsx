@@ -3,12 +3,7 @@ import { screen } from '@testing-library/react'
 import { renderWithProviders } from '../../test/test-utils'
 import ActivityListItem from './ActivityListItem'
 import type { ActivitySummary } from '../../api/types'
-import { SPORT_COLORS, colorMap } from '../../utils/colors'
-
-function hexToRgb(hex: string): string {
-  const n = parseInt(hex.slice(1), 16)
-  return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`
-}
+import { colorMap } from '../../utils/colors'
 
 function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
   return {
@@ -54,13 +49,12 @@ describe('ActivityListItem', () => {
     expect(screen.getByRole('link', { name: /Workout/ })).toBeInTheDocument()
   })
 
-  it('tints the icon by sport colour for a non-running activity', () => {
+  it('colours a non-running activity icon as cross-training (Z1)', () => {
     const { container } = renderWithProviders(
       <ActivityListItem activity={activity({ name: 'Morning Ride', activity_type: 'cycling' })} />,
     )
     const icon = container.querySelector('.ali-icon') as HTMLElement
-    // jsdom normalizes inline hex colours to rgb() on readback.
-    expect(icon.style.color).toBe(hexToRgb(SPORT_COLORS.bike))
+    expect(icon.style.color).toBe('var(--color-cross)')
   })
 
   it('tints the icon by workout intensity for a running activity', () => {
@@ -68,7 +62,7 @@ describe('ActivityListItem', () => {
       <ActivityListItem activity={activity({ name: 'Interval Session', activity_type: 'running' })} />,
     )
     const icon = container.querySelector('.ali-icon') as HTMLElement
-    expect(icon.style.color).toBe(hexToRgb(colorMap.interval))
+    expect(icon.style.color).toBe(colorMap.interval)
   })
 
   it('appends avg HR to the meta line when present', () => {

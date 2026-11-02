@@ -65,14 +65,12 @@
 }
 
 .cm-category-badge {
-  font-size: 0.68rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-size: 0.75rem;
   padding: 2px 7px;
   border-radius: 999px;
   font-weight: 600;
-  background: rgba(108, 92, 231, 0.18);
-  color: var(--accent, #6c5ce7);
+  background: var(--bg-input);
+  color: var(--text);
   white-space: nowrap;
 }
 
@@ -110,10 +108,10 @@
 }
 
 .cm-delete-btn:hover {
-  color: #e74c3c;
+  color: var(--danger);
 }
 
 .cm-error {
   font-size: 0.8rem;
-  color: #e74c3c;
+  color: var(--danger);
 }

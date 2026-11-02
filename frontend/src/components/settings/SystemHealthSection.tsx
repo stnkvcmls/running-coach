@@ -36,7 +36,7 @@ export default function SystemHealthSection() {
 
   return (
     <section className="settings-section">
-      <h2 className="section-title">System Health</h2>
+      <h2 className="section-title">System health</h2>
       <div className="card health-card">
         <div className="health-subsection">
           <h3 className="health-subtitle">Last sync</h3>

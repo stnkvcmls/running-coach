@@ -18,16 +18,15 @@
 }
 
 .tl-stat-label {
-  font-size: 11px;
+  font-size: 0.75rem;
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 .tl-stat-value {
   font-size: 26px;
   font-weight: 700;
   line-height: 1.1;
+  color: var(--text);
 }
 
 .tl-stat-sub {
@@ -42,14 +41,11 @@
   border-radius: 10px;
 }
 
-.tl-form-fresh { background: rgba(0, 184, 148, 0.18); color: #00b894; }
-.tl-form-neutral { background: rgba(108, 92, 231, 0.18); color: #a29bfe; }
-.tl-form-building { background: rgba(225, 112, 85, 0.18); color: #e17055; }
-.tl-form-fatigued { background: rgba(231, 76, 60, 0.2); color: #e74c3c; }
-
-.tl-risk-low { background: rgba(0, 184, 148, 0.18); color: #00b894; }
-.tl-risk-moderate { background: rgba(253, 203, 110, 0.25); color: #e6a817; }
-.tl-risk-high { background: rgba(231, 76, 60, 0.2); color: #e74c3c; }
+/* Form and ACWR zones are status, not effort: neutral chips, with the two
+   zones that ask for action (fatigued, high risk) inverted to ink. */
+.tl-form-badge { background: var(--bg-input); color: var(--text); }
+.tl-form-fatigued,
+.tl-risk-high { background: var(--text); color: var(--on-ink); }
 
 .tl-rsb-recommendation {
   font-size: 12px;
@@ -83,7 +79,7 @@
 .tl-dot {
   width: 10px;
   height: 10px;
-  border-radius: 2px;
+  border-radius: 50%;
 }
 
 .tl-sport-split {
@@ -94,10 +90,8 @@
 
 .tl-sport-split-label {
   display: block;
-  font-size: 11px;
+  font-size: 0.75rem;
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   margin-bottom: 6px;
   text-align: center;
 }

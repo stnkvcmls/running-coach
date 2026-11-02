@@ -46,7 +46,7 @@ export default function ElevationSheet({ open, onClose, initial, onSave }: Props
   }
 
   return (
-    <BottomSheet open={open} onClose={onClose} title="Elevation Profile">
+    <BottomSheet open={open} onClose={onClose} title="Elevation profile">
       <CardPicker value={value} onChange={setValue} options={OPTIONS} />
       <button className="sheet-save-btn" onClick={handleSave}>Save</button>
     </BottomSheet>

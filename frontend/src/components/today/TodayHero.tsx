@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import { CheckCircle2, RefreshCw, Watch } from 'lucide-react'
 import { useTrainingPlan, useActivity, usePushWorkoutToGarmin } from '../../api/hooks'
@@ -96,7 +96,7 @@ function HeroSession({ data, planDay, planLoading, hasPlan, matchedActivity }: H
     return (
       <div className="hero-session">
         <span className="hero-session-label">Today's session</span>
-        <span className="hero-session-badge" style={{ background: badgeColor }}>{label}</span>
+        <span className="hero-session-badge badge-effort" style={{ '--effort': badgeColor } as CSSProperties}>{label}</span>
         {(planDay.target_distance_m != null || planDay.target_pace_display) && (
           <div className="hero-session-meta">
             {planDay.target_distance_m != null && `${formatDistance(planDay.target_distance_m)} km`}
@@ -122,7 +122,7 @@ function HeroSession({ data, planDay, planLoading, hasPlan, matchedActivity }: H
               Send to watch
             </button>
           )}
-          <Link to="/plan" className="btn-ghost hero-action-plan-link">View in plan →</Link>
+          <Link to="/plan" className="btn-ghost hero-action-plan-link">View in plan</Link>
         </div>
       </div>
     )
@@ -145,7 +145,7 @@ function HeroSession({ data, planDay, planLoading, hasPlan, matchedActivity }: H
     return (
       <div className="hero-session">
         <span className="hero-session-label">Today's session</span>
-        <Link to="/plan" className="hero-session-cta">Set up a plan →</Link>
+        <Link to="/plan" className="hero-session-cta">Set up a plan</Link>
       </div>
     )
   }
@@ -153,7 +153,7 @@ function HeroSession({ data, planDay, planLoading, hasPlan, matchedActivity }: H
   return (
     <div className="hero-session">
       <span className="hero-session-label">Today's session</span>
-      <Link to="/chat" className="hero-session-cta">No session planned — ask your coach →</Link>
+      <Link to="/chat" className="hero-session-cta">No session planned — ask your coach</Link>
     </div>
   )
 }
@@ -168,7 +168,7 @@ export default function TodayHero({ data }: Props) {
   const { data: plan, isLoading: planLoading } = useTrainingPlan()
 
   const readiness = data.readiness
-  const ringColor = readiness ? scoreColor(readiness.score) : 'var(--accent)'
+  const ringColor = readiness ? scoreColor(readiness.score) : 'var(--text)'
 
   const planDay = data.plan_day_id != null
     ? plan?.weeks.flatMap(w => w.days).find(d => d.id === data.plan_day_id) ?? null
@@ -224,7 +224,7 @@ export default function TodayHero({ data }: Props) {
         briefing && !briefingExpanded ? (
           <p className="hero-brief">
             <b>{firstSentence(briefing.content || briefing.summary || '')}</b>{' '}
-            <button className="hero-brief-more" onClick={() => setBriefingExpanded(true)}>More →</button>
+            <button className="hero-brief-more" onClick={() => setBriefingExpanded(true)}>More</button>
           </p>
         ) : (
           <BriefingCard dateKey={data.selected_date} planDayId={data.plan_day_id} briefing={briefing} />

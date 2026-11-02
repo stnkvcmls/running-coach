@@ -24,15 +24,16 @@
 }
 
 .wellness-metric-title {
-  font-size: 0.7rem;
+  font-size: 0.8125rem;
   color: var(--text-muted);
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
   margin-bottom: 4px;
 }
 
 .wellness-metric-value {
+  font-stretch: 75%;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.005em;
   font-size: 1.5rem;
   font-weight: 700;
   line-height: 1;

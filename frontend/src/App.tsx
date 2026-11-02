@@ -79,12 +79,12 @@ const ROUTES: RouteMeta[] = [
   { path: '/chat', title: 'Coach', chrome: 'main' },
   { path: '/activities', title: 'Activities', chrome: 'main' },
   { path: '/trends', title: 'Progress', chrome: 'main' },
-  { path: '/daily', title: 'Daily History', chrome: 'main' },
+  { path: '/daily', title: 'Daily history', chrome: 'main' },
   { path: '/activities/:id', title: 'Activity', chrome: 'detail' },
-  { path: '/daily/:id', title: 'Daily Summary', chrome: 'detail' },
+  { path: '/daily/:id', title: 'Daily summary', chrome: 'detail' },
   { path: '/workouts/:id', title: 'Workout', chrome: 'detail' },
   { path: '/info/:topic', title: 'Info', chrome: 'detail' },
-  { path: '/plan/setup', title: 'Plan Setup', chrome: 'detail' },
+  { path: '/plan/setup', title: 'Plan setup', chrome: 'detail' },
   { path: '/settings', title: 'Settings', chrome: 'detail' },
   { path: '/onboarding', title: 'Onboarding', chrome: 'detail' },
 ]
@@ -107,7 +107,12 @@ export default function App() {
   // index.html's pre-paint script applies the same resolution before React
   // loads; this keeps it current when the preference or OS setting changes.
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme)
+    const root = document.documentElement
+    root.setAttribute('data-theme', theme)
+    // The browser chrome (theme-color) follows the ground token of the theme
+    // just applied, read back from CSS so the value lives only in globals.css.
+    const ground = getComputedStyle(root).getPropertyValue('--bg').trim()
+    if (ground) document.querySelector('meta[name="theme-color"]')?.setAttribute('content', ground)
   }, [theme])
 
   // First-run: redirect to onboarding when no athlete profile exists yet.

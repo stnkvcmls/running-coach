@@ -90,7 +90,7 @@ const EXPORT_LINKS = [
 function DataExportSection() {
   return (
     <section className="settings-section">
-      <h2 className="section-title">Data Export</h2>
+      <h2 className="section-title">Data export</h2>
       <div className="export-buttons">
         {EXPORT_LINKS.map(({ label, url, filename }) => (
           <a key={url} href={url} download={filename} className="sync-btn export-btn">
@@ -173,7 +173,7 @@ function GarminConnectionSection() {
 
   return (
     <section className="settings-section">
-      <h2 className="section-title">Garmin Connection</h2>
+      <h2 className="section-title">Garmin connection</h2>
       <div className="card garmin-connect">
         {status?.connected && !reconnecting ? (
           <div className="garmin-connected">
@@ -318,20 +318,20 @@ export default function SettingsView() {
 
       {/* Manual sync buttons */}
       <section className="settings-section">
-        <h2 className="section-title">Manual Sync</h2>
+        <h2 className="section-title">Manual sync</h2>
         <div className="sync-buttons">
           <SyncButton
-            label="Sync Activities"
+            label="Sync activities"
             type="activities"
             mutation={syncMutation}
           />
           <SyncButton
-            label="Sync Daily Summary"
+            label="Sync daily summary"
             type="daily"
             mutation={syncMutation}
           />
           <SyncButton
-            label="Sync Calendar"
+            label="Sync calendar"
             type="calendar"
             mutation={syncMutation}
           />

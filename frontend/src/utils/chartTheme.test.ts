@@ -1,42 +1,68 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { getTooltipProps, getChartTickColor, getAxisTick, getGridStroke, usePrefersReducedMotion } from './chartTheme'
+import type { MetricZone } from '../api/types'
+import {
+  getTooltipProps, getChartTickColor, getAxisTick, getGridStroke, getZoneColor, effortZoneColor,
+  usePrefersReducedMotion,
+} from './chartTheme'
 
+// Chart colours are var() references into globals.css, so they follow the
+// active theme in the browser without depending on the `theme` argument.
 describe('getTooltipProps', () => {
-  it('returns dark-theme colors', () => {
-    const { contentStyle, labelStyle, itemStyle } = getTooltipProps('dark')
-    expect(contentStyle.background).toBe('#1a1a2e')
-    expect(contentStyle.border).toBe('1px solid #2d2d44')
-    expect(contentStyle.color).toBe('#e0e0e0')
-    expect(labelStyle.color).toBe('#e0e0e0')
-    expect(itemStyle.color).toBe('#e0e0e0')
-  })
-
-  it('returns light-theme colors', () => {
-    const { contentStyle, labelStyle } = getTooltipProps('light')
-    expect(contentStyle.background).toBe('#ffffff')
-    expect(contentStyle.border).toBe('1px solid #e0e4ec')
-    expect(contentStyle.color).toBe('#1a1a2e')
-    expect(labelStyle.color).toBe('#1a1a2e')
+  it('is a surface panel with a rule border and ink text in either theme', () => {
+    for (const theme of ['dark', 'light'] as const) {
+      const { contentStyle, labelStyle, itemStyle } = getTooltipProps(theme)
+      expect(contentStyle.background).toBe('var(--bg-card)')
+      expect(contentStyle.border).toBe('1px solid var(--border)')
+      expect(contentStyle.color).toBe('var(--text)')
+      expect(labelStyle.color).toBe('var(--text)')
+      expect(itemStyle.color).toBe('var(--text)')
+    }
   })
 })
 
 describe('getChartTickColor / getAxisTick', () => {
-  it('is theme-correct and defaults to fontSize 10', () => {
-    expect(getChartTickColor('dark')).toBe('#888')
-    expect(getChartTickColor('light')).toBe('#6b7280')
-    expect(getAxisTick('dark')).toEqual({ fontSize: 10, fill: '#888' })
+  it('uses ink-2 and defaults to fontSize 10', () => {
+    expect(getChartTickColor('dark')).toBe('var(--text-muted)')
+    expect(getChartTickColor('light')).toBe('var(--text-muted)')
+    expect(getAxisTick('dark')).toEqual({ fontSize: 10, fill: 'var(--text-muted)' })
   })
 
   it('accepts a custom font size', () => {
-    expect(getAxisTick('light', 11)).toEqual({ fontSize: 11, fill: '#6b7280' })
+    expect(getAxisTick('light', 11)).toEqual({ fontSize: 11, fill: 'var(--text-muted)' })
   })
 })
 
 describe('getGridStroke', () => {
-  it('matches the --border token per theme', () => {
-    expect(getGridStroke('dark')).toBe('#2d2d44')
-    expect(getGridStroke('light')).toBe('#e0e4ec')
+  it('is the --border (rule) token', () => {
+    expect(getGridStroke('dark')).toBe('var(--border)')
+  })
+})
+
+describe('effortZoneColor', () => {
+  it('maps zone numbers onto the Z1–Z5 effort scale, clamped', () => {
+    expect(effortZoneColor(1)).toBe('var(--z1)')
+    expect(effortZoneColor(5)).toBe('var(--z5)')
+    expect(effortZoneColor(0)).toBe('var(--z1)')
+    expect(effortZoneColor(7)).toBe('var(--z5)')
+  })
+})
+
+describe('getZoneColor', () => {
+  const zones: MetricZone[] = [
+    { metric_key: 'cadence', zone_name: 'a', zone_color: '#ff69b4', percentile_label: '', min_value: 185, max_value: null },
+    { metric_key: 'cadence', zone_name: 'b', zone_color: '#3498db', percentile_label: '', min_value: 170, max_value: 185 },
+    { metric_key: 'cadence', zone_name: 'c', zone_color: '#2ecc71', percentile_label: '', min_value: null, max_value: 170 },
+  ]
+
+  it('colours by zone position on the effort scale, ignoring the API colour', () => {
+    expect(getZoneColor(190, zones)).toBe('var(--z1)')
+    expect(getZoneColor(175, zones)).toBe('var(--z2)')
+    expect(getZoneColor(150, zones)).toBe('var(--z3)')
+  })
+
+  it('falls back to the default token when no zone matches', () => {
+    expect(getZoneColor(150, zones.slice(0, 2))).toBe('var(--color-default)')
   })
 })
 

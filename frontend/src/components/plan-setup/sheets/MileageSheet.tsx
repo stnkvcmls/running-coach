@@ -21,14 +21,14 @@ export default function MileageSheet({ open, onClose, initialWeekly, initialLong
   }
 
   return (
-    <BottomSheet open={open} onClose={onClose} title="Current Fitness">
+    <BottomSheet open={open} onClose={onClose} title="Current fitness">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         <div>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: 16, lineHeight: 1.4 }}>
             Select your average weekly mileage from the past 4 weeks.
           </p>
           <RangeSlider
-            label="Current Weekly Mileage"
+            label="Current weekly mileage"
             value={weekly}
             onChange={setWeekly}
             min={0}
@@ -42,7 +42,7 @@ export default function MileageSheet({ open, onClose, initialWeekly, initialLong
             Select the longest run you've completed in the past 4 weeks.
           </p>
           <RangeSlider
-            label="Current Longest Run"
+            label="Current longest run"
             value={longest}
             onChange={setLongest}
             min={0}

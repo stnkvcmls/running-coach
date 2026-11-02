@@ -24,9 +24,9 @@
 }
 
 .chart-tab.active {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
+  background: var(--text);
+  color: var(--on-ink);
+  border-color: var(--text);
 }
 
 .chart-tab:hover:not(.active) {

@@ -190,7 +190,7 @@ describe('ActivityDetailView collapsible stats', () => {
     renderDetail()
     await screen.findByRole('heading', { name: 'Tempo Run' })
 
-    expect(screen.queryByText('Running Dynamics')).not.toBeInTheDocument()
+    expect(screen.queryByText('Running dynamics')).not.toBeInTheDocument()
     expect(screen.queryByText('Power')).not.toBeInTheDocument()
 
     const toggle = screen.getByRole('button', { name: /Show all stats/ })
@@ -198,7 +198,7 @@ describe('ActivityDetailView collapsible stats', () => {
       toggle.click()
     })
 
-    expect(screen.getByText('Running Dynamics')).toBeInTheDocument()
+    expect(screen.getByText('Running dynamics')).toBeInTheDocument()
     expect(screen.getByText('Power')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Hide extra stats' })).toBeInTheDocument()
   })

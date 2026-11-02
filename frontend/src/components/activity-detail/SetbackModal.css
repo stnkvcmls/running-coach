@@ -1,7 +1,7 @@
 .setback-modal__overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--scrim);
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -71,13 +71,13 @@
 }
 
 .setback-modal__chip:hover {
-  border-color: var(--accent);
+  border-color: var(--text);
 }
 
 .setback-modal__chip--selected {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
+  background: var(--text);
+  color: var(--on-ink);
+  border-color: var(--text);
 }
 
 .setback-modal__other-input {
@@ -95,7 +95,7 @@
 
 .setback-modal__other-input:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--text);
 }
 
 .setback-modal__actions {
@@ -122,8 +122,8 @@
   padding: 10px 24px;
   font-size: 0.85rem;
   font-weight: 600;
-  color: #fff;
-  background: var(--accent);
+  color: var(--on-ink);
+  background: var(--text);
   border-radius: 20px;
   transition: opacity 0.15s;
 }

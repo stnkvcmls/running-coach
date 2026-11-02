@@ -14,7 +14,7 @@
 }
 
 .season-timeline-icon {
-  color: var(--accent-light);
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 

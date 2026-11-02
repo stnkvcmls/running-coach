@@ -77,10 +77,10 @@ describe('TodayView section order', () => {
     vi.stubGlobal('fetch', mockFetch())
     renderWithProviders(<TodayView />)
 
-    await screen.findByText('At a Glance')
+    await screen.findByText('At a glance')
 
     const headingTexts = screen.getAllByRole('heading').map(h => h.textContent)
-    const expectedInOrder = ['At a Glance', 'Training Load', 'Week', 'My Insights', 'Also today']
+    const expectedInOrder = ['At a glance', 'Training load', 'Week', 'Insights', 'Also today']
     const indices = expectedInOrder.map(expected =>
       headingTexts.findIndex(text => text?.includes(expected)),
     )
@@ -93,13 +93,13 @@ describe('TodayView section order', () => {
     vi.stubGlobal('fetch', mockFetch())
     const { container } = renderWithProviders(<TodayView />)
 
-    await screen.findByText('At a Glance')
+    await screen.findByText('At a glance')
     await screen.findByText(/sessions missed/)
 
     const html = container.innerHTML
     const alertPos = html.indexOf('sessions missed')
     const heroPos = html.indexOf("Today's session")
-    const glancePos = html.indexOf('At a Glance')
+    const glancePos = html.indexOf('At a glance')
 
     expect(alertPos).toBeGreaterThan(-1)
     expect(heroPos).toBeGreaterThan(-1)
@@ -120,7 +120,7 @@ describe('TodayView section order', () => {
   it('groups sections into the desktop two-column layout without changing document order', async () => {
     vi.stubGlobal('fetch', mockFetch())
     const { container } = renderWithProviders(<TodayView />)
-    await screen.findByText('At a Glance')
+    await screen.findByText('At a glance')
     await screen.findByText(/sessions missed/)
 
     const left = container.querySelector('.today-col-left')
@@ -134,13 +134,13 @@ describe('TodayView section order', () => {
     expect(left).toHaveTextContent('Berlin Marathon')
 
     // Right column: at-a-glance, training load, week overview.
-    expect(right).toHaveTextContent('At a Glance')
-    expect(right).toHaveTextContent('Training Load')
+    expect(right).toHaveTextContent('At a glance')
+    expect(right).toHaveTextContent('Training load')
     expect(right).toHaveTextContent('Week')
 
     // Insights and "Also today" render full-width, after both columns.
     const columns = container.querySelector('.today-columns')
-    const insights = screen.getByText('My Insights').closest('section')
+    const insights = screen.getByText('Insights').closest('section')
     const alsoToday = screen.getByText('Also today').closest('section')
     expect(columns).not.toBeNull()
     expect(insights).not.toBeNull()

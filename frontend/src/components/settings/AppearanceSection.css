@@ -43,8 +43,8 @@
 }
 
 .appearance-option.active {
-  background: var(--accent);
-  color: #fff;
+  background: var(--text);
+  color: var(--on-ink);
 }
 
 .appearance-option:hover:not(.active) {

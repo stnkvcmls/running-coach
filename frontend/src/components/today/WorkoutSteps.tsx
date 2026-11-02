@@ -3,8 +3,8 @@ import './WorkoutSteps.css'
 
 function sectionLabel(stepType: string): string {
   switch (stepType) {
-    case 'warmup': return 'Warm-Up'
-    case 'cooldown': return 'Cool Down'
+    case 'warmup': return 'Warm-up'
+    case 'cooldown': return 'Cool-down'
     case 'rest': return 'Rest'
     case 'repeat': return 'Repeat'
     default: return 'Session'

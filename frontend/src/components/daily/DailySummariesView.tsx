@@ -32,7 +32,7 @@ export default function DailySummariesView() {
 
   return (
     <div className="daily-view">
-      <h2 className="section-title">Daily Summaries</h2>
+      <h2 className="section-title">Daily summaries</h2>
       {summaries.length === 0 && (
         <div className="empty-state">No daily summaries yet</div>
       )}

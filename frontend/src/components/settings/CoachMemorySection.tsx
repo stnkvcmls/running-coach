@@ -34,7 +34,7 @@ export default function CoachMemorySection() {
 
   return (
     <section className="settings-section">
-      <h2 className="section-title">Coach Memory</h2>
+      <h2 className="section-title">Coach memory</h2>
       <p className="cm-desc">
         Durable facts the coach remembers on every chat and analysis — niggles,
         life constraints, preferences. The coach also records these itself when

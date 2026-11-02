@@ -69,7 +69,7 @@ describe('TrendsView', () => {
       expect(within(panel).getByRole('region', { name: h.textContent! })).toBeInTheDocument()
     }
     // The performance curve's explainer link moved up to its section heading.
-    expect(within(panel).getByRole('button', { name: 'About Performance Curve' })).toBeInTheDocument()
+    expect(within(panel).getByRole('button', { name: 'About Performance curve' })).toBeInTheDocument()
 
     // All four sub-views actually mount (each reaches its empty state).
     expect(await within(panel).findByText(/no mean-maximal curve data yet/i)).toBeInTheDocument()
@@ -83,7 +83,7 @@ describe('TrendsView', () => {
     renderWithProviders(<TrendsView />)
 
     // Body: straight from the range control to the charts — no "Wellness Trends" heading.
-    await screen.findByText('Sleep Score')
+    await screen.findByText('Sleep score')
     expect(within(screen.getByRole('tabpanel')).queryByRole('heading')).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: /daily history/i })).toBeInTheDocument()
 

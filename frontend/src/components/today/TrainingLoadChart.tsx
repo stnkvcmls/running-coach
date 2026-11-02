@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import {
   ComposedChart,
   Area,
@@ -12,24 +13,31 @@ import {
 import { useTrainingLoad } from '../../api/hooks'
 import type { TrainingLoadPoint } from '../../api/types'
 import { useTheme } from '../../App'
-import { getAxisTick, getGridStroke, getTooltipProps, Y_AXIS_WIDTH, usePrefersReducedMotion } from '../../utils/chartTheme'
+import { getAxisTick, getGridStroke, getTooltipProps, SERIES_COLORS, SERIES_DASHES, Y_AXIS_WIDTH, usePrefersReducedMotion } from '../../utils/chartTheme'
 import './TrainingLoadChart.css'
 
 interface Props {
   current: TrainingLoadPoint
 }
 
-const CTL_COLOR = '#6c5ce7' // Fitness — purple
-const ATL_COLOR = '#e17055' // Fatigue — orange
-const TSB_COLOR = '#00b894' // Form — green
-const ACWR_COLOR = '#fdcb6e' // ACWR — amber
+// Fitness, fatigue, form and ACWR are load metrics, not effort zones, so they
+// are drawn in ink and told apart by line style (see the legend): fitness
+// solid ink, fatigue solid ink-2, form dashed ink-2, ACWR dotted ink-3.
+const CTL_COLOR = SERIES_COLORS[0]
+const ATL_COLOR = SERIES_COLORS[1]
+const TSB_COLOR = SERIES_COLORS[1]
+const ACWR_COLOR = SERIES_COLORS[2]
+const TSB_DASH = SERIES_DASHES[1]
+const ACWR_DASH = SERIES_DASHES[2]
 
+// Sport is a category, not an effort: running in ink, cross-training in the
+// lighter inks (same scheme as SPORT_COLORS in utils/colors).
 const SPORT_COLORS: Record<string, string> = {
-  run: '#6c5ce7',
-  ride: '#0984e3',
-  swim: '#00cec9',
-  strength: '#e17055',
-  other: '#b2bec3',
+  run: 'var(--text)',
+  ride: 'var(--text-muted)',
+  swim: 'var(--text-faint)',
+  strength: 'var(--text-muted)',
+  other: 'var(--text-faint)',
 }
 
 const SPORT_LABELS: Record<string, string> = {
@@ -85,11 +93,11 @@ export default function TrainingLoadChart({ current }: Props) {
         color: contentStyle.color,
       }}>
         <div style={{ fontWeight: 600, marginBottom: 4 }}>{label}</div>
-        <div style={{ color: CTL_COLOR }}>Fitness: {byKey.ctl?.toFixed(0)}</div>
-        <div style={{ color: ATL_COLOR }}>Fatigue: {byKey.atl?.toFixed(0)}</div>
-        <div style={{ color: TSB_COLOR }}>Form: {byKey.tsb >= 0 ? '+' : ''}{byKey.tsb?.toFixed(0)}</div>
+        <div>Fitness: {byKey.ctl?.toFixed(0)}</div>
+        <div>Fatigue: {byKey.atl?.toFixed(0)}</div>
+        <div>Form: {byKey.tsb >= 0 ? '+' : ''}{byKey.tsb?.toFixed(0)}</div>
         {byKey.acwr != null && (
-          <div style={{ color: ACWR_COLOR }}>ACWR: {byKey.acwr?.toFixed(2)}</div>
+          <div>ACWR: {byKey.acwr?.toFixed(2)}</div>
         )}
       </div>
     )
@@ -126,17 +134,17 @@ export default function TrainingLoadChart({ current }: Props) {
       <div className="tl-stats">
         <div className="tl-stat">
           <span className="tl-stat-label">Fitness</span>
-          <span className="tl-stat-value" style={{ color: CTL_COLOR }}>{current.ctl.toFixed(0)}</span>
+          <span className="tl-stat-value num">{current.ctl.toFixed(0)}</span>
           <span className="tl-stat-sub">CTL</span>
         </div>
         <div className="tl-stat">
           <span className="tl-stat-label">Fatigue</span>
-          <span className="tl-stat-value" style={{ color: ATL_COLOR }}>{current.atl.toFixed(0)}</span>
+          <span className="tl-stat-value num">{current.atl.toFixed(0)}</span>
           <span className="tl-stat-sub">ATL</span>
         </div>
         <div className="tl-stat">
           <span className="tl-stat-label">Form</span>
-          <span className="tl-stat-value" style={{ color: TSB_COLOR }}>
+          <span className="tl-stat-value num">
             {current.tsb >= 0 ? '+' : ''}{current.tsb.toFixed(0)}
           </span>
           <span className={`tl-form-badge tl-form-${formTone(current.form_zone)}`}>
@@ -146,7 +154,7 @@ export default function TrainingLoadChart({ current }: Props) {
         {hasAcwr && (
           <div className="tl-stat">
             <span className="tl-stat-label">ACWR</span>
-            <span className="tl-stat-value" style={{ color: ACWR_COLOR }}>{current.acwr!.toFixed(2)}</span>
+            <span className="tl-stat-value num">{current.acwr!.toFixed(2)}</span>
             <span className={`tl-form-badge tl-risk-${rsbTone(current.rsb_zone)}`}>
               {current.rsb_zone_label ?? ''}
             </span>
@@ -168,7 +176,7 @@ export default function TrainingLoadChart({ current }: Props) {
             <ComposedChart data={chartData} margin={{ top: 8, right: 4, left: -8, bottom: 0 }}>
               <defs>
                 <linearGradient id="ctlFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={CTL_COLOR} stopOpacity={0.35} />
+                  <stop offset="0%" stopColor={CTL_COLOR} stopOpacity={0.16} />
                   <stop offset="100%" stopColor={CTL_COLOR} stopOpacity={0.02} />
                 </linearGradient>
               </defs>
@@ -188,9 +196,9 @@ export default function TrainingLoadChart({ current }: Props) {
               <ReferenceLine yAxisId="form" y={0} stroke={refLineColor} strokeDasharray="3 3" />
               {hasAcwr && (
                 <>
-                  <ReferenceArea yAxisId="acwr" y1={0.8} y2={1.3} fill="rgba(0, 184, 148, 0.07)" />
-                  <ReferenceLine yAxisId="acwr" y={0.8} stroke={ACWR_COLOR} strokeDasharray="3 3" strokeOpacity={0.45} />
-                  <ReferenceLine yAxisId="acwr" y={1.3} stroke={ATL_COLOR} strokeDasharray="3 3" strokeOpacity={0.45} />
+                  <ReferenceArea yAxisId="acwr" y1={0.8} y2={1.3} fill="var(--text)" fillOpacity={0.05} />
+                  <ReferenceLine yAxisId="acwr" y={0.8} stroke={refLineColor} strokeDasharray="3 3" />
+                  <ReferenceLine yAxisId="acwr" y={1.3} stroke={refLineColor} strokeDasharray="3 3" />
                 </>
               )}
               <Area
@@ -220,7 +228,7 @@ export default function TrainingLoadChart({ current }: Props) {
                 dataKey="tsb"
                 stroke={TSB_COLOR}
                 strokeWidth={1.5}
-                strokeDasharray="4 2"
+                strokeDasharray={TSB_DASH}
                 dot={false}
                 name="Form"
                 isAnimationActive={!reduceMotion}
@@ -232,7 +240,7 @@ export default function TrainingLoadChart({ current }: Props) {
                   dataKey="acwr"
                   stroke={ACWR_COLOR}
                   strokeWidth={1.5}
-                  strokeDasharray="2 2"
+                  strokeDasharray={ACWR_DASH}
                   dot={false}
                   name="ACWR"
                   isAnimationActive={!reduceMotion}
@@ -244,11 +252,11 @@ export default function TrainingLoadChart({ current }: Props) {
       )}
 
       <div className="tl-legend">
-        <div className="tl-legend-item"><span className="tl-dot" style={{ background: CTL_COLOR }} />Fitness (CTL)</div>
-        <div className="tl-legend-item"><span className="tl-dot" style={{ background: ATL_COLOR }} />Fatigue (ATL)</div>
-        <div className="tl-legend-item"><span className="tl-dot" style={{ background: TSB_COLOR }} />Form (TSB)</div>
+        <div className="tl-legend-item"><span className="legend-swatch" style={{ '--swatch': CTL_COLOR } as CSSProperties} />Fitness (CTL)</div>
+        <div className="tl-legend-item"><span className="legend-swatch" style={{ '--swatch': ATL_COLOR } as CSSProperties} />Fatigue (ATL)</div>
+        <div className="tl-legend-item"><span className="legend-swatch legend-swatch--dashed" style={{ '--swatch': TSB_COLOR } as CSSProperties} />Form (TSB)</div>
         {hasAcwr && (
-          <div className="tl-legend-item"><span className="tl-dot" style={{ background: ACWR_COLOR }} />ACWR</div>
+          <div className="tl-legend-item"><span className="legend-swatch legend-swatch--dotted" style={{ '--swatch': ACWR_COLOR } as CSSProperties} />ACWR</div>
         )}
       </div>
 

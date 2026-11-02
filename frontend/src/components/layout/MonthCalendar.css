@@ -39,11 +39,10 @@
 
 .month-day-header {
   text-align: center;
-  font-size: 0.65rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
-  text-transform: uppercase;
   padding: 4px 0;
-  font-weight: 500;
+  font-weight: 550;
 }
 
 .month-day {
@@ -67,16 +66,19 @@
 }
 
 .month-day.selected {
-  background: var(--accent);
+  background: var(--text);
 }
 
 .month-day.selected .month-day-num {
-  color: #fff;
+  color: var(--on-ink);
 }
 
 .month-day.today:not(.selected) .month-day-num {
-  color: var(--accent-light);
-  font-weight: 700;
+  color: var(--text);
+  font-weight: 800;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
 }
 
 .month-day-num {
@@ -109,7 +111,7 @@
 }
 
 .month-day.selected .month-dot.month-dot-planned {
-  border-color: rgba(255, 255, 255, 0.7);
+  border-color: var(--on-ink);
 }
 
 /* Upcoming race — distinct ring in the race colour */
@@ -121,5 +123,5 @@
 }
 
 .month-day.selected .month-dot.month-dot-race {
-  border-color: #fff;
+  border-color: var(--on-ink);
 }

@@ -93,7 +93,7 @@ export default function WeekOverview({ data }: Props) {
               tickLine={false}
             />
             <YAxis hide domain={[0, maxKm * 1.15]} />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(108, 92, 231, 0.1)' }} />
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'var(--text)', fillOpacity: 0.06 }} />
             {activityTypes.map((type, index) => (
               <Bar
                 key={type}

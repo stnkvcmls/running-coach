@@ -5,7 +5,7 @@ import {
 } from 'recharts'
 import type { ChartSeries, MetricZone } from '../../api/types'
 import { useTheme } from '../../App'
-import { getAxisTick, getTooltipProps, getZoneColor, METRIC_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
+import { getAxisTick, getTooltipProps, getZoneColor, SERIES_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
 import './ChartTabs.css'
 
 const SCATTER_METRICS = new Set(['cadence', 'stride', 'gct', 'vert_osc', 'vert_ratio'])
@@ -26,7 +26,9 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
   const series = chartData[activeKey]
   if (!series) return null
 
-  const color = METRIC_COLORS[activeKey] || '#6c5ce7'
+  // One metric at a time, so it is drawn in ink; only zone-coloured scatter
+  // dots (metric zones) carry effort colour.
+  const color = SERIES_COLORS[0]
   const isScatter = SCATTER_METRICS.has(activeKey)
   const zones = metricZones?.[activeKey]
 
@@ -104,7 +106,7 @@ export default function ChartTabs({ chartData, metricZones }: Props) {
               />
               <ReferenceLine
                 y={average}
-                stroke="#888"
+                stroke={SERIES_COLORS[2]}
                 strokeDasharray="6 4"
                 strokeWidth={1.5}
               />

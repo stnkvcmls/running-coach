@@ -15,22 +15,23 @@ const paceZones: MetricZone[] = [
 ]
 
 describe('SplitsBars', () => {
-  it('defaults to bars for 3+ splits, one bar per split, coloured by pace zone', () => {
+  it('defaults to bars for 3+ splits, one bar per split, coloured by pace zone on the effort scale', () => {
     const { container } = render(<SplitsBars splits={splits} paceZones={paceZones} color="#6c5ce7" />)
 
     const bars = container.querySelectorAll('.split-bar')
     expect(bars).toHaveLength(splits.length)
 
-    // 5:00/km and 4:30/km fall in "Easy" (>= 4.5); 4:10/km falls in "Fast" (< 4.5).
-    expect((bars[0] as HTMLElement).style.background).toBe('rgb(85, 239, 196)')
-    expect((bars[1] as HTMLElement).style.background).toBe('rgb(85, 239, 196)')
-    expect((bars[2] as HTMLElement).style.background).toBe('rgb(250, 177, 160)')
+    // 5:00/km and 4:30/km fall in "Easy" (>= 4.5, second zone → Z2); 4:10/km
+    // falls in "Fast" (< 4.5, first zone → Z1). The API's zone_color is ignored.
+    expect((bars[0] as HTMLElement).style.background).toBe('var(--z2)')
+    expect((bars[1] as HTMLElement).style.background).toBe('var(--z2)')
+    expect((bars[2] as HTMLElement).style.background).toBe('var(--z1)')
   })
 
   it('falls back to the activity colour when no pace zones are supplied', () => {
-    const { container } = render(<SplitsBars splits={splits} color="#6c5ce7" />)
+    const { container } = render(<SplitsBars splits={splits} color="var(--color-tempo)" />)
     const bars = container.querySelectorAll('.split-bar')
-    bars.forEach(bar => expect((bar as HTMLElement).style.background).toBe('rgb(108, 92, 231)'))
+    bars.forEach(bar => expect((bar as HTMLElement).style.background).toBe('var(--color-tempo)'))
   })
 
   it('defaults to table for fewer than 3 splits', () => {

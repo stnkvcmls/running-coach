@@ -7,11 +7,14 @@ interface Props {
   readiness: TrainingReadiness
 }
 
-export function scoreColor(score: number): string {
-  if (score >= 71) return '#00b894'   // green
-  if (score >= 51) return '#fdcb6e'   // yellow
-  if (score >= 31) return '#e17055'   // orange
-  return '#d63031'                    // red
+/**
+ * Colour for a readiness score (ring stroke, component bars). Readiness is
+ * status, not effort, so every band is ink (docs/UI_UX_CRITIQUE.md §5.1):
+ * the number and the label word carry the band. Kept as a function so
+ * callers stay band-aware if a non-colour treatment ever needs the score.
+ */
+export function scoreColor(_score: number): string {
+  return 'var(--text)'
 }
 
 export function ComponentBar({ label, value }: { label: string; value: number | null }) {
@@ -21,7 +24,7 @@ export function ComponentBar({ label, value }: { label: string; value: number | 
     <div className="readiness-component">
       <div className="rc-row">
         <span className="rc-label">{label}</span>
-        <span className="rc-value" style={{ color }}>{value}</span>
+        <span className="rc-value">{value}</span>
       </div>
       <div className="rc-bar-track">
         <div
@@ -41,11 +44,11 @@ export default function ReadinessCard({ readiness }: Props) {
       <div className="readiness-header">
         <ScoreRing score={readiness.score} color={color} size={72} />
         <div className="readiness-label-block">
-          <span className="readiness-label" style={{ color }}>{readiness.label}</span>
-          <span className="readiness-sub">Training Readiness</span>
+          <span className="readiness-label">{readiness.label}</span>
+          <span className="readiness-sub">Training readiness</span>
         </div>
         <div className="readiness-help">
-          <StatHelpButton topic="training-readiness" label="Training Readiness" />
+          <StatHelpButton topic="training-readiness" label="Training readiness" />
         </div>
       </div>
 

@@ -141,7 +141,7 @@ function DayStateLine({ day, state }: { day: TrainingPlanDay; state: PlanDayStat
         {day.matched_activity_id != null && (
           <>
             {' · '}
-            <Link to={`/activities/${day.matched_activity_id}`} className="plan-day-view-run">View run →</Link>
+            <Link to={`/activities/${day.matched_activity_id}`} className="plan-day-view-run">View run</Link>
           </>
         )}
       </p>
@@ -175,7 +175,7 @@ function DayRow({ day }: { day: TrainingPlanDay }) {
       </div>
 
       <div className="plan-day-body">
-        <div className="plan-day-badge" style={{ backgroundColor: color }}>
+        <div className="plan-day-badge badge-effort" style={{ '--effort': color } as CSSProperties}>
           {label}
         </div>
         {(day.target_distance_m != null || day.target_pace_display) && (
@@ -353,7 +353,7 @@ export default function PlanView() {
                 Generating…
               </>
             ) : (
-              'Generate Plan'
+              'Generate plan'
             )}
           </button>
         </div>
@@ -371,7 +371,7 @@ export default function PlanView() {
       <div className="plan-header">
         <div className="plan-meta">
           {plan.phase && (
-            <span className="plan-phase-badge">{plan.phase.charAt(0).toUpperCase() + plan.phase.slice(1)} Phase</span>
+            <span className="plan-phase-badge">{plan.phase.charAt(0).toUpperCase() + plan.phase.slice(1)} phase</span>
           )}
           <span className="plan-generated">
             Generated {new Date(plan.generated_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}

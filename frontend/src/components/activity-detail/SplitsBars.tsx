@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { MetricZone } from '../../api/types'
-import { getZoneColor } from '../../utils/chartTheme'
+import { effortZoneColor, getZoneColor, zoneIndexFor } from '../../utils/chartTheme'
 import { formatPace } from '../../utils/formatting'
 import LapsTable from './LapsTable'
 import './SplitsBars.css'
@@ -47,7 +47,9 @@ export default function SplitsBars({ splits, paceZones, color }: Props) {
   }
 
   const usedZones = paceZones && paceZones.length > 0
-    ? paceZones.filter(z => paces.some(p => getZoneColor(p, paceZones) === z.zone_color))
+    ? paceZones
+        .map((zone, index) => ({ zone, color: effortZoneColor(index + 1) }))
+        .filter((_, index) => paces.some(p => zoneIndexFor(p, paceZones) === index))
     : []
 
   return (
@@ -98,10 +100,10 @@ export default function SplitsBars({ splits, paceZones, color }: Props) {
             </div>
             {usedZones.length > 1 && (
               <div className="split-legend">
-                {usedZones.map(z => (
-                  <span key={z.zone_name}>
-                    <i style={{ background: z.zone_color }} />
-                    {z.zone_name}
+                {usedZones.map(({ zone, color }) => (
+                  <span key={zone.zone_name}>
+                    <i style={{ background: color }} />
+                    {zone.zone_name}
                   </span>
                 ))}
               </div>

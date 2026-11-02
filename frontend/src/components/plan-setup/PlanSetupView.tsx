@@ -50,34 +50,34 @@ export default function PlanSetupView() {
   return (
     <div className="psu-view">
       <div className="psu-header">
-        <h1 className="psu-title">Training Preferences</h1>
+        <h1 className="psu-title">Training preferences</h1>
         <p className="psu-subtitle">Choose how much your training ramps up, and how difficult your hard runs feel.</p>
       </div>
 
       <div className="psu-section">
-        <Row label="Training Volume" value={cap(p?.training_volume ?? '') || 'Not set'} onClick={() => setSheet('volume')} />
+        <Row label="Training volume" value={cap(p?.training_volume ?? '') || 'Not set'} onClick={() => setSheet('volume')} />
         <Row label="Difficulty" value={cap(p?.difficulty ?? '') || 'Not set'} onClick={() => setSheet('difficulty')} />
-        <Row label="Current Weekly Mileage" value={p?.weekly_mileage_km != null ? `${p.weekly_mileage_km} km` : 'Not set'} onClick={() => setSheet('mileage')} />
-        <Row label="Current Longest Run" value={p?.longest_run_km != null ? `${p.longest_run_km} km` : 'Not set'} onClick={() => setSheet('mileage')} />
+        <Row label="Current weekly mileage" value={p?.weekly_mileage_km != null ? `${p.weekly_mileage_km} km` : 'Not set'} onClick={() => setSheet('mileage')} />
+        <Row label="Current longest run" value={p?.longest_run_km != null ? `${p.longest_run_km} km` : 'Not set'} onClick={() => setSheet('mileage')} />
       </div>
 
       <div className="psu-section">
-        <div className="psu-section-label">Current Race Times</div>
+        <div className="psu-section-label">Current race times</div>
         <div className="psu-subtitle-sm">Include a shorter and longer distance time for more accurate paces.</div>
-        <Row label="Race Times" value={describeRaceTimes()} onClick={() => setSheet('racetimes')} />
+        <Row label="Race times" value={describeRaceTimes()} onClick={() => setSheet('racetimes')} />
       </div>
 
       <div className="psu-section">
-        <div className="psu-section-label">Plan Overview</div>
-        <Row label="Running Ability" value={cap(p?.running_ability ?? '') || 'Not set'} onClick={() => setSheet('ability')} />
-        <Row label="Elevation Profile" value={cap(p?.elevation_profile ?? '') || 'Not set'} onClick={() => setSheet('elevation')} />
+        <div className="psu-section-label">Plan overview</div>
+        <Row label="Running ability" value={cap(p?.running_ability ?? '') || 'Not set'} onClick={() => setSheet('ability')} />
+        <Row label="Elevation profile" value={cap(p?.elevation_profile ?? '') || 'Not set'} onClick={() => setSheet('elevation')} />
       </div>
 
       <div className="psu-section">
-        <div className="psu-section-label">Running Schedule</div>
-        <Row label="Runs Per Week" value={p?.runs_per_week != null ? String(p.runs_per_week) : 'Not set'} onClick={() => setSheet('schedule')} />
-        <Row label="Available Days" value={describeAvailDays()} onClick={() => setSheet('schedule')} />
-        <Row label="Long Run Day" value={p?.long_run_day ?? 'Not set'} onClick={() => setSheet('schedule')} />
+        <div className="psu-section-label">Running schedule</div>
+        <Row label="Runs per week" value={p?.runs_per_week != null ? String(p.runs_per_week) : 'Not set'} onClick={() => setSheet('schedule')} />
+        <Row label="Available days" value={describeAvailDays()} onClick={() => setSheet('schedule')} />
+        <Row label="Long run day" value={p?.long_run_day ?? 'Not set'} onClick={() => setSheet('schedule')} />
       </div>
 
       <button

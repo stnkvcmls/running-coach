@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { useZoneConfigs, useUpdateZoneConfigs } from '../../api/hooks'
 import type { ZoneConfig } from '../../api/types'
 import './ZoneConfigSection.css'
+import { effortZoneColor } from '../../utils/chartTheme'
 
 function formatPace(minPerKm: number): string {
   const min = Math.floor(minPerKm)
@@ -97,7 +98,7 @@ function ZoneTypeEditor({ title, zoneType, zones, threshold, thresholdLabel, onS
         </div>
         {draft.map((zone, idx) => (
           <div key={zone.id} className="zone-row">
-            <span className="zone-num" style={{ color: zone.zone_color }}>Z{zone.zone_number}</span>
+            <span className="zone-num" style={{ '--effort': effortZoneColor(zone.zone_number) } as CSSProperties}>Z{zone.zone_number}</span>
             <input
               className="zone-name-input"
               type="text"
@@ -161,7 +162,7 @@ export default function ZoneConfigSection() {
 
   return (
     <section className="settings-section">
-      <h2 className="section-title">Training Zones</h2>
+      <h2 className="section-title">Training zones</h2>
       <p className="zone-section-desc">
         Threshold-anchored zones for HR, pace, and power. Percentages are relative to your threshold
         values set in Athlete Profile.{' '}
@@ -170,7 +171,7 @@ export default function ZoneConfigSection() {
 
       <div className="card zone-config-card">
         <ZoneTypeEditor
-          title="Heart Rate Zones"
+          title="Heart rate zones"
           zoneType="hr"
           zones={data.hr}
           threshold={data.threshold_hr}
@@ -182,7 +183,7 @@ export default function ZoneConfigSection() {
 
       <div className="card zone-config-card">
         <ZoneTypeEditor
-          title="Pace Zones"
+          title="Pace zones"
           zoneType="pace"
           zones={data.pace}
           threshold={data.threshold_pace_min_km}

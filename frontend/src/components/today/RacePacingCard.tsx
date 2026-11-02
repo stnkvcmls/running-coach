@@ -84,7 +84,7 @@ export default function RacePacingCard({ race }: Props) {
         onClick={() => setExpanded(v => !v)}
         aria-expanded={expanded}
       >
-        <span className="race-pacing-toggle-label">Pacing Strategy</span>
+        <span className="race-pacing-toggle-label">Pacing strategy</span>
         {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
       </button>
 
@@ -153,7 +153,7 @@ export default function RacePacingCard({ race }: Props) {
                   <span className="race-pacing-stat-value">{formatDuration(plan.target_time_sec)}</span>
                 </span>
                 <span className="race-pacing-stat">
-                  <span className="race-pacing-stat-label">Avg Pace</span>
+                  <span className="race-pacing-stat-label">Avg pace</span>
                   <span className="race-pacing-stat-value">{formatPace(plan.target_pace_min_km)}</span>
                 </span>
                 {plan.predicted_time_sec != null && (

@@ -31,17 +31,17 @@ export default function ScheduleSheet({
   }
 
   return (
-    <BottomSheet open={open} onClose={onClose} title="Running Schedule">
+    <BottomSheet open={open} onClose={onClose} title="Running schedule">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         <div className="sheet-section">
-          <div className="sheet-section-title">Runs Per Week</div>
+          <div className="sheet-section-title">Runs per week</div>
           <div className="sheet-stepper">
             <button
               className="sheet-stepper-btn"
               onClick={() => setRunsPerWeek(v => Math.max(1, v - 1))}
               disabled={runsPerWeek <= 1}
             >−</button>
-            <span className="sheet-stepper-val">{runsPerWeek}</span>
+            <span className="sheet-stepper-val num">{runsPerWeek}</span>
             <button
               className="sheet-stepper-btn"
               onClick={() => setRunsPerWeek(v => Math.min(7, v + 1))}
@@ -51,12 +51,12 @@ export default function ScheduleSheet({
         </div>
 
         <div className="sheet-section">
-          <div className="sheet-section-title">Available Days</div>
+          <div className="sheet-section-title">Available days</div>
           <DayChips value={availableDays} onChange={setAvailableDays} />
         </div>
 
         <div className="sheet-section">
-          <div className="sheet-section-title">Long Run Day</div>
+          <div className="sheet-section-title">Long run day</div>
           <DayChips value={longRunDay} onChange={setLongRunDay} single />
         </div>
       </div>

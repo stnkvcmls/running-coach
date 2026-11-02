@@ -46,7 +46,7 @@ export default function RunningAbilitySheet({ open, onClose, initial, onSave }: 
   }
 
   return (
-    <BottomSheet open={open} onClose={onClose} title="Running Ability">
+    <BottomSheet open={open} onClose={onClose} title="Running ability">
       <CardPicker value={value} onChange={setValue} options={OPTIONS} />
       <button className="sheet-save-btn" onClick={handleSave}>Save</button>
     </BottomSheet>

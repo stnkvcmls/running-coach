@@ -11,18 +11,14 @@ import {
 } from 'recharts'
 import { useWellnessTrends } from '../../api/hooks'
 import { useTheme } from '../../App'
-import { getChartTickColor, getTooltipProps, WELLNESS_METRIC_COLORS, Y_AXIS_WIDTH, usePrefersReducedMotion } from '../../utils/chartTheme'
+import { getChartTickColor, getTooltipProps, SERIES_COLORS, Y_AXIS_WIDTH, usePrefersReducedMotion } from '../../utils/chartTheme'
 import RangeSelector, { DEFAULT_RANGE_OPTIONS, type RangeDays } from '../ui/RangeSelector'
 import Skeleton from '../ui/Skeleton'
 import './WellnessTrendsView.css'
 
-const {
-  sleep: SLEEP_COLOR,
-  restingHr: RHR_COLOR,
-  stress: STRESS_COLOR,
-  bodyBattery: BATTERY_COLOR,
-  hrv: HRV_COLOR,
-} = WELLNESS_METRIC_COLORS
+/* Each wellness metric has its own panel, so every trend is a single series
+   in ink; none of them is an effort, so none takes an effort colour. */
+const TREND_COLOR = SERIES_COLORS[0]
 
 function avg7(data: any[], key: string): number | null {
   const vals = data.slice(-7).map(d => d[key]).filter((v: any) => v != null) as number[]
@@ -125,15 +121,15 @@ export default function WellnessTrendsView() {
       {/* No heading: the "Body" tab already names this panel (G3). */}
       <div className="trends-header">
         <RangeSelector options={DEFAULT_RANGE_OPTIONS} value={days} onChange={setDays} />
-        <Link to="/daily" className="btn-ghost">Daily history →</Link>
+        <Link to="/daily" className="btn-ghost">Daily history</Link>
       </div>
 
       {/* Sleep Score */}
       <div className="card wellness-card">
         <div className="wellness-card-header">
-          <div className="wellness-metric-title">Sleep Score</div>
+          <div className="wellness-metric-title">Sleep score</div>
           {avgSleepScore != null && (
-            <div className="wellness-metric-value" style={{ color: SLEEP_COLOR }}>
+            <div className="wellness-metric-value">
               {avgSleepScore.toFixed(0)}
               <span className="wellness-metric-unit"> / 100</span>
             </div>
@@ -151,8 +147,8 @@ export default function WellnessTrendsView() {
             <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
               <defs>
                 <linearGradient id="wt-sleepFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={SLEEP_COLOR} stopOpacity={0.35} />
-                  <stop offset="100%" stopColor={SLEEP_COLOR} stopOpacity={0.02} />
+                  <stop offset="0%" stopColor={TREND_COLOR} stopOpacity={0.14} />
+                  <stop offset="100%" stopColor={TREND_COLOR} stopOpacity={0.02} />
                 </linearGradient>
               </defs>
               <XAxis {...xAxisProps} />
@@ -161,7 +157,7 @@ export default function WellnessTrendsView() {
               <Area
                 type="monotone"
                 dataKey="sleep_score"
-                stroke={SLEEP_COLOR}
+                stroke={TREND_COLOR}
                 strokeWidth={2}
                 fill="url(#wt-sleepFill)"
                 dot={false}
@@ -177,9 +173,9 @@ export default function WellnessTrendsView() {
       {/* Resting HR */}
       <div className="card wellness-card">
         <div className="wellness-card-header">
-          <div className="wellness-metric-title">Resting Heart Rate</div>
+          <div className="wellness-metric-title">Resting heart rate</div>
           {avgRhr != null && (
-            <div className="wellness-metric-value" style={{ color: RHR_COLOR }}>
+            <div className="wellness-metric-value">
               {avgRhr.toFixed(0)}
               <span className="wellness-metric-unit"> bpm avg · 7-day</span>
             </div>
@@ -198,7 +194,7 @@ export default function WellnessTrendsView() {
               <Line
                 type="monotone"
                 dataKey="resting_hr"
-                stroke={RHR_COLOR}
+                stroke={TREND_COLOR}
                 strokeWidth={2}
                 dot={false}
                 name="RHR"
@@ -213,9 +209,9 @@ export default function WellnessTrendsView() {
       {/* Stress */}
       <div className="card wellness-card">
         <div className="wellness-card-header">
-          <div className="wellness-metric-title">Avg Stress</div>
+          <div className="wellness-metric-title">Avg stress</div>
           {avgStress != null && (
-            <div className="wellness-metric-value" style={{ color: STRESS_COLOR }}>
+            <div className="wellness-metric-value">
               {avgStress.toFixed(0)}
               <span className="wellness-metric-unit"> / 100 avg · 7-day</span>
             </div>
@@ -230,8 +226,8 @@ export default function WellnessTrendsView() {
             <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
               <defs>
                 <linearGradient id="wt-stressFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={STRESS_COLOR} stopOpacity={0.4} />
-                  <stop offset="100%" stopColor={STRESS_COLOR} stopOpacity={0.02} />
+                  <stop offset="0%" stopColor={TREND_COLOR} stopOpacity={0.14} />
+                  <stop offset="100%" stopColor={TREND_COLOR} stopOpacity={0.02} />
                 </linearGradient>
               </defs>
               <XAxis {...xAxisProps} />
@@ -240,7 +236,7 @@ export default function WellnessTrendsView() {
               <Area
                 type="monotone"
                 dataKey="stress"
-                stroke={STRESS_COLOR}
+                stroke={TREND_COLOR}
                 strokeWidth={2}
                 fill="url(#wt-stressFill)"
                 dot={false}
@@ -258,7 +254,7 @@ export default function WellnessTrendsView() {
         <div className="wellness-card-header">
           <div className="wellness-metric-title">Body Battery</div>
           {avgBatteryHigh != null && (
-            <div className="wellness-metric-value" style={{ color: BATTERY_COLOR }}>
+            <div className="wellness-metric-value">
               {avgBatteryHigh.toFixed(0)}
               <span className="wellness-metric-unit"> high avg · 7-day</span>
             </div>
@@ -273,8 +269,8 @@ export default function WellnessTrendsView() {
             <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
               <defs>
                 <linearGradient id="wt-batteryFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={BATTERY_COLOR} stopOpacity={0.35} />
-                  <stop offset="100%" stopColor={BATTERY_COLOR} stopOpacity={0.02} />
+                  <stop offset="0%" stopColor={TREND_COLOR} stopOpacity={0.14} />
+                  <stop offset="100%" stopColor={TREND_COLOR} stopOpacity={0.02} />
                 </linearGradient>
               </defs>
               <XAxis {...xAxisProps} />
@@ -283,7 +279,7 @@ export default function WellnessTrendsView() {
               <Area
                 type="monotone"
                 dataKey="battery_high"
-                stroke={BATTERY_COLOR}
+                stroke={TREND_COLOR}
                 strokeWidth={2}
                 fill="url(#wt-batteryFill)"
                 dot={false}
@@ -294,7 +290,7 @@ export default function WellnessTrendsView() {
               <Line
                 type="monotone"
                 dataKey="battery_low"
-                stroke={BATTERY_COLOR}
+                stroke={SERIES_COLORS[1]}
                 strokeWidth={1.5}
                 strokeDasharray="3 2"
                 dot={false}
@@ -313,7 +309,7 @@ export default function WellnessTrendsView() {
           <div className="wellness-card-header">
             <div className="wellness-metric-title">HRV (overnight)</div>
             {avgHrv != null && (
-              <div className="wellness-metric-value" style={{ color: HRV_COLOR }}>
+              <div className="wellness-metric-value">
                 {avgHrv.toFixed(0)}
                 <span className="wellness-metric-unit"> ms avg · 7-day</span>
               </div>
@@ -331,8 +327,8 @@ export default function WellnessTrendsView() {
               <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
                 <defs>
                   <linearGradient id="wt-hrvFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={HRV_COLOR} stopOpacity={0.35} />
-                    <stop offset="100%" stopColor={HRV_COLOR} stopOpacity={0.02} />
+                    <stop offset="0%" stopColor={TREND_COLOR} stopOpacity={0.14} />
+                    <stop offset="100%" stopColor={TREND_COLOR} stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
                 <XAxis {...xAxisProps} />
@@ -341,7 +337,7 @@ export default function WellnessTrendsView() {
                 <Area
                   type="monotone"
                   dataKey="hrv"
-                  stroke={HRV_COLOR}
+                  stroke={TREND_COLOR}
                   strokeWidth={2}
                   fill="url(#wt-hrvFill)"
                   dot={false}

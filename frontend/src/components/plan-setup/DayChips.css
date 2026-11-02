@@ -17,13 +17,13 @@
 }
 
 .dc-chip:hover {
-  border-color: var(--accent-light);
+  border-color: var(--text-muted);
   color: var(--text);
 }
 
 .dc-chip--on {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--on-ink);
   font-weight: 600;
 }

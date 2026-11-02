@@ -10,7 +10,7 @@ import {
 } from 'recharts'
 import { useCustomChartMetrics, useCustomChartData } from '../../api/hooks'
 import { useTheme } from '../../App'
-import { getChartTickColor, getTooltipProps, CHART_SERIES_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
+import { getChartTickColor, getTooltipProps, SERIES_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
 import Skeleton from '../ui/Skeleton'
 import type { CustomChartMetric, CustomChartMetricGroup } from '../../api/types'
 import './CustomChartsView.css'
@@ -27,12 +27,15 @@ const DAY_OPTIONS: { label: string; value: Days }[] = [
 const GROUP_LABELS: Record<CustomChartMetricGroup, string> = {
   activity: 'Activity',
   wellness: 'Wellness',
-  load: 'Training Load',
+  load: 'Training load',
 }
 
 const GROUP_ORDER: CustomChartMetricGroup[] = ['activity', 'wellness', 'load']
 
-const SERIES_COLORS = CHART_SERIES_COLORS
+/** Series are ink steps told apart by line style; the 4th (MAX_METRICS) reuses
+ * ink with a dash-dot so it never collides with the 1st. */
+const seriesColor = (i: number) => SERIES_COLORS[i % SERIES_COLORS.length]
+const SERIES_DASH = [undefined, '6 4', '2 3', '8 3 2 3'] as const
 
 const MAX_METRICS = 4
 const CONFIG_KEY = 'runningCoach.customChart.config'
@@ -264,7 +267,7 @@ export default function CustomChartsView() {
                   yAxisId={id}
                   orientation={i % 2 === 0 ? 'left' : 'right'}
                   hide={i >= 2}
-                  tick={{ fontSize: 11, fill: SERIES_COLORS[i % SERIES_COLORS.length] }}
+                  tick={{ fontSize: 11, fill: seriesColor(i) }}
                   tickLine={false}
                   axisLine={false}
                   width={40}
@@ -284,7 +287,8 @@ export default function CustomChartsView() {
                   key={id}
                   dataKey={id}
                   yAxisId={id}
-                  stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
+                  stroke={seriesColor(i)}
+                  strokeDasharray={SERIES_DASH[i]}
                   strokeWidth={2}
                   dot={false}
                   connectNulls
@@ -297,10 +301,10 @@ export default function CustomChartsView() {
                   key={`${id}__prev`}
                   dataKey={`${id}__prev`}
                   yAxisId={id}
-                  stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
-                  strokeWidth={1.5}
-                  strokeDasharray="4 3"
-                  strokeOpacity={0.6}
+                  stroke={seriesColor(i)}
+                  strokeDasharray={SERIES_DASH[i]}
+                  strokeWidth={1}
+                  strokeOpacity={0.5}
                   dot={false}
                   connectNulls
                   name={`${metricsById.get(id)?.label ?? id} (previous)`}

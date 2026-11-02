@@ -47,25 +47,26 @@
 }
 
 .week-day.selected {
-  background: var(--accent);
+  background: var(--text);
 }
 
 .week-day.selected .day-name,
 .week-day.selected .day-number {
-  color: #fff;
+  color: var(--on-ink);
 }
 
 .week-day.today:not(.selected) .day-number {
-  color: var(--accent-light);
-  font-weight: 700;
+  color: var(--text);
+  font-weight: 800;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
 }
 
 .day-name {
-  font-size: 0.6rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  font-weight: 500;
+  font-weight: 550;
 }
 
 .day-number {
@@ -78,13 +79,13 @@
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: var(--accent-light);
+  background: var(--text);
   position: absolute;
   bottom: 2px;
 }
 
 .week-day.selected .day-dot {
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--on-ink);
 }
 
 /* Planned (unfulfilled) workout — hollow ring, not yet done */
@@ -94,7 +95,7 @@
 }
 
 .week-day.selected .day-dot.day-dot-planned {
-  border-color: rgba(255, 255, 255, 0.7);
+  border-color: var(--on-ink);
 }
 
 /* Upcoming race — distinct ring in the race colour */
@@ -106,5 +107,5 @@
 }
 
 .week-day.selected .day-dot.day-dot-race {
-  border-color: #fff;
+  border-color: var(--on-ink);
 }

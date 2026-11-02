@@ -53,12 +53,12 @@
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-size: 0.65rem;
+  font-size: 0.72rem;
   font-weight: 600;
   padding: 1px 6px;
   border-radius: 999px;
-  color: var(--success);
-  background: rgba(46, 204, 113, 0.14);
+  color: var(--text);
+  background: var(--bg-input);
   flex-shrink: 0;
 }
 

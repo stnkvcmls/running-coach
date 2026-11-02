@@ -44,7 +44,7 @@
 .profile-form__field input:focus,
 .profile-form__field textarea:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--text);
 }
 
 .profile-form__field input:disabled {
@@ -65,8 +65,8 @@
 .profile-form__submit {
   margin-top: 4px;
   padding: 12px 20px;
-  background: var(--accent);
-  color: #fff;
+  background: var(--text);
+  color: var(--on-ink);
   border-radius: var(--radius-sm);
   font-weight: 600;
   font-size: 0.9rem;

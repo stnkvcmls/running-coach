@@ -147,7 +147,7 @@ export default function PeakPerformancesView() {
     return (
       <div className="pr-view">
         <div className="pr-header">
-          <span className="pr-title">Peak Performances</span>
+          <span className="pr-title">Peak performances</span>
         </div>
         <div className="pr-empty">
           No personal records yet. Bests are detected automatically as you sync activities with
@@ -160,11 +160,11 @@ export default function PeakPerformancesView() {
   return (
     <div className="pr-view">
       <div className="pr-header">
-        <span className="pr-title">Peak Performances</span>
+        <span className="pr-title">Peak performances</span>
       </div>
 
       <div className="pr-card">
-        <div className="pr-card-title">Best Efforts</div>
+        <div className="pr-card-title">Best efforts</div>
         <div className="pr-chip-row">
           {labels.map(label => (
             <button
@@ -193,7 +193,7 @@ export default function PeakPerformancesView() {
 
       {durationBests.length > 0 && (
         <div className="pr-card">
-          <div className="pr-card-title">Duration Bests</div>
+          <div className="pr-card-title">Duration bests</div>
           <div className="pr-grid">
             {durationBests.map(r => (
               <Link key={r.id} to={`/activities/${r.activity_id}`} className="pr-tile">
@@ -211,7 +211,7 @@ export default function PeakPerformancesView() {
 
       <div className="pr-card">
         <div className="pr-card-title-row">
-          <div className="pr-card-title">Recent Records</div>
+          <div className="pr-card-title">Recent records</div>
           <div className="pr-tab-strip">
             {DAY_OPTIONS.map(o => (
               <button

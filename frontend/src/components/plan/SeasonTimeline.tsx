@@ -3,13 +3,16 @@ import { useSeasonPlan } from '../../api/hooks'
 import { todayStr } from '../../utils/planDayState'
 import './SeasonTimeline.css'
 
+// Each block takes the effort colour of its key sessions (base easy Z2,
+// build tempo Z4, peak intervals Z5, taper/recovery Z1).
 const PHASE_COLORS: Record<string, string> = {
-  base: 'var(--color-easy, #4caf50)',
-  build: 'var(--color-tempo, #e57373)',
-  peak: 'var(--color-interval, #e91e63)',
-  taper: 'var(--color-cross, #9b59b6)',
-  race: 'var(--accent)',
-  recovery: 'var(--color-strength, #9c7fe0)',
+  base: 'var(--color-easy)',
+  build: 'var(--color-tempo)',
+  peak: 'var(--color-interval)',
+  taper: 'var(--color-cross)',
+  // The race itself is a milestone, not a block intensity: ink.
+  race: 'var(--text)',
+  recovery: 'var(--color-strength)',
 }
 
 const PHASE_LABELS: Record<string, string> = {
@@ -46,7 +49,7 @@ export default function SeasonTimeline() {
       <div className="season-timeline-header">
         <Flag size={14} className="season-timeline-icon" />
         <span className="season-timeline-title">
-          Season Plan → {plan.goal_race_title || 'Goal Race'}
+          Season plan → {plan.goal_race_title || 'Goal race'}
         </span>
         {daysUntil >= 0 && <span className="season-timeline-days">{daysUntil} days</span>}
       </div>

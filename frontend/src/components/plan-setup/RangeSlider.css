@@ -13,8 +13,6 @@
 .rs-label {
   font-size: 0.82rem;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
   color: var(--text-muted);
 }
 
@@ -37,7 +35,7 @@
   appearance: none;
   background: linear-gradient(
     to right,
-    var(--accent) var(--rs-pct, 50%),
+    var(--text) var(--rs-pct, 50%),
     var(--border) var(--rs-pct, 50%)
   );
   border-radius: 3px;
@@ -52,7 +50,7 @@
   height: 24px;
   border-radius: 50%;
   background: var(--bg-card);
-  border: 3px solid var(--accent);
+  border: 3px solid var(--text);
   box-shadow: var(--shadow-sm);
   cursor: pointer;
 }
@@ -62,7 +60,7 @@
   height: 24px;
   border-radius: 50%;
   background: var(--bg-card);
-  border: 3px solid var(--accent);
+  border: 3px solid var(--text);
   box-shadow: var(--shadow-sm);
   cursor: pointer;
 }

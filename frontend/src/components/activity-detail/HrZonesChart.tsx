@@ -1,10 +1,9 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { useTheme } from '../../App'
 import { getChartTooltipStyle, getChartTickColor, getChartTooltipTextStyle } from '../../utils/theme'
-import { usePrefersReducedMotion } from '../../utils/chartTheme'
+import { effortZoneColor, usePrefersReducedMotion } from '../../utils/chartTheme'
 import './HrZonesChart.css'
 
-const ZONE_COLORS = ['#2ecc71', '#27ae60', '#f39c12', '#e67e22', '#e74c3c']
 const ZONE_LABELS = ['Zone 1', 'Zone 2', 'Zone 3', 'Zone 4', 'Zone 5']
 
 interface Props {
@@ -34,7 +33,7 @@ export default function HrZonesChart({ zones }: Props) {
 
   return (
     <section className="detail-section">
-      <h3 className="section-title">Heart Rate Zones</h3>
+      <h3 className="section-title">Heart rate zones</h3>
       <div
         className="card hr-zones-card"
         role="img"
@@ -59,7 +58,7 @@ export default function HrZonesChart({ zones }: Props) {
             />
             <Bar dataKey="minutes" radius={[0, 4, 4, 0]} barSize={20} isAnimationActive={!reduceMotion}>
               {data.map((_: any, i: number) => (
-                <Cell key={i} fill={ZONE_COLORS[i] || '#6c5ce7'} />
+                <Cell key={i} fill={effortZoneColor(i + 1)} />
               ))}
             </Bar>
           </BarChart>

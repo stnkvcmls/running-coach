@@ -22,7 +22,7 @@ const FITNESS_SECTIONS: { id: string; title: string; help?: ReactNode; View: Com
   {
     id: 'performance',
     title: 'Performance curve',
-    help: <StatHelpButton topic="performance-curve" label="Performance Curve" />,
+    help: <StatHelpButton topic="performance-curve" label="Performance curve" />,
     View: PerformanceCurveView,
   },
   { id: 'intensity', title: 'Intensity', View: IntensityTrendsView },

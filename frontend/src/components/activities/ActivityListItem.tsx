@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { ChevronRight, CheckCircle, Trophy } from 'lucide-react'
 import type { ActivitySummary } from '../../api/types'
-import { getActivityAccent } from '../../utils/colors'
+import { getActivityAccent, tint } from '../../utils/colors'
 import { getSportIcon } from '../../utils/sportIcon'
 import { formatDistance, formatDuration, formatPace } from '../../utils/formatting'
 import { format, parseISO } from '../../utils/date'
@@ -17,7 +17,7 @@ export default function ActivityListItem({ activity }: Props) {
 
   return (
     <Link to={`/activities/${activity.id}`} className="activity-list-item card">
-      <div className="ali-icon" style={{ background: `${color}22`, color }}>
+      <div className="ali-icon" style={{ background: tint(color), color }}>
         <SportIcon size={18} />
       </div>
       <div className="ali-main">

@@ -3,7 +3,7 @@ import { useZoneConfigs } from '../../api/hooks'
 import type { ChartSeries } from '../../api/types'
 import { useTheme } from '../../App'
 import { getChartTooltipStyle, getChartTickColor, getChartTooltipTextStyle } from '../../utils/theme'
-import { usePrefersReducedMotion } from '../../utils/chartTheme'
+import { effortZoneColor, usePrefersReducedMotion } from '../../utils/chartTheme'
 import './PaceZonesChart.css'
 
 interface Props {
@@ -68,7 +68,8 @@ export default function PaceZonesChart({ paceSeries }: Props) {
     return {
       zone: `Z${z.zone_number}: ${z.zone_name}`,
       pct,
-      color: z.zone_color,
+      // Z1–Z5 on the app's effort scale, not the colour stored in the zone config.
+      color: effortZoneColor(z.zone_number),
       rangeLabel,
     }
   })
@@ -80,7 +81,7 @@ export default function PaceZonesChart({ paceSeries }: Props) {
 
   return (
     <section className="detail-section">
-      <h3 className="section-title">Pace Zones</h3>
+      <h3 className="section-title">Pace zones</h3>
       <div
         className="card pace-zones-card"
         role="img"

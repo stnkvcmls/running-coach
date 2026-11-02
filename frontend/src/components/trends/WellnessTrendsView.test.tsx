@@ -41,8 +41,8 @@ describe('WellnessTrendsView', () => {
     vi.stubGlobal('fetch', mockFetch([summary()]))
     renderWithProviders(<WellnessTrendsView />)
 
-    expect(await screen.findByText('Sleep Score')).toBeInTheDocument()
-    expect(screen.getByText('Resting Heart Rate')).toBeInTheDocument()
+    expect(await screen.findByText('Sleep score')).toBeInTheDocument()
+    expect(screen.getByText('Resting heart rate')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '30d' })).toHaveAttribute('aria-pressed', 'true')
   })
 
@@ -54,7 +54,7 @@ describe('WellnessTrendsView', () => {
       </ThemeContext.Provider>,
     )
 
-    expect(await screen.findByText('Sleep Score')).toBeInTheDocument()
+    expect(await screen.findByText('Sleep score')).toBeInTheDocument()
     expect(screen.getByText('Body Battery')).toBeInTheDocument()
   })
 
@@ -62,7 +62,7 @@ describe('WellnessTrendsView', () => {
     const fetchMock = mockFetch([summary()])
     vi.stubGlobal('fetch', fetchMock)
     renderWithProviders(<WellnessTrendsView />)
-    await screen.findByText('Sleep Score')
+    await screen.findByText('Sleep score')
 
     fireEvent.click(screen.getByRole('button', { name: '180d' }))
 

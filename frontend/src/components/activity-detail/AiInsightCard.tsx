@@ -16,7 +16,7 @@ export default function AiInsightCard({ insight, onReanalyze, isAnalyzing }: Pro
         <div className="ai-header">
           <div className="ai-title-row">
             <Lightbulb size={18} className="ai-icon" />
-            <h3 className="section-title" style={{ margin: 0 }}>Workout Insights</h3>
+            <h3 className="section-title" style={{ margin: 0 }}>Workout insights</h3>
           </div>
           <button
             className="analyze-btn"

@@ -97,18 +97,16 @@ export default function AerobicTrendsView() {
   const cardStyle: React.CSSProperties = {
     background: 'var(--surface)',
     border: '1px solid var(--border)',
-    borderRadius: 12,
+    borderRadius: 'var(--radius)',
     padding: '16px 20px',
     marginBottom: 16,
   }
 
   const labelStyle: React.CSSProperties = {
-    fontSize: '0.72rem',
-    fontWeight: 700,
-    letterSpacing: '0.08em',
-    color: 'var(--text-muted)',
+    fontSize: '1rem',
+    fontWeight: 680,
+    color: 'var(--text)',
     marginBottom: 12,
-    textTransform: 'uppercase' as const,
   }
 
   function ChartTooltip({ active, payload, unit }: { active?: boolean; payload?: any[]; unit: string }) {
@@ -137,7 +135,7 @@ export default function AerobicTrendsView() {
 
       {/* Decoupling chart */}
       <div style={cardStyle}>
-        <div style={labelStyle}>Aerobic Decoupling (%) — lower is better</div>
+        <div style={labelStyle}>Aerobic decoupling (%) — lower is better</div>
         <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '0 0 12px' }}>
           How much pace/HR efficiency drifts between the first and second half of a run. Under 5% = well coupled.
         </p>
@@ -150,10 +148,10 @@ export default function AerobicTrendsView() {
               <XAxis dataKey="label" tick={{ fontSize: 11, fill: tickColor }} tickLine={false} axisLine={false} />
               <YAxis tick={{ fontSize: 11, fill: tickColor }} tickLine={false} axisLine={false} tickFormatter={v => `${v}%`} />
               <Tooltip content={<ChartTooltip unit="%" />} />
-              <ReferenceLine y={5} stroke={AEROBIC_COLORS.good} strokeDasharray="4 3" strokeWidth={1.5} label={{ value: 'Good (5%)', position: 'right', fontSize: 10, fill: AEROBIC_COLORS.good }} />
-              <ReferenceLine y={10} stroke={AEROBIC_COLORS.high} strokeDasharray="4 3" strokeWidth={1.5} label={{ value: 'High (10%)', position: 'right', fontSize: 10, fill: AEROBIC_COLORS.high }} />
-              <Scatter dataKey="value" fill={AEROBIC_COLORS.decoupling} opacity={0.7} name="Decoupling" r={4} isAnimationActive={!reduceMotion} />
-              <Line dataKey="mean" stroke={AEROBIC_COLORS.decoupling} strokeWidth={2} dot={false} name="7-run avg" connectNulls isAnimationActive={!reduceMotion} />
+              <ReferenceLine y={5} stroke={AEROBIC_COLORS.reference} strokeDasharray="4 3" strokeWidth={1.5} label={{ value: 'Good (5%)', position: 'right', fontSize: 10, fill: tickColor }} />
+              <ReferenceLine y={10} stroke={AEROBIC_COLORS.reference} strokeDasharray="2 3" strokeWidth={1.5} label={{ value: 'High (10%)', position: 'right', fontSize: 10, fill: tickColor }} />
+              <Scatter dataKey="value" fill={AEROBIC_COLORS.points} opacity={0.7} name="Decoupling" r={4} isAnimationActive={!reduceMotion} />
+              <Line dataKey="mean" stroke={AEROBIC_COLORS.average} strokeWidth={2} dot={false} name="7-run avg" connectNulls isAnimationActive={!reduceMotion} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -161,7 +159,7 @@ export default function AerobicTrendsView() {
 
       {/* EF chart */}
       <div style={cardStyle}>
-        <div style={labelStyle}>Efficiency Factor (mm/s·bpm) — higher is better</div>
+        <div style={labelStyle}>Efficiency factor (mm/s·bpm) — higher is better</div>
         <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '0 0 12px' }}>
           Average GAP speed per heart rate beat. Rising EF over time indicates improving aerobic fitness.
         </p>
@@ -174,8 +172,8 @@ export default function AerobicTrendsView() {
               <XAxis dataKey="label" tick={{ fontSize: 11, fill: tickColor }} tickLine={false} axisLine={false} />
               <YAxis tick={{ fontSize: 11, fill: tickColor }} tickLine={false} axisLine={false} tickFormatter={v => `${v.toFixed(1)}`} />
               <Tooltip content={<ChartTooltip unit=" mm/s·bpm" />} />
-              <Scatter dataKey="value" fill={AEROBIC_COLORS.efficiency} opacity={0.7} name="EF" r={4} isAnimationActive={!reduceMotion} />
-              <Line dataKey="mean" stroke={AEROBIC_COLORS.efficiency} strokeWidth={2} dot={false} name="7-run avg" connectNulls isAnimationActive={!reduceMotion} />
+              <Scatter dataKey="value" fill={AEROBIC_COLORS.points} opacity={0.7} name="EF" r={4} isAnimationActive={!reduceMotion} />
+              <Line dataKey="mean" stroke={AEROBIC_COLORS.average} strokeWidth={2} dot={false} name="7-run avg" connectNulls isAnimationActive={!reduceMotion} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
