@@ -45,6 +45,14 @@ export function getChartTickColor(theme: Theme): string {
   return theme === 'light' ? '#6b7280' : '#888'
 }
 
+/**
+ * Width for a visible left `<YAxis>` with 10px ticks. Recharts right-aligns
+ * tick text 8px (tickSize 6 + tickMargin 2) inside this width, and several
+ * charts also pull the plot left with a -8 margin — at the old 28px that left
+ * ~12px for the label, so "100" rendered as "00". 36px fits three digits.
+ */
+export const Y_AXIS_WIDTH = 36
+
 /** Style object for a Recharts axis `tick` prop. */
 export function getAxisTick(theme: Theme, fontSize = 10): { fontSize: number; fill: string } {
   return { fontSize, fill: getChartTickColor(theme) }

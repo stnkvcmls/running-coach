@@ -1,0 +1,59 @@
+.appearance-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Full-width segmented control; same visual language as RangeSelector. No
+   `overflow: hidden` (it would clip the global :focus-visible ring), so the
+   end segments round their own outer corners instead. */
+.appearance-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.appearance-option {
+  min-height: 40px;
+  padding: 8px 12px;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.appearance-option:first-child {
+  border-radius: calc(var(--radius-sm) - 1px) 0 0 calc(var(--radius-sm) - 1px);
+}
+
+.appearance-option:last-child {
+  border-radius: 0 calc(var(--radius-sm) - 1px) calc(var(--radius-sm) - 1px) 0;
+}
+
+.appearance-option + .appearance-option {
+  border-left: 1px solid var(--border);
+}
+
+/* Lift the focused segment so a neighbour's background can't cover its ring. */
+.appearance-option:focus-visible {
+  position: relative;
+  z-index: 1;
+}
+
+.appearance-option.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.appearance-option:hover:not(.active) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.appearance-hint {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}

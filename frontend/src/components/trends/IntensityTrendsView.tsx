@@ -10,7 +10,7 @@ import {
 } from 'recharts'
 import { useIntensityTrends } from '../../api/hooks'
 import { useTheme } from '../../App'
-import { getChartTickColor, getTooltipProps, INTENSITY_ZONE_COLORS, INTENSITY_BUCKET_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
+import { getChartTickColor, getTooltipProps, INTENSITY_ZONE_COLORS, INTENSITY_BUCKET_COLORS, Y_AXIS_WIDTH, usePrefersReducedMotion } from '../../utils/chartTheme'
 import RangeSelector, { DEFAULT_RANGE_OPTIONS, type RangeDays } from '../ui/RangeSelector'
 import Skeleton from '../ui/Skeleton'
 import type { IntensityWeek } from '../../api/types'
@@ -162,7 +162,7 @@ export default function IntensityTrendsView() {
                 tick={{ fontSize: 10, fill: tickColor }}
                 axisLine={false}
                 tickLine={false}
-                width={28}
+                width={Y_AXIS_WIDTH}
               />
               <Tooltip
                 contentStyle={contentStyle}

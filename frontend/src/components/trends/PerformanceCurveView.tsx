@@ -13,7 +13,6 @@ import { useTheme } from '../../App'
 import { getChartTickColor, getTooltipProps, getGridStroke, PERFORMANCE_CURVE_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
 import Skeleton from '../ui/Skeleton'
 import type { PerformanceCurveCompareMode, PerformanceCurvePoint } from '../../api/types'
-import StatHelpButton from '../info/StatHelpButton'
 import './PerformanceCurveView.css'
 
 type Days = 30 | 60 | 90
@@ -121,7 +120,6 @@ export default function PerformanceCurveView() {
     return (
       <div className="perf-curve-view">
         <div className="perf-curve-header">
-          <Skeleton height={18} width={150} />
           <Skeleton height={30} width={180} radius="var(--radius-sm)" />
         </div>
         <div className="perf-curve-chart-card" style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)' }}>
@@ -138,11 +136,8 @@ export default function PerformanceCurveView() {
   if (!hasAnyData) {
     return (
       <div className="perf-curve-view">
+        {/* Titled (with its help link) by the Fitness section heading in TrendsView. */}
         <div className="perf-curve-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <span style={{ fontSize: '0.9rem', fontWeight: 700 }}>Performance Curve</span>
-            <StatHelpButton topic="performance-curve" label="Performance Curve" />
-          </div>
           <div className="perf-curve-tab-strip">
             {DAY_OPTIONS.map(o => (
               <button
@@ -196,10 +191,6 @@ export default function PerformanceCurveView() {
   return (
     <div className="perf-curve-view">
       <div className="perf-curve-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <span style={{ fontSize: '0.9rem', fontWeight: 700 }}>Performance Curve</span>
-          <StatHelpButton topic="performance-curve" label="Performance Curve" />
-        </div>
         <div className="perf-curve-controls">
           <div className="perf-curve-tab-strip">
             {DAY_OPTIONS.map(o => (

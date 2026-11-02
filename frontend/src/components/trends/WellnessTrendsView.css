@@ -8,14 +8,11 @@
 
 .trends-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   margin-bottom: 4px;
-}
-
-.trends-daily-history-row {
-  display: flex;
-  justify-content: flex-end;
 }
 
 .wellness-card {

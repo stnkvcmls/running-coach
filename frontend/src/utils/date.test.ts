@@ -6,6 +6,7 @@ import {
   formatMonthKey,
   getWeekNumber,
   getTotalWeeksInYear,
+  daysBetweenKeys,
 } from './date'
 
 describe('getWeekDays', () => {
@@ -103,5 +104,19 @@ describe('getTotalWeeksInYear', () => {
   it('returns 53 for a long year', () => {
     // 2020 has 53 ISO weeks
     expect(getTotalWeeksInYear(2020)).toBe(53)
+  })
+})
+
+describe('daysBetweenKeys', () => {
+  it('counts calendar days between local date keys, signed', () => {
+    expect(daysBetweenKeys('2026-06-23', '2026-09-21')).toBe(90)
+    expect(daysBetweenKeys('2026-06-23', '2026-06-23')).toBe(0)
+    expect(daysBetweenKeys('2026-06-23', '2026-06-20')).toBe(-3)
+  })
+
+  it('is not thrown off by a DST change inside the range', () => {
+    // Spans the late-March and late-October clock changes in most zones.
+    expect(daysBetweenKeys('2026-03-20', '2026-04-03')).toBe(14)
+    expect(daysBetweenKeys('2026-10-20', '2026-11-03')).toBe(14)
   })
 })

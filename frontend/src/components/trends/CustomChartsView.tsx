@@ -175,7 +175,6 @@ export default function CustomChartsView() {
     return (
       <div className="custom-chart-view">
         <div className="trends-header">
-          <Skeleton height={22} width={140} />
           <Skeleton height={30} width={220} radius="var(--radius-sm)" />
         </div>
         <Skeleton height={120} radius="var(--radius)" />
@@ -185,8 +184,8 @@ export default function CustomChartsView() {
 
   return (
     <div className="custom-chart-view">
+      {/* Titled "Build a chart" by its Fitness section heading in TrendsView. */}
       <div className="trends-header">
-        <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700 }}>Custom Chart</h2>
         <div className="trends-range-tabs">
           {DAY_OPTIONS.map(o => (
             <button

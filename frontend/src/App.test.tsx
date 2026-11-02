@@ -34,12 +34,21 @@ describe('useRouteMeta chrome matrix', () => {
     expect(metaAt(path).chrome).toBe(chrome)
   })
 
-  it('only shows the week-label suffix on Today and Plan', () => {
-    expect(metaAt('/').weekLabel).toBe(true)
-    expect(metaAt('/plan').weekLabel).toBe(true)
-    expect(metaAt('/chat').weekLabel).toBeFalsy()
-    expect(metaAt('/activities').weekLabel).toBeFalsy()
-    expect(metaAt('/trends').weekLabel).toBeFalsy()
+  it('renders the week strip on Today only (the sole DateContext reader)', () => {
+    const withStrip = [
+      '/', '/plan', '/chat', '/activities', '/trends', '/daily',
+      '/activities/42', '/settings',
+    ].filter(path => metaAt(path).weekStrip)
+    expect(withStrip).toEqual(['/'])
+  })
+
+  it('gives Today the training-block subtitle and Plan the goal-race subtitle, nobody else', () => {
+    expect(metaAt('/').subtitle).toBe('block')
+    expect(metaAt('/plan').subtitle).toBe('goal')
+    expect(metaAt('/chat').subtitle).toBeUndefined()
+    expect(metaAt('/activities').subtitle).toBeUndefined()
+    expect(metaAt('/trends').subtitle).toBeUndefined()
+    expect(metaAt('/daily').subtitle).toBeUndefined()
   })
 
   it('gives each main-chrome tab its contextual title', () => {

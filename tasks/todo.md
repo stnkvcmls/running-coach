@@ -196,3 +196,24 @@ Owner: "discard nothing os theme, i don't like it and it's unreadable".
       "current" screenshots recaptured from `main`.
 - [x] `docs/NOTHING_OS_SKIN_PLAN.md` marked abandoned. Skin branch left
       unmerged; deleting it is the owner's call.
+
+# UI/UX critique implementation (branch claude/ui-ux-critique-implementation)
+
+Spec: docs/UI_UX_CRITIQUE.md §7 (+ §5 tokens, §8 decisions). Visual target:
+docs/mockups/ui-ux-critique-mockup.html. One commit per phase, single PR.
+Baseline: frontend 212 tests (2 load-flaky on this machine, pass in isolation),
+tsc clean.
+
+## Waves
+- [x] Wave A (parallel): B1 backend — 1.1 same-day plan matching, 4.6 Garmin
+      HRV baseline (sync + migration + schema + tests) · F1 frontend — 1.3 axis,
+      1.4 readiness contrast, Phase 2 chrome/IA (week strip on Today only,
+      training-context subtitle, System/Light/Dark + Appearance section, sync pill
+      only when wrong, Progress tabs Body/Fitness/Records). 1.2 superseded by 4.5.
+- [ ] Wave B: F2 — Phase 3 visual identity (tokens, effort scale, Archivo
+      self-hosted, ink actions, sentence case, no shadows)
+- [ ] Wave C (parallel): F3 — Phase 4 Today · F4 — Phase 7 Settings index
+- [ ] Wave D (parallel): F5 — Phase 5 Plan · F6 — Phase 6 Activities, detail, Progress Body
+- [ ] After each wave: build + tests + real-browser screenshots (390/1280, light/dark)
+      against perf.db with pinned clocks; fix; commit
+- [ ] PR

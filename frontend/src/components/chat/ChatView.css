@@ -1,7 +1,7 @@
 .chat-view {
   display: flex;
   flex-direction: column;
-  min-height: calc(100dvh - var(--top-bar-height) - var(--calendar-strip-height) - var(--nav-height) - env(safe-area-inset-bottom, 0px));
+  min-height: calc(100dvh - var(--top-bar-height) - var(--nav-height) - env(safe-area-inset-bottom, 0px));
 }
 
 .chat-messages {

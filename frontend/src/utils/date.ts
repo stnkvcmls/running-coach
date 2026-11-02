@@ -1,4 +1,4 @@
-import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, addMonths, subMonths, startOfMonth, eachDayOfInterval, getDay, isSameDay, isToday as fnsIsToday, parseISO, getISOWeek, getISOWeeksInYear, differenceInCalendarWeeks } from 'date-fns'
+import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, addMonths, subMonths, startOfMonth, eachDayOfInterval, getDay, isSameDay, isToday as fnsIsToday, parseISO, getISOWeek, getISOWeeksInYear, differenceInCalendarWeeks, differenceInCalendarDays } from 'date-fns'
 
 export { format, addWeeks, subWeeks, addMonths, subMonths, startOfMonth, startOfWeek, isSameDay, parseISO }
 
@@ -26,6 +26,12 @@ export function getMonthDays(date: Date): (Date | null)[] {
 
 export function formatDateKey(date: Date): string {
   return format(date, 'yyyy-MM-dd')
+}
+
+/** Calendar days from `fromKey` to `toKey` ('yyyy-MM-dd', both read as local
+ * dates, so DST and UTC offsets can't shift the count). Negative if `toKey` is earlier. */
+export function daysBetweenKeys(fromKey: string, toKey: string): number {
+  return differenceInCalendarDays(parseISO(toKey), parseISO(fromKey))
 }
 
 export function formatMonthKey(date: Date): string {

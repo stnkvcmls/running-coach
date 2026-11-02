@@ -60,10 +60,11 @@ export function useMe() {
   })
 }
 
-export function useToday(date: string) {
+export function useToday(date: string, { enabled = true }: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: ['today', date],
     queryFn: () => apiGet<TodayResponse>(`/today?date=${date}`),
+    enabled,
   })
 }
 

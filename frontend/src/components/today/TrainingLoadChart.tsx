@@ -12,7 +12,7 @@ import {
 import { useTrainingLoad } from '../../api/hooks'
 import type { TrainingLoadPoint } from '../../api/types'
 import { useTheme } from '../../App'
-import { getAxisTick, getGridStroke, getTooltipProps, usePrefersReducedMotion } from '../../utils/chartTheme'
+import { getAxisTick, getGridStroke, getTooltipProps, Y_AXIS_WIDTH, usePrefersReducedMotion } from '../../utils/chartTheme'
 import './TrainingLoadChart.css'
 
 interface Props {
@@ -179,7 +179,7 @@ export default function TrainingLoadChart({ current }: Props) {
                 tickLine={false}
                 minTickGap={28}
               />
-              <YAxis yAxisId="load" tick={getAxisTick(theme)} axisLine={false} tickLine={false} width={28} />
+              <YAxis yAxisId="load" tick={getAxisTick(theme)} axisLine={false} tickLine={false} width={Y_AXIS_WIDTH} />
               <YAxis yAxisId="form" orientation="right" hide />
               {hasAcwr && (
                 <YAxis yAxisId="acwr" orientation="right" domain={[0, 2.5]} hide />

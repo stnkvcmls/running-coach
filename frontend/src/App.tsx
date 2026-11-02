@@ -19,6 +19,7 @@ import ChatView from './components/chat/ChatView'
 import { ToastHost } from './components/ui/Toast'
 import ErrorBoundary from './components/ui/ErrorBoundary'
 import { useAthleteProfile } from './api/hooks'
+import { useThemePreference, type ResolvedTheme, type ThemePreference } from './hooks/useThemePreference'
 import './App.css'
 
 interface DateContextType {
@@ -36,13 +37,17 @@ export function useDateContext() {
 }
 
 interface ThemeContextType {
-  theme: 'dark' | 'light'
-  toggleTheme: () => void
+  /** The painted theme ('system' already resolved) — what charts read. */
+  theme: ResolvedTheme
+  /** The athlete's Settings → Appearance choice. */
+  preference: ThemePreference
+  setPreference: (preference: ThemePreference) => void
 }
 
 export const ThemeContext = createContext<ThemeContextType>({
   theme: 'dark',
-  toggleTheme: () => {},
+  preference: 'system',
+  setPreference: () => {},
 })
 
 export function useTheme() {
@@ -52,19 +57,25 @@ export function useTheme() {
 export interface RouteMeta {
   path: string
   title: string
-  /** Show the "Week N/52" suffix next to the title (Today + Plan only). */
-  weekLabel?: boolean
   chrome: 'main' | 'detail'
+  /** Render the week strip / month calendar under the TopBar, plus its
+   * toggle. Only Today reads DateContext, so only Today sets it; the TopBar
+   * then titles the page with the selected date instead of `title`. */
+  weekStrip?: boolean
+  /** Training-context line under the TopBar title: 'block' → "Build block,
+   * week 1 of 4"; 'goal' → "Berlin Marathon in 90 days". */
+  subtitle?: 'block' | 'goal'
 }
 
 const DEFAULT_ROUTE_META: RouteMeta = { path: '', title: '', chrome: 'main' }
 
-// Single source of truth for page chrome: 'main' renders TopBar + calendar
-// strip + bottom nav; 'detail' renders none of those (the view supplies its
-// own header, e.g. ActivityDetailView's back-arrow header).
+// Single source of truth for page chrome: 'main' renders TopBar + bottom nav
+// (+ the calendar strip where `weekStrip` is set); 'detail' renders none of
+// those (the view supplies its own header, e.g. ActivityDetailView's
+// back-arrow header).
 const ROUTES: RouteMeta[] = [
-  { path: '/', title: 'Today', weekLabel: true, chrome: 'main' },
-  { path: '/plan', title: 'Plan', weekLabel: true, chrome: 'main' },
+  { path: '/', title: 'Today', weekStrip: true, subtitle: 'block', chrome: 'main' },
+  { path: '/plan', title: 'Plan', subtitle: 'goal', chrome: 'main' },
   { path: '/chat', title: 'Coach', chrome: 'main' },
   { path: '/activities', title: 'Activities', chrome: 'main' },
   { path: '/trends', title: 'Progress', chrome: 'main' },
@@ -89,18 +100,15 @@ export function useRouteMeta(): RouteMeta {
 export default function App() {
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [calendarExpanded, setCalendarExpanded] = useState(false)
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    return (localStorage.getItem('theme') as 'dark' | 'light') || 'dark'
-  })
+  const { theme, preference, setPreference } = useThemePreference()
   const location = useLocation()
   const navigate = useNavigate()
 
+  // index.html's pre-paint script applies the same resolution before React
+  // loads; this keeps it current when the preference or OS setting changes.
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
-    localStorage.setItem('theme', theme)
   }, [theme])
-
-  const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark')
 
   // First-run: redirect to onboarding when no athlete profile exists yet.
   const { data: profile, isLoading: profileLoading } = useAthleteProfile()
@@ -112,23 +120,22 @@ export default function App() {
 
   const routeMeta = useRouteMeta()
   const isDetailPage = routeMeta.chrome === 'detail'
-  const showCalendar = !isDetailPage
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, preference, setPreference }}>
     <DateContext.Provider value={{ selectedDate, setSelectedDate }}>
       <div className="app-shell">
-        {showCalendar && (
-          <>
-            <TopBar
-              calendarExpanded={calendarExpanded}
-              onToggleCalendar={() => setCalendarExpanded(!calendarExpanded)}
-            />
-            <CalendarContainer
-              expanded={calendarExpanded}
-              onToggle={setCalendarExpanded}
-            />
-          </>
+        {!isDetailPage && (
+          <TopBar
+            calendarExpanded={calendarExpanded}
+            onToggleCalendar={() => setCalendarExpanded(!calendarExpanded)}
+          />
+        )}
+        {!isDetailPage && routeMeta.weekStrip && (
+          <CalendarContainer
+            expanded={calendarExpanded}
+            onToggle={setCalendarExpanded}
+          />
         )}
         <div className="app-body">
           <main className={`app-main ${!isDetailPage ? 'app-main--with-nav' : ''}`}>

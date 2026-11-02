@@ -11,7 +11,7 @@ import {
 } from 'recharts'
 import { useWellnessTrends } from '../../api/hooks'
 import { useTheme } from '../../App'
-import { getChartTickColor, getTooltipProps, WELLNESS_METRIC_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
+import { getChartTickColor, getTooltipProps, WELLNESS_METRIC_COLORS, Y_AXIS_WIDTH, usePrefersReducedMotion } from '../../utils/chartTheme'
 import RangeSelector, { DEFAULT_RANGE_OPTIONS, type RangeDays } from '../ui/RangeSelector'
 import Skeleton from '../ui/Skeleton'
 import './WellnessTrendsView.css'
@@ -34,8 +34,8 @@ function WellnessSkeleton() {
   return (
     <div className="trends-view">
       <div className="trends-header">
-        <Skeleton height={18} width={140} />
         <Skeleton height={30} width={160} radius="var(--radius-sm)" />
+        <Skeleton height={18} width={100} />
       </div>
       {[0, 1, 2, 3].map(i => (
         <div key={i} className="card wellness-card">
@@ -117,17 +117,14 @@ export default function WellnessTrendsView() {
     tick: { fontSize: 10, fill: tickColor } as any,
     axisLine: false,
     tickLine: false,
-    width: 28,
+    width: Y_AXIS_WIDTH,
   }
 
   return (
     <div className="trends-view">
+      {/* No heading: the "Body" tab already names this panel (G3). */}
       <div className="trends-header">
-        <h2 className="section-title">Wellness Trends</h2>
         <RangeSelector options={DEFAULT_RANGE_OPTIONS} value={days} onChange={setDays} />
-      </div>
-
-      <div className="trends-daily-history-row">
         <Link to="/daily" className="btn-ghost">Daily history →</Link>
       </div>
 

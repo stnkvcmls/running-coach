@@ -40,7 +40,6 @@ function AerobicSkeleton() {
   return (
     <div style={{ padding: '16px 12px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <Skeleton height={22} width={160} />
         <Skeleton height={30} width={180} radius="var(--radius-sm)" />
       </div>
       {[0, 1].map(i => (
@@ -131,9 +130,8 @@ export default function AerobicTrendsView() {
 
   return (
     <div style={{ padding: '16px 12px' }}>
-      {/* Header */}
+      {/* Range control; titled by the Fitness section heading in TrendsView. */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700 }}>Aerobic Efficiency</h2>
         <RangeSelector options={DEFAULT_RANGE_OPTIONS} value={days} onChange={setDays} />
       </div>
 
