@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import SplitsBars from './SplitsBars'
+import { ThemeContext } from '../../App'
 import type { MetricZone } from '../../api/types'
 
 const splits = [
@@ -51,5 +52,27 @@ describe('SplitsBars', () => {
   it('renders nothing when there are no splits', () => {
     const { container } = render(<SplitsBars splits={[]} color="#6c5ce7" />)
     expect(container).toBeEmptyDOMElement()
+  })
+
+  it('maps bars and legend swatches onto SIGNAL_ZONE_RAMP, by zone identity, under nothing-signal', () => {
+    const { container } = render(
+      <ThemeContext.Provider value={{ theme: 'dark', toggleTheme: () => {}, skin: 'nothing-signal', setSkin: () => {} }}>
+        <SplitsBars splits={splits} paceZones={paceZones} color="#6c5ce7" />
+      </ThemeContext.Provider>,
+    )
+
+    const bars = container.querySelectorAll('.split-bar')
+    // "Fast" is zones[0] -> SIGNAL_ZONE_RAMP[0] (#3a3a3a); "Easy" is zones[1] -> SIGNAL_ZONE_RAMP[1] (#5c5c5c).
+    expect((bars[0] as HTMLElement).style.background).toBe('rgb(92, 92, 92)')
+    expect((bars[1] as HTMLElement).style.background).toBe('rgb(92, 92, 92)')
+    expect((bars[2] as HTMLElement).style.background).toBe('rgb(58, 58, 58)')
+
+    // The legend must still render both zones — the identity-based filter
+    // still finds them even though getZoneColor no longer returns zone_color.
+    expect(screen.getByText('Fast')).toBeInTheDocument()
+    expect(screen.getByText('Easy')).toBeInTheDocument()
+    const swatches = container.querySelectorAll('.split-legend i')
+    expect((swatches[0] as HTMLElement).style.background).toBe('rgb(58, 58, 58)')
+    expect((swatches[1] as HTMLElement).style.background).toBe('rgb(92, 92, 92)')
   })
 })

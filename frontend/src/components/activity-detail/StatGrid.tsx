@@ -1,3 +1,4 @@
+import Numeral from '../ui/Numeral'
 import './StatGrid.css'
 
 interface Stat {
@@ -19,7 +20,7 @@ export default function StatGrid({ stats, columns = 3, large = false }: Props) {
         <div key={i} className="stat-cell">
           <span className="stat-label">{s.label}</span>
           <span className={large ? 'stat-value-lg' : 'stat-value'}>
-            {s.value}
+            <Numeral value={s.value} />
             {s.unit && <span className="stat-unit">{s.unit}</span>}
           </span>
         </div>

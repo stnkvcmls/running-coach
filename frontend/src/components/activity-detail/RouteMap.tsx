@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ActivityRoute } from '../../api/types'
+import { useSkin, useTheme } from '../../App'
+import { signalRampColor } from '../../utils/chartTheme'
 import './RouteMap.css'
 
 type Mode = 'solid' | 'hr' | 'pace' | 'power' | 'elevation'
@@ -42,6 +44,8 @@ export default function RouteMap({ route, activityColor }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [mode, setMode] = useState<Mode>('solid')
   const [width, setWidth] = useState(0)
+  const { skin } = useSkin()
+  const { theme } = useTheme()
 
   // Keep only valid GPS points, carrying their original index so metric
   // streams (aligned 1:1 with route.points) stay matched up.
@@ -149,16 +153,27 @@ export default function RouteMap({ route, activityColor }: Props) {
 
     const segCount = projected.length - 1
 
+    // Canvas can't read var() — under nothing-signal (whose rule is "the only
+    // non-ink colour is the red accent") the route collapses to the accent
+    // colour instead of the passed-in per-activity hue. nothing-app's whole
+    // point is keeping per-activity colours, like every other chart series,
+    // so it's deliberately excluded here.
+    const strokeColor = skin === 'nothing-signal'
+      ? getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || activityColor
+      : activityColor
+
     // Per-segment colour for the active metric (value at the segment's start
-    // point, normalised across the activity's own range).
+    // point, normalised across the activity's own range). Under nothing-signal
+    // this must stay monochrome too, or switching to HR/pace/power/elevation
+    // colouring paints a full blue->red rainbow on an otherwise ink-only skin.
     const segColor = (i: number): string => {
-      if (mode === 'solid' || !activeMetric?.data || !range) return activityColor
+      if (mode === 'solid' || !activeMetric?.data || !range) return strokeColor
       const v = activeMetric.data[projected[i].idx]
-      if (v === null || v === undefined) return activityColor
+      if (v === null || v === undefined) return strokeColor
       const span = range.max - range.min || 1
       let t = (v - range.min) / span
       if (activeMetric.reverse) t = 1 - t
-      return rampColor(t)
+      return skin === 'nothing-signal' ? signalRampColor(theme, t) : rampColor(t)
     }
 
     const drawMarker = (x: number, y: number, fill: string, r = 5) => {
@@ -167,7 +182,7 @@ export default function RouteMap({ route, activityColor }: Props) {
       ctx.fillStyle = fill
       ctx.fill()
       ctx.lineWidth = 2
-      ctx.strokeStyle = '#fff'
+      ctx.strokeStyle = theme === 'light' ? '#1a1a2e' : '#fff'
       ctx.stroke()
       ctx.lineWidth = LINE_WIDTH
     }
@@ -201,7 +216,7 @@ export default function RouteMap({ route, activityColor }: Props) {
       const n = Math.min(count, segCount)
       if (mode === 'solid') {
         // Single stroke for the whole drawn portion.
-        ctx.strokeStyle = activityColor
+        ctx.strokeStyle = strokeColor
         ctx.beginPath()
         ctx.moveTo(projected[0].x, projected[0].y)
         for (let i = 1; i <= n; i++) ctx.lineTo(projected[i].x, projected[i].y)
@@ -223,7 +238,7 @@ export default function RouteMap({ route, activityColor }: Props) {
       if (n >= segCount) {
         drawFinishMarker(last.x, last.y) // finish (checkered flag)
       } else {
-        drawMarker(projected[n].x, projected[n].y, activityColor, 4.5) // current position
+        drawMarker(projected[n].x, projected[n].y, strokeColor, 4.5) // current position
       }
     }
 
@@ -256,7 +271,7 @@ export default function RouteMap({ route, activityColor }: Props) {
       cancelAnimationFrame(raf)
       if (timer) clearTimeout(timer)
     }
-  }, [projected, width, mode, activeMetric, range, activityColor])
+  }, [projected, width, mode, activeMetric, range, activityColor, skin, theme])
 
   if (!valid) return null
 
@@ -264,6 +279,8 @@ export default function RouteMap({ route, activityColor }: Props) {
     activeMetric?.mode === 'pace'
       ? `${Math.floor(v)}:${Math.round((v - Math.floor(v)) * 60).toString().padStart(2, '0')}`
       : Math.round(v).toString()
+
+  const legendColor = (t: number) => skin === 'nothing-signal' ? signalRampColor(theme, t) : rampColor(t)
 
   return (
     <section className="detail-section">
@@ -300,8 +317,8 @@ export default function RouteMap({ route, activityColor }: Props) {
               className="route-legend-bar"
               style={{
                 background: activeMetric.reverse
-                  ? `linear-gradient(to right, ${rampColor(1)}, ${rampColor(0)})`
-                  : `linear-gradient(to right, ${rampColor(0)}, ${rampColor(1)})`,
+                  ? `linear-gradient(to right, ${legendColor(1)}, ${legendColor(0)})`
+                  : `linear-gradient(to right, ${legendColor(0)}, ${legendColor(1)})`,
               }}
             />
             <span>{fmt(range.max)} {activeMetric.unit}</span>

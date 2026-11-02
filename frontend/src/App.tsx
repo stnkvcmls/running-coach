@@ -35,18 +35,35 @@ export function useDateContext() {
   return useContext(DateContext)
 }
 
+export type Skin = 'default' | 'nothing-signal' | 'nothing-app'
+
+export const SKIN_LABELS: Record<Skin, string> = {
+  'default': 'Default',
+  'nothing-signal': 'Nothing — signal red',
+  'nothing-app': 'Nothing — app inks',
+}
+
 interface ThemeContextType {
   theme: 'dark' | 'light'
   toggleTheme: () => void
+  skin: Skin
+  setSkin: (s: Skin) => void
 }
 
 export const ThemeContext = createContext<ThemeContextType>({
   theme: 'dark',
   toggleTheme: () => {},
+  skin: 'default',
+  setSkin: () => {},
 })
 
 export function useTheme() {
   return useContext(ThemeContext)
+}
+
+export function useSkin() {
+  const { skin, setSkin } = useContext(ThemeContext)
+  return { skin, setSkin }
 }
 
 export interface RouteMeta {
@@ -92,6 +109,10 @@ export default function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     return (localStorage.getItem('theme') as 'dark' | 'light') || 'dark'
   })
+  const [skin, setSkin] = useState<Skin>(() => {
+    const stored = localStorage.getItem('skin')
+    return stored === 'nothing-signal' || stored === 'nothing-app' ? stored : 'default'
+  })
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -99,6 +120,11 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', theme)
     localStorage.setItem('theme', theme)
   }, [theme])
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-skin', skin)
+    localStorage.setItem('skin', skin)
+  }, [skin])
 
   const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark')
 
@@ -115,7 +141,7 @@ export default function App() {
   const showCalendar = !isDetailPage
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, skin, setSkin }}>
     <DateContext.Provider value={{ selectedDate, setSelectedDate }}>
       <div className="app-shell">
         {showCalendar && (

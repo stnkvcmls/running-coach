@@ -10,8 +10,8 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { useAerobicTrends } from '../../api/hooks'
-import { useTheme } from '../../App'
-import { getChartTickColor, getTooltipProps, AEROBIC_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
+import { useTheme, useSkin } from '../../App'
+import { getChartTickColor, getTooltipProps, getSeriesColors, AEROBIC_COLORS as AEROBIC_COLORS_DEFAULT, usePrefersReducedMotion } from '../../utils/chartTheme'
 import RangeSelector, { DEFAULT_RANGE_OPTIONS, type RangeDays } from '../ui/RangeSelector'
 import Skeleton from '../ui/Skeleton'
 import type { AerobicTrendPoint } from '../../api/types'
@@ -57,9 +57,11 @@ export default function AerobicTrendsView() {
   const [days, setDays] = useState<RangeDays>(90)
   const { data, isLoading } = useAerobicTrends(days)
   const { theme } = useTheme()
-  const tickColor = getChartTickColor(theme)
-  const tooltipProps = getTooltipProps(theme)
+  const { skin } = useSkin()
+  const tickColor = getChartTickColor(theme, skin)
+  const tooltipProps = getTooltipProps(theme, skin)
   const reduceMotion = usePrefersReducedMotion()
+  const AEROBIC_COLORS = getSeriesColors(theme, skin, AEROBIC_COLORS_DEFAULT)
 
   if (isLoading) {
     return <AerobicSkeleton />

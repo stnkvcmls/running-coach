@@ -9,9 +9,10 @@ import {
   CartesianGrid,
 } from 'recharts'
 import { usePerformanceCurve, type PerformanceCurveCompareParams } from '../../api/hooks'
-import { useTheme } from '../../App'
-import { getChartTickColor, getTooltipProps, getGridStroke, PERFORMANCE_CURVE_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
+import { useTheme, useSkin } from '../../App'
+import { getChartTickColor, getTooltipProps, getGridStroke, getSeriesColors, PERFORMANCE_CURVE_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
 import Skeleton from '../ui/Skeleton'
+import Numeral from '../ui/Numeral'
 import type { PerformanceCurveCompareMode, PerformanceCurvePoint } from '../../api/types'
 import StatHelpButton from '../info/StatHelpButton'
 import './PerformanceCurveView.css'
@@ -33,8 +34,6 @@ const COMPARE_OPTIONS: { label: string; value: CompareChoice }[] = [
   { label: 'Vs. year ago', value: 'year_ago' },
   { label: 'Vs. custom range', value: 'custom' },
 ]
-
-const { actual: ACTUAL_COLOR, model: MODEL_COLOR, compare: COMPARE_COLOR } = PERFORMANCE_CURVE_COLORS
 
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10)
@@ -113,9 +112,11 @@ export default function PerformanceCurveView() {
 
   const { data, isLoading } = usePerformanceCurve(days, compareParams)
   const { theme } = useTheme()
-  const tickColor = getChartTickColor(theme)
-  const { contentStyle } = getTooltipProps(theme)
+  const { skin } = useSkin()
+  const tickColor = getChartTickColor(theme, skin)
+  const { contentStyle } = getTooltipProps(theme, skin)
   const reduceMotion = usePrefersReducedMotion()
+  const { actual: ACTUAL_COLOR, model: MODEL_COLOR, compare: COMPARE_COLOR } = getSeriesColors(theme, skin, PERFORMANCE_CURVE_COLORS)
 
   if (isLoading) {
     return (
@@ -282,14 +283,15 @@ export default function PerformanceCurveView() {
               <div className="perf-param">
                 <span className="perf-param-label">Threshold Pace (CV)</span>
                 <span className="perf-param-value">
-                  {formatPaceDisplay(speedToPaceMinKm(data.critical_velocity))}
+                  <Numeral value={formatPaceDisplay(speedToPaceMinKm(data.critical_velocity)).replace('/km', '')} />
+                  <span className="perf-param-unit"> /km</span>
                 </span>
               </div>
               {data?.d_prime != null && (
                 <div className="perf-param">
                   <span className="perf-param-label">D′</span>
                   <span className="perf-param-value">
-                    {data.d_prime.toFixed(0)}<span className="perf-param-unit"> m</span>
+                    <Numeral value={data.d_prime.toFixed(0)} /><span className="perf-param-unit"> m</span>
                   </span>
                 </div>
               )}
@@ -300,14 +302,14 @@ export default function PerformanceCurveView() {
               <div className="perf-param">
                 <span className="perf-param-label">Critical Power</span>
                 <span className="perf-param-value">
-                  {data.critical_power.toFixed(0)}<span className="perf-param-unit"> W</span>
+                  <Numeral value={data.critical_power.toFixed(0)} /><span className="perf-param-unit"> W</span>
                 </span>
               </div>
               {data?.w_prime != null && (
                 <div className="perf-param">
                   <span className="perf-param-label">W′</span>
                   <span className="perf-param-value">
-                    {(data.w_prime / 1000).toFixed(1)}<span className="perf-param-unit"> kJ</span>
+                    <Numeral value={(data.w_prime / 1000).toFixed(1)} /><span className="perf-param-unit"> kJ</span>
                   </span>
                 </div>
               )}
@@ -315,7 +317,7 @@ export default function PerformanceCurveView() {
           )}
           <div className="perf-param">
             <span className="perf-param-label">Activities</span>
-            <span className="perf-param-value">{data?.activities_analyzed ?? 0}</span>
+            <span className="perf-param-value"><Numeral value={String(data?.activities_analyzed ?? 0)} /></span>
           </div>
         </div>
       )}
@@ -333,7 +335,7 @@ export default function PerformanceCurveView() {
           >
             <ResponsiveContainer width="100%" height={200}>
               <ComposedChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={getGridStroke(theme)} />
+                <CartesianGrid strokeDasharray="3 3" stroke={getGridStroke(theme, skin)} />
                 <XAxis
                   dataKey="label"
                   tick={{ fill: tickColor, fontSize: 10 }}

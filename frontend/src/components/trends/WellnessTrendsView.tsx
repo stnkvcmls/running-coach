@@ -10,19 +10,12 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { useWellnessTrends } from '../../api/hooks'
-import { useTheme } from '../../App'
-import { getChartTickColor, getTooltipProps, WELLNESS_METRIC_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
+import { useTheme, useSkin } from '../../App'
+import { getChartTickColor, getTooltipProps, getSeriesColors, WELLNESS_METRIC_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
 import RangeSelector, { DEFAULT_RANGE_OPTIONS, type RangeDays } from '../ui/RangeSelector'
 import Skeleton from '../ui/Skeleton'
+import Numeral from '../ui/Numeral'
 import './WellnessTrendsView.css'
-
-const {
-  sleep: SLEEP_COLOR,
-  restingHr: RHR_COLOR,
-  stress: STRESS_COLOR,
-  bodyBattery: BATTERY_COLOR,
-  hrv: HRV_COLOR,
-} = WELLNESS_METRIC_COLORS
 
 function avg7(data: any[], key: string): number | null {
   const vals = data.slice(-7).map(d => d[key]).filter((v: any) => v != null) as number[]
@@ -52,9 +45,17 @@ export default function WellnessTrendsView() {
   const [days, setDays] = useState<RangeDays>(30)
   const { data, isLoading } = useWellnessTrends(days)
   const { theme } = useTheme()
-  const tickColor = getChartTickColor(theme)
-  const { contentStyle } = getTooltipProps(theme)
+  const { skin } = useSkin()
+  const tickColor = getChartTickColor(theme, skin)
+  const { contentStyle } = getTooltipProps(theme, skin)
   const reduceMotion = usePrefersReducedMotion()
+  const {
+    sleep: SLEEP_COLOR,
+    restingHr: RHR_COLOR,
+    stress: STRESS_COLOR,
+    bodyBattery: BATTERY_COLOR,
+    hrv: HRV_COLOR,
+  } = getSeriesColors(theme, skin, WELLNESS_METRIC_COLORS)
 
   function MetricTooltip({ active, payload, label, unit }: { active?: boolean; payload?: any[]; label?: string; unit: string }) {
     if (!active || !payload?.length) return null
@@ -137,7 +138,7 @@ export default function WellnessTrendsView() {
           <div className="wellness-metric-title">Sleep Score</div>
           {avgSleepScore != null && (
             <div className="wellness-metric-value" style={{ color: SLEEP_COLOR }}>
-              {avgSleepScore.toFixed(0)}
+              <Numeral value={avgSleepScore.toFixed(0)} />
               <span className="wellness-metric-unit"> / 100</span>
             </div>
           )}
@@ -183,7 +184,7 @@ export default function WellnessTrendsView() {
           <div className="wellness-metric-title">Resting Heart Rate</div>
           {avgRhr != null && (
             <div className="wellness-metric-value" style={{ color: RHR_COLOR }}>
-              {avgRhr.toFixed(0)}
+              <Numeral value={avgRhr.toFixed(0)} />
               <span className="wellness-metric-unit"> bpm avg · 7-day</span>
             </div>
           )}
@@ -219,7 +220,7 @@ export default function WellnessTrendsView() {
           <div className="wellness-metric-title">Avg Stress</div>
           {avgStress != null && (
             <div className="wellness-metric-value" style={{ color: STRESS_COLOR }}>
-              {avgStress.toFixed(0)}
+              <Numeral value={avgStress.toFixed(0)} />
               <span className="wellness-metric-unit"> / 100 avg · 7-day</span>
             </div>
           )}
@@ -262,7 +263,7 @@ export default function WellnessTrendsView() {
           <div className="wellness-metric-title">Body Battery</div>
           {avgBatteryHigh != null && (
             <div className="wellness-metric-value" style={{ color: BATTERY_COLOR }}>
-              {avgBatteryHigh.toFixed(0)}
+              <Numeral value={avgBatteryHigh.toFixed(0)} />
               <span className="wellness-metric-unit"> high avg · 7-day</span>
             </div>
           )}
@@ -317,7 +318,7 @@ export default function WellnessTrendsView() {
             <div className="wellness-metric-title">HRV (overnight)</div>
             {avgHrv != null && (
               <div className="wellness-metric-value" style={{ color: HRV_COLOR }}>
-                {avgHrv.toFixed(0)}
+                <Numeral value={avgHrv.toFixed(0)} />
                 <span className="wellness-metric-unit"> ms avg · 7-day</span>
               </div>
             )}

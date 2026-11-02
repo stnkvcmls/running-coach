@@ -5,6 +5,7 @@ import { format, parseISO, weeksSinceCurrentWeek, getWeekNumber, startOfWeek } f
 import type { ActivitySummary } from '../../api/types'
 import { celebrateNewRecords } from '../../utils/records'
 import ActivityListItem from './ActivityListItem'
+import Numeral from '../ui/Numeral'
 import './ActivitiesView.css'
 
 const FILTERS = [
@@ -38,13 +39,13 @@ function groupKey(startedAt: string): { key: string; label: string; sortKey: str
   return { key: `m-${sortKey}`, label: format(date, 'MMMM yyyy'), sortKey }
 }
 
-function summarizeGroup(items: ActivitySummary[]): string {
+function summarizeGroup(items: ActivitySummary[]): { count: number; noun: string; km: string } {
   const km = items.reduce((sum, a) => sum + (a.distance_m || 0), 0) / 1000
   const allRuns = items.every(a => (a.activity_type || '').toLowerCase().includes('run'))
   const noun = allRuns
     ? (items.length === 1 ? 'run' : 'runs')
     : (items.length === 1 ? 'activity' : 'activities')
-  return `${items.length} ${noun} · ${km.toFixed(1)} km`
+  return { count: items.length, noun, km: km.toFixed(1) }
 }
 
 export default function ActivitiesView() {
@@ -143,19 +144,24 @@ export default function ActivitiesView() {
         </div>
       )}
 
-      {grouped.map(group => (
-        <div key={group.key} className="activity-group">
-          <div className="group-head">
-            <span>{group.label}</span>
-            <b>{summarizeGroup(group.items)}</b>
+      {grouped.map(group => {
+        const summary = summarizeGroup(group.items)
+        return (
+          <div key={group.key} className="activity-group">
+            <div className="group-head">
+              <span>{group.label}</span>
+              <b>
+                <Numeral value={String(summary.count)} /> {summary.noun} · <Numeral value={summary.km} /> km
+              </b>
+            </div>
+            <div className="group-list">
+              {group.items.map(a => (
+                <ActivityListItem key={a.id} activity={a} />
+              ))}
+            </div>
           </div>
-          <div className="group-list">
-            {group.items.map(a => (
-              <ActivityListItem key={a.id} activity={a} />
-            ))}
-          </div>
-        </div>
-      ))}
+        )
+      })}
 
       <div ref={sentinelRef} className="scroll-sentinel" />
 

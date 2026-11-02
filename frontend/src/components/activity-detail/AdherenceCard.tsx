@@ -1,4 +1,5 @@
 import { IntervalAdherence, WorkoutAdherence } from '../../api/types'
+import Numeral from '../ui/Numeral'
 import './AdherenceCard.css'
 
 interface Props {
@@ -42,7 +43,9 @@ export default function AdherenceCard({ adherence }: Props) {
       <div className="adherence-header">
         <span className="adherence-title">Workout Adherence</span>
         <span className="adherence-score-badge">
-          <span className="adherence-score-value" style={{ color }}>{adherence.adherence_score.toFixed(0)}</span>
+          <span className="adherence-score-value" style={{ color }}>
+            <Numeral value={adherence.adherence_score.toFixed(0)} />
+          </span>
           <span style={{ color, fontSize: '0.8rem' }}>{label}</span>
         </span>
       </div>

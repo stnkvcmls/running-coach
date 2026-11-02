@@ -78,8 +78,9 @@ describe('TodayHero', () => {
     renderWithProviders(<TodayHero data={today({ plan_day_id: 5 })} />)
 
     expect(await screen.findByText('Tempo')).toBeInTheDocument()
-    expect(screen.getByText(/10\.0 km/)).toBeInTheDocument()
-    expect(screen.getByText(/4:45\/km/)).toBeInTheDocument()
+    const meta = document.querySelector('.hero-session-meta')?.textContent
+    expect(meta).toMatch(/10\.0\s*km/)
+    expect(meta).toMatch(/4:45\/km/)
   })
 
   it('planned: shows a Send to watch action and a View in plan link for a pushable workout', async () => {
