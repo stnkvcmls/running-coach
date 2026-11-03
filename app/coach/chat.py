@@ -10,6 +10,7 @@ import json
 from datetime import datetime, date, timedelta, timezone
 
 import anthropic
+import httpx
 from google import genai
 from google.genai import errors as _genai_errors
 from google.genai import types as _genai_types
@@ -26,7 +27,7 @@ from app.models import (
     TrainingPlanDay,
 )
 from app.coach.context import SYSTEM_PROMPT, _build_context, _format_activity_context, _load_zones, _load_zone_configs
-from app.coach.providers import AITransientError, AIFatalError
+from app.coach.providers import AITransientError, AIFatalError, _gemini_client
 
 CHAT_SYSTEM_PROMPT = SYSTEM_PROMPT + """
 
@@ -402,7 +403,7 @@ def _gemini_stream_tokens(client: "genai.Client", **generate_kwargs):
                     fc = getattr(part, "function_call", None)
                     if fc is not None:
                         function_call = fc
-    except _genai_errors.ServerError as exc:
+    except (_genai_errors.ServerError, httpx.TimeoutException) as exc:
         raise AITransientError(str(exc)) from exc
     except _genai_errors.ClientError as exc:
         if getattr(exc, "code", None) == 429:
@@ -413,7 +414,7 @@ def _gemini_stream_tokens(client: "genai.Client", **generate_kwargs):
 
 def _stream_gemini(history: list[dict], system: str, model: str, db: Session, user_id: int):
     """Yield token/action events from the Gemini streaming API, dispatching at most one tool call."""
-    client = genai.Client(api_key=settings.gemini_api_key)
+    client = _gemini_client()
     contents = _gemini_contents(history)
 
     function_call = yield from _gemini_stream_tokens(

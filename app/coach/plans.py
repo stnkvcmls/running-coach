@@ -12,6 +12,7 @@ import time
 from datetime import datetime, date, timedelta, timezone
 
 import anthropic
+import httpx
 from google import genai
 from google.genai import errors as _genai_errors
 from google.genai import types as _genai_types
@@ -44,7 +45,10 @@ from app.coach.context import (
     _load_zone_configs,
     recent_heat_stress,
 )
-from app.coach.providers import AITransientError, AIFatalError, _MAX_RETRIES, _BACKOFF_BASE
+from app.coach.providers import (
+    AITransientError, AIFatalError, _MAX_RETRIES, _BACKOFF_BASE,
+    GEMINI_PLAN_TIMEOUT_SECONDS, _gemini_client,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -796,7 +800,7 @@ def generate_training_plan(
             for attempt in range(_MAX_RETRIES):
                 try:
                     if provider == "gemini":
-                        gemini_client = genai.Client(api_key=settings.gemini_api_key)
+                        gemini_client = _gemini_client(GEMINI_PLAN_TIMEOUT_SECONDS)
                         try:
                             response = gemini_client.models.generate_content(
                                 model=model,
@@ -807,7 +811,7 @@ def generate_training_plan(
                                     response_schema=_PLAN_GEMINI_RESPONSE_SCHEMA,
                                 ),
                             )
-                        except _genai_errors.ServerError as exc:
+                        except (_genai_errors.ServerError, httpx.TimeoutException) as exc:
                             raise AITransientError(str(exc)) from exc
                         except _genai_errors.ClientError as exc:
                             if getattr(exc, "code", None) == 429:

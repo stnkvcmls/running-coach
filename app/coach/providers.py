@@ -11,6 +11,7 @@ import logging
 import time
 
 import anthropic
+import httpx
 from google import genai
 from google.genai import errors as _genai_errors
 from google.genai import types as _genai_types
@@ -34,6 +35,19 @@ class AIFatalError(Exception):
 
 _MAX_RETRIES = 3
 _BACKOFF_BASE = 2  # seconds; delays are 1s, 2s before the 3rd attempt
+
+# Without a timeout the Gemini SDK waits indefinitely, so a model that accepts
+# the connection but never answers hangs the request (and the UI) forever.
+# On expiry httpx raises TimeoutException, which callers map to AITransientError.
+GEMINI_TIMEOUT_SECONDS = 120
+GEMINI_PLAN_TIMEOUT_SECONDS = 300  # structured full-plan output is much longer
+
+
+def _gemini_client(timeout_seconds: int = GEMINI_TIMEOUT_SECONDS) -> "genai.Client":
+    return genai.Client(
+        api_key=settings.gemini_api_key,
+        http_options=_genai_types.HttpOptions(timeout=timeout_seconds * 1000),
+    )
 
 
 def _extract_summary_and_category(content: str, trigger_type: str) -> tuple[str, str]:
@@ -104,7 +118,7 @@ def _call_gemini(
     context: str, trigger_type: str, model: str, system_prompt: str | None = None
 ) -> tuple[str, str, str]:
     """Call Gemini API and return (content, summary, category)."""
-    client = genai.Client(api_key=settings.gemini_api_key)
+    client = _gemini_client()
     user_prompt = _build_user_prompt(trigger_type, context)
     try:
         response = client.models.generate_content(
@@ -112,7 +126,7 @@ def _call_gemini(
             contents=user_prompt,
             config=_genai_types.GenerateContentConfig(system_instruction=system_prompt or SYSTEM_PROMPT),
         )
-    except _genai_errors.ServerError as exc:
+    except (_genai_errors.ServerError, httpx.TimeoutException) as exc:
         raise AITransientError(str(exc)) from exc
     except _genai_errors.ClientError as exc:
         if getattr(exc, "code", None) == 429:
@@ -145,7 +159,10 @@ def _get_ai_config(db: Session, user_id: int = DEFAULT_USER_ID) -> tuple[str, st
     else:
         if stored_model:
             logger.warning("Stored AI model %r is not allowed for provider %r; falling back to default", stored_model, provider)
-        model = settings.ai_model
+        # settings.ai_model is a default for the Claude provider; sending it to
+        # another provider would be an invalid model there (e.g. a Claude ID to Gemini).
+        allowed = settings.available_models.get(provider, [])
+        model = settings.ai_model if settings.ai_model in allowed or not allowed else allowed[0]
     return provider, model
 
 
