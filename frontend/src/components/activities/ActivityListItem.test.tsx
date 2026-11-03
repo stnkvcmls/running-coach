@@ -49,30 +49,35 @@ describe('ActivityListItem', () => {
     expect(screen.getByRole('link', { name: /Workout/ })).toBeInTheDocument()
   })
 
-  it('colours a non-running activity icon as cross-training (Z1)', () => {
+  it('colours the effort tick as cross-training (Z1) for a non-running activity', () => {
     const { container } = renderWithProviders(
       <ActivityListItem activity={activity({ name: 'Morning Ride', activity_type: 'cycling' })} />,
     )
-    const icon = container.querySelector('.ali-icon') as HTMLElement
-    expect(icon.style.color).toBe('var(--color-cross)')
+    const link = container.querySelector('.activity-list-item') as HTMLElement
+    expect(link.style.getPropertyValue('--effort')).toBe('var(--color-cross)')
+    expect(container.querySelector('.ali-tick')).toBeInTheDocument()
   })
 
-  it('tints the icon by workout intensity for a running activity', () => {
+  it('colours the effort tick by workout intensity for a running activity', () => {
     const { container } = renderWithProviders(
       <ActivityListItem activity={activity({ name: 'Interval Session', activity_type: 'running' })} />,
     )
-    const icon = container.querySelector('.ali-icon') as HTMLElement
-    expect(icon.style.color).toBe(colorMap.interval)
+    const link = container.querySelector('.activity-list-item') as HTMLElement
+    expect(link.style.getPropertyValue('--effort')).toBe(colorMap.interval)
   })
 
-  it('appends avg HR to the meta line when present', () => {
-    renderWithProviders(<ActivityListItem activity={activity({ avg_hr: 152 })} />)
-    expect(screen.getByText(/152/)).toBeInTheDocument()
+  it('shows distance, the day and time, pace and avg HR in their own columns (no meta string)', () => {
+    const { container } = renderWithProviders(<ActivityListItem activity={activity({ avg_hr: 152 })} />)
+    expect(container.querySelector('.ali-dist')?.textContent).toBe('12.4km')
+    expect(container.querySelector('.ali-pace')?.textContent).toBe('4:41152 bpm')
+    expect(container.querySelector('.ali-when')?.textContent).toMatch(/^Wed 8, \d{2}:\d{2}$/)
+    expect(container.querySelector('.ali-meta')).not.toBeInTheDocument()
+    expect(container.querySelector('.ali-icon')).not.toBeInTheDocument()
   })
 
-  it('omits the HR segment when avg_hr is absent', () => {
-    const { container } = renderWithProviders(<ActivityListItem activity={activity({ avg_hr: null })} />)
-    expect(container.querySelector('.ali-meta')?.textContent).not.toMatch(/♥/)
+  it('omits the HR figure when avg_hr is absent', () => {
+    renderWithProviders(<ActivityListItem activity={activity({ avg_hr: null })} />)
+    expect(screen.queryByText(/bpm/)).not.toBeInTheDocument()
   })
 
   it('shows a PB badge when the activity carries personal records', () => {

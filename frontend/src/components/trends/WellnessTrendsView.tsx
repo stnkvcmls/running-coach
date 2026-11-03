@@ -1,77 +1,129 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import {
-  ComposedChart,
-  Area,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts'
 import { useWellnessTrends } from '../../api/hooks'
-import { useTheme } from '../../App'
-import { getChartTickColor, getTooltipProps, SERIES_COLORS, Y_AXIS_WIDTH, usePrefersReducedMotion } from '../../utils/chartTheme'
-import RangeSelector, { DEFAULT_RANGE_OPTIONS, type RangeDays } from '../ui/RangeSelector'
+import type { DailySummaryResponse } from '../../api/types'
+import { usePersonalRange, hrvBand, hrvVerdict, type PersonalRange, type RangeMetric, type RangeVerdict } from '../../hooks/usePersonalRange'
+import { formatDateKey } from '../../utils/date'
+import RangeSelector, { type RangeOption } from '../ui/RangeSelector'
 import Skeleton from '../ui/Skeleton'
 import './WellnessTrendsView.css'
 
-/* Each wellness metric has its own panel, so every trend is a single series
-   in ink; none of them is an effort, so none takes an effort colour. */
-const TREND_COLOR = SERIES_COLORS[0]
+type BodyRange = 30 | 90 | 365
 
-function avg7(data: any[], key: string): number | null {
-  const vals = data.slice(-7).map(d => d[key]).filter((v: any) => v != null) as number[]
-  if (!vals.length) return null
-  return vals.reduce((a, b) => a + b, 0) / vals.length
+const RANGE_OPTIONS: RangeOption<BodyRange>[] = [
+  { label: '30 days', value: 30 },
+  { label: '90 days', value: 90 },
+  { label: '1 year', value: 365 },
+]
+
+type MetricKey = RangeMetric | 'hrv_avg'
+
+interface MetricDef {
+  key: MetricKey
+  name: string
+  unit: string
+}
+
+/** Small multiples, one per body metric (G2): ink over the athlete's own
+ * usual range, each with its verdict in words. */
+const METRICS: MetricDef[] = [
+  { key: 'resting_hr', name: 'Resting HR', unit: 'bpm' },
+  { key: 'hrv_avg', name: 'HRV overnight', unit: 'ms' },
+  { key: 'sleep_score', name: 'Sleep score', unit: '' },
+  { key: 'body_battery_high', name: 'Body battery, daily high', unit: '' },
+  { key: 'stress_avg', name: 'Stress, daily average', unit: '' },
+]
+
+const W = 320
+const H = 56
+
+interface SparklineProps {
+  values: (number | null)[]
+  band: PersonalRange | null
+  flag: boolean
+  label: string
+}
+
+/** Ink line over a shaded band; no axes — the band and the value say enough.
+ * The last point is drawn as an HTML dot so it stays round however the
+ * (non-uniformly scaled) SVG stretches. */
+function Sparkline({ values, band, flag, label }: SparklineProps) {
+  const points = values
+    .map((v, i) => (v != null ? { i, v } : null))
+    .filter((p): p is { i: number; v: number } => p != null)
+  if (points.length === 0) return null
+
+  const nums = points.map(p => p.v).concat(band ? [band.low, band.high] : [])
+  const lo = Math.min(...nums)
+  const hi = Math.max(...nums)
+  const pad = Math.max((band ? band.high - band.low : hi - lo) * 0.3, 1)
+  const min = lo - pad
+  const max = hi + pad
+  const x = (i: number) => (values.length > 1 ? (i / (values.length - 1)) * W : W / 2)
+  const y = (v: number) => H - 4 - ((v - min) / (max - min)) * (H - 8)
+  const d = points.map((p, k) => `${k === 0 ? 'M' : 'L'}${x(p.i).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ')
+  const last = points[points.length - 1]
+
+  return (
+    <div className="trend-spark" role="img" aria-label={label}>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
+        {band && (
+          <rect
+            className="trend-band"
+            x={0}
+            y={y(band.high)}
+            width={W}
+            height={Math.max(y(band.low) - y(band.high), 1)}
+            rx={3}
+          />
+        )}
+        <path className="trend-line" d={d} vectorEffect="non-scaling-stroke" />
+      </svg>
+      <span
+        className={`trend-dot${flag ? ' trend-dot-flag' : ''}`}
+        style={{ left: `${(x(last.i) / W) * 100}%`, top: `${(y(last.v) / H) * 100}%` }}
+        aria-hidden="true"
+      />
+    </div>
+  )
+}
+
+function lastWhere(data: DailySummaryResponse[], test: (s: DailySummaryResponse) => boolean): DailySummaryResponse | null {
+  for (let i = data.length - 1; i >= 0; i--) if (test(data[i])) return data[i]
+  return null
 }
 
 function WellnessSkeleton() {
   return (
     <div className="trends-view">
       <div className="trends-header">
-        <Skeleton height={30} width={160} radius="var(--radius-sm)" />
+        <Skeleton height={30} width={200} radius="var(--radius-sm)" />
         <Skeleton height={18} width={100} />
       </div>
-      {[0, 1, 2, 3].map(i => (
-        <div key={i} className="card wellness-card">
-          <Skeleton height={10} width={100} />
-          <Skeleton height={24} width={90} />
-          <Skeleton height={120} radius="var(--radius-xs)" />
-        </div>
-      ))}
+      <div className="card body-trends">
+        {[0, 1, 2, 3, 4].map(i => (
+          <div key={i} className="trend">
+            <Skeleton height={14} width={120} />
+            <Skeleton height={56} radius="var(--radius-xs)" />
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
 
 export default function WellnessTrendsView() {
-  const [days, setDays] = useState<RangeDays>(30)
+  const [days, setDays] = useState<BodyRange>(30)
   const { data, isLoading } = useWellnessTrends(days)
-  const { theme } = useTheme()
-  const tickColor = getChartTickColor(theme)
-  const { contentStyle } = getTooltipProps(theme)
-  const reduceMotion = usePrefersReducedMotion()
-
-  function MetricTooltip({ active, payload, label, unit }: { active?: boolean; payload?: any[]; label?: string; unit: string }) {
-    if (!active || !payload?.length) return null
-    return (
-      <div style={{ ...contentStyle, padding: '6px 10px' }}>
-        <div style={{ fontWeight: 600, marginBottom: 2 }}>{label}</div>
-        {payload.map((p: any) => (
-          p.value != null && (
-            <div key={p.dataKey} style={{ color: p.color }}>
-              {p.name}: {typeof p.value === 'number' ? p.value.toFixed(p.dataKey === 'sleep_hours' ? 1 : 0) : p.value}{unit}
-            </div>
-          )
-        ))}
-      </div>
-    )
-  }
+  const summaries = Array.isArray(data) ? data : []
+  const latestDate = summaries.length > 0 ? summaries[summaries.length - 1].date : formatDateKey(new Date())
+  // Bands always come from the last 90 days, whichever range is on screen.
+  const personal = usePersonalRange(latestDate)
 
   if (isLoading) {
     return <WellnessSkeleton />
   }
-  if (!data?.length) {
+  if (summaries.length === 0) {
     return (
       <div className="trends-empty">
         No wellness data yet. Wellness trends appear once your Garmin sync captures sleep, HRV, or stress data.
@@ -79,277 +131,63 @@ export default function WellnessTrendsView() {
     )
   }
 
-  const chartData = data.map(s => ({
-    label: s.date.slice(5),
-    sleep_score: s.sleep_score ?? null,
-    sleep_hours: s.sleep_seconds != null ? +(s.sleep_seconds / 3600).toFixed(1) : null,
-    resting_hr: s.resting_hr ?? null,
-    stress: s.stress_avg ?? null,
-    battery_high: s.body_battery_high ?? null,
-    battery_low: s.body_battery_low ?? null,
-    hrv: s.hrv_avg ?? null,
-  }))
+  const rangeLabel = RANGE_OPTIONS.find(o => o.value === days)?.label ?? `${days} days`
 
-  const avgSleepScore = avg7(chartData, 'sleep_score')
-  const avgSleepHours = avg7(chartData, 'sleep_hours')
-  const avgRhr = avg7(chartData, 'resting_hr')
-  const avgStress = avg7(chartData, 'stress')
-  const avgBatteryHigh = avg7(chartData, 'battery_high')
-  const avgHrv = avg7(chartData, 'hrv')
-  const latestHrvStatus = [...data].reverse().find(s => s.hrv_status != null)?.hrv_status ?? null
-  const hasHrv = chartData.some(d => d.hrv != null)
+  const rows = METRICS.map(m => {
+    const values = summaries.map(s => s[m.key] ?? null)
+    const latest = lastWhere(summaries, s => s[m.key] != null)
+    if (!latest) return null
+    const value = latest[m.key] as number
 
-  const minTickGap = days === 30 ? 6 : days === 90 ? 14 : days === 180 ? 28 : 50
-
-  const xAxisProps = {
-    dataKey: 'label',
-    tick: { fontSize: 10, fill: tickColor } as any,
-    axisLine: false,
-    tickLine: false,
-    minTickGap,
-  }
-
-  const yAxisProps = {
-    tick: { fontSize: 10, fill: tickColor } as any,
-    axisLine: false,
-    tickLine: false,
-    width: Y_AXIS_WIDTH,
-  }
+    let band: PersonalRange | null
+    let verdict: RangeVerdict | null
+    if (m.key === 'hrv_avg') {
+      band = hrvBand(lastWhere(summaries, s => s.hrv_baseline_low != null && s.hrv_baseline_high != null) ?? latest)
+      verdict = hrvVerdict(latest)
+    } else {
+      band = personal.ranges[m.key]
+      verdict = personal.verdict(m.key, latest.date, value)
+    }
+    const status = verdict?.text ?? (band ? null : 'No usual range yet')
+    return { m, values, value, band, verdict, status }
+  }).filter(r => r != null)
 
   return (
     <div className="trends-view">
       {/* No heading: the "Body" tab already names this panel (G3). */}
       <div className="trends-header">
-        <RangeSelector options={DEFAULT_RANGE_OPTIONS} value={days} onChange={setDays} />
+        <RangeSelector options={RANGE_OPTIONS} value={days} onChange={setDays} />
         <Link to="/daily" className="btn-ghost">Daily history</Link>
       </div>
 
-      {/* Sleep Score */}
-      <div className="card wellness-card">
-        <div className="wellness-card-header">
-          <div className="wellness-metric-title">Sleep score</div>
-          {avgSleepScore != null && (
-            <div className="wellness-metric-value">
-              {avgSleepScore.toFixed(0)}
-              <span className="wellness-metric-unit"> / 100</span>
-            </div>
-          )}
-          {avgSleepHours != null && (
-            <div className="wellness-metric-sub">{avgSleepHours.toFixed(1)}h avg · 7-day</div>
-          )}
-        </div>
-        <div
-          className="wellness-chart"
-          role="img"
-          aria-label={`Sleep score trend, last ${days} days.${avgSleepScore != null ? ` 7-day average ${avgSleepScore.toFixed(0)} out of 100.` : ''}`}
-        >
-          <ResponsiveContainer width="100%" height={120}>
-            <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
-              <defs>
-                <linearGradient id="wt-sleepFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={TREND_COLOR} stopOpacity={0.14} />
-                  <stop offset="100%" stopColor={TREND_COLOR} stopOpacity={0.02} />
-                </linearGradient>
-              </defs>
-              <XAxis {...xAxisProps} />
-              <YAxis {...yAxisProps} domain={[0, 100]} />
-              <Tooltip content={<MetricTooltip unit="" />} />
-              <Area
-                type="monotone"
-                dataKey="sleep_score"
-                stroke={TREND_COLOR}
-                strokeWidth={2}
-                fill="url(#wt-sleepFill)"
-                dot={false}
-                name="Score"
-                connectNulls
-                isAnimationActive={!reduceMotion}
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Resting HR */}
-      <div className="card wellness-card">
-        <div className="wellness-card-header">
-          <div className="wellness-metric-title">Resting heart rate</div>
-          {avgRhr != null && (
-            <div className="wellness-metric-value">
-              {avgRhr.toFixed(0)}
-              <span className="wellness-metric-unit"> bpm avg · 7-day</span>
-            </div>
-          )}
-        </div>
-        <div
-          className="wellness-chart"
-          role="img"
-          aria-label={`Resting heart rate trend, last ${days} days.${avgRhr != null ? ` 7-day average ${avgRhr.toFixed(0)} bpm.` : ''}`}
-        >
-          <ResponsiveContainer width="100%" height={120}>
-            <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
-              <XAxis {...xAxisProps} />
-              <YAxis {...yAxisProps} />
-              <Tooltip content={<MetricTooltip unit=" bpm" />} />
-              <Line
-                type="monotone"
-                dataKey="resting_hr"
-                stroke={TREND_COLOR}
-                strokeWidth={2}
-                dot={false}
-                name="RHR"
-                connectNulls
-                isAnimationActive={!reduceMotion}
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Stress */}
-      <div className="card wellness-card">
-        <div className="wellness-card-header">
-          <div className="wellness-metric-title">Avg stress</div>
-          {avgStress != null && (
-            <div className="wellness-metric-value">
-              {avgStress.toFixed(0)}
-              <span className="wellness-metric-unit"> / 100 avg · 7-day</span>
-            </div>
-          )}
-        </div>
-        <div
-          className="wellness-chart"
-          role="img"
-          aria-label={`Average stress trend, last ${days} days.${avgStress != null ? ` 7-day average ${avgStress.toFixed(0)} out of 100.` : ''}`}
-        >
-          <ResponsiveContainer width="100%" height={120}>
-            <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
-              <defs>
-                <linearGradient id="wt-stressFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={TREND_COLOR} stopOpacity={0.14} />
-                  <stop offset="100%" stopColor={TREND_COLOR} stopOpacity={0.02} />
-                </linearGradient>
-              </defs>
-              <XAxis {...xAxisProps} />
-              <YAxis {...yAxisProps} domain={[0, 100]} />
-              <Tooltip content={<MetricTooltip unit="" />} />
-              <Area
-                type="monotone"
-                dataKey="stress"
-                stroke={TREND_COLOR}
-                strokeWidth={2}
-                fill="url(#wt-stressFill)"
-                dot={false}
-                name="Stress"
-                connectNulls
-                isAnimationActive={!reduceMotion}
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Body Battery */}
-      <div className="card wellness-card">
-        <div className="wellness-card-header">
-          <div className="wellness-metric-title">Body Battery</div>
-          {avgBatteryHigh != null && (
-            <div className="wellness-metric-value">
-              {avgBatteryHigh.toFixed(0)}
-              <span className="wellness-metric-unit"> high avg · 7-day</span>
-            </div>
-          )}
-        </div>
-        <div
-          className="wellness-chart"
-          role="img"
-          aria-label={`Body battery trend, last ${days} days.${avgBatteryHigh != null ? ` 7-day average high ${avgBatteryHigh.toFixed(0)}.` : ''}`}
-        >
-          <ResponsiveContainer width="100%" height={120}>
-            <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
-              <defs>
-                <linearGradient id="wt-batteryFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={TREND_COLOR} stopOpacity={0.14} />
-                  <stop offset="100%" stopColor={TREND_COLOR} stopOpacity={0.02} />
-                </linearGradient>
-              </defs>
-              <XAxis {...xAxisProps} />
-              <YAxis {...yAxisProps} domain={[0, 100]} />
-              <Tooltip content={<MetricTooltip unit="" />} />
-              <Area
-                type="monotone"
-                dataKey="battery_high"
-                stroke={TREND_COLOR}
-                strokeWidth={2}
-                fill="url(#wt-batteryFill)"
-                dot={false}
-                name="High"
-                connectNulls
-                isAnimationActive={!reduceMotion}
-              />
-              <Line
-                type="monotone"
-                dataKey="battery_low"
-                stroke={SERIES_COLORS[1]}
-                strokeWidth={1.5}
-                strokeDasharray="3 2"
-                dot={false}
-                name="Low"
-                connectNulls
-                isAnimationActive={!reduceMotion}
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* HRV (overnight) */}
-      {hasHrv && (
-        <div className="card wellness-card">
-          <div className="wellness-card-header">
-            <div className="wellness-metric-title">HRV (overnight)</div>
-            {avgHrv != null && (
-              <div className="wellness-metric-value">
-                {avgHrv.toFixed(0)}
-                <span className="wellness-metric-unit"> ms avg · 7-day</span>
+      <ul className="card body-trends">
+        {rows.map(({ m, values, value, band, verdict, status }) => {
+          const flag = !!verdict?.flag
+          const shown = Math.round(value)
+          return (
+            <li key={m.key} className="trend">
+              <div className="trend-head">
+                <p className="trend-name">{m.name}</p>
+                {status && <p className={`trend-status${flag ? ' trend-status-flag' : ''}`}>{status}</p>}
               </div>
-            )}
-            {latestHrvStatus != null && (
-              <div className="wellness-metric-sub">Status: {latestHrvStatus.toLowerCase()}</div>
-            )}
-          </div>
-          <div
-            className="wellness-chart"
-            role="img"
-            aria-label={`Overnight heart rate variability trend, last ${days} days.${avgHrv != null ? ` 7-day average ${avgHrv.toFixed(0)} milliseconds.` : ''}`}
-          >
-            <ResponsiveContainer width="100%" height={120}>
-              <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="wt-hrvFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={TREND_COLOR} stopOpacity={0.14} />
-                    <stop offset="100%" stopColor={TREND_COLOR} stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <XAxis {...xAxisProps} />
-                <YAxis {...yAxisProps} domain={['dataMin - 5', 'dataMax + 5']} />
-                <Tooltip content={<MetricTooltip unit=" ms" />} />
-                <Area
-                  type="monotone"
-                  dataKey="hrv"
-                  stroke={TREND_COLOR}
-                  strokeWidth={2}
-                  fill="url(#wt-hrvFill)"
-                  dot={false}
-                  name="HRV"
-                  connectNulls
-                  isAnimationActive={!reduceMotion}
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
+              <div className="trend-val num">
+                {shown}
+                {m.unit && <small>{m.unit}</small>}
+              </div>
+              <Sparkline
+                values={values}
+                band={band}
+                flag={flag}
+                label={`${m.name} over the last ${rangeLabel}; latest ${shown}${m.unit ? ` ${m.unit}` : ''}${status ? `; ${status.toLowerCase()}` : ''}.`}
+              />
+            </li>
+          )
+        })}
+      </ul>
+
+      <p className="trends-footnote">
+        Bands: Garmin's baseline for HRV; your middle 80% of the last 90 days for the rest.
+      </p>
     </div>
   )
 }

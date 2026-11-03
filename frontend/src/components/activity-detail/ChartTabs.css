@@ -1,39 +1,40 @@
-.chart-tabs {
+/* Metric tabs as a plain text tab row (D4): an ink underline marks the
+   selected one. */
+.tabs-line {
   display: flex;
-  gap: 4px;
+  gap: 18px;
   overflow-x: auto;
-  padding-bottom: 8px;
-  -webkit-overflow-scrolling: touch;
+  margin: -4px 0 12px;
+  border-bottom: 1px solid var(--border);
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
 
-.chart-tabs::-webkit-scrollbar {
+.tabs-line::-webkit-scrollbar {
   display: none;
 }
 
-.chart-tab {
-  padding: 6px 12px;
-  border-radius: 16px;
-  font-size: 0.72rem;
-  font-weight: 500;
+.tabs-line-tab {
+  flex-shrink: 0;
+  padding: 8px 0 9px;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  font-size: 0.875rem;
+  font-weight: 600;
   white-space: nowrap;
-  background: var(--bg-card);
   color: var(--text-muted);
-  border: 1px solid var(--border);
-  transition: background 0.15s, color 0.15s;
+  transition: color var(--transition-fast);
 }
 
-.chart-tab.active {
-  background: var(--text);
-  color: var(--on-ink);
-  border-color: var(--text);
-}
-
-.chart-tab:hover:not(.active) {
+.tabs-line-tab:hover {
   color: var(--text);
-  background: var(--bg-hover);
+}
+
+.tabs-line-tab[aria-selected='true'] {
+  color: var(--text);
+  border-bottom-color: var(--text);
 }
 
 .chart-card {
-  padding: 8px;
+  margin: 0 -4px;
 }

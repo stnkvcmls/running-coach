@@ -53,9 +53,9 @@ export default function SplitsBars({ splits, paceZones, color }: Props) {
     : []
 
   return (
-    <section className="detail-section">
-      <div className="section-title-row splits-title-row">
-        <h3 className="section-title" style={{ margin: 0 }}>Splits</h3>
+    <section className="detail-panel splits-card">
+      <div className="detail-panel-head">
+        <h3 className="section-title">Splits</h3>
         <div className="seg-toggle" role="group" aria-label="Splits view">
           <button
             type="button"
@@ -76,7 +76,7 @@ export default function SplitsBars({ splits, paceZones, color }: Props) {
         </div>
       </div>
 
-      <div className={`card splits-card ${mode === 'table' ? 'splits-card-table' : ''}`}>
+      <div className={mode === 'table' ? 'splits-table' : undefined}>
         {mode === 'bars' ? (
           <>
             <div className="split-bars">

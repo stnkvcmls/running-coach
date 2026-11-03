@@ -10,11 +10,13 @@ interface Props {
   stats: Stat[]
   columns?: number
   large?: boolean
+  /** Drop the card surface, for a grid inside a panel. */
+  plain?: boolean
 }
 
-export default function StatGrid({ stats, columns = 3, large = false }: Props) {
+export default function StatGrid({ stats, columns = 3, large = false, plain = false }: Props) {
   return (
-    <div className={`stat-grid card ${large ? 'stat-grid-large' : ''}`} style={{ gridTemplateColumns: `repeat(${Math.min(columns, stats.length)}, 1fr)` }}>
+    <div className={`stat-grid${plain ? '' : ' card'}${large ? ' stat-grid-large' : ''}`} style={{ gridTemplateColumns: `repeat(${Math.min(columns, stats.length)}, 1fr)` }}>
       {stats.map((s, i) => (
         <div key={i} className="stat-cell">
           <span className="stat-label">{s.label}</span>

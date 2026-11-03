@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import type { WorkoutAdherence } from '../../api/types'
+import type { IntervalAdherence, WorkoutAdherence } from '../../api/types'
 import { formatPaceSec } from '../../utils/sessionNotation'
 import './RepChart.css'
 
@@ -8,6 +8,8 @@ export interface RepPoint {
   paceSec: number
   /** Target pace for the rep (seconds per km), when the plan had one. */
   targetSec: number | null
+  /** Peak heart rate during the rep (bpm), printed under the pace when known. */
+  peakHr?: number | null
 }
 
 /** Mean of every m:ss pace in a display string ("3:55 - 4:05/km" → 240). */
@@ -18,12 +20,22 @@ function meanPace(display: string | null): number | null {
 }
 
 /** Work reps from an activity's per-interval adherence breakdown. Returns
- * fewer than two points for an unstructured session — callers hide the chart. */
-export function repsFromAdherence(adherence: WorkoutAdherence | null | undefined): RepPoint[] {
+ * fewer than two points for an unstructured session — callers hide the chart.
+ * `peakHr` (given the step and its index in `adherence.intervals`) adds each
+ * rep's peak heart rate when the caller can work it out. */
+export function repsFromAdherence(
+  adherence: WorkoutAdherence | null | undefined,
+  peakHr?: (step: IntervalAdherence, index: number) => number | null,
+): RepPoint[] {
   if (!adherence?.intervals) return []
   return adherence.intervals
-    .filter(iv => iv.step_type === 'interval' && iv.matched)
-    .map(iv => ({ paceSec: meanPace(iv.actual_pace_display), targetSec: meanPace(iv.planned_pace_display) }))
+    .map((iv, index) => ({ iv, index }))
+    .filter(({ iv }) => iv.step_type === 'interval' && iv.matched)
+    .map(({ iv, index }) => ({
+      paceSec: meanPace(iv.actual_pace_display),
+      targetSec: meanPace(iv.planned_pace_display),
+      ...(peakHr ? { peakHr: peakHr(iv, index) } : {}),
+    }))
     .filter((r): r is RepPoint => r.paceSec != null)
 }
 
@@ -34,7 +46,7 @@ interface Props {
 }
 
 /** One bar per work rep — taller is faster — against a dashed target line.
- * Shared by Today's done-state hero and (later) the run analysis. */
+ * Shared by Today's done-state hero and the run analysis. */
 export default function RepChart({ reps, color }: Props) {
   if (reps.length < 2) return null
   const targets = reps.map(r => r.targetSec).filter((t): t is number => t != null)
@@ -62,7 +74,12 @@ export default function RepChart({ reps, color }: Props) {
         )}
       </div>
       <div className="rep-chart-labels num" aria-hidden="true">
-        {labels.map((l, i) => <span key={i}>{l}</span>)}
+        {labels.map((l, i) => (
+          <span key={i}>
+            {l}
+            {reps[i].peakHr != null && <small>{reps[i].peakHr}</small>}
+          </span>
+        ))}
       </div>
     </figure>
   )

@@ -1,7 +1,3 @@
-.splits-title-row {
-  justify-content: space-between;
-}
-
 .seg-toggle {
   display: flex;
   padding: 2px;
@@ -24,9 +20,11 @@
   color: var(--on-ink);
 }
 
-.splits-card-table {
-  padding: 0;
+/* The laps table runs to the panel edges. */
+.splits-table {
+  margin: 0 -16px -16px;
   overflow: hidden;
+  border-radius: 0 0 var(--radius) var(--radius);
 }
 
 .split-bars {

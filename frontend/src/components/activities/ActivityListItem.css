@@ -1,88 +1,99 @@
+/* Four columns: effort tick · name and when · distance · pace over HR
+   (docs/UI_UX_CRITIQUE.md §6.4). The name column is the only flexible one and
+   wraps rather than truncates; the figure columns size to their content. */
 .activity-list-item {
-  display: flex;
+  display: grid;
+  grid-template-columns: 4px minmax(0, 1fr) auto auto;
+  gap: 0 12px;
   align-items: center;
-  padding: 12px 14px;
-  gap: 12px;
+  padding: 12px 14px 12px 0;
   color: inherit;
+  border-top: 1px solid var(--border);
   transition: background var(--transition-fast);
+}
+
+.activity-list-item:first-child {
+  border-top: 0;
 }
 
 .activity-list-item:hover {
   background: var(--bg-hover);
 }
 
-.activity-list-item:active {
-  transform: scale(0.99);
-}
-
-.ali-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+.ali-tick {
+  align-self: stretch;
+  margin: 2px 0;
+  background: var(--effort, var(--color-default));
+  border-radius: 0 3px 3px 0;
 }
 
 .ali-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.ali-name-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
   min-width: 0;
 }
 
 .ali-name {
-  font-size: 0.88rem;
-  font-weight: 600;
+  font-size: 0.9375rem;
+  font-weight: 640;
+  line-height: 1.3;
   color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+}
+
+.ali-when {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A record is not an effort: ink outline, no colour. */
+.ali-pb {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 4px;
+  border: 1.5px solid var(--text);
+  border-radius: 5px;
+  font-size: 0.71875rem;
+  font-weight: 700;
+  line-height: 16px;
+  vertical-align: 1px;
 }
 
 .ali-tag {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  padding: 1px 6px;
+  margin-left: 6px;
+  padding: 0 6px;
   border-radius: 999px;
-  color: var(--text);
+  font-size: 0.71875rem;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--text-muted);
   background: var(--bg-input);
-  flex-shrink: 0;
-}
-
-.ali-meta {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
+  vertical-align: 1px;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.ali-dist,
+.ali-pace {
+  text-align: right;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.ali-dist .num {
+  font-size: 1.375rem;
+}
+
+.ali-pace .num {
+  font-size: 1.0625rem;
+}
+
+.ali-dist small,
+.ali-pace small {
+  display: block;
+  font-size: 0.71875rem;
+  font-weight: 500;
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
-}
-
-.ali-sep {
-  color: var(--text-muted);
-  margin: 0 4px;
-}
-
-.ali-chevron {
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
-
-@media (max-width: 360px) {
-  .ali-meta {
-    white-space: normal;
-  }
 }

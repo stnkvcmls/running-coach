@@ -1,0 +1,41 @@
+.zone-bar {
+  display: flex;
+  height: 18px;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.zone-bar span {
+  flex-basis: 0;
+  min-width: 3px;
+  background: var(--c);
+  border-radius: 3px;
+}
+
+.zone-legend {
+  display: grid;
+  grid-template-columns: repeat(var(--zones, 5), minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.zone-legend div {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.zone-legend div::before {
+  content: '';
+  display: block;
+  height: 3px;
+  margin-bottom: 5px;
+  border-radius: 2px;
+  background: var(--c);
+}
+
+.zone-legend b {
+  display: block;
+  font-size: 1rem;
+  color: var(--text);
+}

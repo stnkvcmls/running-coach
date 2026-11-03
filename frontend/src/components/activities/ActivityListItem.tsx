@@ -1,9 +1,9 @@
+import type { CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronRight, CheckCircle, Trophy } from 'lucide-react'
+import { CheckCircle } from 'lucide-react'
 import type { ActivitySummary } from '../../api/types'
-import { getActivityAccent, tint } from '../../utils/colors'
-import { getSportIcon } from '../../utils/sportIcon'
-import { formatDistance, formatDuration, formatPace } from '../../utils/formatting'
+import { getActivityAccent } from '../../utils/colors'
+import { formatDistance, formatPace } from '../../utils/formatting'
 import { format, parseISO } from '../../utils/date'
 import './ActivityListItem.css'
 
@@ -11,54 +11,51 @@ interface Props {
   activity: ActivitySummary
 }
 
+/** One row of the Activities list (docs/UI_UX_CRITIQUE.md §6.4, A1/A2): a 4px
+ * effort tick, the name over when it happened, distance (the figure runners
+ * scan by) as the largest number, then pace over average HR. Four columns
+ * instead of a middle-dot string, so nothing truncates at 360px. */
 export default function ActivityListItem({ activity }: Props) {
-  const color = getActivityAccent(activity.name, activity.activity_type)
-  const SportIcon = getSportIcon(activity.activity_type)
+  const effort = getActivityAccent(activity.name, activity.activity_type)
+  const hasRecords = !!activity.personal_records && activity.personal_records.length > 0
 
   return (
-    <Link to={`/activities/${activity.id}`} className="activity-list-item card">
-      <div className="ali-icon" style={{ background: tint(color), color }}>
-        <SportIcon size={18} />
-      </div>
+    <Link
+      to={`/activities/${activity.id}`}
+      className="activity-list-item"
+      style={{ '--effort': effort } as CSSProperties}
+    >
+      <span className="ali-tick" aria-hidden="true" />
       <div className="ali-main">
-        <div className="ali-name-row">
-          <span className="ali-name">{activity.name || 'Workout'}</span>
+        <div className="ali-name">
+          {activity.name || 'Workout'}
+          {hasRecords && (
+            <span
+              className="ali-pb"
+              title={activity.personal_records!.map(r => `${r.label}: ${r.display_value}`).join(', ')}
+            >
+              PB
+            </span>
+          )}
           {activity.workout_tag && (
             <span className="ali-tag" title={activity.workout_tag}>
-              <CheckCircle size={11} />
+              <CheckCircle size={11} aria-hidden="true" />
               Workout
             </span>
           )}
-          {activity.personal_records && activity.personal_records.length > 0 && (
-            <span
-              className="badge pr-badge"
-              title={activity.personal_records.map(r => `${r.label}: ${r.display_value}`).join(', ')}
-            >
-              <Trophy size={11} /> PB
-            </span>
-          )}
         </div>
-        <div className="ali-meta">
-          {activity.started_at && (
-            <>
-              {format(parseISO(activity.started_at), 'EEE · HH:mm')}
-              <span className="ali-sep">&middot;</span>
-            </>
-          )}
-          <span>{formatDistance(activity.distance_m)} km</span>
-          <span className="ali-sep">&middot;</span>
-          <span>{formatDuration(activity.duration_sec)}</span>
-          <span className="ali-sep">&middot;</span>
-          <span>{formatPace(activity.avg_pace_min_km)} /km</span>
-          {activity.avg_hr != null && (
-            <>
-              <span className="ali-sep">&middot;</span>
-              <span>&hearts; {activity.avg_hr}</span>
-            </>
-          )}
-        </div>
+        {activity.started_at && (
+          <div className="ali-when">{format(parseISO(activity.started_at), 'EEE d, HH:mm')}</div>
+        )}
       </div>
-      <ChevronRight size={16} className="ali-chevron" />
+      <div className="ali-dist">
+        <span className="num">{formatDistance(activity.distance_m)}</span>
+        <small>km</small>
+      </div>
+      <div className="ali-pace">
+        <span className="num">{formatPace(activity.avg_pace_min_km)}</span>
+        <small>{activity.avg_hr != null ? `${activity.avg_hr} bpm` : '/km'}</small>
+      </div>
     </Link>
   )
 }
