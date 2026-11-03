@@ -22,7 +22,7 @@ function renderWithSettingsRoute() {
   return renderWithProviders(
     <Routes>
       <Route path="/" element={<SyncStatusPill />} />
-      <Route path="/settings" element={<div>Settings Page</div>} />
+      <Route path="/settings/garmin" element={<div>Settings Page</div>} />
     </Routes>,
   )
 }

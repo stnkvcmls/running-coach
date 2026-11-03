@@ -9,6 +9,7 @@ import ActivityDetailView from './components/activity-detail/ActivityDetailView'
 import DailySummariesView from './components/daily/DailySummariesView'
 import DailyDetailView from './components/daily/DailyDetailView'
 import SettingsView from './components/settings/SettingsView'
+import SettingsSectionView from './components/settings/SettingsSectionView'
 import WorkoutDetailView from './components/workout-detail/WorkoutDetailView'
 import OnboardingView from './components/onboarding/OnboardingView'
 import TrendsView from './components/trends/TrendsView'
@@ -86,6 +87,7 @@ const ROUTES: RouteMeta[] = [
   { path: '/info/:topic', title: 'Info', chrome: 'detail' },
   { path: '/plan/setup', title: 'Plan setup', chrome: 'detail' },
   { path: '/settings', title: 'Settings', chrome: 'detail' },
+  { path: '/settings/:section', title: 'Settings', chrome: 'detail' },
   { path: '/onboarding', title: 'Onboarding', chrome: 'detail' },
 ]
 
@@ -156,6 +158,7 @@ export default function App() {
                 <Route path="/plan" element={<PlanView />} />
                 <Route path="/plan/setup" element={<PlanSetupView />} />
                 <Route path="/settings" element={<SettingsView />} />
+                <Route path="/settings/:section" element={<SettingsSectionView />} />
                 <Route path="/info/:topic" element={<StatInfoView />} />
                 <Route path="/onboarding" element={<OnboardingView />} />
                 <Route path="/chat" element={<ChatView />} />

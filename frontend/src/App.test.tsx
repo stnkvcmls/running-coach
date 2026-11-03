@@ -29,6 +29,8 @@ describe('useRouteMeta chrome matrix', () => {
     ['/info/training-load', 'detail'],
     ['/plan/setup', 'detail'],
     ['/settings', 'detail'],
+    ['/settings/zones', 'detail'],
+    ['/settings/garmin', 'detail'],
     ['/onboarding', 'detail'],
   ])('%s is detail chrome', (path, chrome) => {
     expect(metaAt(path).chrome).toBe(chrome)
@@ -37,7 +39,7 @@ describe('useRouteMeta chrome matrix', () => {
   it('renders the week strip on Today only (the sole DateContext reader)', () => {
     const withStrip = [
       '/', '/plan', '/chat', '/activities', '/trends', '/daily',
-      '/activities/42', '/settings',
+      '/activities/42', '/settings', '/settings/zones',
     ].filter(path => metaAt(path).weekStrip)
     expect(withStrip).toEqual(['/'])
   })

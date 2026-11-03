@@ -135,7 +135,7 @@ export default function ActivitiesView() {
           {garminStatus && !garminStatus.connected ? (
             <>
               <p>Connect Garmin to start tracking your runs.</p>
-              <Link to="/settings" className="btn-primary">Connect Garmin in Settings</Link>
+              <Link to="/settings/garmin" className="btn-primary">Connect Garmin in Settings</Link>
             </>
           ) : (
             <p>No activities found</p>

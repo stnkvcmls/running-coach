@@ -41,7 +41,7 @@ export default function SyncStatusPill() {
     return (
       <button
         className="sync-pill sync-pill-warn"
-        onClick={() => navigate('/settings')}
+        onClick={() => navigate('/settings/garmin')}
         title="Garmin session expired — tap to reconnect"
       >
         <AlertTriangle size={11} />
@@ -69,7 +69,7 @@ export default function SyncStatusPill() {
   return (
     <button
       className="sync-pill sync-pill-warn"
-      onClick={() => navigate('/settings')}
+      onClick={() => navigate('/settings/garmin')}
       aria-label={`Last synced ${age.long} ago — open Settings`}
       title={`Last Garmin sync was ${age.long} ago — tap for sync settings`}
     >
