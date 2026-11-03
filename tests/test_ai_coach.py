@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from app import ai_coach
+from app.config import settings
 from app.models import (
     Activity,
     AIJob,
@@ -349,6 +350,17 @@ def test_get_ai_config_from_db(db):
     assert model == "gemini-2.5-flash"
 
 
+def test_get_ai_config_unknown_gemini_model_falls_back_within_provider(db):
+    # A stored model that's no longer in the catalog must not fall back to the
+    # Claude default (settings.ai_model) while the provider is still Gemini.
+    db.add(SyncStatus(key="ai_provider", value="gemini"))
+    db.add(SyncStatus(key="ai_model", value="gemini-3-flash"))
+    db.commit()
+    provider, model = ai_coach._get_ai_config(db)
+    assert provider == "gemini"
+    assert model in settings.available_models["gemini"]
+
+
 def test_call_ai_dispatches_to_claude(db, monkeypatch):
     called = {}
 
@@ -388,11 +400,40 @@ def test_call_gemini_uses_genai(monkeypatch):
     fake_response.text = "**Summary:** good\nrest"
     fake_client = MagicMock()
     fake_client.models.generate_content.return_value = fake_response
-    monkeypatch.setattr(ai_coach.genai, "Client", lambda api_key: fake_client)
+    monkeypatch.setattr(ai_coach.genai, "Client", lambda **kw: fake_client)
 
     content, summary, category = ai_coach._call_gemini("ctx", "daily_summary", "gemini-x")
     assert summary == "good"
     assert category == "recovery"
+
+
+def test_gemini_client_has_request_timeout(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(ai_coach.genai, "Client", lambda **kw: captured.update(kw))
+
+    from app.coach import providers
+    providers._gemini_client()
+    assert captured["http_options"].timeout == providers.GEMINI_TIMEOUT_SECONDS * 1000
+
+
+def test_call_gemini_timeout_is_transient(monkeypatch):
+    import httpx
+    fake_client = MagicMock()
+    fake_client.models.generate_content.side_effect = httpx.ReadTimeout("no response")
+    monkeypatch.setattr(ai_coach.genai, "Client", lambda **kw: fake_client)
+
+    with pytest.raises(ai_coach.AITransientError):
+        ai_coach._call_gemini("ctx", "activity", "gemini-x")
+
+
+def test_stream_gemini_timeout_is_transient(db, monkeypatch):
+    import httpx
+    fake_client = MagicMock()
+    fake_client.models.generate_content_stream.side_effect = httpx.ReadTimeout("no response")
+    monkeypatch.setattr(ai_coach.genai, "Client", lambda **kw: fake_client)
+
+    with pytest.raises(ai_coach.AITransientError):
+        list(ai_coach._stream_gemini([], "system", "gemini-x", db, 1))
 
 
 def test_call_claude_honors_custom_system_prompt(monkeypatch):
@@ -413,7 +454,7 @@ def test_call_gemini_honors_custom_system_prompt(monkeypatch):
     fake_response.text = "**Summary:** good\nrest"
     fake_client = MagicMock()
     fake_client.models.generate_content.return_value = fake_response
-    monkeypatch.setattr(ai_coach.genai, "Client", lambda api_key: fake_client)
+    monkeypatch.setattr(ai_coach.genai, "Client", lambda **kw: fake_client)
 
     ai_coach._call_gemini("ctx", "briefing", "gemini-x", system_prompt="Custom briefing prompt")
 

@@ -2,13 +2,14 @@ from pydantic_settings import BaseSettings
 
 _DEFAULT_AVAILABLE_MODELS: dict[str, list[str]] = {
     "claude": ["claude-opus-4-8", "claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
+    # IDs must match the Gemini API's model list exactly (GET /v1beta/models);
+    # a stale or misspelled ID makes every AI call fail with a 404.
     "gemini": [
         "gemini-2.5-flash",
-        "gemini-2.5-flash-lite",
-        "gemini-3-flash",
+        "gemini-3-flash-preview",
         "gemini-3.1-flash-lite",
-        "gemma-2-2b-it",
-        "gemma-4-26b-it",
+        "gemini-3.5-flash",
+        "gemma-4-26b-a4b-it",
         "gemma-4-31b-it",
     ],
 }
