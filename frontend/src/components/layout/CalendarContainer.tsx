@@ -1,5 +1,4 @@
 import { useRef, useState, useCallback } from 'react'
-import WeekStrip from './WeekStrip'
 import MonthCalendar from './MonthCalendar'
 import './CalendarContainer.css'
 
@@ -41,6 +40,10 @@ export default function CalendarContainer({ expanded, onToggle }: Props) {
     touchStartY.current = null
   }, [expanded, dragOffset, onToggle])
 
+  // The week view lives in Today's WeekRail; this container only hosts the
+  // month calendar opened from the TopBar toggle.
+  if (!expanded) return null
+
   return (
     <div
       className={`calendar-container ${expanded ? 'expanded' : 'collapsed'}`}
@@ -49,7 +52,7 @@ export default function CalendarContainer({ expanded, onToggle }: Props) {
       onTouchEnd={handleTouchEnd}
       style={dragging ? { transform: `translateY(${dragOffset}px)` } : undefined}
     >
-      {expanded ? <MonthCalendar /> : <WeekStrip />}
+      <MonthCalendar />
       <div className="calendar-handle">
         <div className="handle-bar" />
       </div>

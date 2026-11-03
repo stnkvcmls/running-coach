@@ -34,6 +34,8 @@ export interface ActivitySummary {
   calories: number | null
   elevation_gain: number | null
   workout_tag?: string | null
+  /** Set on /today's activity that completed the selected day's plan day. */
+  matched_plan_day_id?: number | null
   personal_records?: PersonalRecordResponse[] | null
 }
 
@@ -187,6 +189,9 @@ export interface DailySummaryResponse {
   hrv_avg: number | null
   hrv_weekly_avg: number | null
   hrv_status: string | null
+  /** Garmin's HRV "balanced" baseline range (ms); null when not captured. */
+  hrv_baseline_low?: number | null
+  hrv_baseline_high?: number | null
 }
 
 export interface DailySummaryDetail {

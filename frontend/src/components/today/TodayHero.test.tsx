@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, fireEvent, waitFor } from '@testing-library/react'
 import { renderWithProviders } from '../../test/test-utils'
 import TodayHero from './TodayHero'
-import type { TodayResponse, TrainingPlanDay, TrainingPlanResponse } from '../../api/types'
+import type { ActivitySummary, TodayResponse, TrainingPlanDay, TrainingPlanResponse, WorkoutStep } from '../../api/types'
 
 function today(overrides: Partial<TodayResponse> = {}): TodayResponse {
   return {
@@ -57,152 +57,256 @@ function trainingPlan(days: TrainingPlanDay[]): TrainingPlanResponse {
   }
 }
 
-function mockFetch(trainingPlanResponse: TrainingPlanResponse | null) {
-  return vi.fn().mockImplementation((url: string) => {
-    if (url.endsWith('/training-plan')) {
-      return Promise.resolve({ ok: true, status: 200, json: async () => trainingPlanResponse })
-    }
-    return Promise.resolve({ ok: true, status: 200, json: async () => ({}) })
-  })
+function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
+  return {
+    id: 77,
+    garmin_id: null,
+    activity_type: 'running',
+    name: 'Intervals',
+    started_at: '2026-07-09T10:20:00',
+    duration_sec: 2657,
+    distance_m: 9220,
+    avg_hr: 161,
+    max_hr: 178,
+    avg_pace_min_km: 4.8,
+    calories: 700,
+    elevation_gain: 20,
+    workout_tag: 'Intervals',
+    matched_plan_day_id: 5,
+    ...overrides,
+  }
 }
 
-describe('TodayHero', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals()
-  })
+/** The value cell next to a figure's label. */
+function figure(label: string): string | null {
+  return screen.getByText(label, { selector: 'dt' }).nextElementSibling?.textContent ?? null
+}
 
-  it('planned: shows the type badge, distance and pace from the matching training plan day', async () => {
-    vi.stubGlobal('fetch', mockFetch(trainingPlan([
-      planDay({ id: 5, workout_type: 'tempo', target_distance_m: 10000, target_pace_display: '4:45/km' }),
-    ])))
+type Routes = Record<string, unknown>
+
+/** Fetch mock: the first route whose key the URL contains wins. */
+function mockFetch(routes: Routes) {
+  const fn = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+    if (init?.method === 'POST') return Promise.resolve({ ok: true, status: 200, json: async () => ({ status: 'queued', job_id: 0 }) })
+    const key = Object.keys(routes).find(k => url.includes(k))
+    const body = key ? routes[key] : {}
+    return Promise.resolve({ ok: true, status: 200, json: async () => body })
+  })
+  vi.stubGlobal('fetch', fn)
+  return fn
+}
+
+const INTERVAL_DAY = planDay({
+  id: 5,
+  workout_type: 'interval',
+  target_distance_m: 9300,
+  target_pace_min_km: 4.9,
+  target_pace_display: '4:54/km',
+  description: '6 x 800m @ 4:00/km with 400m jog recoveries',
+})
+
+describe('TodayHero, planned', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('writes the session as notation with a sub-line, figures and the rep (not average) pace', async () => {
+    mockFetch({ '/training-plan': trainingPlan([INTERVAL_DAY]) })
     renderWithProviders(<TodayHero data={today({ plan_day_id: 5 })} />)
 
-    expect(await screen.findByText('Tempo')).toBeInTheDocument()
-    expect(screen.getByText(/10\.0 km/)).toBeInTheDocument()
-    expect(screen.getByText(/4:45\/km/)).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '6 × 800 m' })).toBeInTheDocument()
+    expect(screen.getByText('Intervals')).toBeInTheDocument()
+    expect(screen.getByText('at 4:00 /km, 400 m jog between')).toBeInTheDocument()
+    expect(figure('Rep pace')).toBe('4:00/km')
+    expect(figure('Distance')).toBe('9.30km')
+    expect(figure('Time')).toBe('≈46min')
+    // The structure bar is drawn from the parsed description.
+    expect(screen.getByRole('button', { name: /workout structure/i })).toBeInTheDocument()
   })
 
-  it('planned: shows a Send to watch action and a View in plan link for a pushable workout', async () => {
-    vi.stubGlobal('fetch', mockFetch(trainingPlan([
-      planDay({ id: 5, workout_type: 'tempo', target_distance_m: 10000, target_pace_display: '4:45/km' }),
-    ])))
-    renderWithProviders(<TodayHero data={today({ plan_day_id: 5 })} />)
+  it('prefers a scheduled Garmin workout\'s steps for the notation', async () => {
+    const steps: WorkoutStep[] = [{
+      step_order: 1, step_type: 'repeat', end_condition: null, end_condition_value: null, end_condition_display: null,
+      target_type: null, target_display: null, description: null, activity_type: null, repeat_count: 5,
+      steps: [{
+        step_order: 1, step_type: 'interval', end_condition: 'distance', end_condition_value: 1000, end_condition_display: null,
+        target_type: 'pace', target_display: '3:50 - 3:55/km', description: null, activity_type: 'run', repeat_count: null, steps: null,
+      }],
+    }]
+    mockFetch({ '/training-plan': trainingPlan([INTERVAL_DAY]) })
+    const event = {
+      id: 4, event_type: 'workout', date: '2026-07-09', title: 'Intervals', distance_m: 9000, distance_label: null,
+      goal_time_sec: null, priority: null, workout_type: 'interval', workout_description: null, workout_steps: steps, fuelling_guidance: null,
+    }
+    renderWithProviders(<TodayHero data={today({ plan_day_id: 5, scheduled_events: [event] })} />)
 
-    expect(await screen.findByRole('button', { name: /send to watch/i })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /view in plan/i })).toHaveAttribute('href', '/plan')
+    expect(await screen.findByRole('heading', { name: '5 × 1 km' })).toBeInTheDocument()
+    expect(figure('Rep pace')).toBe('3:50/km')
   })
 
-  it('planned: hides Send to watch (but keeps View in plan) for a cross-training day', async () => {
-    vi.stubGlobal('fetch', mockFetch(trainingPlan([planDay({ id: 5, workout_type: 'cross' })])))
+  it('falls back to type + distance for a steady run', async () => {
+    mockFetch({ '/training-plan': trainingPlan([planDay({ workout_type: 'easy', target_distance_m: 9500, target_pace_min_km: 5.7 })]) })
     renderWithProviders(<TodayHero data={today({ plan_day_id: 5 })} />)
 
-    expect(await screen.findByRole('link', { name: /view in plan/i })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Easy 9.5 km' })).toBeInTheDocument()
+    expect(screen.getByText('Pace')).toBeInTheDocument()
+  })
+
+  it('has one primary action (Send to watch) and a quiet Change link to the plan', async () => {
+    mockFetch({ '/training-plan': trainingPlan([INTERVAL_DAY]) })
+    renderWithProviders(<TodayHero data={today({ plan_day_id: 5 })} />)
+
+    expect(await screen.findByRole('button', { name: /send to watch/i })).toHaveClass('btn-primary')
+    expect(screen.getByRole('link', { name: 'Change' })).toHaveAttribute('href', '/plan')
+    expect(document.querySelectorAll('.btn-primary')).toHaveLength(1)
+  })
+
+  it('hides Send to watch for a cross-training day', async () => {
+    mockFetch({ '/training-plan': trainingPlan([planDay({ workout_type: 'cross' })]) })
+    renderWithProviders(<TodayHero data={today({ plan_day_id: 5 })} />)
+
+    expect(await screen.findByRole('link', { name: 'Change' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /send to watch/i })).not.toBeInTheDocument()
   })
 
-  it('planned: hides all hero actions for a rest day', async () => {
-    vi.stubGlobal('fetch', mockFetch(trainingPlan([planDay({ id: 9, workout_type: 'rest' })])))
+  it('shows the briefing as one sentence and expands it in place', async () => {
+    mockFetch({ '/training-plan': trainingPlan([INTERVAL_DAY]) })
+    const briefing = {
+      id: 1, created_at: null, trigger_type: 'briefing', trigger_id: 5, category: null, summary: null,
+      content: 'Hold the reps at **4:00**. Stop after five if they drift past 4:10.',
+    }
+    renderWithProviders(<TodayHero data={today({ plan_day_id: 5, briefing })} />)
+
+    expect(await screen.findByText(/Hold the reps at 4:00\./)).toBeInTheDocument()
+    expect(screen.queryByText(/Stop after five/)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Full briefing' }))
+    expect(screen.getByText(/Stop after five/)).toBeInTheDocument()
+    expect(document.querySelector('.briefing-card')).toBeNull()
+  })
+
+  it('offers the generate action as a text link when there is no briefing yet', async () => {
+    mockFetch({ '/training-plan': trainingPlan([INTERVAL_DAY]) })
+    renderWithProviders(<TodayHero data={today({ plan_day_id: 5 })} />)
+
+    const generate = await screen.findByRole('button', { name: 'Generate briefing' })
+    expect(generate).not.toHaveClass('btn-primary')
+  })
+
+  it('rest: says "Rest day" with no actions', async () => {
+    mockFetch({ '/training-plan': trainingPlan([planDay({ id: 9, workout_type: 'rest' })]) })
     renderWithProviders(<TodayHero data={today({ plan_day_id: 9 })} />)
 
     expect(await screen.findByText('Rest day')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /send to watch/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /view in plan/i })).not.toBeInTheDocument()
   })
 
-  it('completed: links to the matched activity when workout_tag is set', () => {
-    vi.stubGlobal('fetch', mockFetch(null))
-    const data = today({
-      activities: [{
-        id: 77,
-        garmin_id: null,
-        activity_type: 'running',
-        name: 'Tempo Run',
-        started_at: '2026-07-09T06:00:00Z',
-        duration_sec: 2820,
-        distance_m: 10200,
-        avg_hr: 150,
-        max_hr: 170,
-        avg_pace_min_km: 4.7,
-        calories: 700,
-        elevation_gain: 50,
-        workout_tag: 'Tempo Run',
-      }],
-    })
-    renderWithProviders(<TodayHero data={data} />)
+  it('no plan: links to /plan to set one up', async () => {
+    mockFetch({ '/training-plan': null })
+    renderWithProviders(<TodayHero data={today()} />)
 
-    const link = screen.getByRole('link', { name: /done.*tempo run/i })
-    expect(link).toHaveAttribute('href', '/activities/77')
+    expect(await screen.findByRole('link', { name: /set up a plan/i })).toHaveAttribute('href', '/plan')
   })
 
-  it("completed: appends the matched activity's adherence once its detail loads", async () => {
-    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
-      if (url.includes('/activities/77')) {
-        return Promise.resolve({ ok: true, status: 200, json: async () => ({ adherence: { adherence_score: 96.4 } }) })
-      }
-      return Promise.resolve({ ok: true, status: 200, json: async () => ({}) })
-    }))
-    const data = today({
-      activities: [{
-        id: 77,
-        garmin_id: null,
-        activity_type: 'running',
-        name: 'Tempo Run',
-        started_at: '2026-07-09T06:00:00Z',
-        duration_sec: 2820,
-        distance_m: 10200,
-        avg_hr: 150,
-        max_hr: 170,
-        avg_pace_min_km: 4.7,
-        calories: 700,
-        elevation_gain: 50,
-        workout_tag: 'Tempo Run',
-      }],
-    })
-    renderWithProviders(<TodayHero data={data} />)
+  it('no session today: links to /chat when a plan exists but nothing is scheduled', async () => {
+    mockFetch({ '/training-plan': trainingPlan([planDay({ id: 1, day_date: '2026-07-06' })]) })
+    renderWithProviders(<TodayHero data={today()} />)
 
-    expect(await screen.findByText(/96% adherence/)).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: /ask your coach/i })).toHaveAttribute('href', '/chat')
   })
+})
 
-  it('shows the readiness label as the score ring sublabel', async () => {
-    vi.stubGlobal('fetch', mockFetch(null))
+describe('TodayHero, readiness line', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('shows score, word and the limiting factor, and toggles the breakdown', async () => {
+    mockFetch({ '/training-plan': null })
     const data = today({
       readiness: {
-        score: 82,
-        label: 'Ready',
-        sleep_component: null,
-        recovery_component: null,
-        fatigue_component: null,
-        rhr_component: null,
-        hrv_component: null,
-        subjective_component: null,
+        score: 55, label: 'Good', sleep_component: 40, recovery_component: 70, fatigue_component: 80,
+        rhr_component: 75, hrv_component: 60, subjective_component: null,
       },
     })
     renderWithProviders(<TodayHero data={data} />)
 
-    expect(await screen.findByText('82')).toBeInTheDocument()
-    expect(screen.getByText('Ready')).toBeInTheDocument()
+    const line = screen.getByRole('button', { name: /readiness 55 out of 100, good/i })
+    expect(line).toHaveTextContent('Short sleep is holding it back.')
+    expect(line).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(line)
+    expect(line).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText('Freshness')).toBeInTheDocument()
+  })
+})
+
+describe('TodayHero, done', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  const DETAIL = {
+    id: 77,
+    rpe: null,
+    feedback_rating: null,
+    feedback_tags: null,
+    feedback_text: null,
+    scheduled_workout: null,
+    adherence: {
+      adherence_score: 100,
+      intervals: [
+        { step_type: 'warmup', matched: true, actual_pace_display: '5:30/km', planned_pace_display: null },
+        ...['4:02', '3:58', '4:01', '3:59', '4:03', '4:05'].map(p => ({
+          step_type: 'interval', matched: true, actual_pace_display: `${p}/km`, planned_pace_display: '3:55 - 4:05/km',
+        })),
+      ],
+    },
+  }
+
+  it('turns into the result: done time, notation, verdict, rep chart, figures', async () => {
+    mockFetch({
+      '/training-plan': trainingPlan([{ ...INTERVAL_DAY, matched_activity_id: 77, adherence_score: 61 }]),
+      '/activities/77': DETAIL,
+    })
+    renderWithProviders(<TodayHero data={today({ plan_day_id: 5, activities: [activity()] })} />)
+
+    expect(screen.getByText('Done at 10:20')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '6 × 800 m' })).toBeInTheDocument()
+    expect(await screen.findByRole('img', { name: /rep paces against a 4:00 target: 4:02, 3:58, 4:01, 3:59, 4:03, 4:05/i })).toBeInTheDocument()
+    expect(screen.getByText(/All six reps within 5 s of 4:00\. The last one was the slowest\./)).toBeInTheDocument()
+    // Adherence comes from the plan day (61 %), not the activity's own 100 %.
+    expect(screen.getByText(/61% adherence to the plan/)).toBeInTheDocument()
+    expect(screen.queryByText(/100%/)).not.toBeInTheDocument()
+    expect(figure('Avg HR')).toBe('161bpm')
+    expect(screen.getByRole('link', { name: 'Open run analysis' })).toHaveAttribute('href', '/activities/77')
+    expect(screen.queryByRole('button', { name: /send to watch/i })).not.toBeInTheDocument()
   })
 
-  it('rest: shows "Rest day" when the matching plan day is a rest day', async () => {
-    vi.stubGlobal('fetch', mockFetch(trainingPlan([planDay({ id: 9, workout_type: 'rest' })])))
-    renderWithProviders(<TodayHero data={today({ plan_day_id: 9 })} />)
+  it('hides the rep chart for an unstructured session', async () => {
+    mockFetch({
+      '/training-plan': trainingPlan([planDay({ workout_type: 'easy', target_distance_m: 8000, matched_activity_id: 77 })]),
+      '/activities/77': { ...DETAIL, adherence: { adherence_score: 90, intervals: null } },
+    })
+    renderWithProviders(<TodayHero data={today({ plan_day_id: 5, activities: [activity({ workout_tag: 'Easy Run' })] })} />)
 
-    expect(await screen.findByText('Rest day')).toBeInTheDocument()
+    expect(await screen.findByText('How hard did it feel?')).toBeInTheDocument()
+    expect(screen.queryByRole('img', { name: /rep paces/i })).not.toBeInTheDocument()
   })
 
-  it('no plan: links to /plan to set one up when no training plan exists at all', async () => {
-    vi.stubGlobal('fetch', mockFetch(null))
-    renderWithProviders(<TodayHero data={today()} />)
+  it('asks for RPE inline and posts it through the feedback mutation', async () => {
+    const fetchMock = mockFetch({
+      '/training-plan': trainingPlan([INTERVAL_DAY]),
+      '/activities/77': DETAIL,
+    })
+    renderWithProviders(<TodayHero data={today({ plan_day_id: 5, activities: [activity()] })} />)
 
-    const link = await screen.findByRole('link', { name: /set up a plan/i })
-    expect(link).toHaveAttribute('href', '/plan')
+    fireEvent.click(await screen.findByRole('button', { name: '7 of 10' }))
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/v1/activities/77/feedback',
+        expect.objectContaining({ method: 'POST', body: expect.stringContaining('"rpe":7') }),
+      ),
+    )
   })
 
-  it('no session today: links to /chat when a plan exists but nothing is scheduled today', async () => {
-    vi.stubGlobal('fetch', mockFetch(trainingPlan([planDay({ id: 1, day_date: '2026-07-06' })])))
-    renderWithProviders(<TodayHero data={today({ plan_day_id: null })} />)
+  it('shows "Felt N/10" once rated', async () => {
+    mockFetch({ '/training-plan': trainingPlan([INTERVAL_DAY]), '/activities/77': { ...DETAIL, rpe: 8 } })
+    renderWithProviders(<TodayHero data={today({ plan_day_id: 5, activities: [activity()] })} />)
 
-    const link = await screen.findByRole('link', { name: /ask your coach/i })
-    expect(link).toHaveAttribute('href', '/chat')
+    expect(await screen.findByText(/Felt/)).toHaveTextContent('Felt 8/10')
+    expect(screen.queryByText('How hard did it feel?')).not.toBeInTheDocument()
   })
 })

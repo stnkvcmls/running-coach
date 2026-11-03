@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import type { ActivitySummary } from '../../api/types'
 import { getActivityColor, getActivityAccent } from '../../utils/colors'
@@ -26,7 +27,7 @@ export default function WorkoutCard({ activity }: Props) {
     >
       <div className="workout-header">
         <div className="workout-header-left">
-          <span className="badge" style={{ background: `${color}22`, color }}>{typeLabel}</span>
+          <span className="badge badge-effort" style={{ '--effort': color } as CSSProperties}>{typeLabel}</span>
           {activity.workout_tag && (
             <span className="workout-tag" title={activity.workout_tag}>
               <CheckCircle size={12} />

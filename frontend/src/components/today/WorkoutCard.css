@@ -1,7 +1,7 @@
 .workout-card {
   display: block;
   color: inherit;
-  border-left: 4px solid var(--accent);
+  border-left: 4px solid var(--text);
   cursor: pointer;
   transition: background 0.15s, transform 0.1s;
 }
@@ -35,8 +35,8 @@
   font-weight: 600;
   padding: 2px 7px;
   border-radius: 999px;
-  color: var(--success);
-  background: rgba(46, 204, 113, 0.14);
+  color: var(--text);
+  background: var(--bg-input);
 }
 
 .workout-time {

@@ -15,26 +15,18 @@
   display: block;
   padding: 10px 16px;
   border-radius: var(--radius-sm);
-  background: var(--bg-card);
-  color: var(--text);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-md);
+  /* Inverted like the alert banner: floats over any panel without a shadow. */
+  background: var(--text);
+  color: var(--on-ink);
   font-size: var(--text-sm);
   font-weight: 500;
   text-align: left;
   animation: toast-in var(--transition-base) ease;
 }
 
-.toast-success {
-  border-color: var(--success);
-}
-
+/* Success and info read the same: only a genuine error takes colour. */
 .toast-error {
-  border-color: var(--danger);
-}
-
-.toast-info {
-  border-color: var(--accent);
+  background: var(--danger);
 }
 
 @keyframes toast-in {

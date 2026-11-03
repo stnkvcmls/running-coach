@@ -44,13 +44,13 @@
 }
 
 .ob-dot--active {
-  background: var(--accent);
+  background: var(--text);
   width: 18px;
   border-radius: 3px;
 }
 
 .ob-dot--done {
-  background: var(--accent-light);
+  background: var(--text-muted);
   opacity: 0.6;
 }
 
@@ -111,8 +111,6 @@
 .ob-field-label {
   font-size: 0.78rem;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
   color: var(--text-muted);
   margin-bottom: 10px;
 }
@@ -144,7 +142,7 @@
 }
 
 .ob-stepper-btn:hover:not(:disabled) {
-  border-color: var(--accent);
+  border-color: var(--text);
   background: var(--bg-hover);
 }
 
@@ -172,8 +170,8 @@
 .ob-btn-primary {
   width: 100%;
   padding: 14px;
-  background: var(--accent);
-  color: #fff;
+  background: var(--text);
+  color: var(--on-ink);
   border: none;
   border-radius: var(--radius-sm);
   font-size: 0.95rem;

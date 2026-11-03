@@ -9,7 +9,7 @@
   gap: 12px;
   padding: 12px 16px 16px;
   background: var(--bg-card);
-  border-bottom: 3px solid var(--accent);
+  border-bottom: 3px solid var(--text);
 }
 
 .stat-info-back {
@@ -90,7 +90,7 @@
 .stat-info-acronym {
   font-size: 0.78rem;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--text);
   letter-spacing: 0.01em;
 }
 
@@ -107,10 +107,8 @@
 
 .stat-info-field-label {
   display: block;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
   color: var(--text-muted);
   margin-bottom: 6px;
 }

@@ -22,12 +22,12 @@ export default function DailyDetailView() {
     s.max_hr ? { label: 'Max HR', value: `${s.max_hr}`, unit: 'bpm' } : null,
     s.steps ? { label: 'Steps', value: s.steps.toLocaleString() } : null,
     s.total_calories ? { label: 'Calories', value: s.total_calories.toLocaleString(), unit: 'kcal' } : null,
-    s.active_calories ? { label: 'Active Cal', value: s.active_calories.toLocaleString(), unit: 'kcal' } : null,
+    s.active_calories ? { label: 'Active cal', value: s.active_calories.toLocaleString(), unit: 'kcal' } : null,
     s.sleep_seconds ? { label: 'Sleep', value: formatSleepHours(s.sleep_seconds) } : null,
-    s.sleep_score != null ? { label: 'Sleep Score', value: `${Math.round(s.sleep_score)}` } : null,
-    s.body_battery_high != null ? { label: 'Battery High', value: `${s.body_battery_high}` } : null,
-    s.body_battery_low != null ? { label: 'Battery Low', value: `${s.body_battery_low}` } : null,
-    s.stress_avg ? { label: 'Stress Avg', value: `${s.stress_avg}` } : null,
+    s.sleep_score != null ? { label: 'Sleep score', value: `${Math.round(s.sleep_score)}` } : null,
+    s.body_battery_high != null ? { label: 'Battery high', value: `${s.body_battery_high}` } : null,
+    s.body_battery_low != null ? { label: 'Battery low', value: `${s.body_battery_low}` } : null,
+    s.stress_avg ? { label: 'Stress avg', value: `${s.stress_avg}` } : null,
     s.intensity_minutes ? { label: 'Intensity', value: `${s.intensity_minutes}`, unit: 'min' } : null,
     s.floors_climbed ? { label: 'Floors', value: `${s.floors_climbed}` } : null,
   ].filter(Boolean) as { label: string; value: string; unit?: string }[]
@@ -40,7 +40,7 @@ export default function DailyDetailView() {
         </button>
         <div className="detail-header-info">
           <h1 className="detail-title">{format(parseISO(s.date), 'EEEE, d MMMM yyyy')}</h1>
-          <span className="detail-date">Daily Summary</span>
+          <span className="detail-date">Daily summary</span>
         </div>
       </header>
 

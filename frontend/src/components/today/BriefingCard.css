@@ -2,15 +2,13 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
-  background: color-mix(in srgb, var(--accent) 6%, var(--bg-card));
 }
 
 .briefing-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--accent);
+  color: var(--text);
 }
 
 .briefing-title {
@@ -75,6 +73,42 @@
 }
 
 .briefing-generate:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Inline (session hero): plain text, a text-link action. */
+.briefing-inline {
+  margin: 16px 0 0;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.briefing-inline b {
+  font-weight: 700;
+}
+
+.briefing-inline--full .briefing-content {
+  font-size: 0.9375rem;
+  line-height: 1.55;
+}
+
+.briefing-inline-action {
+  font-size: inherit;
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-decoration-color: var(--text-faint);
+  text-underline-offset: 3px;
+  white-space: nowrap;
+}
+
+.briefing-inline--full .briefing-inline-action {
+  margin-top: 8px;
+  font-size: 0.84375rem;
+}
+
+.briefing-inline-action:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }

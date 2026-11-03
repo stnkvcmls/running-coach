@@ -10,11 +10,9 @@
 }
 
 .adherence-title {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-size: 1rem;
+  font-weight: 680;
+  color: var(--text);
 }
 
 .adherence-score-badge {
@@ -27,8 +25,14 @@
 
 .adherence-score-value {
   font-size: 1.25rem;
-  font-weight: 800;
   line-height: 1;
+  color: var(--text);
+}
+
+.adherence-score-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-muted);
 }
 
 .adherence-summary {
@@ -79,30 +83,22 @@
   padding: 2px 6px;
   border-radius: 4px;
   font-weight: 600;
+  background: var(--bg-input);
+  color: var(--text);
 }
 
-.adherence-delta-faster {
-  background: #d1fae522;
-  color: #10b981;
-}
-
-.adherence-delta-slower {
-  background: #fee2e222;
-  color: #ef4444;
-}
+/* Faster/slower is spelled out in the text; colour stays reserved for effort. */
 
 .adherence-intervals {
   margin-top: 16px;
-  border-top: 1px solid var(--border-color, #e5e7eb);
+  border-top: 1px solid var(--border);
   padding-top: 12px;
 }
 
 .adherence-intervals-title {
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   margin-bottom: 8px;
 }
 
@@ -149,6 +145,7 @@
 .adherence-interval-score {
   font-size: 0.75rem;
   font-weight: 700;
+  color: var(--text);
   min-width: 24px;
   text-align: right;
 }
@@ -156,13 +153,14 @@
 .adherence-bar-container {
   margin-top: 12px;
   height: 4px;
-  background: var(--border-color, #e5e7eb);
+  background: var(--border);
   border-radius: 2px;
   overflow: hidden;
 }
 
 .adherence-bar-fill {
   height: 100%;
+  background: var(--text);
   border-radius: 2px;
   transition: width 0.3s ease;
 }

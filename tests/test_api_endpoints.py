@@ -114,6 +114,27 @@ def test_activity_detail_links_scheduled_workout(client, db):
 
 # --- /daily-summaries ---
 
+def test_daily_summaries_expose_hrv_baseline(client, db):
+    day = date.today()
+    db.add(DailySummary(
+        date=day, hrv_avg=48, hrv_weekly_avg=44, hrv_status="BALANCED",
+        hrv_baseline_low=44.0, hrv_baseline_high=54.0,
+    ))
+    db.add(DailySummary(date=day - timedelta(days=1), hrv_avg=47))
+    db.commit()
+
+    rows = {r["date"]: r for r in client.get("/api/v1/daily-summaries").json()}
+    assert rows[day.isoformat()]["hrv_baseline_low"] == 44.0
+    assert rows[day.isoformat()]["hrv_baseline_high"] == 54.0
+    older = rows[(day - timedelta(days=1)).isoformat()]
+    assert older["hrv_baseline_low"] is None
+    assert older["hrv_baseline_high"] is None
+
+    today_summary = client.get("/api/v1/today").json()["daily_summary"]
+    assert today_summary["hrv_baseline_low"] == 44.0
+    assert today_summary["hrv_baseline_high"] == 54.0
+
+
 def test_daily_summaries_list_and_detail(client, db):
     s = DailySummary(date=date(2026, 6, 1), steps=10000, resting_hr=48)
     db.add(s)
@@ -1213,16 +1234,135 @@ def test_plan_day_unmatched_when_activity_is_different_sport(client, db):
     assert body["matched_activity_id"] is None
 
 
-def test_plan_day_today_and_future_never_matched(client, db):
-    """Matching only applies to days strictly before today, even if an
-    activity already exists (today's/future's state is decided client-side)."""
-    today_ = date.today()
-    day = _seed_plan_day(db, today_)
-    _add_activity(db, datetime.combine(today_, datetime.min.time().replace(hour=7)), distance_m=8000)
+def _at(day, hour):
+    return datetime.combine(day, datetime.min.time().replace(hour=hour))
+
+
+def _today_activities(client, day=None):
+    url = "/api/v1/today" + (f"?date={day.isoformat()}" if day else "")
+    resp = client.get(url)
+    assert resp.status_code == 200
+    return {a["id"]: a for a in resp.json()["activities"]}
+
+
+def test_plan_day_today_without_activity_is_unmatched(client, db):
+    day = _seed_plan_day(db, date.today())
 
     body = _get_day(client, day.id)
     assert body["matched_activity_id"] is None
     assert body["adherence_score"] is None
+
+
+def test_same_day_run_completes_todays_plan_day(client, db):
+    """T1/P6: a run done today on an AI-plan day is recognised the same day,
+    on both Plan (matched_activity_id + score) and Today (tag + plan day id)."""
+    today_ = date.today()
+    day = _seed_plan_day(
+        db, today_, workout_type="interval", target_distance_m=9000, target_pace_min_km=4.9,
+    )
+    run = _add_activity(db, _at(today_, 10), name="Interval Run", distance_m=9200, duration_sec=2657)
+
+    plan_day = _get_day(client, day.id)
+    assert plan_day["matched_activity_id"] == run.id
+    assert plan_day["adherence_score"] is not None
+
+    today_body = client.get("/api/v1/today").json()
+    assert today_body["plan_day_id"] == day.id
+    [activity] = today_body["activities"]
+    assert activity["matched_plan_day_id"] == day.id
+    assert activity["workout_tag"] == "Intervals"
+
+
+def test_plan_day_future_never_matched(client, db):
+    tomorrow = date.today() + timedelta(days=1)
+    day = _seed_plan_day(db, tomorrow)
+    run = _add_activity(db, _at(tomorrow, 7), distance_m=8000)
+
+    body = _get_day(client, day.id)
+    assert body["matched_activity_id"] is None
+    assert body["adherence_score"] is None
+    activity = _today_activities(client, tomorrow)[run.id]
+    assert activity["matched_plan_day_id"] is None
+    assert activity["workout_tag"] is None
+
+
+def test_same_day_type_mismatch_not_matched(client, db):
+    """A run doesn't complete a strength day."""
+    today_ = date.today()
+    day = _seed_plan_day(
+        db, today_, workout_type="strength", target_distance_m=None, target_pace_min_km=None,
+    )
+    run = _add_activity(db, _at(today_, 7), distance_m=8000)
+
+    assert _get_day(client, day.id)["matched_activity_id"] is None
+    activity = _today_activities(client)[run.id]
+    assert activity["matched_plan_day_id"] is None
+    assert activity["workout_tag"] is None
+
+
+def test_same_day_shakeout_below_distance_guard_not_matched(client, db):
+    """A 2 km shake-out doesn't "complete" a 9 km interval session."""
+    today_ = date.today()
+    day = _seed_plan_day(db, today_, workout_type="interval", target_distance_m=9000)
+    shakeout = _add_activity(db, _at(today_, 7), distance_m=2000, duration_sec=720)
+
+    assert _get_day(client, day.id)["matched_activity_id"] is None
+    activity = _today_activities(client)[shakeout.id]
+    assert activity["matched_plan_day_id"] is None
+    assert activity["workout_tag"] is None
+
+
+def test_same_day_two_runs_closest_distance_wins(client, db):
+    today_ = date.today()
+    day = _seed_plan_day(db, today_, workout_type="interval", target_distance_m=9000)
+    long_run = _add_activity(db, _at(today_, 7), distance_m=12000)
+    session = _add_activity(db, _at(today_, 18), distance_m=9300)
+
+    assert _get_day(client, day.id)["matched_activity_id"] == session.id
+    activities = _today_activities(client)
+    assert activities[session.id]["matched_plan_day_id"] == day.id
+    assert activities[session.id]["workout_tag"] == "Intervals"
+    assert activities[long_run.id]["matched_plan_day_id"] is None
+    assert activities[long_run.id]["workout_tag"] is None
+
+
+def test_today_plan_match_keeps_calendar_workout_tag(client, db):
+    """When the plan day was pushed to the watch, the Garmin calendar workout
+    claims the run first; it keeps that title and still gets the plan day id,
+    matching what the training plan reports."""
+    today_ = date.today()
+    day = _seed_plan_day(db, today_, workout_type="interval", target_distance_m=9000)
+    db.add(GarminCalendarEvent(
+        garmin_id="pushed_plan_day", event_type="workout", date=today_,
+        title="Intervals — 9.0 km", workout_type="running",
+    ))
+    db.commit()
+    run = _add_activity(db, _at(today_, 10), distance_m=9200)
+
+    body = client.get("/api/v1/today").json()
+    assert body["scheduled_events"] == []
+    [activity] = body["activities"]
+    assert activity["workout_tag"] == "Intervals — 9.0 km"
+    assert activity["matched_plan_day_id"] == day.id
+    assert _get_day(client, day.id)["matched_activity_id"] == run.id
+
+
+def test_today_past_date_reports_plan_match(client, db):
+    yesterday = date.today() - timedelta(days=1)
+    day = _seed_plan_day(db, yesterday, workout_type="tempo", target_distance_m=10000)
+    run = _add_activity(db, _at(yesterday, 7), distance_m=10100)
+
+    activity = _today_activities(client, yesterday)[run.id]
+    assert activity["matched_plan_day_id"] == day.id
+    assert activity["workout_tag"] == "Tempo Run"
+
+
+def test_today_activity_without_plan_day_has_no_plan_match(client, db):
+    run = _add_activity(db, _at(date.today(), 7), distance_m=8000)
+
+    activity = _today_activities(client)[run.id]
+    assert activity["matched_plan_day_id"] is None
+    assert activity["workout_tag"] is None
 
 
 def test_plan_day_rest_day_never_matched(client, db):

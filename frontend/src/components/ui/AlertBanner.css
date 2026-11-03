@@ -1,9 +1,11 @@
+/* Alerts use inversion, not a hue (docs/UI_UX_CRITIQUE.md §5.2): an ink bar
+   with on-ink text gets attention without borrowing Z5's meaning. */
 .alert-banner {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: color-mix(in srgb, var(--color-tempo) 12%, var(--bg-card));
-  border: 1px solid color-mix(in srgb, var(--color-tempo) 40%, transparent);
+  background: var(--text);
+  color: var(--on-ink);
   border-radius: var(--radius-sm);
   padding: 8px 12px;
   margin-bottom: 14px;
@@ -12,13 +14,13 @@
 
 .alert-banner-icon {
   flex-shrink: 0;
-  color: var(--color-tempo);
+  color: var(--on-ink);
 }
 
 .alert-banner-msg {
   flex: 1;
   min-width: 0;
-  color: var(--text);
+  color: var(--on-ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -29,8 +31,10 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: var(--accent-light);
-  font-weight: 600;
+  color: var(--on-ink);
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
   font-size: 0.78rem;
   white-space: nowrap;
 }
@@ -46,13 +50,15 @@
 
 .alert-banner-dismiss {
   flex-shrink: 0;
-  color: var(--text-muted);
+  color: var(--on-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
   font-size: 0.78rem;
   white-space: nowrap;
 }
 
 .alert-banner-dismiss:hover:not(:disabled) {
-  color: var(--text);
+  opacity: 0.8;
 }
 
 .alert-banner-dismiss:disabled {

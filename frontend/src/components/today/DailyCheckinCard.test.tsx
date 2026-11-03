@@ -8,8 +8,12 @@ function mockFetchOk(body: unknown) {
   return vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => body })
 }
 
-function tapRow(name: string): HTMLElement {
-  return screen.getByText(name).closest('.checkin-row') as HTMLElement
+function scale(name: string): HTMLElement {
+  return screen.getByRole('group', { name: new RegExp(`^${name}`) })
+}
+
+function tap(name: string, value: number) {
+  fireEvent.click(within(scale(name)).getByRole('button', { name: String(value) }))
 }
 
 describe('DailyCheckinCard', () => {
@@ -17,53 +21,80 @@ describe('DailyCheckinCard', () => {
     vi.unstubAllGlobals()
   })
 
-  it('keeps the log button disabled until at least one scale is tapped', () => {
+  it('renders one joined 1–5 control per question with end labels and no Log button', () => {
     renderWithQueryClient(<DailyCheckinCard date="2026-07-09" checkin={null} />)
 
-    expect(screen.getByRole('button', { name: 'Log check-in' })).toBeDisabled()
-    fireEvent.click(within(tapRow('Energy')).getByRole('button', { name: '4' }))
-    expect(screen.getByRole('button', { name: 'Log check-in' })).toBeEnabled()
+    for (const name of ['Soreness', 'Energy', 'Mood']) {
+      expect(within(scale(name)).getAllByRole('button')).toHaveLength(5)
+    }
+    expect(screen.getByText('Very sore')).toBeInTheDocument()
+    expect(screen.getByText('Great')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /log check-in/i })).not.toBeInTheDocument()
   })
 
-  it('reveals the soreness note field only when soreness is tapped at 3 or below', () => {
-    renderWithQueryClient(<DailyCheckinCard date="2026-07-09" checkin={null} />)
-
-    expect(screen.queryByPlaceholderText(/where's it sore/i)).not.toBeInTheDocument()
-    fireEvent.click(within(tapRow('Soreness')).getByRole('button', { name: '2' }))
-    expect(screen.getByPlaceholderText(/where's it sore/i)).toBeInTheDocument()
-
-    fireEvent.click(within(tapRow('Soreness')).getByRole('button', { name: '5' }))
-    expect(screen.queryByPlaceholderText(/where's it sore/i)).not.toBeInTheDocument()
-  })
-
-  it('submits the tapped scales for the viewed date', async () => {
-    const fetchMock = mockFetchOk({ date: '2026-07-09', soreness: null, energy: 4, mood: null, soreness_note: null })
+  it('marks the picked segment pressed and does not save until all three are set', () => {
+    const fetchMock = mockFetchOk({})
     vi.stubGlobal('fetch', fetchMock)
-
     renderWithQueryClient(<DailyCheckinCard date="2026-07-09" checkin={null} />)
-    fireEvent.click(within(tapRow('Energy')).getByRole('button', { name: '4' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Log check-in' }))
+
+    tap('Energy', 4)
+    tap('Mood', 5)
+    expect(within(scale('Energy')).getByRole('button', { name: '4' })).toHaveAttribute('aria-pressed', 'true')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('auto-saves for the viewed date once the third answer is in', async () => {
+    const fetchMock = mockFetchOk({ date: '2026-07-09', soreness: 4, energy: 4, mood: 5, soreness_note: null })
+    vi.stubGlobal('fetch', fetchMock)
+    renderWithQueryClient(<DailyCheckinCard date="2026-07-09" checkin={null} />)
+
+    tap('Soreness', 4)
+    tap('Energy', 4)
+    tap('Mood', 5)
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
         '/api/v1/daily-checkin?date=2026-07-09',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ soreness: null, energy: 4, mood: null, soreness_note: null }),
+          body: JSON.stringify({ soreness: 4, energy: 4, mood: 5, soreness_note: null }),
         }),
       ),
     )
   })
 
-  it('collapses to a one-line summary chip for an existing check-in and re-enters editing on tap', () => {
+  it('reveals the soreness note at 3 or below and keeps the card open after saving for it', async () => {
+    const fetchMock = mockFetchOk({})
+    vi.stubGlobal('fetch', fetchMock)
+    renderWithQueryClient(<DailyCheckinCard date="2026-07-09" checkin={null} />)
+
+    expect(screen.queryByPlaceholderText(/where's it sore/i)).not.toBeInTheDocument()
+    tap('Soreness', 2)
+    expect(screen.getByPlaceholderText(/where's it sore/i)).toBeInTheDocument()
+    tap('Energy', 3)
+    tap('Mood', 3)
+
+    expect(await screen.findByRole('button', { name: 'Done' })).toBeInTheDocument()
+    fireEvent.change(screen.getByPlaceholderText(/where's it sore/i), { target: { value: 'left knee' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        '/api/v1/daily-checkin?date=2026-07-09',
+        expect.objectContaining({ body: JSON.stringify({ soreness: 2, energy: 3, mood: 3, soreness_note: 'left knee' }) }),
+      ),
+    )
+  })
+
+  it('collapses to a one-line summary for an existing check-in and re-opens on tap', () => {
     const checkin: DailyCheckin = { date: '2026-07-09', soreness: 4, energy: 3, mood: 5, soreness_note: null }
     renderWithQueryClient(<DailyCheckinCard date="2026-07-09" checkin={checkin} />)
 
     const chip = screen.getByRole('button', { name: /feeling great.*low soreness.*edit/i })
-    expect(screen.queryByRole('button', { name: 'Update' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('group')).not.toBeInTheDocument()
 
     fireEvent.click(chip)
-    expect(screen.getByRole('button', { name: 'Update' })).toBeInTheDocument()
+    expect(within(scale('Mood')).getByRole('button', { name: '5' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
   })
 
   it('dismisses the card when Skip is clicked with no existing check-in', () => {

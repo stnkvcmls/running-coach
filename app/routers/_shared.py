@@ -5,8 +5,18 @@ from sqlalchemy.orm import Session
 
 from app import adherence as adherence_mod
 from app import records as records_mod
-from app.models import GarminCalendarEvent, PersonalRecord
+from app.models import Activity, GarminCalendarEvent, PersonalRecord, TrainingPlanDay
 from app.schemas import CalendarEventResponse, PersonalRecordResponse
+
+# Plan-day workout types fulfilled by a run, and the coarse activity
+# categories (see _categorize_activity_type) that fulfil a "cross" day.
+_RUN_WORKOUT_TYPES = {"easy", "tempo", "long", "interval", "race"}
+_CROSS_ACTIVITY_CATEGORIES = {"bike", "swim", "walk"}
+
+# A run must cover at least this fraction of a run day's target distance to
+# count as doing that session, so a 2 km shake-out doesn't "complete" a 9 km
+# interval day.
+PLAN_MATCH_MIN_DISTANCE_RATIO = 0.5
 
 
 def _parse_date(s: str | None) -> date:
@@ -38,6 +48,56 @@ def _categorize_activity_type(activity_type: str | None) -> str:
     elif "strength" in activity_type:
         return "strength"
     return "other"
+
+
+def _fulfils_workout_type(workout_type: str, activity_category: str) -> bool:
+    if workout_type in _RUN_WORKOUT_TYPES:
+        return activity_category == "run"
+    if workout_type == "strength":
+        return activity_category == "strength"
+    if workout_type == "cross":
+        return activity_category in _CROSS_ACTIVITY_CATEGORIES
+    return False
+
+
+def _plan_day_matchable(plan_day: TrainingPlanDay) -> bool:
+    """Only rest days and days after today can never have been completed."""
+    return plan_day.workout_type != "rest" and plan_day.day_date <= date.today()
+
+
+def _select_plan_day_activity(
+    plan_day: TrainingPlanDay, candidates: list[Activity],
+) -> Activity | None:
+    """Pick the activity, among the plan day's same-day ``candidates``, that
+    completed it, or None.
+
+    Shared by the training plan (``matched_activity_id``) and Today
+    (``matched_plan_day_id``) so both screens agree on which run did the
+    session. An activity qualifies when its coarse sport category fulfils the
+    plan's workout type. On a run day with a target distance it must also cover
+    ``PLAN_MATCH_MIN_DISTANCE_RATIO`` of the target, and the run closest to the
+    target wins. Remaining ties (and days without a target) go to the earliest
+    activity. The distance rules apply to run days only: a cross day's target
+    can't be compared across bike, swim and walk distances.
+    """
+    if not _plan_day_matchable(plan_day):
+        return None
+    eligible = [
+        a for a in candidates
+        if _fulfils_workout_type(plan_day.workout_type, _categorize_activity_type(a.activity_type))
+    ]
+    target = plan_day.target_distance_m if plan_day.workout_type in _RUN_WORKOUT_TYPES else None
+    if not target or target <= 0:
+        target = None
+    if target is not None:
+        min_distance = target * PLAN_MATCH_MIN_DISTANCE_RATIO
+        eligible = [a for a in eligible if (a.distance_m or 0) >= min_distance]
+
+    def _rank(a: Activity) -> tuple[float, datetime]:
+        gap = abs(a.distance_m - target) if target is not None else 0.0
+        return gap, a.started_at or datetime.max
+
+    return min(eligible, key=_rank, default=None)
 
 
 def _enrich_event_with_steps(event: GarminCalendarEvent) -> CalendarEventResponse:

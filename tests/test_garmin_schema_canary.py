@@ -185,6 +185,13 @@ def test_hrv_data_values_extracted():
     assert hrv_summary.get("lastNightAvg") == 48
     assert hrv_summary.get("weeklyAvg") == 44
     assert hrv_summary.get("status") == "BALANCED"
+    assert garmin_sync._hrv_baseline_range(hrv_summary) == (44.0, 54.0)
+
+
+def test_hrv_data_without_baseline_yields_no_range():
+    payload = _load("garmin_hrv_data.json")
+    del payload["hrvSummary"]["baseline"]
+    assert garmin_sync._hrv_baseline_range(payload["hrvSummary"]) == (None, None)
 
 
 def test_hrv_data_missing_hrvsummary_yields_none():

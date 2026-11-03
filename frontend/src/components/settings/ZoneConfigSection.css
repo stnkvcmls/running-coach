@@ -45,14 +45,14 @@
   gap: 6px;
 }
 
+/* Name gets every pixel the fixed columns don't need (S2: names were cut to
+   "Rec", "Aer", "Ten" when Range sat on the same line at phone width). */
 .zone-table-head {
   display: grid;
-  grid-template-columns: 28px 1fr 70px 70px 110px;
+  grid-template-columns: 36px minmax(0, 1fr) 60px 60px 110px;
   gap: 8px;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   padding: 0 2px;
 }
 
@@ -62,23 +62,67 @@
 
 .zone-row {
   display: grid;
-  grid-template-columns: 28px 1fr 70px 70px 110px;
+  grid-template-columns: 36px minmax(0, 1fr) 60px 60px 110px;
   gap: 8px;
   align-items: center;
 }
 
 /* 4-column layout when no computed values shown */
 .zone-table-head:not(:has(span:nth-child(5))) {
-  grid-template-columns: 28px 1fr 70px 70px;
+  grid-template-columns: 36px minmax(0, 1fr) 60px 60px;
 }
 
 .zone-row:not(:has(.zone-computed)) {
-  grid-template-columns: 28px 1fr 70px 70px;
+  grid-template-columns: 36px minmax(0, 1fr) 60px 60px;
 }
 
+/* Phone width: Range drops to its own line under the name, so the name
+   column keeps room for "Recovery", "Aerobic", "Threshold". */
+@media (max-width: 559px) {
+  .zone-table-head,
+  .zone-row,
+  .zone-table-head:not(:has(span:nth-child(5))),
+  .zone-row:not(:has(.zone-computed)) {
+    grid-template-columns: 36px minmax(0, 1fr) 60px 60px;
+  }
+
+  .zone-table-head span:nth-child(5) {
+    display: none;
+  }
+
+  .zone-table-head span:nth-child(4) {
+    text-align: left;
+  }
+
+  .zone-computed {
+    grid-column: 2 / -1;
+    text-align: left;
+    margin-top: -2px;
+  }
+
+  .zone-row:has(.zone-computed) {
+    row-gap: 2px;
+    padding-bottom: 4px;
+  }
+}
+
+/* Zone label in ink; the effort colour is the dot in front of it. */
 .zone-num {
-  font-size: 0.78rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
   font-weight: 700;
+  color: var(--text);
+}
+
+.zone-num::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--effort, var(--color-default));
+  flex-shrink: 0;
 }
 
 .zone-name-input {
@@ -105,7 +149,7 @@
 .zone-name-input:focus,
 .zone-pct-input:focus {
   outline: none;
-  border-color: var(--accent, #6c5ce7);
+  border-color: var(--text);
 }
 
 .zone-computed {
@@ -117,8 +161,8 @@
 
 .zone-save-btn {
   align-self: flex-start;
-  background: var(--accent, #6c5ce7);
-  color: #fff;
+  background: var(--text);
+  color: var(--on-ink);
   border: none;
   border-radius: 8px;
   padding: 7px 18px;

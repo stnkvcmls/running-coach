@@ -4,37 +4,26 @@
   gap: 8px;
 }
 
-.plan-adaptation-downgrade {
-  border: 1px solid color-mix(in srgb, var(--color-tempo) 40%, transparent);
-  background: color-mix(in srgb, var(--color-tempo) 8%, var(--bg-card));
-}
-
-.plan-adaptation-upgrade {
-  border: 1px solid color-mix(in srgb, var(--color-easy) 40%, transparent);
-  background: color-mix(in srgb, var(--color-easy) 8%, var(--bg-card));
+/* Adaptation notices are neutral panels (colour is reserved for effort): the
+   kind of change is carried by the header text and icon, not a tint. A risk
+   notice gets an ink outline so it still reads as the louder one. */
+.plan-adaptation-downgrade,
+.plan-adaptation-upgrade,
+.plan-adaptation-risk {
+  border: 1px solid var(--border);
+  background: var(--bg-card);
 }
 
 .plan-adaptation-risk {
-  border: 1px solid rgba(231, 76, 60, 0.45);
-  background: rgba(231, 76, 60, 0.08);
-}
-
-.plan-adaptation-risk .plan-adaptation-header {
-  color: #e74c3c;
+  box-shadow: inset 0 0 0 1.5px var(--text);
+  border-color: transparent;
 }
 
 .plan-adaptation-header {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.plan-adaptation-downgrade .plan-adaptation-header {
-  color: var(--color-tempo);
-}
-
-.plan-adaptation-upgrade .plan-adaptation-header {
-  color: var(--color-easy);
+  color: var(--text);
 }
 
 .plan-adaptation-title {

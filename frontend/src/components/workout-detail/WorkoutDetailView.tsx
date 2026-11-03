@@ -28,12 +28,12 @@ export default function WorkoutDetailView() {
 
   return (
     <div className="activity-detail">
-      <header className="detail-header" style={{ borderBottomColor: 'var(--warning)' }}>
+      <header className="detail-header">
         <button className="back-btn" onClick={() => navigate(-1)} aria-label="Back">
           <ArrowLeft size={20} />
         </button>
         <div className="detail-header-info">
-          <span className="badge" style={{ background: 'rgba(243,156,18,0.15)', color: 'var(--warning)' }}>
+          <span className="badge badge-effort">
             {workoutType}
           </span>
           <h1 className="detail-title">{event.title || 'Workout'}</h1>

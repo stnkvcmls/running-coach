@@ -68,24 +68,35 @@ const SEGMENT_COLORS: Record<StructureSegmentKind, string> = {
   warmup: 'var(--text-muted)',
   cooldown: 'var(--text-muted)',
   recover: 'var(--bg-hover)',
-  work: 'var(--accent)',
+  work: 'var(--text)',
+}
+
+/** Large variant (Today's session hero): every non-work segment is Z1 on
+ * the effort scale, so the strip reads in effort colour like the watch. */
+const LARGE_SEGMENT_COLORS: Record<StructureSegmentKind, string> = {
+  warmup: 'var(--z1)',
+  cooldown: 'var(--z1)',
+  recover: 'var(--z1)',
+  work: 'var(--text)',
 }
 
 interface Props {
   steps: WorkoutStep[]
-  /** Accent for 'work' segments — pass the workout-type colour. Defaults to --accent. */
+  /** Accent for 'work' segments — pass the workout-type colour. Defaults to ink. */
   color?: string
+  size?: 'default' | 'large'
 }
 
 /** Proportional segment bar summarising a workout's warmup/work/recover/cooldown
  * shape. Tap/click reveals the full step-by-step breakdown (WorkoutSteps). */
-export default function WorkoutStructureBar({ steps, color }: Props) {
+export default function WorkoutStructureBar({ steps, color, size = 'default' }: Props) {
   const [expanded, setExpanded] = useState(false)
   const segments = computeSegments(steps)
+  const palette = size === 'large' ? LARGE_SEGMENT_COLORS : SEGMENT_COLORS
   if (segments.length === 0) return null
 
   return (
-    <div className="workout-structure">
+    <div className={`workout-structure workout-structure--${size}`}>
       <button
         type="button"
         className="workout-structure-bar"
@@ -97,7 +108,7 @@ export default function WorkoutStructureBar({ steps, color }: Props) {
           <span
             key={i}
             className={`workout-structure-seg workout-structure-seg--${seg.kind}`}
-            style={{ flex: seg.weight, background: seg.kind === 'work' && color ? color : SEGMENT_COLORS[seg.kind] }}
+            style={{ flex: seg.weight, background: seg.kind === 'work' && color ? color : palette[seg.kind] }}
           />
         ))}
       </button>

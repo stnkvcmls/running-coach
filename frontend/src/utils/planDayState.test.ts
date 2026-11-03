@@ -33,9 +33,12 @@ describe('dayState', () => {
     expect(dayState(day({ workout_type: 'rest', day_date: '2026-08-01' }), TODAY)).toBe('rest')
   })
 
-  it('is "today" when day_date equals today, even with a matched activity', () => {
+  it('is "today" when day_date equals today and nothing has matched yet', () => {
     expect(dayState(day({ day_date: TODAY, matched_activity_id: null }), TODAY)).toBe('today')
-    expect(dayState(day({ day_date: TODAY, matched_activity_id: 5 }), TODAY)).toBe('today')
+  })
+
+  it('is "done" for today once the backend matched an activity to it', () => {
+    expect(dayState(day({ day_date: TODAY, matched_activity_id: 5 }), TODAY)).toBe('done')
   })
 
   it('is "done" for a past day with a matched activity', () => {

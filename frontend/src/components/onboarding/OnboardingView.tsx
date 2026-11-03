@@ -133,8 +133,8 @@ export default function OnboardingView() {
         {step === 4 && (
           <Step title="How far have you been running recently?" subtitle="Select your average weekly mileage and longest run from the past 4 weeks.">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-              <RangeSlider label="Current Weekly Mileage" value={state.weekly_mileage_km} onChange={v => patch('weekly_mileage_km', v)} min={0} max={200} step={1} unit="km" />
-              <RangeSlider label="Current Longest Run" value={state.longest_run_km} onChange={v => patch('longest_run_km', v)} min={0} max={50} step={0.5} unit="km" />
+              <RangeSlider label="Current weekly mileage" value={state.weekly_mileage_km} onChange={v => patch('weekly_mileage_km', v)} min={0} max={200} step={1} unit="km" />
+              <RangeSlider label="Current longest run" value={state.longest_run_km} onChange={v => patch('longest_run_km', v)} min={0} max={50} step={0.5} unit="km" />
             </div>
           </Step>
         )}
@@ -142,19 +142,19 @@ export default function OnboardingView() {
           <Step title="Set your running schedule" subtitle="Tell us how many days per week you can run, and when you prefer your long run.">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
               <div>
-                <div className="ob-field-label">Runs Per Week</div>
+                <div className="ob-field-label">Runs per week</div>
                 <div className="ob-stepper">
                   <button className="ob-stepper-btn" onClick={() => patch('runs_per_week', Math.max(1, state.runs_per_week - 1))} disabled={state.runs_per_week <= 1}>−</button>
-                  <span className="ob-stepper-val">{state.runs_per_week}</span>
+                  <span className="ob-stepper-val num">{state.runs_per_week}</span>
                   <button className="ob-stepper-btn" onClick={() => patch('runs_per_week', Math.min(7, state.runs_per_week + 1))} disabled={state.runs_per_week >= 7}>+</button>
                 </div>
               </div>
               <div>
-                <div className="ob-field-label">Available Days</div>
+                <div className="ob-field-label">Available days</div>
                 <DayChips value={state.available_days} onChange={v => patch('available_days', v)} />
               </div>
               <div>
-                <div className="ob-field-label">Long Run Day</div>
+                <div className="ob-field-label">Long run day</div>
                 <DayChips value={[state.long_run_day]} onChange={v => patch('long_run_day', v[0] ?? 'Sun')} single />
               </div>
             </div>
@@ -209,7 +209,7 @@ function WelcomeStep({ onStart }: { onStart: () => void }) {
       <p className="ob-welcome-subtitle">
         Let's set up your personalised training plan. It only takes a minute and you can change everything later.
       </p>
-      <button className="ob-btn-primary" onClick={onStart}>Get Started</button>
+      <button className="ob-btn-primary" onClick={onStart}>Get started</button>
       <button className="ob-skip" onClick={() => window.location.replace('/')}>Skip for now</button>
     </div>
   )

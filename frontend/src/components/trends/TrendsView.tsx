@@ -1,25 +1,55 @@
-import { useState } from 'react'
+import { useState, type ComponentType, type ReactNode } from 'react'
+import StatHelpButton from '../info/StatHelpButton'
 import WellnessTrendsView from './WellnessTrendsView'
 import PerformanceCurveView from './PerformanceCurveView'
 import IntensityTrendsView from './IntensityTrendsView'
 import AerobicTrendsView from './AerobicTrendsView'
 import CustomChartsView from './CustomChartsView'
 import PeakPerformancesView from './PeakPerformancesView'
+import WeeklyVolumeView from './WeeklyVolumeView'
 import './TrendsView.css'
 
-type Tab = 'wellness' | 'performance' | 'intensity' | 'aerobic' | 'records' | 'custom'
+type Tab = 'body' | 'fitness' | 'records'
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'wellness', label: 'Wellness' },
-  { id: 'performance', label: 'Performance' },
-  { id: 'intensity', label: 'Intensity' },
-  { id: 'aerobic', label: 'Aerobic' },
+  { id: 'body', label: 'Body' },
+  { id: 'fitness', label: 'Fitness' },
   { id: 'records', label: 'Records' },
-  { id: 'custom', label: 'Custom' },
 ]
 
+/** Fitness stacks what used to be four separate tabs, each under a plain
+ * heading; "Build a chart" (the old Custom tab) closes the page. */
+const FITNESS_SECTIONS: { id: string; title: string; help?: ReactNode; View: ComponentType }[] = [
+  { id: 'volume', title: 'Weekly volume', View: WeeklyVolumeView },
+  {
+    id: 'performance',
+    title: 'Performance curve',
+    help: <StatHelpButton topic="performance-curve" label="Performance curve" />,
+    View: PerformanceCurveView,
+  },
+  { id: 'intensity', title: 'Intensity', View: IntensityTrendsView },
+  { id: 'aerobic', title: 'Aerobic efficiency', View: AerobicTrendsView },
+  { id: 'custom', title: 'Build a chart', View: CustomChartsView },
+]
+
+function FitnessPanel() {
+  return (
+    <div className="trends-fitness">
+      {FITNESS_SECTIONS.map(({ id, title, help, View }) => (
+        <section key={id} className="trends-section" aria-labelledby={`trends-section-${id}`}>
+          <div className="section-title-row trends-section-head">
+            <h2 id={`trends-section-${id}`} className="section-title">{title}</h2>
+            {help}
+          </div>
+          <View />
+        </section>
+      ))}
+    </div>
+  )
+}
+
 export default function TrendsView() {
-  const [tab, setTab] = useState<Tab>('wellness')
+  const [tab, setTab] = useState<Tab>('body')
 
   return (
     <div className="trends-page">
@@ -43,12 +73,9 @@ export default function TrendsView() {
         role="tabpanel"
         aria-labelledby={`trends-tab-${tab}`}
       >
-        {tab === 'wellness' && <WellnessTrendsView />}
-        {tab === 'performance' && <PerformanceCurveView />}
-        {tab === 'intensity' && <IntensityTrendsView />}
-        {tab === 'aerobic' && <AerobicTrendsView />}
+        {tab === 'body' && <WellnessTrendsView />}
+        {tab === 'fitness' && <FitnessPanel />}
         {tab === 'records' && <PeakPerformancesView />}
-        {tab === 'custom' && <CustomChartsView />}
       </div>
     </div>
   )

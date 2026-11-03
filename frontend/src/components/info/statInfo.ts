@@ -29,7 +29,7 @@ export interface InfoTopic {
 
 export const STAT_INFO: Record<string, InfoTopic> = {
   'training-load': {
-    title: 'Training Load',
+    title: 'Training load',
     intro:
       'Training load tracks how much work you’ve done and how it’s balancing out over time. ' +
       'Every stat below is built from TSS (Training Stress Score) — a single number summarising ' +
@@ -78,7 +78,7 @@ export const STAT_INFO: Record<string, InfoTopic> = {
           'fatigue / overreaching risk.',
       },
       {
-        name: 'Workload Ratio',
+        name: 'Workload ratio',
         acronym: 'ACWR (Acute:Chronic Workload Ratio)',
         description:
           'A relative injury-risk gauge: how big your recent load (Fatigue) is compared with the load ' +
@@ -94,7 +94,7 @@ export const STAT_INFO: Record<string, InfoTopic> = {
   },
 
   'activity-performance': {
-    title: 'Activity Performance',
+    title: 'Activity performance',
     intro:
       'These metrics describe the physiological stimulus of a single run — how aerobic, how ' +
       'anaerobic, how aerobically efficient you were, and whether your heart rate stayed in sync ' +
@@ -142,7 +142,7 @@ export const STAT_INFO: Record<string, InfoTopic> = {
           '58–65 = excellent; > 65 = elite. Requires consistent outdoor GPS running to be reliable.',
       },
       {
-        name: 'Aerobic Decoupling',
+        name: 'Aerobic decoupling',
         acronym: 'Pa:HR Decoupling (%)',
         description:
           'How much your heart rate drifted upward relative to your pace (or power) between ' +
@@ -159,7 +159,7 @@ export const STAT_INFO: Record<string, InfoTopic> = {
           'unusually hot. Computed only for runs of 10 min or more with GPS and HR data.',
       },
       {
-        name: 'Efficiency Factor',
+        name: 'Efficiency factor',
         acronym: 'EF (Efficiency Factor)',
         description:
           'Average GAP-speed (grade-adjusted pace, converted to m/s) divided by average ' +
@@ -178,7 +178,7 @@ export const STAT_INFO: Record<string, InfoTopic> = {
   },
 
   'performance-curve': {
-    title: 'Performance Curve',
+    title: 'Performance curve',
     intro:
       'The performance curve (also called a mean-maximal or power-duration curve) shows the best ' +
       'sustained pace or power achieved over a range of durations within the selected time window. ' +
@@ -200,7 +200,7 @@ export const STAT_INFO: Record<string, InfoTopic> = {
           'easy runs leave those points blank.',
       },
       {
-        name: 'Critical Velocity',
+        name: 'Critical velocity',
         acronym: 'CV (Critical Velocity)',
         description:
           'The highest sustainable aerobic running speed — essentially your running "threshold pace", ' +
@@ -231,7 +231,7 @@ export const STAT_INFO: Record<string, InfoTopic> = {
           'short efforts in the data.',
       },
       {
-        name: 'Critical Power',
+        name: 'Critical power',
         acronym: 'CP (Critical Power)',
         description:
           'The highest power output that can be sustained aerobically — the power equivalent of ' +
@@ -257,7 +257,7 @@ export const STAT_INFO: Record<string, InfoTopic> = {
           'once the data includes genuine short-duration maximal efforts.',
       },
       {
-        name: 'Race Predictions',
+        name: 'Race predictions',
         description:
           'Estimated finish times for standard distances (5 K, 10 K, Half Marathon, Marathon) ' +
           'derived from the Critical Velocity model. For durations within the model\'s fitted range ' +
@@ -279,7 +279,7 @@ export const STAT_INFO: Record<string, InfoTopic> = {
   },
 
   'training-readiness': {
-    title: 'Training Readiness',
+    title: 'Training readiness',
     intro:
       'Readiness is a single 0–100 score estimating how prepared your body is to train hard today. ' +
       'It’s a weighted average of up to five wellness components (each scored 0–100). Any component ' +
@@ -287,7 +287,7 @@ export const STAT_INFO: Record<string, InfoTopic> = {
       'data day still gives a meaningful score.',
     stats: [
       {
-        name: 'Overall Readiness Score',
+        name: 'Overall readiness score',
         description:
           'The headline 0–100 number. It’s the weighted average of the available components below: ' +
           'Sleep 25%, Recovery 25%, Freshness 20%, Resting HR 10%, HRV 20%.',

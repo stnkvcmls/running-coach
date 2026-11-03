@@ -65,7 +65,7 @@ export default function RaceTimesSheet({ open, onClose, initial, onSave }: Props
   }
 
   return (
-    <BottomSheet open={open} onClose={onClose} title="Current Race Times">
+    <BottomSheet open={open} onClose={onClose} title="Current race times">
       <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: 16, lineHeight: 1.4 }}>
         Include a shorter and a longer distance time for more accurate paces in your plan.
       </p>
@@ -87,7 +87,7 @@ export default function RaceTimesSheet({ open, onClose, initial, onSave }: Props
                   <input className="sheet-time-input" maxLength={2} value={fields.m} onChange={e => setFields(f => ({ ...f, m: e.target.value }))} placeholder="MM" />
                   <span>:</span>
                   <input className="sheet-time-input" maxLength={2} value={fields.s} onChange={e => setFields(f => ({ ...f, s: e.target.value }))} placeholder="SS" />
-                  <button onClick={commitEdit} style={{ marginLeft: 'auto', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontSize: '0.85rem' }}>OK</button>
+                  <button onClick={commitEdit} className="btn-primary" style={{ marginLeft: 'auto' }}>OK</button>
                 </div>
               </div>
             )

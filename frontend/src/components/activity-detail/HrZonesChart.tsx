@@ -1,70 +1,32 @@
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
-import { useTheme } from '../../App'
-import { getChartTooltipStyle, getChartTickColor, getChartTooltipTextStyle } from '../../utils/theme'
-import { usePrefersReducedMotion } from '../../utils/chartTheme'
-import './HrZonesChart.css'
-
-const ZONE_COLORS = ['#2ecc71', '#27ae60', '#f39c12', '#e67e22', '#e74c3c']
-const ZONE_LABELS = ['Zone 1', 'Zone 2', 'Zone 3', 'Zone 4', 'Zone 5']
+import { effortZoneColor } from '../../utils/chartTheme'
+import ZoneBar, { formatZoneTime, type ZoneSegment } from './ZoneBar'
 
 interface Props {
   zones: any
 }
 
+/** Time in heart-rate zone: one stacked bar, minutes printed per zone (D3). */
 export default function HrZonesChart({ zones }: Props) {
-  const { theme } = useTheme()
-  const reduceMotion = usePrefersReducedMotion()
-
   if (!zones || !Array.isArray(zones) || zones.length === 0) return null
 
-  const data = zones.map((z: any, i: number) => {
-    const secs = z?.secsInZone ?? 0
-    const mins = Math.round(secs / 60)
-    return {
-      zone: ZONE_LABELS[i] || `Zone ${i + 1}`,
-      minutes: mins,
-      seconds: secs,
-    }
+  const segments: ZoneSegment[] = zones.slice(0, 5).map((z: any, i: number) => {
+    const secs = Math.max(0, z?.secsInZone ?? 0)
+    return { label: `Zone ${i + 1}`, color: effortZoneColor(i + 1), weight: secs, value: formatZoneTime(secs) }
   })
 
-  if (data.every((d: any) => d.minutes === 0)) return null
-
-  const totalMinutes = data.reduce((s: number, d: any) => s + d.minutes, 0)
-  const dominant = data.reduce((max: any, d: any) => (d.minutes > max.minutes ? d : max), data[0])
+  const total = segments.reduce((s, z) => s + z.weight, 0)
+  if (total < 60) return null
+  const dominant = segments.reduce((max, z) => (z.weight > max.weight ? z : max), segments[0])
 
   return (
-    <section className="detail-section">
-      <h3 className="section-title">Heart Rate Zones</h3>
-      <div
-        className="card hr-zones-card"
-        role="img"
-        aria-label={`Heart rate zones, ${totalMinutes} minutes total. Most time spent in ${dominant.zone}, ${dominant.minutes} minutes.`}
-      >
-        <ResponsiveContainer width="100%" height={180}>
-          <BarChart data={data} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
-            <XAxis type="number" hide />
-            <YAxis
-              type="category"
-              dataKey="zone"
-              tick={{ fontSize: 11, fill: getChartTickColor(theme) }}
-              axisLine={false}
-              tickLine={false}
-              width={48}
-            />
-            <Tooltip
-              contentStyle={getChartTooltipStyle(theme)}
-              labelStyle={getChartTooltipTextStyle(theme)}
-              itemStyle={getChartTooltipTextStyle(theme)}
-              formatter={(value: number) => [`${value} min`, 'Time']}
-            />
-            <Bar dataKey="minutes" radius={[0, 4, 4, 0]} barSize={20} isAnimationActive={!reduceMotion}>
-              {data.map((_: any, i: number) => (
-                <Cell key={i} fill={ZONE_COLORS[i] || '#6c5ce7'} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+    <section className="detail-panel hr-zones-card">
+      <div className="detail-panel-head">
+        <h3 className="section-title">Time in zone</h3>
       </div>
+      <ZoneBar
+        segments={segments}
+        ariaLabel={`Time in heart rate zone: ${segments.map(s => `${s.label} ${s.value}`).join(', ')}. Most time in ${dominant.label}.`}
+      />
     </section>
   )
 }

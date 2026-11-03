@@ -34,12 +34,12 @@
 }
 
 .notif-disable {
-  color: #e74c3c;
+  color: var(--danger);
 }
 
 .notif-error {
   font-size: 0.8rem;
-  color: #e74c3c;
+  color: var(--danger);
 }
 
 .notif-categories {

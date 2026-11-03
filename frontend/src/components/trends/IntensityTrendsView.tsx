@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import {
   BarChart,
   Bar,
@@ -10,7 +10,7 @@ import {
 } from 'recharts'
 import { useIntensityTrends } from '../../api/hooks'
 import { useTheme } from '../../App'
-import { getChartTickColor, getTooltipProps, INTENSITY_ZONE_COLORS, INTENSITY_BUCKET_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
+import { getChartTickColor, getTooltipProps, INTENSITY_ZONE_COLORS, INTENSITY_BUCKET_COLORS, Y_AXIS_WIDTH, usePrefersReducedMotion } from '../../utils/chartTheme'
 import RangeSelector, { DEFAULT_RANGE_OPTIONS, type RangeDays } from '../ui/RangeSelector'
 import Skeleton from '../ui/Skeleton'
 import type { IntensityWeek } from '../../api/types'
@@ -47,6 +47,16 @@ function buildChartData(weeks: IntensityWeek[]) {
     row._total_min = Math.round(w.total_seconds / 60)
     return row
   })
+}
+
+/** Ink label with an effort-colour dot: the effort colours are marks, not text. */
+function BucketLabel({ color, children }: { color: string; children: ReactNode }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text)' }}>
+      <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+      {children}
+    </span>
+  )
 }
 
 function PolarizationBar({ easy, moderate, hard }: { easy: number; moderate: number; hard: number }) {
@@ -132,9 +142,8 @@ export default function IntensityTrendsView() {
               className={`chip ${zoneType === zt ? 'active' : ''}`}
               aria-pressed={zoneType === zt}
               onClick={() => setZoneType(zt)}
-              style={{ textTransform: 'uppercase' }}
             >
-              {zt}
+              {zt === 'hr' ? 'HR' : 'Power'}
             </button>
           ))}
         </div>
@@ -162,7 +171,7 @@ export default function IntensityTrendsView() {
                 tick={{ fontSize: 10, fill: tickColor }}
                 axisLine={false}
                 tickLine={false}
-                width={28}
+                width={Y_AXIS_WIDTH}
               />
               <Tooltip
                 contentStyle={contentStyle}
@@ -204,9 +213,9 @@ export default function IntensityTrendsView() {
             </p>
             <PolarizationBar easy={avgEasy} moderate={avgMod} hard={avgHard} />
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: '0.75rem' }}>
-              <span style={{ color: INTENSITY_BUCKET_COLORS.easy }}>Easy {avgEasy.toFixed(0)}%</span>
-              <span style={{ color: INTENSITY_BUCKET_COLORS.moderate }}>Moderate {avgMod.toFixed(0)}%</span>
-              <span style={{ color: INTENSITY_BUCKET_COLORS.hard }}>Hard {avgHard.toFixed(0)}%</span>
+              <BucketLabel color={INTENSITY_BUCKET_COLORS.easy}>Easy {avgEasy.toFixed(0)}%</BucketLabel>
+              <BucketLabel color={INTENSITY_BUCKET_COLORS.moderate}>Moderate {avgMod.toFixed(0)}%</BucketLabel>
+              <BucketLabel color={INTENSITY_BUCKET_COLORS.hard}>Hard {avgHard.toFixed(0)}%</BucketLabel>
             </div>
             <p style={{
               fontSize: '0.73rem',
@@ -232,7 +241,7 @@ export default function IntensityTrendsView() {
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-muted)', fontWeight: 500 }}>Week</th>
                 {allZones.map(z => (
-                  <th key={z} style={{ textAlign: 'right', padding: '8px 8px', color: INTENSITY_ZONE_COLORS[z], fontWeight: 500 }}>
+                  <th key={z} style={{ textAlign: 'right', padding: '8px 8px', color: 'var(--text-muted)', fontWeight: 500, boxShadow: `inset 0 -3px 0 ${INTENSITY_ZONE_COLORS[z]}` }}>
                     Z{z}
                   </th>
                 ))}

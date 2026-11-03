@@ -75,10 +75,11 @@ export default function WeekOverview({ data }: Props) {
 
   return (
     <div className="card week-overview">
-      <div className="week-total">
+      {/* The total spans every bar, so the headline names the span (T5). */}
+      <p className="week-total">
         <span className="stat-value-lg">{totalKm.toFixed(1)}</span>
-        <span className="stat-unit">km total</span>
-      </div>
+        <span className="stat-unit">km in {data.length} {data.length === 1 ? 'week' : 'weeks'}</span>
+      </p>
       <div
         className="week-chart"
         role="img"
@@ -93,7 +94,7 @@ export default function WeekOverview({ data }: Props) {
               tickLine={false}
             />
             <YAxis hide domain={[0, maxKm * 1.15]} />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(108, 92, 231, 0.1)' }} />
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'var(--text)', fillOpacity: 0.06 }} />
             {activityTypes.map((type, index) => (
               <Bar
                 key={type}

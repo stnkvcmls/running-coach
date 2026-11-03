@@ -1,6 +1,6 @@
 .race-pacing-card {
   margin-top: 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  border-top: 1px solid var(--border);
   padding-top: 8px;
 }
 
@@ -10,11 +10,9 @@
   gap: 6px;
   background: none;
   border: none;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--text);
   font-size: 0.75rem;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   cursor: pointer;
   padding: 0;
   width: 100%;
@@ -22,7 +20,7 @@
 }
 
 .race-pacing-toggle:hover {
-  color: #fff;
+  color: var(--text);
 }
 
 .race-pacing-toggle-label {
@@ -46,8 +44,8 @@
 .race-pacing-strategy-group {
   display: flex;
   gap: 4px;
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 6px;
+  background: var(--bg-input);
+  border-radius: var(--radius-xs);
   padding: 2px;
 }
 
@@ -55,7 +53,7 @@
   background: none;
   border: none;
   border-radius: 4px;
-  color: rgba(255, 255, 255, 0.65);
+  color: var(--text-muted);
   cursor: pointer;
   font-size: 0.73rem;
   font-weight: 500;
@@ -64,12 +62,12 @@
 }
 
 .race-pacing-strategy-btn.active {
-  background: rgba(255, 255, 255, 0.25);
-  color: #fff;
+  background: var(--text);
+  color: var(--on-ink);
 }
 
 .race-pacing-strategy-btn:hover:not(.active) {
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--text);
 }
 
 /* Expected conditions inputs */
@@ -84,15 +82,15 @@
   align-items: center;
   gap: 6px;
   font-size: 0.72rem;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-muted);
 }
 
 .race-pacing-conditions-field input {
   width: 48px;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: var(--bg-input);
+  border: none;
   border-radius: 4px;
-  color: #fff;
+  color: var(--text);
   font-size: 0.78rem;
   font-variant-numeric: tabular-nums;
   padding: 3px 5px;
@@ -107,7 +105,7 @@
 
 .race-pacing-conditions-note {
   font-size: 0.7rem;
-  color: rgba(255, 200, 150, 0.85);
+  color: var(--text-muted);
   text-align: center;
   padding: 0 4px;
 }
@@ -128,16 +126,14 @@
 }
 
 .race-pacing-stat-label {
-  font-size: 0.62rem;
-  color: rgba(255, 255, 255, 0.55);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-size: 0.75rem;
+  color: var(--text-muted);
 }
 
 .race-pacing-stat-value {
   font-size: 0.88rem;
   font-weight: 600;
-  color: #fff;
+  color: var(--text);
 }
 
 .race-pacing-source .race-pacing-stat-value {
@@ -148,7 +144,7 @@
 /* Terrain course note */
 .race-pacing-course-note {
   font-size: 0.7rem;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-muted);
   text-align: center;
   padding: 0 4px;
 }
@@ -157,26 +153,24 @@
 .race-pacing-table-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.15);
+  border-radius: var(--radius-xs);
+  background: var(--bg-input);
 }
 
 .race-pacing-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.76rem;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--text);
 }
 
 .race-pacing-table th {
-  font-size: 0.63rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
   padding: 6px 8px 4px;
   text-align: right;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--border);
 }
 
 .race-pacing-table th:first-child {
@@ -186,33 +180,33 @@
 .race-pacing-table td {
   padding: 5px 8px;
   text-align: right;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border);
 }
 
 .race-pacing-table td:first-child {
   text-align: left;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
 }
 
 .race-pacing-table tr:last-child td {
   border-bottom: none;
   font-weight: 600;
-  color: #fff;
+  color: var(--text);
 }
 
 .race-pacing-pace {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
-  color: #fff !important;
+  color: var(--text) !important;
 }
 
 .race-pacing-cumul {
-  color: rgba(255, 255, 255, 0.6) !important;
+  color: var(--text-muted) !important;
   font-variant-numeric: tabular-nums;
 }
 
 .race-pacing-grade {
-  color: rgba(255, 255, 255, 0.55) !important;
+  color: var(--text-muted) !important;
   font-variant-numeric: tabular-nums;
 }
 
@@ -222,20 +216,21 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  background: rgba(255, 255, 255, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 6px;
-  color: #fff;
+  background: var(--bg-input);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text);
   cursor: pointer;
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   font-weight: 600;
-  padding: 8px 14px;
+  min-height: 44px;
+  padding: 0 14px;
   transition: background 0.15s, opacity 0.15s;
   width: 100%;
 }
 
 .race-pacing-push-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--bg-hover);
 }
 
 .race-pacing-push-btn:disabled {
@@ -246,11 +241,11 @@
 .race-pacing-loading,
 .race-pacing-error {
   font-size: 0.78rem;
-  color: rgba(255, 255, 255, 0.65);
+  color: var(--text-muted);
   text-align: center;
   padding: 8px 0;
 }
 
 .race-pacing-error {
-  color: rgba(255, 200, 150, 0.85);
+  color: var(--danger);
 }

@@ -20,8 +20,8 @@
 }
 
 .range-selector-btn.active {
-  background: var(--accent);
-  color: #fff;
+  background: var(--text);
+  color: var(--on-ink);
 }
 
 .range-selector-btn:hover:not(.active) {

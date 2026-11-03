@@ -1,36 +1,84 @@
+/* Archivo is the one UI family (docs/UI_UX_CRITIQUE.md §5.3): a self-hosted
+   variable Latin subset (SIL OFL, see fonts/OFL.txt) so the PWA keeps its type
+   offline. Width does the work a second face would: numerals run condensed
+   (.num), prose at 100%. */
+@font-face {
+  font-family: 'Archivo';
+  src: url('./fonts/archivo-latin-var.woff2') format('woff2');
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Tokens (docs/UI_UX_CRITIQUE.md §5.2). Neutrals carry the interface; the only
+   chroma is the effort scale --z1…--z5, in Garmin's zone order, so the app and
+   the watch agree. Colour means effort: status, selection and emphasis use ink.
+   Dark is the default; [data-theme="light"] (set pre-paint by index.html)
+   overrides the theme-dependent values. The token names predate the redesign
+   and map onto the spec as: --bg = ground, --bg-card/--surface = surface,
+   --bg-input = surface-2, --text = ink, --text-muted = ink-2,
+   --text-faint = ink-3, --border = rule. */
 :root {
-  --bg: #0f0f1a;
-  --bg-card: #1a1a2e;
-  --bg-input: #16213e;
-  --bg-hover: #232342;
+  color-scheme: dark;
+
+  --bg: #111416;
+  --bg-card: #1A1E21;
+  --bg-input: #22272B;
+  --bg-hover: #283036;
   --surface: var(--bg-card);
-  --text: #e0e0e0;
-  --text-muted: #98a0b3;
-  --text-secondary: #aaa;
-  --accent: #6c5ce7;
-  --accent-light: #a29bfe;
-  --success: #2ecc71;
-  --warning: #f39c12;
-  --danger: #e74c3c;
-  --border: #2d2d44;
-  --radius: 12px;
-  --radius-sm: 8px;
-  --radius-xs: 6px;
+  --text: #E8EBED;
+  --text-muted: #A3ACB4;
+  --text-secondary: var(--text-muted);
+  /* ink-3: underlines, tracks, rest marks and other non-text marks. It is
+     below 4.5:1 on every surface, so never use it for text. */
+  --text-faint: #6D767E;
+  --border: #2C3338;
+  /* Text/icon colour on an ink-filled surface (primary button, selected chip). */
+  --on-ink: #111416;
+  /* Dimmed backdrop behind sheets and modals. */
+  --scrim: rgba(0, 0, 0, 0.6);
+
+  /* Effort scale: marks only (bars, dots, strips), never text; in light mode
+     most steps are below 4.5:1. A label next to a mark stays in ink. */
+  --z1: #8F9BA8;
+  --z2: #4B96E2;
+  --z3: #3DAE6B;
+  --z4: #EF8F37;
+  --z5: #EC5459;
+
+  /* Interactive emphasis is ink, not a hue. Kept as names for older rules. */
+  --accent: var(--text);
+  --accent-light: var(--text-muted);
+  /* Decorative status is neutral; --danger is for genuine errors and
+     destructive actions only. */
+  --success: var(--text);
+  --warning: var(--text);
+  --danger: var(--z5);
+
+  --radius: 16px;
+  --radius-sm: 12px;
+  --radius-xs: 8px;
   --nav-height: 64px;
   --top-bar-height: 48px;
-  --calendar-strip-height: 72px;
 
-  --color-easy: #2ecc71;
-  --color-tempo: #f39c12;
-  --color-interval: #e74c3c;
-  --color-long: #0984e3;
-  --color-race: #e84393;
-  --color-cross: #00cec9;
-  --color-strength: #a29bfe;
-  --color-default: #6c5ce7;
+  /* Workout types on the effort scale: recovery/cross/strength Z1, easy and
+     long Z2, tempo Z4, intervals and race Z5. */
+  --color-easy: var(--z2);
+  --color-long: var(--z2);
+  --color-tempo: var(--z4);
+  --color-interval: var(--z5);
+  --color-race: var(--z5);
+  --color-cross: var(--z1);
+  --color-strength: var(--z1);
+  --color-default: var(--text-faint);
 
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  /* Panels separate from the ground by tone, not elevation. */
+  --shadow-sm: none;
+  --shadow-md: none;
+
+  --font-ui: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
 
   /* Spacing scale */
   --space-1: 4px;
@@ -51,7 +99,7 @@
   --text-2xl: 1.75rem;
 
   /* Interaction */
-  --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+  --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--text);
   --transition-fast: 120ms ease;
   --transition-base: 200ms ease;
 
@@ -62,19 +110,24 @@
 }
 
 [data-theme="light"] {
-  --bg: #f5f5f7;
-  --bg-card: #ffffff;
-  --bg-input: #eef0f4;
-  --bg-hover: #e8ecf2;
-  --surface: var(--bg-card);
-  --text: #1a1a2e;
-  --text-muted: #5b6472;
-  --text-secondary: #616a78;
-  --accent: #6c5ce7;
-  --accent-light: #5a4bd1;
-  --border: #e0e4ec;
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.12);
+  color-scheme: light;
+
+  --bg: #ECEEF0;
+  --bg-card: #FFFFFF;
+  --bg-input: #F2F4F5;
+  --bg-hover: #E7EBEE;
+  --text: #121518;
+  --text-muted: #525B64;
+  --text-faint: #8A939B;
+  --border: #D8DDE1;
+  --on-ink: #FFFFFF;
+  --scrim: rgba(18, 21, 24, 0.45);
+
+  --z1: #8A96A3;
+  --z2: #2D7BCB;
+  --z3: #2B9156;
+  --z4: #DD7A1E;
+  --z5: #D0353A;
 }
 
 *, *::before, *::after {
@@ -90,7 +143,9 @@ html {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.45;
   background: var(--bg);
   color: var(--text);
   min-height: 100dvh;
@@ -104,9 +159,19 @@ body {
   flex-direction: column;
 }
 
+/* Most anchors in the app are rows, cards or buttons, so the base rule is
+   plain ink; inline text links opt into the underline via .text-link (or
+   their own class) — see a.btn-ghost below. */
 a {
-  color: var(--accent-light);
+  color: var(--text);
   text-decoration: none;
+}
+
+.text-link,
+a.btn-ghost {
+  text-decoration: underline;
+  text-decoration-color: var(--text-faint);
+  text-underline-offset: 3px;
 }
 
 button {
@@ -134,47 +199,75 @@ button {
   background: var(--bg-card);
   border-radius: var(--radius);
   padding: 16px;
-  box-shadow: var(--shadow-sm);
+}
+
+/* Figures: condensed bold tabular numerals, like a race bib or stadium clock.
+   Units beside a figure stay at 100% width (.stat-unit). */
+.num,
+.stat-value,
+.stat-value-lg {
+  font-stretch: 75%;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.005em;
 }
 
 .stat-label {
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   margin-bottom: 2px;
 }
 
 .stat-value {
   font-size: 1.25rem;
-  font-weight: 600;
   color: var(--text);
-  font-variant-numeric: tabular-nums;
 }
 
 .stat-value-lg {
   font-size: 1.75rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
 }
 
-/* Recharts renders axis tick labels as SVG text with this class */
+/* Recharts renders axis tick labels as SVG text with this class: tabular
+   figures at normal width so axes stay calm next to the condensed figures. */
 .recharts-cartesian-axis-tick-value {
   font-variant-numeric: tabular-nums;
 }
 
+/* Legend key for a line series: a short stroke in the series' ink and line
+   style, matching SERIES_COLORS / SERIES_DASHES in utils/chartTheme. Set
+   --swatch inline to the series colour. */
+.legend-swatch {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 16px;
+  height: 0;
+  border-top: 2px solid var(--swatch, var(--text));
+  vertical-align: middle;
+}
+
+.legend-swatch--dashed {
+  border-top-style: dashed;
+}
+
+.legend-swatch--dotted {
+  border-top-style: dotted;
+}
+
 .stat-unit {
   font-size: 0.75rem;
+  font-weight: 500;
+  font-stretch: 100%;
+  letter-spacing: 0;
   color: var(--text-muted);
   margin-left: 2px;
 }
 
+/* Panel heading: sentence case, hierarchy from size and weight. */
 .section-title {
-  font-size: 0.85rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-muted);
+  font-size: 1rem;
+  font-weight: 680;
+  line-height: 1.25;
+  color: var(--text);
   margin-bottom: 12px;
 }
 
@@ -201,7 +294,7 @@ button {
   width: 24px;
   height: 24px;
   border: 3px solid var(--border);
-  border-top-color: var(--accent);
+  border-top-color: var(--text);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   margin: 32px auto;
@@ -222,34 +315,56 @@ button {
   display: inline-block;
   padding: 2px 8px;
   border-radius: 10px;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
-/* PB trophy badge modifier — shared by ActivityDetailView's header and
-   ActivityListItem's rows so a new PB reads the same wherever it appears. */
+/* Workout-type badge: the label stays ink (effort colours are below 4.5:1 as
+   text in light mode); the effort colour is the dot in front of it. Set
+   --effort to a --color-* / --z* reference inline. */
+.badge-effort {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-input);
+  color: var(--text);
+}
+
+.badge-effort::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--effort, var(--color-default));
+  flex-shrink: 0;
+}
+
+/* PB badge modifier — shared by ActivityDetailView's header and
+   ActivityListItem's rows so a new PB reads the same wherever it appears.
+   A record is not an effort, so it is marked in ink, not colour. */
 .pr-badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   margin-left: 6px;
-  background: #f0a50022;
-  color: #f0a500;
+  background: var(--bg-input);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1.5px var(--text);
 }
 
-/* Shared button primitives */
+/* Shared button primitives. Primary actions are ink, never a hue. */
 .btn-primary {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  padding: 10px 24px;
-  background: var(--accent);
-  color: #fff;
-  border-radius: var(--radius-sm);
-  font-size: 0.9rem;
-  font-weight: 600;
+  min-height: 48px;
+  padding: 0 18px;
+  background: var(--text);
+  color: var(--on-ink);
+  border-radius: 12px;
+  font-size: 0.9375rem;
+  font-weight: 650;
   cursor: pointer;
   transition: opacity var(--transition-fast);
 }
@@ -266,21 +381,20 @@ button {
 .btn-secondary {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  padding: 9px 20px;
+  padding: 9px 18px;
   background: var(--bg-input);
   color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  font-size: 0.9rem;
-  font-weight: 600;
+  border-radius: 12px;
+  font-size: 0.9375rem;
+  font-weight: 650;
   cursor: pointer;
-  transition: background var(--transition-fast), border-color var(--transition-fast);
+  transition: background var(--transition-fast);
 }
 
 .btn-secondary:hover:not(:disabled) {
   background: var(--bg-hover);
-  border-color: var(--accent-light);
 }
 
 .btn-secondary:disabled {
@@ -295,16 +409,16 @@ button {
   padding: 9px 12px;
   background: none;
   border: none;
-  border-radius: var(--radius-sm);
-  color: var(--accent-light);
+  border-radius: var(--radius-xs);
+  color: var(--text-muted);
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
-  transition: opacity var(--transition-fast);
+  transition: color var(--transition-fast);
 }
 
 .btn-ghost:hover:not(:disabled) {
-  opacity: 0.8;
+  color: var(--text);
 }
 
 .btn-ghost:disabled {
@@ -312,16 +426,69 @@ button {
   cursor: not-allowed;
 }
 
-/* Shared chip/filter primitive */
+/* Joined segmented scale (check-in 1–5, effort 1–10): one bordered control,
+   hairline dividers, 44px targets, selected = ink fill. */
+.seg-control {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.seg-control--10 {
+  grid-template-columns: repeat(10, 1fr);
+}
+
+.seg-control button {
+  min-height: 44px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  border-left: 1px solid var(--border);
+  transition: background var(--transition-fast);
+}
+
+.seg-control button:first-child {
+  border-left: 0;
+}
+
+.seg-control button:hover:not(:disabled):not([aria-pressed='true']) {
+  background: var(--bg-hover);
+}
+
+.seg-control button[aria-pressed='true'] {
+  background: var(--text);
+  color: var(--on-ink);
+}
+
+.seg-control button:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: -3px;
+}
+
+.seg-control button[aria-pressed='true']:focus-visible {
+  outline-color: var(--on-ink);
+}
+
+.seg-control-ends {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Shared chip/filter primitive: a pill; selected = ink fill. */
 .chip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-height: 44px;
   padding: 6px 14px;
-  border-radius: 20px;
-  font-size: 0.78rem;
-  font-weight: 500;
+  border-radius: 22px;
+  font-size: 0.875rem;
+  font-weight: 550;
   background: var(--bg-card);
   color: var(--text-muted);
   white-space: nowrap;
@@ -330,9 +497,9 @@ button {
 }
 
 .chip.active {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
+  background: var(--text);
+  color: var(--on-ink);
+  border-color: var(--text);
 }
 
 .chip:hover:not(.active) {

@@ -41,7 +41,7 @@ export default function TrainingVolumeSheet({ open, onClose, initial, onSave }: 
   }
 
   return (
-    <BottomSheet open={open} onClose={onClose} title="Training Volume">
+    <BottomSheet open={open} onClose={onClose} title="Training volume">
       <SliderPicker
         value={value}
         onChange={setValue}

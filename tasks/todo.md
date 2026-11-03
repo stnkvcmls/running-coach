@@ -145,3 +145,75 @@ Visual target per phase: docs/mockups/ui-redesign-mockup.html (toggle
   Fixture-driven Playwright screenshots at 390×844 for every phase's
   user-visible change (detail order, sticky header, hero states, races,
   activities list icons/HR/PB badge, AdherenceCard wrap, Plan row gating).
+
+# UI/UX critique & change proposal (2026-11-02, plan only)
+
+Goal: critique the shipped UI/UX against real seeded data and propose changes
+with mockups. Deliverables: docs/UI_UX_CRITIQUE.md,
+docs/mockups/ui-ux-critique-mockup.html, docs/mockups/ui-ux-critique/*.
+
+- [x] Run backend on a copy of perf/perf.db + Vite; pin browser and server
+      clocks to 2026-06-23 so Today/Plan/load agree
+- [x] Capture 390×844 / 1280×800, dark + light, every main tab + detail + settings
+- [x] Trace each finding to code (`file:line`); exclude seed artifacts
+- [x] Design direction for the default skin (effort-only colour, Archivo, ink actions)
+- [x] HTML mockups (7 screens, light/dark, change-ID overlay) + rendered PNGs
+- [x] Implementation plan (7 phases) in the doc
+
+## Review
+Found 5 S1 issues: same-day AI-plan runs not matched (Today hero still offers
+"Send to watch" after the run; Plan shows 0.0/73 km), "Week N Overview"
+headline is an 8-week total, Wellness y-axis clips "100" to "00", and
+readiness number ~1.1:1 contrast in light mode. Biggest S2 theme: global
+week strip renders on 5 tabs but only Today reads DateContext. Phases 1–2 of
+the doc's plan clear every S1 item and most daily friction.
+
+## Revision (2026-11-02, after owner answers)
+- [x] Re-baselined on the Nothing skin branch (`origin/claude/activity-nothing-theme-ui-4qgdfo`,
+      unmerged, fast-forward from main). Added N1–N7 skin defects (blank badges on
+      signal/black, "17.15542" steps+HRV, overlapping hero numerals, readiness
+      ~1.4:1 on app inks/white, dot-matrix on every stat, 9px labels at 3.1–3.9:1,
+      colour leaks).
+- [x] Q1: dropped the default-skin identity proposal; mockups redrawn in the
+      skin's vocabulary (Black/White × Signal/App inks).
+- [x] Q2: RPE asked on Today's done hero; detail page stays as edit point.
+- [x] Q3: Garmin HRV baseline/status for HRV; 10th–90th percentile of 90 days
+      for RHR, sleep, body battery, stress.
+- [x] Plan now starts with Phase 0 "land the skin" (fix N1–N7, then merge).
+- Lesson recorded in tasks/lessons.md (check for unmerged implementation branches).
+
+## Revision 2 (2026-11-02): Nothing skin discarded
+Owner: "discard nothing os theme, i don't like it and it's unreadable".
+- [x] Reverted the critique to the `main`/default-skin baseline and the §5
+      effort-colour direction (Archivo, Garmin-zone effort scale, ink actions),
+      now marked approved. N1–N7 and Phase 0 removed.
+- [x] Phases reordered: visual identity is Phase 3, before the Today/Plan/
+      Activities rewrites, so new components are built on the new tokens once.
+- [x] Q2 (RPE on Today) and Q3 (Garmin HRV baseline + 90-day percentile bands
+      for the rest) recorded as decisions; Q3 implementation is task 4.6
+      (verify Garmin field names against a live payload first).
+- [x] Mockup restored to the effort-colour design with the decisions applied;
+      "current" screenshots recaptured from `main`.
+- [x] `docs/NOTHING_OS_SKIN_PLAN.md` marked abandoned. Skin branch left
+      unmerged; deleting it is the owner's call.
+
+# UI/UX critique implementation (branch claude/ui-ux-critique-implementation)
+
+Spec: docs/UI_UX_CRITIQUE.md §7 (+ §5 tokens, §8 decisions). Visual target:
+docs/mockups/ui-ux-critique-mockup.html. One commit per phase, single PR.
+Baseline: frontend 212 tests (2 load-flaky on this machine, pass in isolation),
+tsc clean.
+
+## Waves
+- [x] Wave A (parallel): B1 backend — 1.1 same-day plan matching, 4.6 Garmin
+      HRV baseline (sync + migration + schema + tests) · F1 frontend — 1.3 axis,
+      1.4 readiness contrast, Phase 2 chrome/IA (week strip on Today only,
+      training-context subtitle, System/Light/Dark + Appearance section, sync pill
+      only when wrong, Progress tabs Body/Fitness/Records). 1.2 superseded by 4.5.
+- [x] Wave B: F2 — Phase 3 visual identity (tokens, effort scale, Archivo
+      self-hosted, ink actions, sentence case, no shadows)
+- [x] Wave C (parallel): F3 — Phase 4 Today · F4 — Phase 7 Settings index
+- [x] Wave D (parallel): F5 — Phase 5 Plan · F6 — Phase 6 Activities, detail, Progress Body
+- [x] After each wave: build + tests + real-browser screenshots (390/1280, light/dark)
+      against perf.db with pinned clocks; fix; commit
+- [x] PR #153

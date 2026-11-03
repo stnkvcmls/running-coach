@@ -16,3 +16,16 @@
 .trends-tabs::-webkit-scrollbar {
   display: none;
 }
+
+/* Fitness tab: the sub-views stack, each keeping its own inner padding, under
+   a heading that sits on the same 16px gutter. */
+.trends-section + .trends-section {
+  border-top: 1px solid var(--border);
+}
+
+/* Two classes: globals.css loads after component CSS (main.tsx import order),
+   so a lone class would lose the tie against .section-title-row's margin. */
+.trends-section > .trends-section-head {
+  padding: 20px 16px 0;
+  margin-bottom: 0;
+}

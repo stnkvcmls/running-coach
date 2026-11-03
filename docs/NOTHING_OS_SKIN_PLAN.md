@@ -1,5 +1,11 @@
 # Nothing OS Skin — Implementation Plan
 
+> **Status: abandoned (2026-11-02).** The owner reviewed the implemented skin
+> (branch `claude/activity-nothing-theme-ui-4qgdfo`, never merged) and rejected
+> it as unreadable. The visual direction is now
+> [`UI_UX_CRITIQUE.md`](UI_UX_CRITIQUE.md) §5. This document is kept for history
+> only; do not implement it.
+
 _Last updated: 2026-07-25_
 
 This document specifies a **selectable visual skin** for the Running Coach PWA,

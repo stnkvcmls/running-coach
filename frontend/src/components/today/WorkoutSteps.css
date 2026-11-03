@@ -16,24 +16,22 @@
 }
 
 .sw-section-header--repeat {
-  background: linear-gradient(135deg, var(--warning), #e67e22);
+  background: var(--text);
 }
 
 .sw-section-header--session {
-  background: linear-gradient(135deg, var(--warning), #e67e22);
+  background: var(--text);
 }
 
 .sw-section-label {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
   color: var(--text-muted);
 }
 
 .sw-section-header--repeat .sw-section-label,
 .sw-section-header--session .sw-section-label {
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--on-ink);
 }
 
 .sw-section-body {
@@ -100,17 +98,16 @@
 }
 
 .sw-step-type {
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   white-space: nowrap;
   padding: 2px 6px;
   border-radius: 4px;
 }
 
 .sw-step-type--run {
-  color: var(--color-easy);
+  color: var(--text);
+  background: var(--bg-input);
 }
 
 .sw-step-type--rest {

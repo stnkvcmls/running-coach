@@ -30,7 +30,7 @@ export default function ThresholdEstimateSection() {
   if (isError || !data) {
     return (
       <section className="settings-section">
-        <h2 className="section-title">Threshold Estimation</h2>
+        <h2 className="section-title">Threshold estimation</h2>
         <div className="card">
           <p className="te-desc">Could not compute threshold estimates.</p>
         </div>
@@ -53,7 +53,7 @@ export default function ThresholdEstimateSection() {
       ].filter(Boolean).join(' · ') || undefined,
     },
     {
-      label: 'Threshold Pace',
+      label: 'Threshold pace',
       field: d.threshold_pace_min_km,
       display: (v) => formatPace(v),
       current: d.current_threshold_pace_min_km,
@@ -79,7 +79,7 @@ export default function ThresholdEstimateSection() {
 
   return (
     <section className="settings-section">
-      <h2 className="section-title">Threshold Estimation</h2>
+      <h2 className="section-title">Threshold estimation</h2>
       <p className="te-desc">
         Auto-derived from your last {d.lookback_days} days of training
         ({d.activities_analyzed} activities) using a Critical Power / Critical

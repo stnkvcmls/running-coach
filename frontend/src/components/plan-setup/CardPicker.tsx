@@ -32,8 +32,8 @@ export default function CardPicker({ value, onChange, options }: CardPickerProps
           <div className="cp-check">
             {opt.value === value && (
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                <circle cx="9" cy="9" r="9" fill="var(--accent)" />
-                <path d="M5 9l3 3 5-5" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="9" cy="9" r="9" fill="var(--text)" />
+                <path d="M5 9l3 3 5-5" stroke="var(--on-ink)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             )}
           </div>

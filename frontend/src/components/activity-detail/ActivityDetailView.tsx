@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, type CSSProperties } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Loader, Trophy, ChevronDown } from 'lucide-react'
+import { ArrowLeft, Trophy } from 'lucide-react'
 import { useActivity, useTriggerAnalysis, useJobStatus } from '../../api/hooks'
 import { getActivityColor, getActivityAccent } from '../../utils/colors'
-import { formatDistance, formatDuration, formatPace } from '../../utils/formatting'
+import { formatDistance, formatPace } from '../../utils/formatting'
 import { format, parseISO } from '../../utils/date'
 import StatGrid from './StatGrid'
 import RouteMap from './RouteMap'
@@ -12,25 +12,18 @@ import ChartTabs from './ChartTabs'
 import HrZonesChart from './HrZonesChart'
 import PaceZonesChart from './PaceZonesChart'
 import SplitsBars from './SplitsBars'
-import AiInsightCard from './AiInsightCard'
 import FeedbackPrompt from './FeedbackPrompt'
-import WorkoutStructureBar from '../ui/WorkoutStructureBar'
 import AdherenceCard from './AdherenceCard'
+import HeadlinePanel from './HeadlinePanel'
+import RepsPanel from './RepsPanel'
+import { repsFromAdherence } from '../ui/RepChart'
+import { sampleDistancesKm, stepWindows } from './runAnalysis'
 import StatHelpButton from '../info/StatHelpButton'
 import { toast } from '../ui/Toast'
 import { celebrateNewRecords } from '../../utils/records'
 import './ActivityDetailView.css'
 
-function firstSentence(markdown: string): string {
-  const stripped = markdown
-    .replace(/\*\*(.*?)\*\*/g, '$1')
-    .replace(/\*(.*?)\*/g, '$1')
-    .replace(/_(.*?)_/g, '$1')
-    .replace(/`(.*?)`/g, '$1')
-    .replace(/\[(.*?)\]\(.*?\)/g, '$1')
-    .trim()
-  return stripped.split(/(?<=[.!?])\s/)[0] || stripped
-}
+type Stat = { label: string; value: string; unit?: string }
 
 export default function ActivityDetailView() {
   const { id } = useParams<{ id: string }>()
@@ -85,33 +78,28 @@ export default function ActivityDetailView() {
     ? (activity.activity_type || 'Activity')
     : colorType.charAt(0).toUpperCase() + colorType.slice(1)
 
-  const primaryStats = [
-    { label: 'Distance', value: formatDistance(activity.distance_m), unit: 'km' },
-    { label: 'Duration', value: formatDuration(activity.duration_sec) },
-    { label: 'Avg Pace', value: formatPace(activity.avg_pace_min_km), unit: '/km' },
-  ]
-
   const secondaryStats = [
     activity.avg_hr ? { label: 'Avg HR', value: String(activity.avg_hr), unit: 'bpm' } : null,
     activity.max_hr ? { label: 'Max HR', value: String(activity.max_hr), unit: 'bpm' } : null,
-    activity.elevation_gain ? { label: 'Elev. Gain', value: `${Math.round(activity.elevation_gain)}`, unit: 'm' } : null,
+    activity.elevation_gain ? { label: 'Elev. gain', value: `${Math.round(activity.elevation_gain)}`, unit: 'm' } : null,
     activity.calories ? { label: 'Calories', value: String(Math.round(activity.calories)), unit: 'kcal' } : null,
     activity.avg_cadence ? { label: 'Cadence', value: String(Math.round(activity.avg_cadence)), unit: 'spm' } : null,
     activity.avg_stride ? { label: 'Stride', value: activity.avg_stride.toFixed(2), unit: 'm' } : null,
-  ].filter(Boolean) as { label: string; value: string; unit?: string }[]
+    activity.rpe != null ? { label: 'Effort', value: String(activity.rpe), unit: 'of 10' } : null,
+  ].filter(Boolean) as Stat[]
 
   const dynamicsStats = [
     activity.avg_ground_contact_time ? { label: 'GCT', value: String(Math.round(activity.avg_ground_contact_time)), unit: 'ms' } : null,
-    activity.avg_vertical_oscillation ? { label: 'Vert. Osc.', value: activity.avg_vertical_oscillation.toFixed(1), unit: 'cm' } : null,
-    activity.avg_vertical_ratio ? { label: 'Vert. Ratio', value: activity.avg_vertical_ratio.toFixed(1), unit: '%' } : null,
-  ].filter(Boolean) as { label: string; value: string; unit?: string }[]
+    activity.avg_vertical_oscillation ? { label: 'Vert. osc.', value: activity.avg_vertical_oscillation.toFixed(1), unit: 'cm' } : null,
+    activity.avg_vertical_ratio ? { label: 'Vert. ratio', value: activity.avg_vertical_ratio.toFixed(1), unit: '%' } : null,
+  ].filter(Boolean) as Stat[]
 
   const powerStats = [
-    activity.avg_power ? { label: 'Avg Power', value: String(Math.round(activity.avg_power)), unit: 'W' } : null,
+    activity.avg_power ? { label: 'Avg power', value: String(Math.round(activity.avg_power)), unit: 'W' } : null,
     activity.normalized_power ? { label: 'NP', value: String(Math.round(activity.normalized_power)), unit: 'W' } : null,
     activity.training_stress_score ? { label: 'TSS', value: activity.training_stress_score.toFixed(0) } : null,
     activity.intensity_factor ? { label: 'IF', value: activity.intensity_factor.toFixed(2) } : null,
-  ].filter(Boolean) as { label: string; value: string; unit?: string }[]
+  ].filter(Boolean) as Stat[]
 
   const perfStats = [
     activity.training_effect_aerobic ? { label: 'Aerobic TE', value: activity.training_effect_aerobic.toFixed(1) } : null,
@@ -119,18 +107,31 @@ export default function ActivityDetailView() {
     activity.vo2max ? { label: 'VO2max', value: activity.vo2max.toFixed(1) } : null,
     activity.decoupling_pct != null ? { label: 'Decoupling', value: activity.decoupling_pct.toFixed(1), unit: '%' } : null,
     activity.efficiency_factor != null ? { label: 'EF', value: (activity.efficiency_factor * 1000).toFixed(2), unit: 'mm/s/bpm' } : null,
-  ].filter(Boolean) as { label: string; value: string; unit?: string }[]
+  ].filter(Boolean) as Stat[]
 
   const weatherStats = [
     activity.weather_adjusted_pace_min_km != null
-      ? { label: 'Adj. Pace', value: formatPace(activity.weather_adjusted_pace_min_km), unit: '/km' }
+      ? { label: 'Adj. pace', value: formatPace(activity.weather_adjusted_pace_min_km), unit: '/km' }
       : null,
     activity.weather_penalty_sec_per_km != null
-      ? { label: 'Heat Penalty', value: `+${Math.round(activity.weather_penalty_sec_per_km)}`, unit: 's/km' }
+      ? { label: 'Heat penalty', value: `+${Math.round(activity.weather_penalty_sec_per_km)}`, unit: 's/km' }
       : null,
-  ].filter(Boolean) as { label: string; value: string; unit?: string }[]
+  ].filter(Boolean) as Stat[]
 
-  const verdict = activity.insight?.content || activity.insight?.summary || null
+  const extraGroups = [
+    dynamicsStats.length > 0 && 'dynamics',
+    powerStats.length > 0 && 'power',
+    perfStats.length > 0 && 'performance',
+    weatherStats.length > 0 && 'conditions',
+  ].filter(Boolean) as string[]
+
+  // Structured session: a rep chart from the per-step adherence (D1, D5);
+  // the HR chart runs over distance with the work reps shaded (D4).
+  const structured = repsFromAdherence(activity.adherence).length >= 2
+  const distanceKm = sampleDistancesKm(activity.chart_data, activity.distance_m)
+  const windows = stepWindows(activity.adherence)
+  const repWindows = windows?.filter(w => w.stepType === 'interval') ?? null
+  const hasChart = !!activity.chart_data && Object.keys(activity.chart_data).length > 0
 
   return (
     <div className="activity-detail">
@@ -152,7 +153,7 @@ export default function ActivityDetailView() {
           <ArrowLeft size={20} />
         </button>
         <div className="detail-header-info">
-          <span className="badge" style={{ background: `${color}22`, color }}>{typeLabel}</span>
+          <span className="badge badge-effort" style={{ '--effort': color } as CSSProperties}>{typeLabel}</span>
           {activity.personal_records && activity.personal_records.length > 0 && (
             <span
               className="badge pr-badge"
@@ -170,152 +171,128 @@ export default function ActivityDetailView() {
 
       <div className="detail-body">
         {/* detail-columns/detail-col-* are `display: contents` below 1024px,
-            so every piece below still renders as one flat, in-order stack
-            (the `order` CSS in ActivityDetailView.css restores the original
-            top-to-bottom order across that flattened stack). At >=1024px
-            they become real, independently-tall flex columns — a shared-row
-            CSS grid would size every row to its tallest cell across *both*
-            columns, leaving gaps next to shorter content. */}
+            so every slot renders as one flat stack whose sequence comes from
+            the `order` values in ActivityDetailView.css. At >=1024px they
+            become independently-tall flex columns: figures, verdict, reps
+            and stats lead on the left (D6); charts follow on the right. */}
         <div className="detail-columns">
           <div className="detail-col detail-col-left">
-            {/* Route silhouette (animated; only when GPS data is present) */}
-            <RouteMap route={activity.route} activityColor={color} />
+            <div className="detail-slot slot-headline">
+              <HeadlinePanel activity={activity} onReanalyze={handleReanalyze} isAnalyzing={isAnalyzing} />
+            </div>
 
-            {/* Workout Description */}
-            {activity.scheduled_workout?.workout_steps && activity.scheduled_workout.workout_steps.length > 0 && (
-              <section className="detail-section">
-                <h3 className="section-title">Description</h3>
-                <div className="card workout-description-card">
-                  <WorkoutStructureBar steps={activity.scheduled_workout.workout_steps} color={color} />
-                </div>
-              </section>
-            )}
+            <div className="detail-slot slot-reps">
+              {structured && activity.adherence ? (
+                <RepsPanel
+                  adherence={activity.adherence}
+                  color={color}
+                  hr={activity.chart_data?.heart_rate?.data}
+                  distanceKm={distanceKm}
+                  windows={windows}
+                />
+              ) : (
+                <>
+                  {activity.adherence && <AdherenceCard adherence={activity.adherence} />}
+                  {activity.splits && (
+                    <SplitsBars splits={activity.splits} paceZones={activity.metric_zones?.pace} color={color} />
+                  )}
+                </>
+              )}
+            </div>
 
-            {/* HR Zones */}
-            {activity.hr_zones && <HrZonesChart zones={activity.hr_zones} />}
+            {(secondaryStats.length > 0 || extraGroups.length > 0) && (
+              <div className="detail-slot slot-stats">
+                <section className="detail-panel more-stats">
+                  <div className="detail-panel-head">
+                    <h3 className="section-title">More stats</h3>
+                    {extraGroups.length > 0 && (
+                      <button
+                        type="button"
+                        className="detail-panel-link"
+                        aria-expanded={showAllStats}
+                        aria-label={showAllStats ? 'Hide extra stats' : `Show all stats (${extraGroups.join(', ')})`}
+                        onClick={() => setShowAllStats(v => !v)}
+                      >
+                        {showAllStats ? 'Hide' : 'Show all'}
+                      </button>
+                    )}
+                  </div>
 
-            {/* Pace Zones (custom threshold-anchored) */}
-            {activity.chart_data?.pace && (
-              <PaceZonesChart paceSeries={activity.chart_data.pace} />
-            )}
+                  {secondaryStats.length > 0 && <StatGrid stats={secondaryStats} columns={3} plain />}
 
-            {/* Time-series charts */}
-            {activity.chart_data && Object.keys(activity.chart_data).length > 0 && (
-              <section className="detail-section">
-                <ChartTabs chartData={activity.chart_data} metricZones={activity.metric_zones} />
-              </section>
-            )}
+                  {showAllStats && (
+                    <>
+                      {dynamicsStats.length > 0 && (
+                        <div className="more-stats-group">
+                          <h4 className="more-stats-title">Running dynamics</h4>
+                          <StatGrid stats={dynamicsStats} columns={3} plain />
+                        </div>
+                      )}
 
-            {/* Splits — bars by default, table fallback via toggle */}
-            {activity.splits && (
-              <SplitsBars splits={activity.splits} paceZones={activity.metric_zones?.pace} color={color} />
+                      {powerStats.length > 0 && (
+                        <div className="more-stats-group">
+                          <h4 className="more-stats-title">Power</h4>
+                          <StatGrid stats={powerStats} columns={4} plain />
+                        </div>
+                      )}
+
+                      {perfStats.length > 0 && (
+                        <div className="more-stats-group">
+                          <div className="more-stats-title-row">
+                            <h4 className="more-stats-title">Performance</h4>
+                            <StatHelpButton topic="activity-performance" label="Performance" />
+                          </div>
+                          <StatGrid stats={perfStats} columns={3} plain />
+                        </div>
+                      )}
+
+                      {weatherStats.length > 0 && (
+                        <div className="more-stats-group">
+                          <h4 className="more-stats-title">Conditions</h4>
+                          <StatGrid stats={weatherStats} columns={2} plain />
+                          {activity.weather_description && (
+                            <p className="weather-description">{activity.weather_description}</p>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </section>
+              </div>
             )}
           </div>
 
           <div className="detail-col detail-col-right">
-            {/* Primary stats */}
-            <StatGrid stats={primaryStats} columns={3} large />
-
-            {/* AI verdict — first sentence up top; full analysis stays in AiInsightCard below */}
-            {verdict && (
-              <a href="#ai-insight" className="verdict-chip">
-                <span className="verdict-tag">Coach</span>
-                <span>{firstSentence(verdict)} Full analysis ↓</span>
-              </a>
+            {hasChart && (
+              <div className="detail-slot slot-chart">
+                <ChartTabs
+                  chartData={activity.chart_data!}
+                  metricZones={activity.metric_zones}
+                  distanceKm={distanceKm}
+                  repWindows={structured ? repWindows : null}
+                />
+              </div>
             )}
 
-            {/* Workout Adherence */}
-            {activity.adherence && (
-              <section className="detail-section">
-                <AdherenceCard adherence={activity.adherence} />
-              </section>
-            )}
+            <div className="detail-slot slot-zones">
+              {activity.hr_zones && <HrZonesChart zones={activity.hr_zones} />}
+              {activity.chart_data?.pace && (
+                <PaceZonesChart paceSeries={activity.chart_data.pace} durationSec={activity.duration_sec} />
+              )}
+            </div>
 
-            {/* Secondary stats — always visible */}
-            {secondaryStats.length > 0 && (
-              <section className="detail-section">
-                <StatGrid stats={secondaryStats} columns={3} />
-              </section>
-            )}
-
-            {/* Dynamics / Power / Performance / Conditions — collapsed behind "Show all stats" */}
-            {(dynamicsStats.length > 0 || powerStats.length > 0 || perfStats.length > 0 || weatherStats.length > 0) && (
-              <>
-                {showAllStats && (
-                  <>
-                    {dynamicsStats.length > 0 && (
-                      <section className="detail-section">
-                        <h3 className="section-title">Running Dynamics</h3>
-                        <StatGrid stats={dynamicsStats} columns={3} />
-                      </section>
-                    )}
-
-                    {powerStats.length > 0 && (
-                      <section className="detail-section">
-                        <h3 className="section-title">Power</h3>
-                        <StatGrid stats={powerStats} columns={4} />
-                      </section>
-                    )}
-
-                    {perfStats.length > 0 && (
-                      <section className="detail-section">
-                        <div className="section-title-row">
-                          <h3 className="section-title">Performance</h3>
-                          <StatHelpButton topic="activity-performance" label="Performance" />
-                        </div>
-                        <StatGrid stats={perfStats} columns={3} />
-                      </section>
-                    )}
-
-                    {weatherStats.length > 0 && (
-                      <section className="detail-section">
-                        <h3 className="section-title">Conditions</h3>
-                        <StatGrid stats={weatherStats} columns={2} />
-                        {activity.weather_description && (
-                          <p className="weather-description">{activity.weather_description}</p>
-                        )}
-                      </section>
-                    )}
-                  </>
-                )}
-
-                <button
-                  type="button"
-                  className="collapse-toggle"
-                  onClick={() => setShowAllStats(v => !v)}
-                  aria-expanded={showAllStats}
-                >
-                  {showAllStats ? 'Hide extra stats' : `Show all stats (${[
-                    dynamicsStats.length > 0 && 'dynamics',
-                    powerStats.length > 0 && 'power',
-                    perfStats.length > 0 && 'performance',
-                    weatherStats.length > 0 && 'conditions',
-                  ].filter(Boolean).join(' · ')})`}
-                  <ChevronDown size={14} className={`collapse-chevron ${showAllStats ? 'flipped' : ''}`} />
-                </button>
-              </>
-            )}
+            <div className="detail-slot slot-route">
+              <RouteMap route={activity.route} activityColor={color} />
+            </div>
           </div>
         </div>
 
-        {/* AI Insight / Feedback */}
-        {activity.insight ? (
-          <AiInsightCard
-            insight={activity.insight}
-            onReanalyze={handleReanalyze}
-            isAnalyzing={isAnalyzing}
-          />
-        ) : activity.feedback_rating ? (
-          <section className="detail-section detail-section-generating">
-            <div className="card" style={{ textAlign: 'center', padding: '24px 16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                <Loader size={18} className="spin" />
-                <span>Generating insights...</span>
-              </div>
-            </div>
-          </section>
-        ) : (
-          <FeedbackPrompt activityId={activity.id} />
+        {/* Rating is the gate to the coach's analysis; once rated, the
+            headline panel shows the analysis (or that it's being written). */}
+        {!activity.insight && !activity.feedback_rating && (
+          <div className="detail-slot slot-feedback">
+            <FeedbackPrompt activityId={activity.id} />
+          </div>
         )}
       </div>
     </div>

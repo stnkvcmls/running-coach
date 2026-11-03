@@ -89,8 +89,8 @@
   margin-top: 12px;
   width: 100%;
   padding: 14px;
-  background: var(--accent);
-  color: #fff;
+  background: var(--text);
+  color: var(--on-ink);
   border: none;
   border-radius: var(--radius-sm);
   font-size: 0.95rem;

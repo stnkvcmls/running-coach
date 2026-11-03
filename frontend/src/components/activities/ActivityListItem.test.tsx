@@ -3,12 +3,7 @@ import { screen } from '@testing-library/react'
 import { renderWithProviders } from '../../test/test-utils'
 import ActivityListItem from './ActivityListItem'
 import type { ActivitySummary } from '../../api/types'
-import { SPORT_COLORS, colorMap } from '../../utils/colors'
-
-function hexToRgb(hex: string): string {
-  const n = parseInt(hex.slice(1), 16)
-  return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`
-}
+import { colorMap } from '../../utils/colors'
 
 function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
   return {
@@ -54,31 +49,35 @@ describe('ActivityListItem', () => {
     expect(screen.getByRole('link', { name: /Workout/ })).toBeInTheDocument()
   })
 
-  it('tints the icon by sport colour for a non-running activity', () => {
+  it('colours the effort tick as cross-training (Z1) for a non-running activity', () => {
     const { container } = renderWithProviders(
       <ActivityListItem activity={activity({ name: 'Morning Ride', activity_type: 'cycling' })} />,
     )
-    const icon = container.querySelector('.ali-icon') as HTMLElement
-    // jsdom normalizes inline hex colours to rgb() on readback.
-    expect(icon.style.color).toBe(hexToRgb(SPORT_COLORS.bike))
+    const link = container.querySelector('.activity-list-item') as HTMLElement
+    expect(link.style.getPropertyValue('--effort')).toBe('var(--color-cross)')
+    expect(container.querySelector('.ali-tick')).toBeInTheDocument()
   })
 
-  it('tints the icon by workout intensity for a running activity', () => {
+  it('colours the effort tick by workout intensity for a running activity', () => {
     const { container } = renderWithProviders(
       <ActivityListItem activity={activity({ name: 'Interval Session', activity_type: 'running' })} />,
     )
-    const icon = container.querySelector('.ali-icon') as HTMLElement
-    expect(icon.style.color).toBe(hexToRgb(colorMap.interval))
+    const link = container.querySelector('.activity-list-item') as HTMLElement
+    expect(link.style.getPropertyValue('--effort')).toBe(colorMap.interval)
   })
 
-  it('appends avg HR to the meta line when present', () => {
-    renderWithProviders(<ActivityListItem activity={activity({ avg_hr: 152 })} />)
-    expect(screen.getByText(/152/)).toBeInTheDocument()
+  it('shows distance, the day and time, pace and avg HR in their own columns (no meta string)', () => {
+    const { container } = renderWithProviders(<ActivityListItem activity={activity({ avg_hr: 152 })} />)
+    expect(container.querySelector('.ali-dist')?.textContent).toBe('12.4km')
+    expect(container.querySelector('.ali-pace')?.textContent).toBe('4:41152 bpm')
+    expect(container.querySelector('.ali-when')?.textContent).toMatch(/^Wed 8, \d{2}:\d{2}$/)
+    expect(container.querySelector('.ali-meta')).not.toBeInTheDocument()
+    expect(container.querySelector('.ali-icon')).not.toBeInTheDocument()
   })
 
-  it('omits the HR segment when avg_hr is absent', () => {
-    const { container } = renderWithProviders(<ActivityListItem activity={activity({ avg_hr: null })} />)
-    expect(container.querySelector('.ali-meta')?.textContent).not.toMatch(/♥/)
+  it('omits the HR figure when avg_hr is absent', () => {
+    renderWithProviders(<ActivityListItem activity={activity({ avg_hr: null })} />)
+    expect(screen.queryByText(/bpm/)).not.toBeInTheDocument()
   })
 
   it('shows a PB badge when the activity carries personal records', () => {

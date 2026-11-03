@@ -23,6 +23,10 @@ class ActivitySummary(BaseModel):
     # Set when this activity fulfils a scheduled workout on the same day. Carries
     # the matched workout's label so the UI can show a "workout" tag.
     workout_tag: str | None = None
+    # Set on Today's payload when this activity completed the selected day's
+    # AI training-plan day (the same match as the plan day's
+    # matched_activity_id). None everywhere else.
+    matched_plan_day_id: int | None = None
     # Personal records this activity set, if any — same shape as
     # ActivityDetail's field, additively populated on list/Today rows too so
     # the PB badge and celebration toast can fire without a detail fetch.
@@ -232,6 +236,9 @@ class DailySummaryResponse(BaseModel):
     hrv_avg: float | None = None
     hrv_weekly_avg: float | None = None
     hrv_status: str | None = None
+    # Garmin's personal balanced HRV range (ms); None until Garmin has a baseline
+    hrv_baseline_low: float | None = None
+    hrv_baseline_high: float | None = None
 
     class Config:
         from_attributes = True

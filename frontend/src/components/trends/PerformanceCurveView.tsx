@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import {
   ComposedChart,
   Line,
@@ -13,7 +13,6 @@ import { useTheme } from '../../App'
 import { getChartTickColor, getTooltipProps, getGridStroke, PERFORMANCE_CURVE_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
 import Skeleton from '../ui/Skeleton'
 import type { PerformanceCurveCompareMode, PerformanceCurvePoint } from '../../api/types'
-import StatHelpButton from '../info/StatHelpButton'
 import './PerformanceCurveView.css'
 
 type Days = 30 | 60 | 90
@@ -121,10 +120,9 @@ export default function PerformanceCurveView() {
     return (
       <div className="perf-curve-view">
         <div className="perf-curve-header">
-          <Skeleton height={18} width={150} />
           <Skeleton height={30} width={180} radius="var(--radius-sm)" />
         </div>
-        <div className="perf-curve-chart-card" style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)' }}>
+        <div className="perf-curve-chart-card" style={{ background: 'var(--surface)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
           <Skeleton height={200} radius="var(--radius-xs)" />
         </div>
       </div>
@@ -138,11 +136,8 @@ export default function PerformanceCurveView() {
   if (!hasAnyData) {
     return (
       <div className="perf-curve-view">
+        {/* Titled (with its help link) by the Fitness section heading in TrendsView. */}
         <div className="perf-curve-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <span style={{ fontSize: '0.9rem', fontWeight: 700 }}>Performance Curve</span>
-            <StatHelpButton topic="performance-curve" label="Performance Curve" />
-          </div>
           <div className="perf-curve-tab-strip">
             {DAY_OPTIONS.map(o => (
               <button
@@ -177,7 +172,7 @@ export default function PerformanceCurveView() {
           if (p.value == null) return null
           const display = isPace ? formatPaceDisplay(p.value) : `${p.value.toFixed(0)} W`
           return (
-            <div key={p.dataKey} style={{ color: p.color }}>
+            <div key={p.dataKey}>
               {p.name}: {display}
             </div>
           )
@@ -196,10 +191,6 @@ export default function PerformanceCurveView() {
   return (
     <div className="perf-curve-view">
       <div className="perf-curve-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <span style={{ fontSize: '0.9rem', fontWeight: 700 }}>Performance Curve</span>
-          <StatHelpButton topic="performance-curve" label="Performance Curve" />
-        </div>
         <div className="perf-curve-controls">
           <div className="perf-curve-tab-strip">
             {DAY_OPTIONS.map(o => (
@@ -298,7 +289,7 @@ export default function PerformanceCurveView() {
           {!isPace && data?.critical_power && (
             <>
               <div className="perf-param">
-                <span className="perf-param-label">Critical Power</span>
+                <span className="perf-param-label">Critical power</span>
                 <span className="perf-param-value">
                   {data.critical_power.toFixed(0)}<span className="perf-param-unit"> W</span>
                 </span>
@@ -323,7 +314,7 @@ export default function PerformanceCurveView() {
       {/* Curve chart */}
       {chartData.length > 0 && (
         <div className="perf-curve-chart-card" style={{
-          background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)',
+          background: 'var(--surface)', borderRadius: 'var(--radius)', border: '1px solid var(--border)',
         }}>
           <div className="perf-curve-chart-title">{yLabel} vs Duration</div>
           <div
@@ -386,16 +377,16 @@ export default function PerformanceCurveView() {
           </div>
           <div className="perf-curve-legend">
             <div className="perf-legend-item">
-              <div className="perf-legend-dot" style={{ background: ACTUAL_COLOR }} />
+              <span className="legend-swatch" style={{ "--swatch": ACTUAL_COLOR } as CSSProperties} />
               Best effort
             </div>
             <div className="perf-legend-item">
-              <div className="perf-legend-dot" style={{ background: MODEL_COLOR, opacity: 0.7 }} />
+              <span className="legend-swatch legend-swatch--dashed" style={{ "--swatch": MODEL_COLOR } as CSSProperties} />
               CV model fit
             </div>
             {hasComparison && (
               <div className="perf-legend-item">
-                <div className="perf-legend-dot" style={{ background: COMPARE_COLOR }} />
+                <span className="legend-swatch legend-swatch--dotted" style={{ "--swatch": COMPARE_COLOR } as CSSProperties} />
                 {data!.comparison!.label}
               </div>
             )}
@@ -406,7 +397,7 @@ export default function PerformanceCurveView() {
       {/* Race predictions */}
       {(data?.race_predictions?.length ?? 0) > 0 && (
         <div className="perf-curve-race-card" style={{
-          background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)',
+          background: 'var(--surface)', borderRadius: 'var(--radius)', border: '1px solid var(--border)',
         }}>
           <div className="perf-race-title">Race Predictions (CV Model)</div>
           <table className="perf-race-table">

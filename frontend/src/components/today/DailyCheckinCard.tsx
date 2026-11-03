@@ -49,35 +49,38 @@ function checkinSummary(checkin: DailyCheckin): string {
   return parts.length > 0 ? parts.join(' · ') : 'Logged'
 }
 
-function TapRow({
+function ScaleRow({
   label,
-  hint,
+  low,
+  high,
   value,
   onChange,
+  disabled,
 }: {
   label: string
-  hint: string
+  low: string
+  high: string
   value: number | null
   onChange: (v: number) => void
+  disabled: boolean
 }) {
   return (
     <div className="checkin-row">
-      <div className="checkin-row-label">
-        <span>{label}</span>
-        <span className="checkin-row-hint">{hint}</span>
-      </div>
-      <div className="checkin-row-taps">
+      <span className="checkin-row-name">{label}</span>
+      <div className="seg-control" role="group" aria-label={`${label}, 1 ${low.toLowerCase()} to 5 ${high.toLowerCase()}`}>
         {SCALE.map(v => (
           <button
             key={v}
             type="button"
-            className={`checkin-tap ${value === v ? 'checkin-tap--selected' : ''}`}
+            aria-pressed={value === v}
+            disabled={disabled}
             onClick={() => onChange(v)}
           >
             {v}
           </button>
         ))}
       </div>
+      <span className="seg-control-ends checkin-row-ends"><span>{low}</span><span>{high}</span></span>
     </div>
   )
 }
@@ -89,27 +92,50 @@ export default function DailyCheckinCard({ date, checkin }: Props) {
   const [energy, setEnergy] = useState<number | null>(checkin?.energy ?? null)
   const [mood, setMood] = useState<number | null>(checkin?.mood ?? null)
   const [sorenessNote, setSorenessNote] = useState(checkin?.soreness_note ?? '')
+  // Saved with soreness ≤ 3: stay open so the optional "where" note can be added.
+  const [notePending, setNotePending] = useState(false)
   const submitCheckin = useSubmitDailyCheckin()
 
-  // Reset local state when the viewed date (or its check-in) changes.
+  // Reset local state when the viewed date (or its check-in) changes — but
+  // not while the just-saved card is waiting on the optional soreness note.
   useEffect(() => {
+    if (notePending) return
     setSoreness(checkin?.soreness ?? null)
     setEnergy(checkin?.energy ?? null)
     setMood(checkin?.mood ?? null)
     setSorenessNote(checkin?.soreness_note ?? '')
     setEditing(!checkin)
     setDismissed(false)
-  }, [date, checkin])
+  }, [date, checkin]) // notePending deliberately omitted: clearing it must not reset the form
 
   if (dismissed && !checkin) return null
 
-  const canSubmit = soreness !== null || energy !== null || mood !== null
-
-  const handleSubmit = () => {
+  const save = (values: { soreness: number | null; energy: number | null; mood: number | null }, note = sorenessNote) => {
+    const keepOpen = values.soreness != null && values.soreness <= 3
     submitCheckin.mutate(
-      { date, checkin: { soreness, energy, mood, soreness_note: sorenessNote.trim() || null } },
-      { onSuccess: () => setEditing(false) },
+      { date, checkin: { ...values, soreness_note: note.trim() || null } },
+      {
+        onSuccess: () => {
+          setNotePending(keepOpen)
+          if (!keepOpen) setEditing(false)
+        },
+      },
     )
+  }
+
+  // Auto-save as soon as all three are answered; no separate "Log" step.
+  const pick = (field: 'soreness' | 'energy' | 'mood', v: number) => {
+    const next = { soreness, energy, mood, [field]: v }
+    if (field === 'soreness') setSoreness(v)
+    if (field === 'energy') setEnergy(v)
+    if (field === 'mood') setMood(v)
+    if (next.soreness != null && next.energy != null && next.mood != null) save(next)
+  }
+
+  const finishNote = () => {
+    if (sorenessNote.trim() !== (checkin?.soreness_note ?? '')) save({ soreness, energy, mood })
+    setNotePending(false)
+    setEditing(false)
   }
 
   if (!editing && checkin) {
@@ -123,35 +149,46 @@ export default function DailyCheckinCard({ date, checkin }: Props) {
     )
   }
 
+  const answered = [soreness, energy, mood].filter(v => v != null).length
+
   return (
     <div className="card daily-checkin-card">
-      <h3 className="checkin-title">How are you feeling today?</h3>
-      <TapRow label="Soreness" hint="1 = very sore, 5 = none" value={soreness} onChange={setSoreness} />
-      <TapRow label="Energy" hint="1 = depleted, 5 = energized" value={energy} onChange={setEnergy} />
-      <TapRow label="Mood" hint="1 = low, 5 = great" value={mood} onChange={setMood} />
+      <h3 className="checkin-title">How do you feel this morning?</h3>
+      <ScaleRow label="Soreness" low="Very sore" high="None" value={soreness} onChange={v => pick('soreness', v)} disabled={submitCheckin.isPending} />
+      <ScaleRow label="Energy" low="Drained" high="Full" value={energy} onChange={v => pick('energy', v)} disabled={submitCheckin.isPending} />
+      <ScaleRow label="Mood" low="Low" high="Great" value={mood} onChange={v => pick('mood', v)} disabled={submitCheckin.isPending} />
       {soreness !== null && soreness <= 3 && (
         <input
           className="checkin-note-input"
           type="text"
           placeholder="Where's it sore? (optional, e.g. left knee)"
+          aria-label="Where's it sore?"
           value={sorenessNote}
           onChange={e => setSorenessNote(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && notePending) finishNote() }}
         />
       )}
-      <div className="checkin-actions">
-        <button
-          className="checkin-skip"
-          onClick={() => (checkin ? setEditing(false) : setDismissed(true))}
-        >
-          {checkin ? 'Cancel' : 'Skip'}
-        </button>
-        <button
-          className="btn-primary checkin-submit"
-          onClick={handleSubmit}
-          disabled={!canSubmit || submitCheckin.isPending}
-        >
-          {checkin ? 'Update' : 'Log check-in'}
-        </button>
+      <div className="checkin-foot">
+        <p className="checkin-foot-text" aria-live="polite">
+          {submitCheckin.isPending
+            ? 'Saving…'
+            : notePending
+              ? 'Saved. Add where it’s sore, or leave it blank.'
+              : answered < 3
+                ? 'Saves when all three are set. Your coach folds it into readiness.'
+                : ''}
+        </p>
+        {notePending ? (
+          <button type="button" className="checkin-skip" onClick={finishNote}>Done</button>
+        ) : (
+          <button
+            type="button"
+            className="checkin-skip"
+            onClick={() => (checkin ? setEditing(false) : setDismissed(true))}
+          >
+            {checkin ? 'Cancel' : 'Skip'}
+          </button>
+        )}
       </div>
     </div>
   )

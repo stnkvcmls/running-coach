@@ -8,53 +8,120 @@
 
 .trends-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   margin-bottom: 4px;
 }
 
-.trends-daily-history-row {
-  display: flex;
-  justify-content: flex-end;
+/* Body small multiples (docs/UI_UX_CRITIQUE.md §6.6, G2): one surface, a row
+   per metric — name and verdict on the left, latest value on the right, the
+   sparkline across the full width beneath. */
+.body-trends {
+  list-style: none;
+  margin: 0;
 }
 
-.wellness-card {
-  padding: 12px 16px;
+.trend {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0 12px;
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
 }
 
-.wellness-card-header {
-  margin-bottom: 8px;
+.trend:first-child {
+  border-top: 0;
+  padding-top: 0;
 }
 
-.wellness-metric-title {
-  font-size: 0.7rem;
+.trend:last-child {
+  padding-bottom: 0;
+}
+
+.trend-head p {
+  margin: 0;
+}
+
+.trend-name {
+  font-size: 0.90625rem;
+  font-weight: 640;
+  color: var(--text);
+}
+
+.trend-status {
+  font-size: 0.8125rem;
   color: var(--text-muted);
+}
+
+/* Out of range: said in ink and weight, not a hue (colour means effort). */
+.trend-status-flag {
+  color: var(--text);
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-bottom: 4px;
 }
 
-.wellness-metric-value {
+.trend-val {
+  text-align: right;
   font-size: 1.5rem;
-  font-weight: 700;
-  line-height: 1;
+  line-height: 1.05;
+  white-space: nowrap;
 }
 
-.wellness-metric-unit {
-  font-size: 0.8rem;
-  font-weight: 400;
+.trend-val small {
+  margin-left: 2px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-stretch: 100%;
   color: var(--text-muted);
 }
 
-.wellness-metric-sub {
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  margin-top: 2px;
+.trend-spark {
+  position: relative;
+  grid-column: 1 / -1;
+  height: 56px;
+  margin-top: 8px;
 }
 
-.wellness-chart {
-  margin-top: 4px;
+.trend-spark svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.trend-band {
+  fill: var(--text);
+  fill-opacity: 0.08;
+}
+
+.trend-line {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 1.7;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.trend-dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--bg-card);
+  box-shadow: inset 0 0 0 1.7px var(--text);
+}
+
+.trend-dot-flag {
+  background: var(--text);
+}
+
+.trends-footnote {
+  margin: 0;
+  padding: 0 4px;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
 }
 
 .trends-empty {

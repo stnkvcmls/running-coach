@@ -6,7 +6,7 @@
   display: flex;
   align-items: baseline;
   gap: 6px;
-  margin-bottom: 12px;
+  margin: 0 0 12px;
 }
 
 .week-chart {

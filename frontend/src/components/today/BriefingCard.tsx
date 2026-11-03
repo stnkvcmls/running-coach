@@ -10,9 +10,12 @@ interface Props {
   dateKey: string
   planDayId: number | null
   briefing: InsightResponse | null
+  /** 'inline' renders inside the session hero: no card, no filled button
+   * (the hero's one primary action is Send to watch). */
+  variant?: 'card' | 'inline'
 }
 
-export default function BriefingCard({ dateKey, planDayId, briefing }: Props) {
+export default function BriefingCard({ dateKey, planDayId, briefing, variant = 'card' }: Props) {
   const qc = useQueryClient()
   const generateBriefing = useGenerateBriefing()
   const [jobId, setJobId] = useState<number | null>(null)
@@ -35,6 +38,29 @@ export default function BriefingCard({ dateKey, planDayId, briefing }: Props) {
     generateBriefing.mutate(planDayId!, {
       onSuccess: (data) => { if (data?.job_id) setJobId(data.job_id) },
     })
+  }
+
+  if (variant === 'inline') {
+    if (!briefing) {
+      return (
+        <p className="briefing-inline">
+          <b>Coach:</b> a short note tailored to today's session.{' '}
+          <button type="button" className="briefing-inline-action" onClick={handleGenerate} disabled={isGenerating}>
+            {isGenerating ? 'Generating…' : 'Generate briefing'}
+          </button>
+        </p>
+      )
+    }
+    return (
+      <div className="briefing-inline briefing-inline--full">
+        <div className="briefing-content">
+          <ReactMarkdown>{briefing.content || briefing.summary || ''}</ReactMarkdown>
+        </div>
+        <button type="button" className="briefing-inline-action" onClick={handleGenerate} disabled={isGenerating}>
+          {isGenerating ? 'Regenerating…' : 'Regenerate'}
+        </button>
+      </div>
+    )
   }
 
   if (!briefing) {

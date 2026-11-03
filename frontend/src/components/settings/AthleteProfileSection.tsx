@@ -14,7 +14,7 @@ export default function AthleteProfileSection() {
 
   return (
     <section className="settings-section">
-      <h2 className="section-title">Athlete Profile</h2>
+      <h2 className="section-title">Athlete profile</h2>
       <div className="card">
         <ProfileForm
           initial={profile}
@@ -24,7 +24,7 @@ export default function AthleteProfileSection() {
           submitLabel="Save profile"
         />
         {updateProfile.isSuccess && !updateProfile.isPending && (
-          <span className="profile-form__error" style={{ color: 'var(--success)' }}>
+          <span className="profile-form__error" style={{ color: 'var(--text)' }}>
             Profile saved
           </span>
         )}

@@ -383,6 +383,59 @@ def test_sync_daily_summary_creates_row(db, patch_db_session, monkeypatch):
     assert stored.hrv_status == "BALANCED"
 
 
+_HRV_WITH_BASELINE = {
+    "hrvSummary": {
+        "lastNightAvg": 48, "weeklyAvg": 44, "status": "BALANCED",
+        "baseline": {"lowUpper": 42, "balancedLow": 44, "balancedUpper": 54, "markerValue": 52.0},
+    }
+}
+
+
+@pytest.mark.parametrize("hrv_payload,expected", [
+    (_HRV_WITH_BASELINE, (44.0, 54.0)),
+    ({"hrvSummary": {"lastNightAvg": 48, "weeklyAvg": 44, "status": "BALANCED"}}, (None, None)),
+    ({"hrvSummary": {"lastNightAvg": 48, "baseline": None}}, (None, None)),
+    ({"hrvSummary": {"lastNightAvg": 48, "baseline": "n/a"}}, (None, None)),
+    ({"hrvSummary": {"lastNightAvg": 48, "baseline": [44, 54]}}, (None, None)),
+    ({"hrvSummary": {"lastNightAvg": 48, "baseline": {"balancedLow": "44", "balancedUpper": None}}}, (None, None)),
+    ({"hrvSummary": {"lastNightAvg": 48, "baseline": {"balancedLow": True, "balancedUpper": float("nan")}}}, (None, None)),
+    ({"hrvSummary": {"lastNightAvg": 48, "baseline": {"balancedLow": 41.5}}}, (41.5, None)),
+], ids=["recorded", "absent", "null", "string", "list", "string-values", "bool-nan", "partial"])
+def test_sync_daily_summary_stores_hrv_baseline(db, patch_db_session, monkeypatch, hrv_payload, expected):
+    """Garmin's balanced HRV range is stored when present and numeric; a
+    missing or malformed baseline block stores None and never fails the sync."""
+    patch_db_session(garmin_sync)
+    fake_client = MagicMock()
+    fake_client.get_stats.return_value = {"totalSteps": 9000}
+    fake_client.get_user_summary.return_value = {}
+    fake_client.get_sleep_data.return_value = {}
+    fake_client.get_heart_rates.return_value = {}
+    fake_client.get_all_day_stress.return_value = {}
+    fake_client.get_hrv_data.return_value = hrv_payload
+    monkeypatch.setattr(garmin_sync, "get_garmin_client", lambda *a, **k: fake_client)
+
+    assert garmin_sync.sync_daily_summary(date(2026, 6, 10)) is not None
+    stored = db.query(DailySummary).filter(DailySummary.date == date(2026, 6, 10)).first()
+    assert stored.hrv_avg == 48
+    assert (stored.hrv_baseline_low, stored.hrv_baseline_high) == expected
+
+
+def test_daily_summary_fields_carry_hrv_baseline():
+    fields = garmin_sync._daily_summary_fields(
+        {}, None, None, None, {}, hrv_baseline_low=44.0, hrv_baseline_high=54.0,
+    )
+    assert fields["hrv_baseline_low"] == 44.0
+    assert fields["hrv_baseline_high"] == 54.0
+    defaults = garmin_sync._daily_summary_fields({}, None, None, None, {})
+    assert defaults["hrv_baseline_low"] is None
+    assert defaults["hrv_baseline_high"] is None
+
+
+def test_hrv_baseline_range_tolerates_non_dict_summary():
+    assert garmin_sync._hrv_baseline_range(None) == (None, None)
+    assert garmin_sync._hrv_baseline_range("BALANCED") == (None, None)
+
+
 def test_sync_daily_summary_updates_existing(db, patch_db_session, monkeypatch):
     patch_db_session(garmin_sync)
     db.add(DailySummary(date=date(2026, 6, 10), steps=1))

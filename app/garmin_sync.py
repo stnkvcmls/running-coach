@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 import os
 import shutil
 import threading
@@ -678,6 +679,26 @@ def sync_activities(user: User | None = None) -> list[Activity]:
     return new_activities
 
 
+def _hrv_baseline_range(hrv_summary) -> tuple[float | None, float | None]:
+    """Garmin's personal "balanced" HRV range (ms) as ``(low, high)``.
+
+    Read from ``hrvSummary.baseline.balancedLow`` / ``balancedUpper`` (shape
+    per tests/fixtures/garmin_hrv_data.json). The block isn't part of the HRV
+    contract: Garmin omits it until it has established a baseline. Any missing
+    or non-numeric value yields None, and this never raises.
+    """
+    baseline = hrv_summary.get("baseline") if isinstance(hrv_summary, dict) else None
+    if not isinstance(baseline, dict):
+        return None, None
+
+    def _ms(value) -> float | None:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        return float(value) if math.isfinite(value) else None
+
+    return _ms(baseline.get("balancedLow")), _ms(baseline.get("balancedUpper"))
+
+
 def _daily_summary_fields(
     stats: dict,
     stress_avg,
@@ -687,6 +708,8 @@ def _daily_summary_fields(
     hrv_avg=None,
     hrv_weekly_avg=None,
     hrv_status=None,
+    hrv_baseline_low=None,
+    hrv_baseline_high=None,
 ) -> dict:
     """Build field dict for DailySummary create/update."""
     return {
@@ -708,6 +731,8 @@ def _daily_summary_fields(
         "hrv_avg": hrv_avg,
         "hrv_weekly_avg": hrv_weekly_avg,
         "hrv_status": hrv_status,
+        "hrv_baseline_low": hrv_baseline_low,
+        "hrv_baseline_high": hrv_baseline_high,
         "raw_json": json.dumps(raw, default=str),
         "synced_at": datetime.now(timezone.utc),
         "ai_analyzed": False,
@@ -768,12 +793,14 @@ def sync_daily_summary(
             hrv_avg = None
             hrv_weekly_avg = None
             hrv_status = None
+            hrv_baseline_low = hrv_baseline_high = None
             if raw.get("hrv"):
                 check_payload_fields(raw["hrv"] or {}, _HRV_DATA_CONTRACT, "hrv_data")
                 hrv_summary = (raw["hrv"] or {}).get("hrvSummary", {}) or {}
                 hrv_avg = hrv_summary.get("lastNightAvg")
                 hrv_weekly_avg = hrv_summary.get("weeklyAvg")
                 hrv_status = hrv_summary.get("status")
+                hrv_baseline_low, hrv_baseline_high = _hrv_baseline_range(hrv_summary)
 
             fields = _daily_summary_fields(
                 stats,
@@ -784,6 +811,8 @@ def sync_daily_summary(
                 hrv_avg=hrv_avg,
                 hrv_weekly_avg=hrv_weekly_avg,
                 hrv_status=hrv_status,
+                hrv_baseline_low=hrv_baseline_low,
+                hrv_baseline_high=hrv_baseline_high,
             )
 
             existing = (

@@ -13,8 +13,6 @@
 .health-subtitle {
   margin: 0 0 8px;
   font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   color: var(--text-muted);
   font-weight: 600;
 }
@@ -27,11 +25,11 @@
 }
 
 .health-status-ok {
-  color: #2ecc71;
+  color: var(--text);
 }
 
 .health-status-alarm {
-  color: #e67e22;
+  color: var(--danger);
 }
 
 .health-canary-alarm {

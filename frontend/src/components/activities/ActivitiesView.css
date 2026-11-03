@@ -27,6 +27,8 @@
   margin-bottom: 16px;
 }
 
+/* Sticky under the TopBar: the document scrolls (no overflow ancestor), see
+   tasks/lessons.md. */
 .group-head {
   display: flex;
   align-items: baseline;
@@ -36,23 +38,35 @@
   top: var(--top-bar-height);
   z-index: 10;
   background: var(--bg);
-  padding: 8px 4px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--text-muted);
+  padding: 8px 4px 6px;
 }
 
-.group-head b {
-  font-weight: 600;
-  color: var(--text-secondary);
+.group-head h3 {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 680;
+  color: var(--text);
+}
+
+.group-sum {
+  font-size: 0.84375rem;
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
+.group-sum b {
+  font-size: 0.9375rem;
+  color: var(--text);
+}
+
+/* One surface per group, rows split by hairlines (ActivityListItem). */
 .group-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  overflow: hidden;
 }
 
 .scroll-sentinel {

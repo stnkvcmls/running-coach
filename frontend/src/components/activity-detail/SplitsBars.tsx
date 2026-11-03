@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { MetricZone } from '../../api/types'
-import { getZoneColor } from '../../utils/chartTheme'
+import { effortZoneColor, getZoneColor, zoneIndexFor } from '../../utils/chartTheme'
 import { formatPace } from '../../utils/formatting'
 import LapsTable from './LapsTable'
 import './SplitsBars.css'
@@ -47,13 +47,15 @@ export default function SplitsBars({ splits, paceZones, color }: Props) {
   }
 
   const usedZones = paceZones && paceZones.length > 0
-    ? paceZones.filter(z => paces.some(p => getZoneColor(p, paceZones) === z.zone_color))
+    ? paceZones
+        .map((zone, index) => ({ zone, color: effortZoneColor(index + 1) }))
+        .filter((_, index) => paces.some(p => zoneIndexFor(p, paceZones) === index))
     : []
 
   return (
-    <section className="detail-section">
-      <div className="section-title-row splits-title-row">
-        <h3 className="section-title" style={{ margin: 0 }}>Splits</h3>
+    <section className="detail-panel splits-card">
+      <div className="detail-panel-head">
+        <h3 className="section-title">Splits</h3>
         <div className="seg-toggle" role="group" aria-label="Splits view">
           <button
             type="button"
@@ -74,7 +76,7 @@ export default function SplitsBars({ splits, paceZones, color }: Props) {
         </div>
       </div>
 
-      <div className={`card splits-card ${mode === 'table' ? 'splits-card-table' : ''}`}>
+      <div className={mode === 'table' ? 'splits-table' : undefined}>
         {mode === 'bars' ? (
           <>
             <div className="split-bars">
@@ -98,10 +100,10 @@ export default function SplitsBars({ splits, paceZones, color }: Props) {
             </div>
             {usedZones.length > 1 && (
               <div className="split-legend">
-                {usedZones.map(z => (
-                  <span key={z.zone_name}>
-                    <i style={{ background: z.zone_color }} />
-                    {z.zone_name}
+                {usedZones.map(({ zone, color }) => (
+                  <span key={zone.zone_name}>
+                    <i style={{ background: color }} />
+                    {zone.zone_name}
                   </span>
                 ))}
               </div>

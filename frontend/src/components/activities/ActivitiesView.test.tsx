@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import { renderWithProviders } from '../../test/test-utils'
 import ActivitiesView from './ActivitiesView'
-import type { ActivitySummary, PersonalRecordResponse } from '../../api/types'
+import type { ActivitySummary, PersonalRecordResponse, TrainingPlanDay, TrainingPlanResponse } from '../../api/types'
 import { celebrateNewRecords } from '../../utils/records'
 
 vi.mock('../../utils/records', () => ({ celebrateNewRecords: vi.fn() }))
@@ -28,9 +28,12 @@ function summary(overrides: Partial<ActivitySummary>): ActivitySummary {
   }
 }
 
-function mockFetch(activities: ActivitySummary[]) {
+function mockFetch(activities: ActivitySummary[], plan: TrainingPlanResponse | null = null) {
   return vi.fn().mockImplementation((url: string) => {
     const u = new URL(url, 'http://localhost')
+    if (u.pathname.endsWith('/training-plan')) {
+      return Promise.resolve({ ok: true, status: 200, json: async () => plan })
+    }
     const type = u.searchParams.get('type')
     const filtered = type ? activities.filter(a => a.activity_type === type) : activities
     return Promise.resolve({ ok: true, status: 200, json: async () => filtered })
@@ -55,7 +58,7 @@ describe('ActivitiesView grouping and filters', () => {
     renderWithProviders(<ActivitiesView />)
 
     expect(await screen.findByText('January 2020')).toBeInTheDocument()
-    expect(screen.getByText('2 runs · 29.0 km')).toBeInTheDocument()
+    expect(screen.getByText('2 runs, 29.0 km')).toBeInTheDocument()
   })
 
   it('labels a mixed-sport group as "activities" rather than misreporting it as runs', async () => {
@@ -66,7 +69,7 @@ describe('ActivitiesView grouping and filters', () => {
 
     renderWithProviders(<ActivitiesView />)
 
-    expect(await screen.findByText('2 activities · 23.0 km')).toBeInTheDocument()
+    expect(await screen.findByText('2 activities, 23.0 km')).toBeInTheDocument()
   })
 
   it('adds a chip for an activity_type outside the fixed filter list, without dropping the fixed ones', async () => {
@@ -90,6 +93,65 @@ describe('ActivitiesView grouping and filters', () => {
     screen.getByRole('button', { name: 'Running' }).click()
     expect(await screen.findByRole('button', { name: 'Running' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'false')
+  })
+})
+
+function planDay(day_date: string, target_distance_m: number | null): TrainingPlanDay {
+  return {
+    id: Number(day_date.replace(/-/g, '')), plan_id: 1, day_date, day_of_week: '', week_number: 1,
+    workout_type: 'easy', target_distance_m, target_pace_min_km: null, target_pace_display: null,
+    description: null, notes: null, week_theme: null, routine: null, fuelling_guidance: null,
+    matched_activity_id: null, adherence_score: null,
+  }
+}
+
+describe('ActivitiesView week headers', () => {
+  beforeEach(() => {
+    // Wednesday 24 June 2026; fake only Date so findBy*/react-query keep real timers.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 5, 24, 12, 0))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  const recent = [
+    summary({ id: 1, name: 'Interval Run', started_at: '2026-06-23T10:20:00', distance_m: 9220 }),
+    summary({ id: 2, name: 'Easy Run', started_at: '2026-06-20T16:43:00', distance_m: 8220 }),
+    summary({ id: 3, name: 'Easy Run', started_at: '2026-06-17T17:42:00', distance_m: 9770 }),
+    summary({ id: 4, name: 'Long Run', started_at: '2026-06-01T08:00:00', distance_m: 20000 }),
+    summary({ id: 5, name: 'Easy Run', started_at: '2026-05-31T08:00:00', distance_m: 10000 }),
+  ]
+
+  it('labels the current week "This week" against the planned km, and past weeks by date range', async () => {
+    const plan: TrainingPlanResponse = {
+      id: 1, generated_at: '2026-06-01', week_start: '2026-06-22', plan_weeks: 1, phase: null, overview: null,
+      weeks: [{
+        week_number: 1, week_start: '2026-06-22', week_end: '2026-06-28', theme: null,
+        days: [planDay('2026-06-23', 9000), planDay('2026-06-25', 14000), planDay('2026-06-28', 50000), planDay('2026-06-29', 8000)],
+      }],
+    }
+    vi.stubGlobal('fetch', mockFetch(recent, plan))
+    renderWithProviders(<ActivitiesView />)
+
+    expect(await screen.findByText('This week')).toBeInTheDocument()
+    const thisWeek = screen.getByRole('region', { name: 'This week' })
+    expect(await within(thisWeek).findByText(/of 73 km planned/)).toHaveTextContent('9.2 of 73 km planned')
+
+    expect(screen.getByText('15–21 June')).toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: '15–21 June' })).getByText('2 runs, 18.0 km')).toBeInTheDocument()
+    expect(screen.getByText('25–31 May')).toBeInTheDocument()
+    expect(screen.getByText('1–7 June')).toBeInTheDocument()
+  })
+
+  it('falls back to a run count and total for the current week without a plan', async () => {
+    vi.stubGlobal('fetch', mockFetch(recent, null))
+    renderWithProviders(<ActivitiesView />)
+
+    const thisWeek = await screen.findByRole('region', { name: 'This week' })
+    expect(within(thisWeek).getByText('1 run, 9.2 km')).toBeInTheDocument()
   })
 })
 

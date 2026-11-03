@@ -1,6 +1,12 @@
 import '@testing-library/jest-dom/vitest'
 import { afterEach } from 'vitest'
-import { cleanup } from '@testing-library/react'
+import { cleanup, configure } from '@testing-library/react'
+
+// findBy*/waitFor default to 1 s. React Query + Recharts-heavy views can take
+// longer when the whole suite runs in parallel on a loaded machine, which made
+// a few tests flaky (they always pass in isolation). 5 s still fails fast on a
+// genuinely missing element.
+configure({ asyncUtilTimeout: 5000 })
 
 // vitest.globals is off, so @testing-library/react's auto-cleanup (which
 // looks for a global `afterEach`) never registers itself — do it explicitly.
