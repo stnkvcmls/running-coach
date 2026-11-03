@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, fireEvent, waitFor } from '@testing-library/react'
 import { renderWithProviders } from '../../test/test-utils'
 import PlanView from './PlanView'
 import type { TrainingPlanDay, TrainingPlanResponse, TrainingPlanWeek } from '../../api/types'
@@ -47,11 +47,15 @@ function mockFetch(planResponse: TrainingPlanResponse | null) {
     if (url.endsWith('/training-plan')) {
       return Promise.resolve({ ok: true, status: 200, json: async () => planResponse })
     }
-    if (url.includes('/season-plan') || url.includes('/realignment-status')) {
-      return Promise.resolve({ ok: true, status: 200, json: async () => null })
+    if (url.includes('/training-plan/generate')) {
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({ job_id: 7 }) })
     }
     return Promise.resolve({ ok: true, status: 200, json: async () => null })
   })
+}
+
+function calledUrl(fetchMock: ReturnType<typeof mockFetch>, fragment: string): boolean {
+  return fetchMock.mock.calls.some(([url]) => String(url).includes(fragment))
 }
 
 describe('PlanView', () => {
@@ -78,7 +82,8 @@ describe('PlanView', () => {
 
     expect(await screen.findByText('Week two day')).toBeInTheDocument()
     expect(screen.queryByText('Week one day')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /W2/ })).toHaveClass('active')
+    expect(screen.getByRole('button', { name: /Week 2/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: /Week 1/ })).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('shows a done day with its adherence score and a link to the matched activity', async () => {
@@ -90,9 +95,29 @@ describe('PlanView', () => {
     vi.stubGlobal('fetch', mockFetch(plan(weeks)))
     renderWithProviders(<PlanView />)
 
-    expect(await screen.findByText(/Done · 96% adherence/)).toBeInTheDocument()
+    expect(await screen.findByText(/Done, 96%/)).toBeInTheDocument()
     const link = screen.getByRole('link', { name: /view run/i })
     expect(link).toHaveAttribute('href', '/activities/123')
+  })
+
+  it("counts today's completed run toward the week, using the actual distance", async () => {
+    const weeks = [
+      week(1, '2026-07-06', '2026-07-12', [
+        day({ id: 12, day_date: '2026-07-10', workout_type: 'interval', target_distance_m: 9000, matched_activity_id: 55, adherence_score: 96 }),
+        day({ id: 13, day_date: '2026-07-12', workout_type: 'long', target_distance_m: 20000 }),
+      ]),
+    ]
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.endsWith('/training-plan')) return Promise.resolve({ ok: true, status: 200, json: async () => plan(weeks) })
+      if (url.endsWith('/activities/55')) return Promise.resolve({ ok: true, status: 200, json: async () => ({ id: 55, distance_m: 9220 }) })
+      return Promise.resolve({ ok: true, status: 200, json: async () => null })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    renderWithProviders(<PlanView />)
+
+    expect(await screen.findByText('9.22')).toBeInTheDocument()
+    expect(screen.getByText(/of 29 km/)).toBeInTheDocument()
+    expect(screen.getByText('9.2')).toBeInTheDocument()
   })
 
   it('shows "Missed" for a past day with no matching activity', async () => {
@@ -108,11 +133,11 @@ describe('PlanView', () => {
     expect(screen.queryByRole('link', { name: /view run/i })).not.toBeInTheDocument()
   })
 
-  it('shows Send to watch for today and upcoming rows', async () => {
+  it('shows Send to watch only on the next upcoming session', async () => {
     const weeks = [
       week(1, '2026-07-06', '2026-07-12', [
-        day({ id: 20, day_date: '2026-07-10', workout_type: 'tempo', description: 'Today tempo' }),
-        day({ id: 21, day_date: '2026-07-11', workout_type: 'easy', description: 'Tomorrow easy' }),
+        day({ id: 20, day_date: '2026-07-10', day_of_week: 'Friday', workout_type: 'tempo', description: 'Today tempo' }),
+        day({ id: 21, day_date: '2026-07-11', day_of_week: 'Saturday', workout_type: 'easy', description: 'Tomorrow easy' }),
       ]),
     ]
     vi.stubGlobal('fetch', mockFetch(plan(weeks)))
@@ -120,7 +145,44 @@ describe('PlanView', () => {
 
     await screen.findByText('Today tempo')
     expect(screen.getByText('Tomorrow easy')).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: /send to watch/i })).toHaveLength(2)
+    const buttons = screen.getAllByRole('button', { name: /to watch/i })
+    expect(buttons).toHaveLength(1)
+    expect(buttons[0]).toHaveAccessibleName("Send Friday's tempo run to watch")
+  })
+
+  it('skips rest and cross days when picking the session to send', async () => {
+    const weeks = [
+      week(1, '2026-07-06', '2026-07-12', [
+        day({ id: 25, day_date: '2026-07-10', day_of_week: 'Friday', workout_type: 'rest', target_distance_m: null, description: 'Rest day' }),
+        day({ id: 26, day_date: '2026-07-11', day_of_week: 'Saturday', workout_type: 'cross', description: 'Bike' }),
+        day({ id: 27, day_date: '2026-07-12', day_of_week: 'Sunday', workout_type: 'long', description: 'Long one' }),
+      ]),
+    ]
+    vi.stubGlobal('fetch', mockFetch(plan(weeks)))
+    renderWithProviders(<PlanView />)
+
+    await screen.findByText('Long one')
+    const buttons = screen.getAllByRole('button', { name: /to watch/i })
+    expect(buttons).toHaveLength(1)
+    expect(buttons[0]).toHaveAccessibleName("Send Sunday's long run to watch")
+  })
+
+  it('shows no Send to watch on a later week while an earlier session is still ahead', async () => {
+    const weeks = [
+      week(1, '2026-07-06', '2026-07-12', [
+        day({ id: 28, day_date: '2026-07-11', workout_type: 'easy', description: 'This week easy' }),
+      ]),
+      week(2, '2026-07-13', '2026-07-19', [
+        day({ id: 29, week_number: 2, day_date: '2026-07-14', workout_type: 'easy', description: 'Next week easy' }),
+      ]),
+    ]
+    vi.stubGlobal('fetch', mockFetch(plan(weeks)))
+    renderWithProviders(<PlanView />)
+
+    await screen.findByText('This week easy')
+    fireEvent.click(screen.getByRole('button', { name: /Week 2/ }))
+    expect(await screen.findByText('Next week easy')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /to watch/i })).not.toBeInTheDocument()
   })
 
   it('hides Send to watch for done and missed (past) rows', async () => {
@@ -135,7 +197,7 @@ describe('PlanView', () => {
 
     await screen.findByText('Done tempo')
     expect(screen.getByText('Missed easy')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /send to watch/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /to watch/i })).not.toBeInTheDocument()
   })
 
   it('hides Send to watch for a cross-training day even when it is today', async () => {
@@ -148,6 +210,70 @@ describe('PlanView', () => {
     renderWithProviders(<PlanView />)
 
     await screen.findByText('Today cross')
-    expect(screen.queryByRole('button', { name: /send to watch/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /to watch/i })).not.toBeInTheDocument()
+  })
+
+  it('hides a note repeated across the week but keeps one that differs', async () => {
+    const boiler = 'Keep it conversational.'
+    const weeks = [
+      week(1, '2026-07-06', '2026-07-12', [
+        day({ id: 30, day_date: '2026-07-11', notes: boiler }),
+        day({ id: 31, day_date: '2026-07-12', notes: boiler }),
+        day({ id: 32, day_date: '2026-07-13', notes: boiler }),
+        day({ id: 33, day_date: '2026-07-14', notes: 'Hilly route, ease off on the climbs.' }),
+      ]),
+    ]
+    vi.stubGlobal('fetch', mockFetch(plan(weeks)))
+    renderWithProviders(<PlanView />)
+
+    expect(await screen.findByText('Hilly route, ease off on the climbs.')).toBeInTheDocument()
+    expect(screen.queryByText(boiler)).not.toBeInTheDocument()
+  })
+
+  it('shows a note that does not repeat', async () => {
+    const weeks = [
+      week(1, '2026-07-06', '2026-07-12', [
+        day({ id: 34, day_date: '2026-07-11', notes: 'Only note' }),
+        day({ id: 37, day_date: '2026-07-12', notes: 'Another note' }),
+      ]),
+    ]
+    vi.stubGlobal('fetch', mockFetch(plan(weeks)))
+    renderWithProviders(<PlanView />)
+
+    expect(await screen.findByText('Only note')).toBeInTheDocument()
+    expect(screen.getByText('Another note')).toBeInTheDocument()
+  })
+
+  it('writes a structured session in notation with a structure strip, and a steady one as distance and pace', async () => {
+    const weeks = [
+      week(1, '2026-07-06', '2026-07-12', [
+        day({ id: 35, day_date: '2026-07-11', workout_type: 'interval', target_distance_m: 10000, description: '6 x 800m @ 4:00/km with 400m jog' }),
+        day({ id: 36, day_date: '2026-07-12', workout_type: 'easy', target_distance_m: 9500, target_pace_min_km: 5.7 }),
+      ]),
+    ]
+    vi.stubGlobal('fetch', mockFetch(plan(weeks)))
+    renderWithProviders(<PlanView />)
+
+    expect(await screen.findByText('6 × 800 m at 4:00 /km, 400 m jog between')).toBeInTheDocument()
+    expect(screen.getByText('9.5 km at 5:42 /km')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /workout structure/i })).toHaveLength(1)
+  })
+
+  it('keeps Preferences and Regenerate behind the options menu, with a confirm step', async () => {
+    const weeks = [week(1, '2026-07-06', '2026-07-12', [day({ id: 40, day_date: '2026-07-11', description: 'Some run' })])]
+    const fetchMock = mockFetch(plan(weeks))
+    vi.stubGlobal('fetch', fetchMock)
+    renderWithProviders(<PlanView />)
+
+    await screen.findByText('Some run')
+    expect(screen.queryByRole('button', { name: /^regenerate/i })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /plan options/i }))
+    expect(screen.getByRole('button', { name: /training preferences/i })).toBeInTheDocument()
+    expect(screen.getByText('Build phase, generated 1 Jul')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /regenerate plan/i }))
+    expect(calledUrl(fetchMock, '/training-plan/generate')).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: /^regenerate$/i }))
+    await waitFor(() => expect(calledUrl(fetchMock, '/training-plan/generate')).toBe(true))
   })
 })
