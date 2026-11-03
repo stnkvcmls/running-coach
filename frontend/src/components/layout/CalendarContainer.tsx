@@ -1,6 +1,4 @@
 import { useRef, useState, useCallback } from 'react'
-import { useLocation } from 'react-router-dom'
-import WeekStrip from './WeekStrip'
 import MonthCalendar from './MonthCalendar'
 import './CalendarContainer.css'
 
@@ -13,7 +11,6 @@ export default function CalendarContainer({ expanded, onToggle }: Props) {
   const touchStartY = useRef<number | null>(null)
   const [dragOffset, setDragOffset] = useState(0)
   const [dragging, setDragging] = useState(false)
-  const { pathname } = useLocation()
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartY.current = e.touches[0].clientY
@@ -43,10 +40,9 @@ export default function CalendarContainer({ expanded, onToggle }: Props) {
     touchStartY.current = null
   }, [expanded, dragOffset, onToggle])
 
-  // Today renders its own WeekRail (in TodayView), so the collapsed week
-  // strip is redundant there; the month calendar still opens from the
-  // TopBar toggle. TODO: drop RouteMeta.weekStrip's strip half in App.tsx.
-  if (!expanded && pathname === '/') return null
+  // The week view lives in Today's WeekRail; this container only hosts the
+  // month calendar opened from the TopBar toggle.
+  if (!expanded) return null
 
   return (
     <div
@@ -56,7 +52,7 @@ export default function CalendarContainer({ expanded, onToggle }: Props) {
       onTouchEnd={handleTouchEnd}
       style={dragging ? { transform: `translateY(${dragOffset}px)` } : undefined}
     >
-      {expanded ? <MonthCalendar /> : <WeekStrip />}
+      <MonthCalendar />
       <div className="calendar-handle">
         <div className="handle-bar" />
       </div>

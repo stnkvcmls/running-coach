@@ -59,8 +59,9 @@ export interface RouteMeta {
   path: string
   title: string
   chrome: 'main' | 'detail'
-  /** Render the week strip / month calendar under the TopBar, plus its
-   * toggle. Only Today reads DateContext, so only Today sets it; the TopBar
+  /** The page is date-scoped: the TopBar shows the month-calendar toggle (the
+   * week itself is Today's WeekRail). Only Today reads DateContext, so only
+   * Today sets it; the TopBar
    * then titles the page with the selected date instead of `title`. */
   weekStrip?: boolean
   /** Training-context line under the TopBar title: 'block' → "Build block,
@@ -71,7 +72,7 @@ export interface RouteMeta {
 const DEFAULT_ROUTE_META: RouteMeta = { path: '', title: '', chrome: 'main' }
 
 // Single source of truth for page chrome: 'main' renders TopBar + bottom nav
-// (+ the calendar strip where `weekStrip` is set); 'detail' renders none of
+// (+ the month-calendar toggle where `weekStrip` is set); 'detail' renders none of
 // those (the view supplies its own header, e.g. ActivityDetailView's
 // back-arrow header).
 const ROUTES: RouteMeta[] = [
