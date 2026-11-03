@@ -426,6 +426,59 @@ button {
   cursor: not-allowed;
 }
 
+/* Joined segmented scale (check-in 1–5, effort 1–10): one bordered control,
+   hairline dividers, 44px targets, selected = ink fill. */
+.seg-control {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.seg-control--10 {
+  grid-template-columns: repeat(10, 1fr);
+}
+
+.seg-control button {
+  min-height: 44px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  border-left: 1px solid var(--border);
+  transition: background var(--transition-fast);
+}
+
+.seg-control button:first-child {
+  border-left: 0;
+}
+
+.seg-control button:hover:not(:disabled):not([aria-pressed='true']) {
+  background: var(--bg-hover);
+}
+
+.seg-control button[aria-pressed='true'] {
+  background: var(--text);
+  color: var(--on-ink);
+}
+
+.seg-control button:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: -3px;
+}
+
+.seg-control button[aria-pressed='true']:focus-visible {
+  outline-color: var(--on-ink);
+}
+
+.seg-control-ends {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
 /* Shared chip/filter primitive: a pill; selected = ink fill. */
 .chip {
   display: inline-flex;

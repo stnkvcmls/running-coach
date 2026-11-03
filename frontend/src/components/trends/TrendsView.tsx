@@ -6,6 +6,7 @@ import IntensityTrendsView from './IntensityTrendsView'
 import AerobicTrendsView from './AerobicTrendsView'
 import CustomChartsView from './CustomChartsView'
 import PeakPerformancesView from './PeakPerformancesView'
+import WeeklyVolumeView from './WeeklyVolumeView'
 import './TrendsView.css'
 
 type Tab = 'body' | 'fitness' | 'records'
@@ -19,6 +20,7 @@ const TABS: { id: Tab; label: string }[] = [
 /** Fitness stacks what used to be four separate tabs, each under a plain
  * heading; "Build a chart" (the old Custom tab) closes the page. */
 const FITNESS_SECTIONS: { id: string; title: string; help?: ReactNode; View: ComponentType }[] = [
+  { id: 'volume', title: 'Weekly volume', View: WeeklyVolumeView },
   {
     id: 'performance',
     title: 'Performance curve',

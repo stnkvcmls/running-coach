@@ -76,3 +76,39 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* Inline (session hero): plain text, a text-link action. */
+.briefing-inline {
+  margin: 16px 0 0;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.briefing-inline b {
+  font-weight: 700;
+}
+
+.briefing-inline--full .briefing-content {
+  font-size: 0.9375rem;
+  line-height: 1.55;
+}
+
+.briefing-inline-action {
+  font-size: inherit;
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-decoration-color: var(--text-faint);
+  text-underline-offset: 3px;
+  white-space: nowrap;
+}
+
+.briefing-inline--full .briefing-inline-action {
+  margin-top: 8px;
+  font-size: 0.84375rem;
+}
+
+.briefing-inline-action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

@@ -1,0 +1,28 @@
+.form-line {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.form-line b {
+  font-weight: 700;
+}
+
+.form-chart {
+  margin-top: 12px;
+}
+
+.form-legend {
+  display: flex;
+  gap: 16px;
+  margin-top: 6px;
+  font-size: 0.78125rem;
+  color: var(--text-muted);
+}
+
+.form-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

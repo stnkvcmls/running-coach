@@ -52,7 +52,7 @@ describe('TrendsView', () => {
     expect(recordsTab).toHaveAttribute('aria-controls', 'trends-panel-records')
   })
 
-  it('Fitness stacks Performance, Intensity and Aerobic as sections, ending with "Build a chart"', async () => {
+  it('Fitness stacks Weekly volume, Performance, Intensity and Aerobic as sections, ending with "Build a chart"', async () => {
     vi.stubGlobal('fetch', mockApi())
     renderWithProviders(<TrendsView />)
 
@@ -62,7 +62,7 @@ describe('TrendsView', () => {
     expect(panel).toHaveAttribute('aria-labelledby', 'trends-tab-fitness')
     const headings = within(panel).getAllByRole('heading', { level: 2 })
     expect(headings.map(h => h.textContent)).toEqual([
-      'Performance curve', 'Intensity', 'Aerobic efficiency', 'Build a chart',
+      'Weekly volume', 'Performance curve', 'Intensity', 'Aerobic efficiency', 'Build a chart',
     ])
     // Each heading labels its own section region.
     for (const h of headings) {

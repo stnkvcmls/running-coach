@@ -1,0 +1,51 @@
+.body-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 12px;
+  margin: 0;
+}
+
+.body-metric dt {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.body-metric dd {
+  margin: 0;
+}
+
+.body-metric .num {
+  font-size: 1.75rem;
+  line-height: 1.1;
+  color: var(--text);
+}
+
+.body-metric .num small {
+  margin-left: 2px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  font-stretch: 100%;
+  color: var(--text-muted);
+}
+
+.body-metric-verdict {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+/* Outside the usual range: ink + a dot, never a hue (colour means effort). */
+.body-metric-verdict.is-flag {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.body-metric-verdict.is-flag::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--text);
+  vertical-align: 1px;
+}

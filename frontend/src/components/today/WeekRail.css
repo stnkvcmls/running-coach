@@ -1,0 +1,131 @@
+.week-rail {
+  padding: 12px 8px;
+}
+
+.week-rail-days {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.week-rail-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 100%;
+  min-height: 44px;
+  padding: 2px 0 4px;
+  border-radius: 12px;
+  color: var(--text);
+}
+
+.week-rail-day:hover {
+  background: var(--bg-input);
+}
+
+.week-rail-dl {
+  font-size: 0.75rem;
+  font-weight: 550;
+  color: var(--text-muted);
+}
+
+.week-rail-dn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 0.9375rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.week-rail-day.is-selected .week-rail-dn {
+  box-shadow: inset 0 0 0 1.5px var(--text);
+}
+
+.week-rail-day.is-today .week-rail-dn {
+  background: var(--text);
+  color: var(--on-ink);
+  box-shadow: none;
+}
+
+.week-rail-col {
+  display: flex;
+  align-items: flex-end;
+  width: 20px;
+  height: 44px;
+  margin-top: 2px;
+}
+
+/* Planned: effort-coloured outline over a faint tint. */
+.week-rail-bar {
+  display: block;
+  width: 100%;
+  height: var(--h);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--c) 22%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--c);
+}
+
+.week-rail-day.is-done .week-rail-bar {
+  background: var(--c);
+  box-shadow: none;
+}
+
+.week-rail-day.is-missed .week-rail-bar {
+  background: none;
+  box-shadow: none;
+  outline: 1.5px dashed var(--text-faint);
+  outline-offset: -1.5px;
+}
+
+.week-rail-day.is-rest .week-rail-bar {
+  height: 2px;
+  background: var(--text-faint);
+  box-shadow: none;
+}
+
+.week-rail-sum {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 0 0 0 0;
+  font-size: 0.84375rem;
+  color: var(--text-muted);
+}
+
+.week-rail-total {
+  flex: 1;
+  min-width: 0;
+}
+
+.week-rail-total b {
+  font-size: 1.0625rem;
+  color: var(--text);
+}
+
+.week-rail-plan {
+  color: var(--text-muted);
+  padding: 8px 6px;
+}
+
+.week-rail-nav {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.week-rail-nav:hover {
+  background: var(--bg-input);
+  color: var(--text);
+}
