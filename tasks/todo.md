@@ -210,10 +210,10 @@ tsc clean.
       1.4 readiness contrast, Phase 2 chrome/IA (week strip on Today only,
       training-context subtitle, System/Light/Dark + Appearance section, sync pill
       only when wrong, Progress tabs Body/Fitness/Records). 1.2 superseded by 4.5.
-- [ ] Wave B: F2 — Phase 3 visual identity (tokens, effort scale, Archivo
+- [x] Wave B: F2 — Phase 3 visual identity (tokens, effort scale, Archivo
       self-hosted, ink actions, sentence case, no shadows)
-- [ ] Wave C (parallel): F3 — Phase 4 Today · F4 — Phase 7 Settings index
-- [ ] Wave D (parallel): F5 — Phase 5 Plan · F6 — Phase 6 Activities, detail, Progress Body
-- [ ] After each wave: build + tests + real-browser screenshots (390/1280, light/dark)
+- [x] Wave C (parallel): F3 — Phase 4 Today · F4 — Phase 7 Settings index
+- [x] Wave D (parallel): F5 — Phase 5 Plan · F6 — Phase 6 Activities, detail, Progress Body
+- [x] After each wave: build + tests + real-browser screenshots (390/1280, light/dark)
       against perf.db with pinned clocks; fix; commit
-- [ ] PR
+- [x] PR #153
