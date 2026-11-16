@@ -217,3 +217,53 @@ tsc clean.
 - [x] After each wave: build + tests + real-browser screenshots (390/1280, light/dark)
       against perf.db with pinned clocks; fix; commit
 - [x] PR #153
+
+# Simplification audit (2026-11-16, branch claude/stoic-archimedes-64gibt)
+
+Baseline: `main` @ `72d9997` (1031 backend / 344 frontend tests green). No
+unmerged branch touches this (checked `p0-1-implementation`, `feature/theme`).
+Goal: remove dead code and stale assumptions with the smallest changes that
+preserve behaviour. Owner decisions: register the service worker (push stays);
+deployment is single-user behind the tunnel, multi-user later; images are
+published only from version tags.
+
+## Tasks
+- [x] Release CI: publish the image only on `vX.Y.Z` tags (`release.yml`).
+- [x] Delete zero-reference backend code (streams early/late curves,
+      `backfill_missing_insights`, `_garth_post`, `Race` model, …) and prune
+      the 9 unreferenced `app.ai_coach` re-exports.
+- [x] Delete zero-reference frontend code (`sportIcon`, `theme`, `useInsights`,
+      two chat types, load-more CSS); untrack `tsconfig.tsbuildinfo`.
+- [x] Template-era leftovers: `static/style.css`, `jinja2`/`aiosqlite`/
+      `python-multipart`, coverage omit.
+- [x] `init_db`: stamp a pre-Alembic DB at the initial revision, not `head`.
+- [x] Register the service worker (`/sw.js` at root scope) so push works.
+- [x] Make the bind guard truthful in Docker without changing startup.
+- [x] One frontend pace formatter (`paceClock`), with the `4:60` rounding fix.
+- [x] `SyncStatus.get()` replaces 23 hand-written lookups.
+- [x] README refresh (jobs, modules, tests, releases, guard).
+
+## Review
+
+Verified: backend 1034 passed (was 1031; +2 service-worker tests, +1 legacy-DB
+migration test), frontend 347 passed (was 344; +3 `paceClock` tests), `tsc`
+clean, suite green with the three dropped dependencies uninstalled. In headless
+Chromium against a real build the worker now registers and controls the app
+(`getRegistrations()` 0 -> 1, `serviceWorker.ready` resolves), Settings ->
+Notifications shows "Enable notifications", and five pages load with no failed
+requests or console errors.
+
+Deliberately left alone:
+- Test-only code (`compute_zone_distribution_from_streams`, `execute_job` /
+  `_claim_job`, `_estimate_critical_power`, `getWeekNumber` /
+  `getTotalWeeksInYear`): removing it means deleting tests; owner's call.
+- `GET /strength-routines` and `GET /insights` have no frontend caller.
+- The `app.ai_coach` shim (48 re-exports, 34 `_shim.` call sites, 9 test files).
+- The empty `races` table (model removed; dropping the table needs a migration).
+- `docs/NOTHING_OS_SKIN_PLAN.md` + mockup, marked "kept for history".
+- Not simplifications, but found on the way: startup backfill and default zone
+  seeding only cover user #1; `TIMEZONE` only drives the scheduler while 48
+  `date.today()`/`datetime.now()` calls use the container clock (UTC); CI tests
+  on Python 3.11, the image runs 3.12.
+- Not verified here: a real `docker build` (no Docker in the session) and a
+  real push delivery (needs VAPID keys and a push service).

@@ -50,7 +50,7 @@ fully scoped for multiple authenticated users behind Cloudflare Access.
 - **Workout adherence** (`app/adherence.py`): planned-vs-actual distance, pace,
   and interval alignment with a 0–100 adherence score.
 
-### AI coaching (`app/ai_coach.py`)
+### AI coaching (`app/coach/`)
 - **Multi-provider**: Anthropic Claude (Opus / Sonnet / Haiku) and Google
   (Gemini / Gemma), selectable per user and validated against the catalog in
   `app/config.py`.
@@ -79,17 +79,17 @@ Dark/light theme, PWA manifest, and service worker included.
 ```
 [Garmin Connect API]
         │
-   garmin_sync.py  ← APScheduler (4 background jobs + startup backfill)
+   garmin_sync.py  ← APScheduler (5 background jobs + startup backfill)
         │
    SQLite (WAL mode)   — every data row scoped by user_id
-   ├── User, Activity, DailySummary, GarminCalendarEvent, Race
+   ├── User, Activity, DailySummary, GarminCalendarEvent
    ├── Insight, AthleteProfile, ZoneConfig, MetricZone
    └── TrainingPlan / TrainingPlanDay, SyncStatus
         │
    streams · threshold · training_load · adherence · intensity  (analytics)
    workout_translator (plan day → Garmin structured workout)
         │
-   ai_coach.py  → Anthropic / Google Generative AI  (retry + provider dispatch)
+   coach/  → Anthropic / Google Generative AI  (job queue, retry, provider dispatch)
         │
    FastAPI REST API (/api/v1, auth dependency) + SPA catch-all
         │
@@ -100,11 +100,13 @@ Dark/light theme, PWA manifest, and service worker included.
 
 | File | Role |
 |------|------|
-| `app/main.py` | FastAPI init, APScheduler (4 jobs), lifespan, backfill, SPA catch-all |
-| `app/api.py` | All REST endpoints, auth-gated router |
+| `app/main.py` | FastAPI init, APScheduler (5 jobs), lifespan, backfill, service worker + SPA catch-all |
+| `app/api.py` | Builds the auth-gated `/api/v1` router from `app/routers/*` |
+| `app/routers/` | REST endpoints grouped by domain (activities, daily, plan, races, chat, settings, trends, …) |
 | `app/auth.py` | Cloudflare Access JWT verification + user resolution |
 | `app/garmin_sync.py` | Garmin auth/MFA, sync, backfill, calendar/profile parsing, push-to-Garmin |
-| `app/ai_coach.py` | AI analysis, context building, plan generation, provider dispatch, retry |
+| `app/coach/` | AI analysis, context building, plan generation, chat, job queue, provider dispatch |
+| `app/ai_coach.py` | Re-export of `app/coach/*`, kept as the import and test-patching surface |
 | `app/workout_translator.py` | TrainingPlanDay → Garmin structured-workout JSON |
 | `app/streams.py` | Detail-stream parsing, grade-adjusted pace, mean-maximal curves |
 | `app/threshold.py` | Critical Power / CV / LTHR estimation, performance curve, race prediction |
@@ -117,11 +119,12 @@ Dark/light theme, PWA manifest, and service worker included.
 | `app/config.py` | Env-var config + `AVAILABLE_MODELS` catalog |
 
 ### Scheduling
-Four APScheduler jobs, each fanned out across all Garmin-connected users:
+Five APScheduler jobs; the first four fan out across all Garmin-connected users:
 1. **Activity sync** — every `ACTIVITY_POLL_MINUTES`; new activities trigger AI analysis.
 2. **Daily summary sync** — daily at `DAILY_SYNC_HOUR`; rolling window + profile.
 3. **Weekly review** — Sundays 8am.
 4. **Training-plan generation** — Sundays 9am.
+5. **AI job worker** — every 30 seconds; runs queued AI jobs on a small thread pool.
 
 ### Authentication & multi-user
 `app/auth.py` resolves the request user. With `AUTH_ENABLED=true` it verifies a
@@ -155,7 +158,8 @@ The simplest deployment is the published image via Docker Compose.
 3. Open <http://localhost:8080>.
 
 SQLite and Garmin tokens persist in the `./data` volume. The bundled
-[Watchtower](https://containrrr.dev/watchtower/) service auto-updates the image.
+[Watchtower](https://containrrr.dev/watchtower/) service pulls `latest`, which
+moves only when a release is tagged (see [Releases](#releases)).
 
 ### Configuration
 
@@ -175,16 +179,19 @@ All settings come from environment variables (see `app/config.py`):
 | `AUTH_ENABLED` | `false` | Enable Cloudflare Access JWT auth |
 | `CF_ACCESS_TEAM_DOMAIN` / `CF_ACCESS_AUD` | — | Required when auth is enabled |
 | `ENCRYPTION_KEY` | — | Fernet key for per-user Garmin passwords |
-| `BIND_HOST` | `127.0.0.1` | Interface uvicorn listens on (must match `--host`); used by the security guard |
-| `ALLOW_INSECURE_BIND` | `false` | Opt out of the startup refusal below (e.g. trusted, firewalled private network) |
+| `BIND_HOST` | `127.0.0.1` (`0.0.0.0` in the Docker image) | Interface uvicorn listens on (must match `--host`); used by the security guard |
+| `ALLOW_INSECURE_BIND` | `false` (`true` in the Docker image) | Downgrade the startup refusal below to a `CRITICAL` log line (e.g. trusted, firewalled private network) |
 
 > **Safe-default rule:** `AUTH_ENABLED=false` is fine for local development
-> (`BIND_HOST=127.0.0.1`, the default).  If you expose the app on any
-> non-loopback interface — including Docker's `0.0.0.0` — you **must** set
-> `AUTH_ENABLED=true` and configure Cloudflare Access.  The app logs a
-> `CRITICAL` warning and **refuses to start** when it detects the unsafe
-> combination; set `ALLOW_INSECURE_BIND=true` only if you understand the risk
-> and still want to run that way (e.g. a trusted, firewalled private network).
+> (`BIND_HOST=127.0.0.1`, the default).  On a non-loopback bind with auth
+> disabled the app logs a `CRITICAL` warning and **refuses to start** unless
+> `ALLOW_INSECURE_BIND=true`.
+>
+> The Docker image listens on `0.0.0.0` and ships with
+> `ALLOW_INSECURE_BIND=true`, so an auth-disabled container (single user behind
+> a tunnel or private network) starts and logs the warning on every boot.  When
+> you enable `AUTH_ENABLED=true` with Cloudflare Access, also set
+> `ALLOW_INSECURE_BIND=false` so the container refuses to run unauthenticated.
 
 Generate an encryption key once and keep it stable:
 
@@ -221,15 +228,29 @@ serves the compiled `frontend/dist` from the FastAPI process.
 ## Testing
 
 ```bash
-pytest                       # backend (~414 tests; coverage fail_under=80)
-cd frontend && npm test      # frontend vitest (utils)
+pytest                       # backend (~1,030 tests; coverage fail_under=80)
+cd frontend && npm test      # frontend vitest (~350 tests: components, hooks, utils)
 ```
 
 The `perf/` directory holds a seeded load-test harness — see
 [`docs/performance-testing.md`](docs/performance-testing.md).
 
-CI runs via GitHub Actions: `tests.yml` (backend + frontend), `performance.yml`,
-and `docker-publish.yml` (build & push the image to GHCR).
+CI runs via GitHub Actions: `tests.yml` (backend + frontend) and
+`performance.yml` on pushes and pull requests, and `release.yml` on version tags.
+
+---
+
+## Releases
+
+The Docker image is built and pushed to GHCR only when a version tag is pushed:
+
+```bash
+git tag v1.2.0
+git push origin v1.2.0
+```
+
+`release.yml` publishes `ghcr.io/stnkvcmls/running-coach` as `1.2.0`, `1.2` and
+`latest`. Branch pushes and merges to `main` do not publish an image.
 
 ---
 
