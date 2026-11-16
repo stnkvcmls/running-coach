@@ -421,6 +421,32 @@ def test_spa_catch_all_rejects_api_paths():
     assert exc.value.status_code == 404
 
 
+# --- service worker --------------------------------------------------------
+
+def test_service_worker_is_served_from_root_as_javascript():
+    import asyncio
+    import os
+
+    resp = asyncio.run(main.service_worker())
+    assert os.path.isfile(resp.path)
+    assert resp.path.endswith(os.path.join("static", "sw.js"))
+    assert resp.media_type == "text/javascript"
+
+
+def test_service_worker_precache_urls_exist():
+    """``cache.addAll`` rejects (and the worker never installs) if any
+    precached URL 404s, so every listed file must exist under static/."""
+    import os
+    import re
+
+    with open(os.path.join(main.static_dir, "sw.js")) as fh:
+        shell_block = fh.read().split("SHELL_URLS = [")[1].split("];")[0]
+    urls = re.findall(r"'(/static/[^']+)'", shell_block)
+    assert urls
+    for url in urls:
+        assert os.path.isfile(os.path.join(main.static_dir, url.removeprefix("/static/"))), url
+
+
 # --- _check_security_config ------------------------------------------------
 
 def test_security_guard_refuses_when_auth_disabled_on_public_host(monkeypatch, caplog):

@@ -610,6 +610,21 @@ app.include_router(api_router)
 from fastapi.responses import FileResponse  # noqa: E402
 
 
+@app.get("/sw.js", include_in_schema=False)
+async def service_worker():
+    """Serve the service worker from the origin root.
+
+    A worker can only control pages at or below its own path, so the file
+    under /static/ could never control the app. Served from / its scope covers
+    every page, which Web Push (Settings -> Notifications) depends on.
+    """
+    return FileResponse(
+        os.path.join(static_dir, "sw.js"),
+        media_type="text/javascript",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
 @app.get("/{full_path:path}", include_in_schema=False)
 async def spa_catch_all(full_path: str):
     """Serve the React SPA for client-side routing."""

@@ -1,6 +1,6 @@
-const CACHE_NAME = 'running-coach-v4';
+// Served at /sw.js (see app/main.py) and registered from frontend/src/main.tsx.
+const CACHE_NAME = 'running-coach-v5';
 const SHELL_URLS = [
-    '/static/style.css',
     '/static/manifest.json',
 ];
 
@@ -43,8 +43,8 @@ self.addEventListener('fetch', event => {
         return;
     }
 
-    // Network-first for everything else
-    event.respondWith(fetch(event.request));
+    // Everything else (API calls, chat streaming, hashed /assets/) is left to
+    // the browser's normal network handling.
 });
 
 // Web Push (P0-1): payload is JSON { category, title, body, url } — see
