@@ -130,16 +130,8 @@ def api_get_ai_config(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    provider_row = (
-        db.query(SyncStatus)
-        .filter(SyncStatus.user_id == current_user.id, SyncStatus.key == "ai_provider")
-        .first()
-    )
-    model_row = (
-        db.query(SyncStatus)
-        .filter(SyncStatus.user_id == current_user.id, SyncStatus.key == "ai_model")
-        .first()
-    )
+    provider_row = SyncStatus.get(db, current_user.id, "ai_provider")
+    model_row = SyncStatus.get(db, current_user.id, "ai_model")
     provider = provider_row.value if provider_row else "claude"
     model = model_row.value if model_row else app_settings.ai_model
     return AiConfigResponse(
@@ -162,11 +154,7 @@ def api_set_ai_config(
         raise HTTPException(status_code=400, detail=f"Model {config.model} not valid for {config.provider}")
 
     for key, value in [("ai_provider", config.provider), ("ai_model", config.model)]:
-        row = (
-            db.query(SyncStatus)
-            .filter(SyncStatus.user_id == current_user.id, SyncStatus.key == key)
-            .first()
-        )
+        row = SyncStatus.get(db, current_user.id, key)
         if row:
             row.value = value
         else:

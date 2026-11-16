@@ -255,11 +255,7 @@ def ensure_records_backfilled(db: Session, user_id: int = DEFAULT_USER_ID) -> No
     full chunk) does the chronological replay run and the version get
     recorded — from then on this is a single indexed lookup.
     """
-    status = (
-        db.query(SyncStatus)
-        .filter(SyncStatus.user_id == user_id, SyncStatus.key == _BACKFILL_STATUS_KEY)
-        .first()
-    )
+    status = SyncStatus.get(db, user_id, _BACKFILL_STATUS_KEY)
     current_version = int(status.value) if status and status.value else 0
     if current_version >= _BACKFILL_VERSION:
         return

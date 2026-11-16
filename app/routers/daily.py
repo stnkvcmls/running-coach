@@ -259,14 +259,7 @@ def api_today(
         active_niggle=active_niggle,
     )
     if plan_adaptation is not None:
-        dismissed = (
-            db.query(SyncStatus)
-            .filter(
-                SyncStatus.user_id == uid,
-                SyncStatus.key == f"plan_adaptation_dismissed:{plan_day.id}",
-            )
-            .first()
-        )
+        dismissed = SyncStatus.get(db, uid, f"plan_adaptation_dismissed:{plan_day.id}")
         if dismissed:
             plan_adaptation = None
 

@@ -304,20 +304,12 @@ def seed_bootstrap_user() -> None:
 
 
 def _get_sync_status(db: Session, key: str, user_id: int = DEFAULT_USER_ID) -> str | None:
-    row = (
-        db.query(SyncStatus)
-        .filter(SyncStatus.user_id == user_id, SyncStatus.key == key)
-        .first()
-    )
+    row = SyncStatus.get(db, user_id, key)
     return row.value if row else None
 
 
 def _set_sync_status(db: Session, key: str, value: str, user_id: int = DEFAULT_USER_ID):
-    row = (
-        db.query(SyncStatus)
-        .filter(SyncStatus.user_id == user_id, SyncStatus.key == key)
-        .first()
-    )
+    row = SyncStatus.get(db, user_id, key)
     if row:
         row.value = value
         row.updated_at = datetime.now(timezone.utc)

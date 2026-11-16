@@ -245,11 +245,7 @@ def _push_plan_adaptation_if_needed(user_id: int, today_summary: DailySummary | 
             return
 
         dedup_key = f"push_sent:plan_adaptation:{plan_day.id}"
-        already_sent = (
-            db.query(SyncStatus)
-            .filter(SyncStatus.user_id == user_id, SyncStatus.key == dedup_key)
-            .first()
-        )
+        already_sent = SyncStatus.get(db, user_id, dedup_key)
         if already_sent:
             return
 
@@ -308,11 +304,7 @@ def _generate_briefing_if_needed(user_id: int) -> None:
             return
 
         dedup_key = f"briefing_generated:{plan_day.id}"
-        already_generated = (
-            db.query(SyncStatus)
-            .filter(SyncStatus.user_id == user_id, SyncStatus.key == dedup_key)
-            .first()
-        )
+        already_generated = SyncStatus.get(db, user_id, dedup_key)
         if already_generated:
             return
 
@@ -345,11 +337,7 @@ def _push_race_week_reminders(user_id: int, days_out: int = 7) -> None:
         )
         for race in races:
             dedup_key = f"push_sent:race_reminder:{race.id}"
-            already_sent = (
-                db.query(SyncStatus)
-                .filter(SyncStatus.user_id == user_id, SyncStatus.key == dedup_key)
-                .first()
-            )
+            already_sent = SyncStatus.get(db, user_id, dedup_key)
             if already_sent:
                 continue
             notifications_mod.notify(
@@ -382,11 +370,7 @@ def _push_canary_alarms_if_needed(user_id: int) -> None:
     bad_sources = sorted(source for source, result in status.items() if not result.get("ok", True))
 
     with db_session() as db:
-        row = (
-            db.query(SyncStatus)
-            .filter(SyncStatus.user_id == user_id, SyncStatus.key == _CANARY_ALARM_KEY)
-            .first()
-        )
+        row = SyncStatus.get(db, user_id, _CANARY_ALARM_KEY)
         previously_bad = set(json.loads(row.value)) if row and row.value else set()
         newly_bad = sorted(set(bad_sources) - previously_bad)
 

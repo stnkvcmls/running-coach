@@ -571,11 +571,7 @@ def _load_cached_threshold_raw(
     db: Session, user_id: int
 ) -> dict | None:
     """Return the raw cache dict (without fingerprint validation) for incremental use."""
-    row = (
-        db.query(SyncStatus)
-        .filter(SyncStatus.user_id == user_id, SyncStatus.key == _THRESHOLD_CACHE_KEY)
-        .first()
-    )
+    row = SyncStatus.get(db, user_id, _THRESHOLD_CACHE_KEY)
     if not row or not row.value:
         return None
     try:
@@ -618,11 +614,7 @@ def _save_cached_threshold(
     if pace_frontier is not None:
         payload["pace_frontier"] = _frontier_to_list(pace_frontier)
     json_payload = json.dumps(payload)
-    row = (
-        db.query(SyncStatus)
-        .filter(SyncStatus.user_id == user_id, SyncStatus.key == _THRESHOLD_CACHE_KEY)
-        .first()
-    )
+    row = SyncStatus.get(db, user_id, _THRESHOLD_CACHE_KEY)
     if row:
         row.value = json_payload
         row.updated_at = datetime.now(timezone.utc)
@@ -1160,11 +1152,7 @@ def _curve_for_window_cached(
     """
     key = _range_cache_key(start, end)
     fp = _range_fingerprint(db, start, end, user_id)
-    row = (
-        db.query(SyncStatus)
-        .filter(SyncStatus.user_id == user_id, SyncStatus.key == key)
-        .first()
-    )
+    row = SyncStatus.get(db, user_id, key)
     if row and row.value:
         try:
             cached = json.loads(row.value)

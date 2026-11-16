@@ -145,11 +145,7 @@ def estimate_tss(activity: Activity, profile: AthleteProfile | None) -> tuple[fl
 
 def _get_load_watermark(db: Session, user_id: int) -> datetime | None:
     """Return the synced_at watermark from the last series compute, or None."""
-    row = (
-        db.query(SyncStatus)
-        .filter(SyncStatus.user_id == user_id, SyncStatus.key == _LOAD_WATERMARK_KEY)
-        .first()
-    )
+    row = SyncStatus.get(db, user_id, _LOAD_WATERMARK_KEY)
     if not row or not row.value:
         return None
     try:
@@ -161,11 +157,7 @@ def _get_load_watermark(db: Session, user_id: int) -> datetime | None:
 def _set_load_watermark(db: Session, watermark: datetime | None, user_id: int) -> None:
     """Persist the watermark (called after a series compute completes)."""
     value = watermark.isoformat() if watermark else ""
-    row = (
-        db.query(SyncStatus)
-        .filter(SyncStatus.user_id == user_id, SyncStatus.key == _LOAD_WATERMARK_KEY)
-        .first()
-    )
+    row = SyncStatus.get(db, user_id, _LOAD_WATERMARK_KEY)
     if row:
         row.value = value
         row.updated_at = datetime.now(timezone.utc)

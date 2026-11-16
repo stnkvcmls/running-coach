@@ -64,11 +64,7 @@ def is_configured() -> bool:
 
 def get_notification_preferences(db: Session, user_id: int = DEFAULT_USER_ID) -> dict[str, bool]:
     """This user's per-category opt-outs, defaulting every category to enabled."""
-    row = (
-        db.query(SyncStatus)
-        .filter(SyncStatus.user_id == user_id, SyncStatus.key == _PREFS_KEY)
-        .first()
-    )
+    row = SyncStatus.get(db, user_id, _PREFS_KEY)
     stored: dict[str, bool] = {}
     if row and row.value:
         try:
@@ -85,11 +81,7 @@ def set_notification_preferences(
     current = get_notification_preferences(db, user_id)
     current.update({k: bool(v) for k, v in updates.items() if k in CATEGORIES})
 
-    row = (
-        db.query(SyncStatus)
-        .filter(SyncStatus.user_id == user_id, SyncStatus.key == _PREFS_KEY)
-        .first()
-    )
+    row = SyncStatus.get(db, user_id, _PREFS_KEY)
     value = json.dumps(current)
     if row:
         row.value = value

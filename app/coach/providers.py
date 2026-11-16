@@ -139,16 +139,8 @@ def _call_gemini(
 
 def _get_ai_config(db: Session, user_id: int = DEFAULT_USER_ID) -> tuple[str, str]:
     """Return (provider, model) from DB, falling back to env defaults."""
-    provider_row = (
-        db.query(SyncStatus)
-        .filter(SyncStatus.user_id == user_id, SyncStatus.key == "ai_provider")
-        .first()
-    )
-    model_row = (
-        db.query(SyncStatus)
-        .filter(SyncStatus.user_id == user_id, SyncStatus.key == "ai_model")
-        .first()
-    )
+    provider_row = SyncStatus.get(db, user_id, "ai_provider")
+    model_row = SyncStatus.get(db, user_id, "ai_model")
     provider = provider_row.value if provider_row else "claude"
     if provider not in settings.available_models:
         logger.warning("Stored AI provider %r is not in available_models; falling back to 'claude'", provider)

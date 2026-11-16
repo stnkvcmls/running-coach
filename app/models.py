@@ -263,6 +263,11 @@ class SyncStatus(Base):
     value = Column(Text)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
+    @classmethod
+    def get(cls, db, user_id: int, key: str) -> "SyncStatus | None":
+        """Return one user's row for ``key``, or None."""
+        return db.query(cls).filter(cls.user_id == user_id, cls.key == key).first()
+
 
 class AthleteProfile(Base):
     """Single-athlete profile feeding personalization and the AI context.

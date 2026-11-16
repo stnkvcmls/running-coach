@@ -625,7 +625,7 @@ def _store_training_plan(
             dist_km = day_data.get("target_distance_km")
             dist_m = dist_km * 1000 if dist_km is not None else None
             pace_display = day_data.get("target_pace_display")
-            pace_num = _parse_pace_display(pace_display) if pace_display else None
+            pace_num = _parse_pace_min_km(pace_display) if pace_display else None
             raw_routine_id = day_data.get("routine_id")
             routine_id = raw_routine_id if get_routine(raw_routine_id or "") else None
             db.add(TrainingPlanDay(
@@ -647,7 +647,7 @@ def _store_training_plan(
     return plan
 
 
-def _parse_pace_display(pace_str: str) -> float | None:
+def _parse_pace_min_km(pace_str: str) -> float | None:
     """Parse '5:15/km' or '5:15' to float min/km. Returns None on failure."""
     try:
         parts = pace_str.replace("/km", "").strip().split(":")
@@ -685,10 +685,7 @@ def detect_plan_realignment(
     if not plan:
         return empty
 
-    dismiss_row = db.query(SyncStatus).filter(
-        SyncStatus.user_id == user_id,
-        SyncStatus.key == "plan_realignment_dismissed_until",
-    ).first()
+    dismiss_row = SyncStatus.get(db, user_id, "plan_realignment_dismissed_until")
     dismissed = False
     if dismiss_row and dismiss_row.value:
         try:

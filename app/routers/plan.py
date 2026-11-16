@@ -372,10 +372,7 @@ def api_realign_plan(
     """Handle plan realignment: regenerate the plan or dismiss the banner for 7 days."""
     if body.action == "dismiss":
         dismiss_until = (date.today() + timedelta(days=7)).isoformat()
-        row = db.query(SyncStatus).filter(
-            SyncStatus.user_id == current_user.id,
-            SyncStatus.key == "plan_realignment_dismissed_until",
-        ).first()
+        row = SyncStatus.get(db, current_user.id, "plan_realignment_dismissed_until")
         if row:
             row.value = dismiss_until
         else:
@@ -390,10 +387,7 @@ def api_realign_plan(
     # action == "regenerate" — enqueue and return job id for polling
     from app.ai_coach import enqueue_job
     # Clear any existing dismiss snooze when the user triggers regeneration
-    row = db.query(SyncStatus).filter(
-        SyncStatus.user_id == current_user.id,
-        SyncStatus.key == "plan_realignment_dismissed_until",
-    ).first()
+    row = SyncStatus.get(db, current_user.id, "plan_realignment_dismissed_until")
     if row:
         db.delete(row)
         db.commit()
