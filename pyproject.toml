@@ -12,9 +12,6 @@ filterwarnings = [
 [tool.coverage.run]
 source = ["app"]
 branch = false
-omit = [
-    "app/templates/*",
-]
 
 [tool.coverage.report]
 show_missing = true
