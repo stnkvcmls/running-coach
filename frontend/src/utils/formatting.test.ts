@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatPace, formatDuration, formatDistance, formatSleepHours } from './formatting'
+import { formatPace, paceClock, formatDuration, formatDistance, formatSleepHours } from './formatting'
 
 describe('formatPace', () => {
   it('returns dash for null', () => {
@@ -94,5 +94,22 @@ describe('formatSleepHours', () => {
 
   it('formats exact hours with zero minutes', () => {
     expect(formatSleepHours(8 * 3600)).toBe('8h 0m')
+  })
+})
+
+describe('paceClock', () => {
+  it('formats min/km as m:ss', () => {
+    expect(paceClock(5.5)).toBe('5:30')
+    expect(paceClock(4.25)).toBe('4:15')
+  })
+
+  it('rolls 60 seconds over into the next minute', () => {
+    expect(paceClock(4.9999)).toBe('5:00')
+    expect(paceClock(4.995)).toBe('5:00')
+    expect(formatPace(4.9999)).toBe('5:00')
+  })
+
+  it('is unguarded, so a zero axis tick still renders', () => {
+    expect(paceClock(0)).toBe('0:00')
   })
 })

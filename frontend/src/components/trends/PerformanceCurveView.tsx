@@ -13,6 +13,7 @@ import { useTheme } from '../../App'
 import { getChartTickColor, getTooltipProps, getGridStroke, PERFORMANCE_CURVE_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
 import Skeleton from '../ui/Skeleton'
 import type { PerformanceCurveCompareMode, PerformanceCurvePoint } from '../../api/types'
+import { paceClock } from '../../utils/formatting'
 import './PerformanceCurveView.css'
 
 type Days = 30 | 60 | 90
@@ -61,9 +62,7 @@ function formatTime(sec: number): string {
 }
 
 function formatPaceDisplay(minPerKm: number): string {
-  const m = Math.floor(minPerKm)
-  const s = Math.round((minPerKm - m) * 60)
-  return `${m}:${String(s).padStart(2, '0')}/km`
+  return `${paceClock(minPerKm)}/km`
 }
 
 function speedToPaceMinKm(mps: number): number {

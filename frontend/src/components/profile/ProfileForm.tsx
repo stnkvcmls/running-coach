@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { AthleteProfile, AthleteProfileRequest } from '../../api/types'
+import { paceClock } from '../../utils/formatting'
 import './ProfileForm.css'
 
 interface ProfileFormProps {
@@ -28,9 +29,7 @@ interface FormState {
 
 function paceToMmSs(val: number | null | undefined): string {
   if (val === null || val === undefined) return ''
-  const mins = Math.floor(val)
-  const secs = Math.round((val - mins) * 60)
-  return `${mins}:${String(secs).padStart(2, '0')}`
+  return paceClock(val)
 }
 
 function mmSsToFloat(val: string): number | null {

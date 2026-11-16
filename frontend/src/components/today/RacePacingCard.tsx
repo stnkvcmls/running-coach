@@ -1,14 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { Watch, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react'
 import { useRacePacing, usePushRacePacing } from '../../api/hooks'
-import { formatDuration } from '../../utils/formatting'
+import { formatDuration, paceClock } from '../../utils/formatting'
 import type { RaceInfo } from '../../api/types'
 import './RacePacingCard.css'
 
 function formatPace(paceMinKm: number): string {
-  const mins = Math.floor(paceMinKm)
-  const secs = Math.round((paceMinKm - mins) * 60)
-  return `${mins}:${secs.toString().padStart(2, '0')}/km`
+  return `${paceClock(paceMinKm)}/km`
 }
 
 function formatSplitDist(distM: number, splitUnit: string): string {

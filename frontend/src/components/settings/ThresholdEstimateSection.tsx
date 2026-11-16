@@ -1,11 +1,10 @@
 import { useThresholdEstimate, useApplyThresholdEstimate } from '../../api/hooks'
 import type { ThresholdEstimateField, ThresholdEstimateResponse } from '../../api/types'
+import { paceClock } from '../../utils/formatting'
 import './ThresholdEstimateSection.css'
 
 function formatPace(minPerKm: number): string {
-  const min = Math.floor(minPerKm)
-  const sec = Math.round((minPerKm - min) * 60)
-  return `${min}:${sec.toString().padStart(2, '0')}/km`
+  return `${paceClock(minPerKm)}/km`
 }
 
 interface Row {

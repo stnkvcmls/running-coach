@@ -1,18 +1,13 @@
 import { useState, type CSSProperties } from 'react'
 import { useZoneConfigs, useUpdateZoneConfigs } from '../../api/hooks'
 import type { ZoneConfig } from '../../api/types'
+import { paceClock } from '../../utils/formatting'
 import './ZoneConfigSection.css'
 import { effortZoneColor } from '../../utils/chartTheme'
 
-function formatPace(minPerKm: number): string {
-  const min = Math.floor(minPerKm)
-  const sec = Math.round((minPerKm - min) * 60)
-  return `${min}:${sec.toString().padStart(2, '0')}`
-}
-
 function formatBound(value: number | null, zoneType: string): string {
   if (value === null) return '—'
-  if (zoneType === 'pace') return `${formatPace(value)}/km`
+  if (zoneType === 'pace') return `${paceClock(value)}/km`
   if (zoneType === 'hr') return `${Math.round(value)} bpm`
   if (zoneType === 'power') return `${Math.round(value)} W`
   return String(value)
@@ -157,7 +152,7 @@ export default function ZoneConfigSection() {
   }
 
   const hrThresholdLabel = data.threshold_hr !== null ? `${data.threshold_hr} bpm` : null
-  const paceThresholdLabel = data.threshold_pace_min_km !== null ? `${formatPace(data.threshold_pace_min_km)}/km` : null
+  const paceThresholdLabel = data.threshold_pace_min_km !== null ? `${paceClock(data.threshold_pace_min_km)}/km` : null
   const powerThresholdLabel = data.threshold_power !== null ? `${data.threshold_power} W` : null
 
   return (

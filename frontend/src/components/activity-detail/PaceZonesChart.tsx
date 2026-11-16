@@ -2,18 +2,13 @@ import { useZoneConfigs } from '../../api/hooks'
 import type { ChartSeries } from '../../api/types'
 import { effortZoneColor } from '../../utils/chartTheme'
 import ZoneBar, { formatZoneTime, type ZoneSegment } from './ZoneBar'
+import { paceClock } from '../../utils/formatting'
 import './PaceZonesChart.css'
 
 interface Props {
   paceSeries: ChartSeries
   /** Moving time of the activity, to turn sample shares into minutes. */
   durationSec?: number | null
-}
-
-function formatPace(minPerKm: number): string {
-  const min = Math.floor(minPerKm)
-  const sec = Math.round((minPerKm - min) * 60)
-  return `${min}:${sec.toString().padStart(2, '0')}`
 }
 
 /** Time in (threshold-anchored) pace zone, drawn like the HR zones: one
@@ -70,9 +65,9 @@ export default function PaceZonesChart({ paceSeries, durationSec }: Props) {
       </div>
       <ZoneBar
         segments={segments}
-        ariaLabel={`Time in pace zone, based on threshold ${formatPace(threshold)} per km: ${segments.map(s => `${s.label} ${s.value}`).join(', ')}. Most time in ${dominant.label}.`}
+        ariaLabel={`Time in pace zone, based on threshold ${paceClock(threshold)} per km: ${segments.map(s => `${s.label} ${s.value}`).join(', ')}. Most time in ${dominant.label}.`}
       />
-      <p className="pace-zones-note">Based on threshold {formatPace(threshold)} /km</p>
+      <p className="pace-zones-note">Based on threshold {paceClock(threshold)} /km</p>
     </section>
   )
 }

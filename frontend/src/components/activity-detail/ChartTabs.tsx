@@ -6,6 +6,7 @@ import {
 import type { ChartSeries, MetricZone } from '../../api/types'
 import { useTheme } from '../../App'
 import { getAxisTick, getTooltipProps, getZoneColor, SERIES_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
+import { paceClock } from '../../utils/formatting'
 import './ChartTabs.css'
 
 const SCATTER_METRICS = new Set(['cadence', 'stride', 'gct', 'vert_osc', 'vert_ratio'])
@@ -34,12 +35,6 @@ export function heartRateDomain(values: number[]): [number, number] {
   return [Math.floor((Math.min(...values) - 10) / 10) * 10, Math.ceil((Math.max(...values) + 5) / 10) * 10]
 }
 
-function formatPaceTick(v: number): string {
-  const m = Math.floor(v)
-  const s = Math.round((v - m) * 60)
-  return `${m}:${s.toString().padStart(2, '0')}`
-}
-
 export default function ChartTabs({ chartData, metricZones, distanceKm, repWindows }: Props) {
   const keys = Object.keys(chartData).filter(k => k !== 'distance')
   const [activeKey, setActiveKey] = useState(keys[0] || '')
@@ -65,12 +60,12 @@ export default function ChartTabs({ chartData, metricZones, distanceKm, repWindo
 
   const { contentStyle: tooltipStyle, labelStyle: tooltipTextStyle } = getTooltipProps(theme)
 
-  const yTickFormatter = (v: number) => (isPace ? formatPaceTick(v) : Math.round(v).toString())
+  const yTickFormatter = (v: number) => (isPace ? paceClock(v) : Math.round(v).toString())
 
   const formatValue = (value: any) => {
     if (value === null || value === undefined) return ['-', series.label]
     const num = Number(value)
-    if (isPace) return [formatPaceTick(num), series.label]
+    if (isPace) return [paceClock(num), series.label]
     return [`${num.toFixed(1)} ${series.unit}`, series.label]
   }
 
