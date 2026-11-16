@@ -92,3 +92,32 @@ def test_alembic_version_table_exists():
     database.init_db()
     table_names = inspect(database.engine).get_table_names()
     assert "alembic_version" in table_names
+
+
+def test_init_db_migrates_a_pre_alembic_database(tmp_path, monkeypatch):
+    """A DB holding the initial schema but no alembic_version table must be
+    stamped at the initial revision and then upgraded -- stamping it at head
+    would silently skip every migration added since."""
+    from alembic import command
+    from sqlalchemy import create_engine
+
+    db_file = tmp_path / "legacy.db"
+    legacy_engine = create_engine(f"sqlite:///{db_file}")
+    monkeypatch.setattr(database, "engine", legacy_engine)
+    monkeypatch.setattr(database.settings, "db_path", str(db_file))
+    try:
+        command.upgrade(database._alembic_config(), database._INITIAL_REVISION)
+        with legacy_engine.begin() as conn:
+            conn.execute(text("DROP TABLE alembic_version"))
+        assert "hrv_baseline_low" not in {
+            c["name"] for c in inspect(legacy_engine).get_columns("daily_summaries")
+        }
+
+        database.init_db()
+
+        inspector = inspect(legacy_engine)
+        assert "hrv_baseline_low" in {c["name"] for c in inspector.get_columns("daily_summaries")}
+        assert "user_id" in {c["name"] for c in inspector.get_columns("activities")}
+        assert "push_subscriptions" in inspector.get_table_names()
+    finally:
+        legacy_engine.dispose()

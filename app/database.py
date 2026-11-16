@@ -153,6 +153,11 @@ def _seed_zone_configs():
         logger.debug("zone_configs seeding skipped (table may not exist yet)")
 
 
+# alembic/versions/e3a9b1c2d4f5_initial_schema.py -- the schema a database
+# created before Alembic was adopted already has.
+_INITIAL_REVISION = "e3a9b1c2d4f5"
+
+
 def init_db():
     from alembic import command
     from alembic.runtime.migration import MigrationContext
@@ -161,13 +166,15 @@ def init_db():
 
     alembic_cfg = _alembic_config()
 
-    # Baseline detection: if app tables exist but Alembic has never run, stamp
-    # the DB as already at head so we don't try to recreate existing tables.
+    # Baseline detection: if app tables exist but Alembic has never run, the
+    # DB predates Alembic and holds the initial schema. Stamp it there (not at
+    # head) so the upgrade below skips table creation but still applies every
+    # later migration.
     with engine.connect() as conn:
         ctx = MigrationContext.configure(conn)
         if ctx.get_current_revision() is None:
             if "activities" in inspect(engine).get_table_names():
-                command.stamp(alembic_cfg, "head")
+                command.stamp(alembic_cfg, _INITIAL_REVISION)
 
     command.upgrade(alembic_cfg, "head")
     _seed_metric_zones()
