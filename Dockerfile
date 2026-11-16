@@ -16,6 +16,15 @@ WORKDIR /app
 ENV MALLOC_ARENA_MAX=2 \
     MALLOC_TRIM_THRESHOLD_=131072
 
+# uvicorn below listens on every interface, so tell the startup security guard
+# the truth (it compares BIND_HOST, not the --host flag). With auth disabled the
+# guard would then refuse to start; ALLOW_INSECURE_BIND=true keeps the existing
+# behaviour for a deployment behind a tunnel / private network and downgrades
+# the refusal to a CRITICAL log line. Set ALLOW_INSECURE_BIND=false to enforce
+# it once AUTH_ENABLED=true (multi-user).
+ENV BIND_HOST=0.0.0.0 \
+    ALLOW_INSECURE_BIND=true
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 

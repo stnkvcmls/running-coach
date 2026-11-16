@@ -24,6 +24,9 @@ services:
       - CF_ACCESS_AUD=${CF_ACCESS_AUD:-}
       - DEV_USER_EMAIL=${DEV_USER_EMAIL:-}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
+      # The image binds 0.0.0.0. With AUTH_ENABLED=false it starts anyway and
+      # logs a CRITICAL warning; set this to false to make it refuse instead.
+      - ALLOW_INSECURE_BIND=${ALLOW_INSECURE_BIND:-true}
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:8000/', timeout=5)\""]

@@ -59,9 +59,12 @@ def _check_security_config() -> None:
             "  All user data is publicly readable and writable.\n"
             "  Set AUTH_ENABLED=true (with Cloudflare Access) or restrict\n"
             "  BIND_HOST to 127.0.0.1 before exposing this instance.\n"
-            "  Refusing to start. Set ALLOW_INSECURE_BIND=true to override.\n"
+            "  %s\n"
             "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!",
             settings.bind_host,
+            "Continuing because ALLOW_INSECURE_BIND=true."
+            if settings.allow_insecure_bind
+            else "Refusing to start. Set ALLOW_INSECURE_BIND=true to override.",
         )
         if not settings.allow_insecure_bind:
             raise RuntimeError(

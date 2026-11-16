@@ -494,4 +494,6 @@ def test_security_guard_warns_but_continues_when_insecure_bind_allowed(monkeypat
     with caplog.at_level(logging.CRITICAL, logger="app.main"):
         main._check_security_config()  # must not raise
     assert any("SECURITY WARNING" in r.message for r in caplog.records)
+    assert any("Continuing because ALLOW_INSECURE_BIND=true" in r.message for r in caplog.records)
+    assert not any("Refusing to start" in r.message for r in caplog.records)
     assert any(r.levelno == logging.CRITICAL for r in caplog.records)
