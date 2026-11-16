@@ -13,7 +13,6 @@ from datetime import datetime, date, timedelta, timezone
 
 import anthropic
 import httpx
-from google import genai
 from google.genai import errors as _genai_errors
 from google.genai import types as _genai_types
 

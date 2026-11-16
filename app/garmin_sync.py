@@ -849,10 +849,6 @@ def sync_daily_summary(
             return None
 
 
-# Athlete profile fields that are always sourced from Garmin (read-only in the UI).
-GARMIN_PROFILE_FIELDS = ("name", "date_of_birth", "weight_kg")
-
-
 def _fetch_latest_garmin_weight(client: Garmin) -> float | None:
     """Return the most recent weight (in grams) from Garmin body composition."""
     try:
@@ -1443,30 +1439,6 @@ def sync_calendar(user: User | None = None) -> int:
 # ---------------------------------------------------------------------------
 # Structured-workout push
 # ---------------------------------------------------------------------------
-
-def _garth_post(client: Garmin, path: str, json_body: dict) -> dict:
-    """POST to the Garmin Connect API using the underlying garth session.
-
-    garminconnect stores its garth.Client as ``self.client``.  We use the
-    same ``client.post("connectapi", path, json=payload)`` pattern used by
-    all write methods in garminconnect (add_weigh_in, create_manual_activity…).
-    """
-    # garminconnect 0.3.x stores the garth Client as self.client
-    garth_client = getattr(client, "client", None) or getattr(client, "garth", None)
-    if garth_client is None:
-        raise RuntimeError("Cannot access garth client from Garmin instance")
-
-    try:
-        resp = garth_client.post("connectapi", path, json=json_body)
-    except Exception as exc:
-        # Capture response body when available (httpx.HTTPStatusError etc.)
-        body = getattr(getattr(exc, "response", None), "text", None)
-        detail = f"{exc}" + (f" — response: {body}" if body else "")
-        raise RuntimeError(f"Garmin API POST {path} failed: {detail}") from exc
-
-    if hasattr(resp, "json"):
-        return resp.json()
-    return resp  # already decoded (dict/list)
 
 
 def push_workout_to_garmin(

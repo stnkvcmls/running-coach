@@ -17,8 +17,6 @@ from google import genai
 from app.database import db_session
 
 from app.coach.context import (
-    SYSTEM_PROMPT,
-    COACH_MEMORY_CONTEXT_LIMIT,
     _classify_metric,
     _format_activity_context,
     _format_daily_context,
@@ -28,12 +26,9 @@ from app.coach.context import (
     _recent_heat_stress_note,
     recent_heat_stress,
     _build_context,
-    _load_zones,
-    _load_zone_configs,
 )
 from app.coach.providers import (
     AITransientError,
-    AIFatalError,
     _extract_summary_and_category,
     _call_claude,
     _call_gemini,
@@ -44,7 +39,6 @@ from app.coach.jobs import (
     enqueue_job,
     execute_job,
     _JOB_TIMEOUT_SECONDS,
-    _claim_job,
     _claim_pending_jobs,
     _run_claimed_job,
     _activity_user_id,
@@ -63,16 +57,13 @@ from app.coach.plans import (
     _build_race_periodization_context,
     _build_plan_context,
     _store_training_plan,
-    _parse_pace_display,
     detect_plan_realignment,
     generate_training_plan,
     weekly_review,
     _BRIEFING_SYSTEM_PROMPT,
-    _build_briefing_trigger_data,
     generate_briefing,
 )
 from app.coach.chat import (
-    CHAT_SYSTEM_PROMPT,
     _format_upcoming_plan_context,
     _build_chat_context,
     _dispatch_chat_tool,

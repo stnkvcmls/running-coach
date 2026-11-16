@@ -11,7 +11,7 @@ ignore that patch.
 """
 import json
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 from app.models import (
     DEFAULT_USER_ID,
@@ -429,53 +429,6 @@ def analyze_activity_with_feedback(activity_id: int):
         except Exception as exc:
             logger.exception("AI feedback analysis failed for activity %s", activity_id)
             _shim._save_error_insight(activity_id, exc, _shim._activity_user_id(activity_id))
-
-
-def backfill_missing_insights(user_id: int = DEFAULT_USER_ID):
-    """Analyze past 7 days of activities and daily summaries that lack insights."""
-    from app import ai_coach as _shim
-
-    with _shim.db_session() as db:
-        cutoff = datetime.now(timezone.utc) - timedelta(days=7)
-
-        # Activities in past 7 days without insights
-        activities = (
-            db.query(Activity)
-            .filter(
-                Activity.user_id == user_id,
-                Activity.started_at >= cutoff,
-                Activity.ai_analyzed == False,
-            )
-            .order_by(Activity.started_at.asc())
-            .all()
-        )
-        logger.info("Backfilling insights for %d activities", len(activities))
-        for activity in activities:
-            try:
-                analyze_activity(activity)
-            except Exception:
-                logger.exception("Insight backfill failed for activity %s", activity.id)
-
-        # Daily summaries in past 7 days without insights
-        cutoff_date = (datetime.now(timezone.utc) - timedelta(days=7)).date()
-        summaries = (
-            db.query(DailySummary)
-            .filter(
-                DailySummary.user_id == user_id,
-                DailySummary.date >= cutoff_date,
-                DailySummary.ai_analyzed == False,
-            )
-            .order_by(DailySummary.date.asc())
-            .all()
-        )
-        logger.info("Backfilling insights for %d daily summaries", len(summaries))
-        for summary in summaries:
-            try:
-                analyze_daily_summary(summary)
-            except Exception:
-                logger.exception("Insight backfill failed for daily summary %s", summary.id)
-
-        logger.info("Insight backfill complete")
 
 
 def _activity_user_id(activity_id: int) -> int:

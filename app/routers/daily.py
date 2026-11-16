@@ -22,7 +22,6 @@ from app.models import (
     User,
 )
 from app.schemas import (
-    AIJobEnqueuedResponse,
     AIJobResponse,
     ActivitySummary,
     DailyCheckinRequest,

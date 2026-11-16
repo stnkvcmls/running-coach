@@ -724,15 +724,6 @@ export interface ChatMessage {
   actions?: ChatAction[] | null
 }
 
-export interface ChatHistoryResponse {
-  messages: ChatMessage[]
-}
-
-export interface ChatRequest {
-  message: string
-  activity_id?: number | null
-}
-
 export type CoachMemoryCategory = 'niggle' | 'constraint' | 'preference' | 'note'
 
 export interface CoachMemory {

@@ -446,14 +446,6 @@ def _ensure_series_current(
     db.commit()
 
 
-def _compute_full_series(
-    db: Session, end_date: date, user_id: int = DEFAULT_USER_ID
-) -> list[TrainingLoadPoint]:
-    """Return the full series up to ``end_date``, computing/extending as needed."""
-    _ensure_series_current(db, end_date, user_id)
-    return _load_series_points(db, user_id, end_date)
-
-
 def compute_load_series(
     db: Session, end_date: date | None = None, days: int = 90, user_id: int = DEFAULT_USER_ID
 ) -> list[TrainingLoadPoint]:

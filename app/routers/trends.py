@@ -22,7 +22,6 @@ from app.schemas import (
     PerformanceCurveComparisonResponse,
     PerformanceCurvePoint,
     PerformanceCurveResponse,
-    PersonalRecordResponse,
     PersonalRecordsResponse,
     RacePrediction,
     TrainingLoadResponse,

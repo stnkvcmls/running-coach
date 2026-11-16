@@ -363,12 +363,6 @@ def _estimate_critical_power(
     return _fit_critical_power_from_frontier(frontier)
 
 
-def _estimate_threshold_pace(curves: list[tuple[float, dict]]) -> tuple[FieldEstimate, float | None]:
-    """Estimate threshold pace (min/km) and CV (m/s) via critical velocity."""
-    frontier = _build_frontier(curves, "gap_speed")
-    return _fit_threshold_pace_from_frontier(frontier)
-
-
 def _garmin_lactate_threshold_hr(activities: list[Activity]) -> int | None:
     """Pull Garmin's own lactate-threshold HR from raw activity JSON, if present."""
     for a in sorted(activities, key=lambda x: x.started_at or datetime.min, reverse=True):

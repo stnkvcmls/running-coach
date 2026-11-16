@@ -17,7 +17,6 @@ import type {
   GarminConnectResult,
   GarminConnectionStatus,
   GarminCredentialsRequest,
-  InsightResponse,
   IntensityTrendsResponse,
   PacingStrategyResponse,
   PacingPushRequest,
@@ -157,15 +156,6 @@ export function useCalendarEvent(id: number) {
     queryKey: ['calendar-event', id],
     queryFn: () => apiGet<CalendarEvent>(`/calendar-events/${id}`),
     enabled: id > 0,
-  })
-}
-
-export function useInsights(category?: string) {
-  const params = new URLSearchParams({ limit: '50' })
-  if (category) params.set('category', category)
-  return useQuery({
-    queryKey: ['insights', category],
-    queryFn: () => apiGet<InsightResponse[]>(`/insights?${params}`),
   })
 }
 
