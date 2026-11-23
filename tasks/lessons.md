@@ -311,3 +311,17 @@ first denial instead of carrying on with edits.
 read/search/edit tools only, no shell, the reviewer runs tests and builds.
 Check the JSON for `denied_actions` and an empty `response` before assuming
 the work happened.
+
+## Removing an endpoint: grep perf/ too, and run it (2026-11-23)
+
+**Symptom:** PR #156's Performance check failed: `perf/test_perf_endpoints.py`
+still benchmarked `POST /activities/{id}/feedback`, which week 4 removed.
+
+**Cause:** The local gates were `tests/` + vitest + tsc + build. `perf/` is a
+separate pytest suite that only CI runs, and the leftover grep covered
+app/, frontend/src and tests/ but not perf/.
+
+**Fix / rule:** When an endpoint or schema changes, grep `perf/` as well and
+run `pytest perf/ --benchmark-disable` locally (needs `pytest-benchmark`). A
+red check that is already red on `main` is still worth reading: here it was
+T4 (a 90-day lookback against a fixed seed), fixed with a perf-only clock pin.
