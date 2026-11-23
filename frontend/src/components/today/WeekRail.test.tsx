@@ -12,7 +12,7 @@ function planDay(day_date: string, workout_type: string, km: number | null, matc
     id: Number(day_date.slice(-2)), plan_id: 1, day_date, day_of_week: '', week_number: 1, workout_type,
     target_distance_m: km != null ? km * 1000 : null, target_pace_min_km: null, target_pace_display: null,
     description: null, notes: null, week_theme: null, routine: null, fuelling_guidance: null,
-    matched_activity_id: matched, adherence_score: null,
+    matched_activity_id: matched, matched_distance_m: null, adherence_score: null,
   }
 }
 

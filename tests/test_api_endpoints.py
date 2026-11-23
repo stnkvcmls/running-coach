@@ -323,6 +323,46 @@ def test_health_detail_lists_recent_failed_jobs_for_current_user_only(client, db
     assert body["recent_failed_jobs"][0]["error_message"] == "boom"
 
 
+def test_health_detail_reports_garmin_push_and_stuck_jobs(client, db, monkeypatch):
+    from datetime import timezone
+    from app.config import settings
+    from app.models import PushSubscription, User
+
+    # Ensure the dev user exists and is connected to Garmin.
+    client.get("/api/v1/me")
+    user = db.query(User).first()
+    user.garmin_email = "runner@garmin.com"
+    user.garmin_needs_reauth = True
+    db.add(PushSubscription(
+        user_id=user.id, endpoint="https://push.example/1", p256dh="k", auth="a",
+    ))
+    now = datetime.now(timezone.utc)
+    # Stuck running job (> 15 min) vs fresh running job (< 15 min) vs other user's stuck job.
+    db.add(AIJob(
+        user_id=user.id, task_type="generate_plan", status="running",
+        started_at=now - timedelta(minutes=30),
+    ))
+    db.add(AIJob(
+        user_id=user.id, task_type="weekly_review", status="running",
+        started_at=now - timedelta(minutes=2),
+    ))
+    db.add(AIJob(
+        user_id=user.id + 1, task_type="generate_plan", status="running",
+        started_at=now - timedelta(minutes=30),
+    ))
+    db.commit()
+
+    monkeypatch.setattr(settings, "vapid_public_key", "pub")
+    monkeypatch.setattr(settings, "vapid_private_key", "priv")
+
+    body = client.get("/api/v1/health-detail").json()
+    assert body["garmin_connected"] is True
+    assert body["garmin_needs_reauth"] is True
+    assert body["push_configured"] is True
+    assert body["push_subscriptions"] == 1
+    assert body["stuck_jobs"] == 1
+
+
 # --- /ai-config ---
 
 def test_ai_config_defaults(client):
@@ -356,7 +396,7 @@ def test_ai_config_invalid_model(client):
     assert resp.status_code == 400
 
 
-# --- Actions: analyze / feedback / sync (threads mocked) ---
+# --- Actions: analyze / sync (threads mocked) ---
 
 @pytest.fixture
 def no_threads(monkeypatch):
@@ -392,58 +432,10 @@ def test_trigger_analysis_404(client, no_threads):
     assert client.post("/api/v1/activities/999/analyze").status_code == 404
 
 
-def test_submit_feedback(client, db, patch_db_session):
-    import app.ai_coach as ai_coach
-    patch_db_session(ai_coach)
+def test_submit_feedback_endpoint_not_found(client, db):
     act = _add_activity(db, datetime(2026, 6, 1, 7, 0))
-    db.add(Insight(trigger_type="activity", trigger_id=act.id, content="old", summary="old"))
-    db.commit()
-    resp = client.post(
-        f"/api/v1/activities/{act.id}/feedback",
-        json={"rating": "bad", "tags": ["tough_pace"], "text": "legs heavy"},
-    )
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["status"] == "queued"
-    assert isinstance(body["job_id"], int)
-    db.expire_all()
-    refreshed = db.get(Activity, act.id)
-    assert refreshed.feedback_rating == "bad"
-    assert json.loads(refreshed.feedback_tags) == ["tough_pace"]
-    assert refreshed.ai_analyzed is False
-    # Existing insight was cleared.
-    assert db.query(Insight).filter(Insight.trigger_id == act.id).count() == 0
-
-
-def test_submit_feedback_404(client, no_threads):
-    resp = client.post("/api/v1/activities/999/feedback", json={"rating": "good"})
-    assert resp.status_code == 404
-
-
-def test_feedback_rejects_invalid_rating(client, db, no_threads):
-    act = _add_activity(db, datetime(2026, 6, 1, 7, 0))
-    resp = client.post(f"/api/v1/activities/{act.id}/feedback", json={"rating": "meh"})
-    assert resp.status_code == 422
-
-
-def test_submit_feedback_stores_rpe(client, db, patch_db_session):
-    import app.ai_coach as ai_coach
-    patch_db_session(ai_coach)
-    act = _add_activity(db, datetime(2026, 6, 1, 7, 0))
-    resp = client.post(
-        f"/api/v1/activities/{act.id}/feedback",
-        json={"rating": "good", "rpe": 6},
-    )
-    assert resp.status_code == 200
-    db.expire_all()
-    refreshed = db.get(Activity, act.id)
-    assert refreshed.rpe == 6
-
-
-def test_feedback_rejects_rpe_out_of_range(client, db, no_threads):
-    act = _add_activity(db, datetime(2026, 6, 1, 7, 0))
-    resp = client.post(f"/api/v1/activities/{act.id}/feedback", json={"rating": "good", "rpe": 11})
-    assert resp.status_code == 422
+    resp = client.post(f"/api/v1/activities/{act.id}/feedback", json={"rating": "good"})
+    assert resp.status_code in (404, 405)
 
 
 @pytest.mark.parametrize("sync_type", ["activities", "daily", "calendar"])
@@ -1212,6 +1204,7 @@ def test_plan_day_matched_activity_and_adherence_score(client, db):
 
     body = _get_day(client, day.id)
     assert body["matched_activity_id"] == activity.id
+    assert body["matched_distance_m"] == 8000
     assert body["adherence_score"] == 100.0
 
 
@@ -1221,6 +1214,7 @@ def test_plan_day_missed_when_no_matching_activity(client, db):
 
     body = _get_day(client, day.id)
     assert body["matched_activity_id"] is None
+    assert body["matched_distance_m"] is None
     assert body["adherence_score"] is None
 
 
@@ -1264,6 +1258,7 @@ def test_same_day_run_completes_todays_plan_day(client, db):
 
     plan_day = _get_day(client, day.id)
     assert plan_day["matched_activity_id"] == run.id
+    assert plan_day["matched_distance_m"] == 9200
     assert plan_day["adherence_score"] is not None
 
     today_body = client.get("/api/v1/today").json()
@@ -1455,22 +1450,52 @@ def test_api_post_chat_plain_text_has_no_actions(client, db, patch_db_session, m
     assert assistant_entry["actions"] is None
 
 
-# --- /races/{id}/pacing terrain strategy ---
+def test_api_get_chat_returns_newest_messages_oldest_first(client, db):
+    base = datetime(2026, 6, 1, 10, 0)
+    for i in range(25):
+        db.add(ChatMessage(
+            user_id=1,
+            role="user" if i % 2 == 0 else "assistant",
+            content=f"msg-{i}",
+            created_at=base + timedelta(minutes=i),
+        ))
+    db.commit()
 
-def _elevation_details(samples: list[tuple[float, float]]) -> str:
-    """Build a minimal Garmin details payload (distance, elevation) as laps_json."""
-    descriptors = [
-        {"metricsIndex": 0, "key": "sumDistance"},
-        {"metricsIndex": 1, "key": "directElevation"},
-    ]
-    rows = [{"metrics": [dist, elev]} for dist, elev in samples]
-    return json.dumps({"metricDescriptors": descriptors, "activityDetailMetrics": rows})
+    resp = client.get("/api/v1/chat?limit=10")
+    assert resp.status_code == 200
+    contents = [m["content"] for m in resp.json()["messages"]]
+    assert contents == [f"msg-{i}" for i in range(15, 25)]
 
 
-def _hilly_10k_samples() -> list[tuple[float, float]]:
-    # Climb for the first half, descend back down for the second half.
-    return [(float(i * 500), (i * 50.0 if i <= 10 else (20 - i) * 50.0)) for i in range(21)]
+def test_api_post_chat_passes_newest_20_history_oldest_first(client, db, patch_db_session, monkeypatch):
+    import app.ai_coach as ai_mod
+    import app.database as database_mod
+    patch_db_session(database_mod)
 
+    base = datetime(2026, 6, 1, 10, 0)
+    for i in range(25):
+        db.add(ChatMessage(
+            user_id=1,
+            role="user" if i % 2 == 0 else "assistant",
+            content=f"msg-{i}",
+            created_at=base + timedelta(minutes=i),
+        ))
+    db.commit()
+
+    captured = {}
+
+    def fake_chat_stream(db_, new_message, history, user_id, activity_id):
+        captured["history"] = history
+        yield {"type": "token", "text": "Reply"}
+
+    monkeypatch.setattr(ai_mod, "chat_stream", fake_chat_stream)
+
+    resp = client.post("/api/v1/chat", json={"message": "latest turn"})
+    assert resp.status_code == 200
+    assert [m["content"] for m in captured["history"]] == [f"msg-{i}" for i in range(5, 25)]
+
+
+# --- /races/{id}/pacing ---
 
 def _add_race(db, **kw):
     defaults = dict(
@@ -1486,50 +1511,30 @@ def _add_race(db, **kw):
     return race
 
 
-def test_race_pacing_terrain_uses_matched_activity(client, db):
-    race = _add_race(db)
-    act = _add_activity(
-        db, datetime(2026, 5, 1, 7, 0),
-        distance_m=10000, name="Hilly 10K",
-        laps_json=_elevation_details(_hilly_10k_samples()),
-    )
-
-    resp = client.get(f"/api/v1/races/{race.id}/pacing?strategy=terrain")
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["strategy"] == "terrain"
-    assert body["course_activity_id"] == act.id
-    assert body["course_activity_name"] == "Hilly 10K"
-    # Early (uphill) splits should be slower than late (downhill) splits.
-    assert body["splits"][0]["target_pace_min_km"] > body["splits"][-1]["target_pace_min_km"]
-    assert body["splits"][0]["grade_pct"] is not None
-
-
-def test_race_pacing_terrain_no_matching_activity_422(client, db):
+def test_race_pacing_rejects_unsupported_strategy(client, db):
     race = _add_race(db)
     resp = client.get(f"/api/v1/races/{race.id}/pacing?strategy=terrain")
     assert resp.status_code == 422
-    assert "terrain profile" in resp.json()["detail"].lower()
 
 
-def test_race_pacing_terrain_ignores_activity_without_elevation_stream(client, db):
+def test_race_pacing_push_rejects_unsupported_strategy(client, db):
     race = _add_race(db)
-    _add_activity(db, datetime(2026, 5, 1, 7, 0), distance_m=10000, laps_json=None)
-    resp = client.get(f"/api/v1/races/{race.id}/pacing?strategy=terrain")
+    resp = client.post(
+        f"/api/v1/races/{race.id}/pacing/push",
+        json={"strategy": "terrain", "split_unit": "km"},
+    )
     assert resp.status_code == 422
 
 
-def test_race_pacing_even_strategy_has_no_course_activity(client, db):
+def test_race_pacing_even_and_negative_split_response_shape(client, db):
     race = _add_race(db)
-    _add_activity(
-        db, datetime(2026, 5, 1, 7, 0), distance_m=10000,
-        laps_json=_elevation_details(_hilly_10k_samples()),
-    )
     resp = client.get(f"/api/v1/races/{race.id}/pacing?strategy=even")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["course_activity_id"] is None
-    assert all(s["grade_pct"] is None for s in body["splits"])
+    assert body["strategy"] == "even"
+    assert len(body["splits"]) == 10
+    assert "course_activity_id" not in body
+    assert "grade_pct" not in body["splits"][0]
 
 
 # --- /races/{id}/pacing conditions-aware pacing (P1-2) ---
@@ -1655,11 +1660,107 @@ def test_notification_preferences_default_and_update(client):
     body = resp.json()
     assert body["categories"]["insight"] is True
     assert "insight" in body["labels"]
+    assert body["push_configured"] is False
+    assert body["push_subscriptions"] == 0
 
     resp = client.put("/api/v1/notification-preferences", json={"categories": {"insight": False}})
     assert resp.status_code == 200
     assert resp.json()["categories"]["insight"] is False
+    assert resp.json()["push_configured"] is False
+    assert resp.json()["push_subscriptions"] == 0
 
     resp = client.get("/api/v1/notification-preferences")
     assert resp.json()["categories"]["insight"] is False
     assert resp.json()["categories"]["weekly_review"] is True
+
+
+def test_notification_preferences_reports_push_status(client, db, monkeypatch):
+    from app.config import settings
+    from app.models import PushSubscription, User
+
+    client.get("/api/v1/me")
+    user = db.query(User).first()
+    db.add(PushSubscription(
+        user_id=user.id, endpoint="https://push.example/dev-1", p256dh="k", auth="a",
+    ))
+    db.commit()
+    monkeypatch.setattr(settings, "vapid_public_key", "pub")
+    monkeypatch.setattr(settings, "vapid_private_key", "priv")
+
+    body = client.get("/api/v1/notification-preferences").json()
+    assert body["push_configured"] is True
+    assert body["push_subscriptions"] == 1
+
+
+# --- PATCH /activities/{id}/rpe (U2) ---
+
+def test_patch_rpe_sets_rpe_without_wiping_analysis_or_queuing_job(client, db):
+    from app.models import AIJob
+
+    old_synced = datetime(2026, 1, 1, 0, 0, 0)
+    act = Activity(
+        garmin_id=880001,
+        activity_type="running",
+        name="Easy Run",
+        started_at=datetime(2026, 6, 10, 7, 0),
+        duration_sec=2400.0,
+        distance_m=8000.0,
+        ai_analyzed=True,
+        synced_at=old_synced,
+    )
+    db.add(act)
+    db.commit()
+    db.refresh(act)
+
+    db.add(Insight(
+        trigger_type="activity",
+        trigger_id=act.id,
+        content="Solid aerobic run.",
+        summary="Solid run",
+    ))
+    db.commit()
+
+    resp = client.patch(f"/api/v1/activities/{act.id}/rpe", json={"rpe": 7})
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "ok", "rpe": 7}
+
+    db.expire_all()
+    updated = db.query(Activity).filter(Activity.id == act.id).first()
+    assert updated.rpe == 7
+    assert updated.feedback_rating is None
+    assert updated.ai_analyzed is True
+    assert updated.synced_at.replace(tzinfo=None) > old_synced
+
+    # Existing insight is preserved and no background AI job is queued.
+    assert (
+        db.query(Insight)
+        .filter(Insight.trigger_type == "activity", Insight.trigger_id == act.id)
+        .count()
+        == 1
+    )
+    assert db.query(AIJob).count() == 0
+
+
+def test_patch_rpe_validates_bounds(client, db):
+    act = _add_activity(db, datetime(2026, 6, 10, 7, 0))
+    assert client.patch(f"/api/v1/activities/{act.id}/rpe", json={"rpe": 0}).status_code == 422
+    assert client.patch(f"/api/v1/activities/{act.id}/rpe", json={"rpe": 11}).status_code == 422
+
+
+def test_patch_rpe_404_for_missing_or_other_users_activity(client, db):
+    assert client.patch("/api/v1/activities/999999/rpe", json={"rpe": 5}).status_code == 404
+
+    other_act = Activity(
+        user_id=999,
+        garmin_id=880002,
+        activity_type="running",
+        name="Other Run",
+        started_at=datetime(2026, 6, 10, 7, 0),
+    )
+    db.add(other_act)
+    db.commit()
+    db.refresh(other_act)
+
+    assert client.patch(f"/api/v1/activities/{other_act.id}/rpe", json={"rpe": 5}).status_code == 404
+    db.refresh(other_act)
+    assert other_act.rpe is None

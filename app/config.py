@@ -24,11 +24,16 @@ class Settings(BaseSettings):
     db_path: str = "/data/running_coach.db"
     garmin_token_dir: str = "/data/garmin_tokens"
     activity_poll_minutes: int = 5
+    # Calendar sync fetches 6 months + workout/race detail payloads; run on its
+    # own slower schedule rather than every activity poll to avoid Garmin 429s.
+    calendar_sync_hours: int = 6
     daily_sync_hour: int = 7
     # Each daily run syncs today plus the prior (window-1) days, so last night's
     # overnight stats land on the wake-up day while earlier days' full-day totals
     # finalize the morning after.
     daily_sync_window_days: int = 3
+    # Automatically enqueue AI analysis for newly synced recent runs (within 48h).
+    auto_analyze_activities: bool = True
     ai_model: str = "claude-sonnet-4-6"
     # Overridable via AVAILABLE_MODELS env var as a JSON object, e.g.:
     # AVAILABLE_MODELS='{"claude": ["claude-opus-4-8"], "gemini": ["gemini-2.5-flash"]}'

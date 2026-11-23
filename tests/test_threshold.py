@@ -89,17 +89,13 @@ def test_fit_two_param_needs_two_points_in_range():
     assert threshold._fit_two_param(frontier) is None
 
 
-def test_three_param_selected_on_bending_curve():
-    # Build a curve that genuinely follows the 3-param model.
-    cp, w, pmax = 250.0, 15000.0, 600.0
-    durations = [60, 120, 300, 600, 1200, 2400]
-    curve = {str(t): round(threshold._model_3p(t, cp, w, pmax), 2) for t in durations}
-    curves = [(1.0, {"power": curve})]
-    est, w_out, pmax_out = threshold._estimate_critical_power(curves)
+def test_estimate_critical_power_uses_two_param_model():
+    curves = [(1.0, {"power": _power_curve(250, 15000)})]
+    est, w_out = threshold._estimate_critical_power(curves)
     assert est.value is not None
-    # 3-param should win and report a Pmax in range.
-    assert est.method == "critical_power_3p"
-    assert pmax_out is not None and pmax_out > est.value
+    assert est.method == "critical_power_2p"
+    assert abs(est.value - 250) < 2
+    assert w_out is not None and abs(w_out - 15000) < 200
 
 
 # --- estimation pipeline ---
@@ -275,8 +271,8 @@ def test_apply_estimate_skips_none(db):
 
 def test_format_context_shows_missing_fields():
     est = threshold.ThresholdEstimate(
-        critical_power=threshold.FieldEstimate(250.0, "critical_power_3p", "high", 4),
-        w_prime=15000.0, pmax=600.0,
+        critical_power=threshold.FieldEstimate(250.0, "critical_power_2p", "high", 4),
+        w_prime=15000.0,
         threshold_pace_min_km=threshold.FieldEstimate(4.5, "critical_velocity", "medium", 3),
         threshold_hr=threshold.FieldEstimate(170.0, "near_threshold_segment", "high", 3),
         max_hr=threshold.FieldEstimate(189.0, "observed_max", "high", 6),
@@ -284,7 +280,7 @@ def test_format_context_shows_missing_fields():
     )
     ctx = threshold.format_threshold_estimate_context(est, None)
     assert "Critical Power" in ctx
-    assert "Pmax 600 W" in ctx
+    assert "W' 15000 J" in ctx
     assert "4:30/km" in ctx
     assert "170 bpm" in ctx
 
@@ -292,7 +288,7 @@ def test_format_context_shows_missing_fields():
 def test_format_context_hides_set_fields():
     est = threshold.ThresholdEstimate(
         critical_power=threshold.FieldEstimate(250.0, "critical_power_2p", "high", 4),
-        w_prime=None, pmax=None,
+        w_prime=None,
         threshold_pace_min_km=threshold.FieldEstimate(4.5, "critical_velocity", "high", 4),
         threshold_hr=threshold.FieldEstimate(170.0, "sustained_effort", "high", 3),
         max_hr=threshold.FieldEstimate(189.0, "observed_max", "high", 6),

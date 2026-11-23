@@ -598,3 +598,207 @@ def test_api_generate_briefing_404_for_other_users_day(client, db):
     plan_day = _make_plan_day(db, user_id=2)
     resp = client.post(f"/api/v1/training-plan/days/{plan_day.id}/briefing")
     assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# A3: transient vs fatal errors, error insight on final failure, real-handler
+# propagation, and stuck-job reaper
+# ---------------------------------------------------------------------------
+
+def test_transient_error_retries_then_fails_and_notifies(db, patch_db_session, monkeypatch):
+    import app.ai_coach as ai_mod
+    from app import notifications as notifications_mod
+    from app.coach.providers import AITransientError
+
+    patch_db_session(ai_mod)
+    notify = MagicMock()
+    monkeypatch.setattr(notifications_mod, "notify", notify)
+
+    job_id = enqueue_job("generate_plan", {}, user_id=1)
+
+    with patch.object(ai_mod, "generate_training_plan", side_effect=AITransientError("429")):
+        execute_job(job_id)
+
+    db.expire_all()
+    job = db.query(AIJob).filter(AIJob.id == job_id).first()
+    assert job.status == "pending"
+    assert job.attempts == 1
+    notify.assert_not_called()
+
+    for _ in range(2):
+        with patch.object(ai_mod, "generate_training_plan", side_effect=AITransientError("429")):
+            execute_job(job_id)
+        db.expire_all()
+
+    job = db.query(AIJob).filter(AIJob.id == job_id).first()
+    assert job.status == "failed"
+    assert job.attempts == 3
+    notify.assert_called_once()
+    assert notify.call_args.args[1] == 1
+    assert notify.call_args.args[2] == "system_health"
+
+
+def test_fatal_error_fails_immediately_on_first_attempt(db, patch_db_session, monkeypatch):
+    import app.ai_coach as ai_mod
+    from app import notifications as notifications_mod
+    from app.coach.providers import AIFatalError
+
+    patch_db_session(ai_mod)
+    notify = MagicMock()
+    monkeypatch.setattr(notifications_mod, "notify", notify)
+
+    job_id = enqueue_job("generate_plan", {}, user_id=1)
+
+    with patch.object(ai_mod, "generate_training_plan", side_effect=AIFatalError("bad api key")):
+        execute_job(job_id)
+
+    db.expire_all()
+    job = db.query(AIJob).filter(AIJob.id == job_id).first()
+    assert job.status == "failed"
+    assert job.attempts == 1
+    assert "bad api key" in job.error_message
+    notify.assert_called_once()
+    assert notify.call_args.args[2] == "system_health"
+
+
+def test_failed_analyze_activity_job_saves_error_insight(db, patch_db_session):
+    import app.ai_coach as ai_mod
+    from app.coach.providers import AIFatalError
+    from app.models import Insight
+
+    patch_db_session(ai_mod)
+    act = _make_activity(db, user_id=1)
+    job_id = enqueue_job("analyze_activity", {"activity_id": act.id}, user_id=1)
+
+    with patch.object(ai_mod, "analyze_activity_force", side_effect=AIFatalError("invalid key")):
+        execute_job(job_id)
+
+    db.expire_all()
+    job = db.query(AIJob).filter(AIJob.id == job_id).first()
+    assert job.status == "failed"
+    insight = (
+        db.query(Insight)
+        .filter(Insight.trigger_type == "activity", Insight.trigger_id == act.id)
+        .first()
+    )
+    assert insight is not None
+    assert "Re-analyze" in insight.summary
+
+
+def test_real_analyze_activity_force_propagates_transient_error(db, patch_db_session, monkeypatch):
+    """Real handler propagation: provider raises AITransientError -> job is NOT marked 'done'."""
+    import app.ai_coach as ai_mod
+    from app.coach.providers import AITransientError
+    from app.models import Insight
+
+    patch_db_session(ai_mod)
+    act = _make_activity(db, user_id=1)
+    job_id = enqueue_job("analyze_activity", {"activity_id": act.id}, user_id=1)
+
+    monkeypatch.setattr(
+        ai_mod, "_call_ai", MagicMock(side_effect=AITransientError("upstream 503"))
+    )
+
+    claimed = ai_mod._claim_pending_jobs(limit=5)
+    assert [c["job_id"] for c in claimed] == [job_id]
+    ai_mod._run_claimed_job(claimed[0])
+
+    db.expire_all()
+    job = db.query(AIJob).filter(AIJob.id == job_id).first()
+    assert job.status == "pending"
+    assert job.status != "done"
+    assert job.attempts == 1
+    assert "upstream 503" in job.error_message
+    # Error insight is not written until retries are exhausted.
+    assert (
+        db.query(Insight)
+        .filter(Insight.trigger_type == "activity", Insight.trigger_id == act.id)
+        .first()
+        is None
+    )
+
+    # Exhaust remaining attempts with the real handler -> ends failed + error insight saved.
+    for _ in range(2):
+        claimed = ai_mod._claim_pending_jobs(limit=5)
+        assert len(claimed) == 1
+        ai_mod._run_claimed_job(claimed[0])
+        db.expire_all()
+
+    job = db.query(AIJob).filter(AIJob.id == job_id).first()
+    assert job.status == "failed"
+    assert job.attempts == 3
+    insight = (
+        db.query(Insight)
+        .filter(Insight.trigger_type == "activity", Insight.trigger_id == act.id)
+        .first()
+    )
+    assert insight is not None
+    assert "Re-analyze" in insight.summary
+
+
+def test_reap_stuck_jobs(db, patch_db_session):
+    from datetime import timedelta
+    import app.ai_coach as ai_mod
+
+    patch_db_session(ai_mod)
+    now = datetime.now(timezone.utc)
+
+    stale_retryable = AIJob(
+        user_id=1,
+        task_type="generate_plan",
+        status="running",
+        attempts=1,
+        max_attempts=3,
+        started_at=now - timedelta(hours=1),
+    )
+    stale_exhausted = AIJob(
+        user_id=1,
+        task_type="weekly_review",
+        status="running",
+        attempts=3,
+        max_attempts=3,
+        started_at=now - timedelta(hours=1),
+    )
+    null_started = AIJob(
+        user_id=1,
+        task_type="analyze_activity",
+        status="running",
+        attempts=1,
+        max_attempts=3,
+        started_at=None,
+    )
+    fresh_running = AIJob(
+        user_id=1,
+        task_type="generate_plan",
+        status="running",
+        attempts=1,
+        max_attempts=3,
+        started_at=now - timedelta(minutes=1),
+    )
+    db.add_all([stale_retryable, stale_exhausted, null_started, fresh_running])
+    db.commit()
+    ids = [stale_retryable.id, stale_exhausted.id, null_started.id, fresh_running.id]
+
+    changed = ai_mod.reap_stuck_jobs(older_than_minutes=15)
+    assert changed == 3
+
+    db.expire_all()
+    r1 = db.query(AIJob).filter(AIJob.id == ids[0]).first()
+    r2 = db.query(AIJob).filter(AIJob.id == ids[1]).first()
+    r3 = db.query(AIJob).filter(AIJob.id == ids[2]).first()
+    r4 = db.query(AIJob).filter(AIJob.id == ids[3]).first()
+
+    assert r1.status == "pending"
+    assert r1.error_message == "Interrupted (worker restart or timeout)"
+    assert r1.completed_at is not None
+
+    assert r2.status == "failed"
+    assert r2.error_message == "Interrupted (worker restart or timeout)"
+    assert r2.completed_at is not None
+
+    assert r3.status == "pending"
+    assert r3.error_message == "Interrupted (worker restart or timeout)"
+
+    assert r4.status == "running"
+    assert r4.error_message is None
+    assert r4.completed_at is None

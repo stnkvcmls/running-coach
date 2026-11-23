@@ -75,6 +75,10 @@ network access, `conftest.py` stubs the external boundary only:
 - `app.ai_coach.generate_training_plan` → returns the seeded plan instantly
 - `app.garmin_sync.sync_calendar` → no-op
 
+The two threshold-estimate benchmarks also use the `seed_clock` fixture, which
+pins `app.threshold`'s `utcnow()` to the last seeded day: its 90-day lookback
+would otherwise be empty once the committed `perf.db` is more than 90 days old.
+
 Everything else (routing, DB access, serialization) runs for real. `/sync/{type}`
 is benchmarked with `calendar`, which keeps `app.main` (and its `frontend/dist`
 static mount) out of the import path.

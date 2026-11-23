@@ -141,14 +141,6 @@
   font-weight: 500;
 }
 
-/* Terrain course note */
-.race-pacing-course-note {
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  text-align: center;
-  padding: 0 4px;
-}
-
 /* Split table */
 .race-pacing-table-wrap {
   overflow-x: auto;
@@ -201,11 +193,6 @@
 }
 
 .race-pacing-cumul {
-  color: var(--text-muted) !important;
-  font-variant-numeric: tabular-nums;
-}
-
-.race-pacing-grade {
   color: var(--text-muted) !important;
   font-variant-numeric: tabular-nums;
 }

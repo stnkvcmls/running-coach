@@ -1,4 +1,4 @@
-"""The AIJob durable queue and its job handlers (activity/daily insights).
+"""The AIJob durable queue and its job handlers (activity insights).
 
 ``db_session()`` opens, the ``_call_ai`` provider dispatch, and execute_job's
 dispatch to analyze_activity_force/analyze_activity_with_feedback/
@@ -16,7 +16,6 @@ from datetime import datetime, timezone, timedelta
 from app.models import (
     DEFAULT_USER_ID,
     Activity,
-    DailySummary,
     GarminCalendarEvent,
     Insight,
 )
@@ -25,7 +24,6 @@ from app import notifications as notifications_mod
 from app.coach.context import (
     _build_context,
     _format_activity_context,
-    _format_daily_context,
     _load_zones,
     _load_zone_configs,
 )
@@ -66,6 +64,11 @@ def enqueue_job(task_type: str, payload: dict, user_id: int) -> int:
 # just stops waiting on it so a single slow call never delays every other
 # user's jobs or the next scheduler tick.
 _JOB_TIMEOUT_SECONDS = 120
+
+# A job "running" longer than this is presumed dead (process restart, hung
+# provider call). Generous on purpose: a plan generation can legitimately run
+# several minutes x provider retries, and reaping a live job re-runs it.
+STUCK_JOB_MINUTES = 30
 
 
 def _claim_job(job_id: int) -> dict | None:
@@ -158,6 +161,8 @@ def _finish_claimed_job(claimed: dict, exc: Exception | None) -> None:
     from app import ai_coach as _shim
     from app.models import AIJob
 
+    ended_failed = False
+    job_user_id = claimed["user_id"]
     with _shim.db_session() as db:
         job = db.query(AIJob).filter(AIJob.id == claimed["job_id"]).first()
         if not job:
@@ -167,8 +172,13 @@ def _finish_claimed_job(claimed: dict, exc: Exception | None) -> None:
             job.status = "done"
         else:
             job.error_message = str(exc)[:1000]
-            job.status = "failed" if claimed["attempts"] >= claimed["max_attempts"] else "pending"
+            if isinstance(exc, AIFatalError) or claimed["attempts"] >= claimed["max_attempts"]:
+                job.status = "failed"
+            else:
+                job.status = "pending"
             if job.status == "failed":
+                ended_failed = True
+                job_user_id = job.user_id
                 notifications_mod.notify(
                     db, job.user_id, "system_health",
                     title="A background job failed",
@@ -176,6 +186,57 @@ def _finish_claimed_job(claimed: dict, exc: Exception | None) -> None:
                     url="/settings",
                 )
         db.commit()
+
+    if (
+        ended_failed
+        and exc is not None
+        and claimed["task_type"] in ("analyze_activity", "analyze_feedback")
+    ):
+        activity_id = claimed.get("payload", {}).get("activity_id")
+        if activity_id is not None:
+            _shim._save_error_insight(activity_id, exc, job_user_id)
+
+
+def _as_utc_naive(dt: datetime) -> datetime:
+    if dt.tzinfo is not None:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
+def reap_stuck_jobs(older_than_minutes: int = STUCK_JOB_MINUTES) -> int:
+    """Recover AIJobs left in 'running' past ``older_than_minutes`` (or with NULL started_at).
+
+    Moves retry-eligible jobs back to 'pending' and marks exhausted ones 'failed'.
+    Returns the number of jobs updated.
+    """
+    from app import ai_coach as _shim
+    from app.models import AIJob
+
+    now = datetime.now(timezone.utc)
+    cutoff_naive = now.replace(tzinfo=None) - timedelta(minutes=older_than_minutes)
+    reaped = 0
+    with _shim.db_session() as db:
+        running = db.query(AIJob).filter(AIJob.status == "running").all()
+        for job in running:
+            if job.started_at is not None and _as_utc_naive(job.started_at) >= cutoff_naive:
+                continue
+            job.error_message = "Interrupted (worker restart or timeout)"
+            job.completed_at = now
+            if job.attempts < job.max_attempts:
+                job.status = "pending"
+            else:
+                job.status = "failed"
+                notifications_mod.notify(
+                    db, job.user_id, "system_health",
+                    title="A background job failed",
+                    body=f"{job.task_type} failed after {job.attempts} attempts: {job.error_message}",
+                    url="/settings",
+                )
+            reaped += 1
+        if reaped:
+            db.commit()
+            logger.warning("Reaped %d stuck running AI job(s)", reaped)
+    return reaped
 
 
 def _run_claimed_job(claimed: dict) -> None:
@@ -276,40 +337,6 @@ def analyze_activity(activity: Activity):
             logger.exception("AI analysis failed for activity %s", activity.id)
 
 
-def analyze_daily_summary(daily: DailySummary):
-    """Generate AI insight for a daily summary."""
-    from app import ai_coach as _shim
-
-    user_id = daily.user_id or DEFAULT_USER_ID
-    with _shim.db_session() as db:
-        try:
-            daily_context = _format_daily_context(daily)
-            full_context = _build_context(
-                db, "daily_summary", daily_context, reference_date=daily.date, user_id=user_id
-            )
-            content, summary, category = _shim._call_ai(db, full_context, "daily_summary", user_id)
-
-            insight = Insight(
-                user_id=user_id,
-                created_at=datetime.now(timezone.utc),
-                trigger_type="daily_summary",
-                trigger_id=daily.id,
-                content=content,
-                summary=summary,
-                category=category,
-            )
-            db.add(insight)
-
-            db_daily = db.query(DailySummary).get(daily.id)
-            if db_daily:
-                db_daily.ai_analyzed = True
-
-            db.commit()
-            logger.info("AI analysis complete for daily summary %s: %s", daily.date, summary[:80])
-        except Exception:
-            logger.exception("AI analysis failed for daily summary %s", daily.id)
-
-
 def analyze_activity_force(activity_id: int):
     """Generate AI insight for an activity, replacing any existing insight."""
     from app import ai_coach as _shim
@@ -356,9 +383,9 @@ def analyze_activity_force(activity_id: int):
             activity.ai_analyzed = True
             db.commit()
             logger.info("AI re-analysis complete for activity %s: %s", activity.id, summary[:80])
-        except Exception as exc:
+        except Exception:
             logger.exception("AI re-analysis failed for activity %s", activity_id)
-            _shim._save_error_insight(activity_id, exc, _shim._activity_user_id(activity_id))
+            raise
 
 
 def analyze_activity_with_feedback(activity_id: int):
@@ -426,13 +453,13 @@ def analyze_activity_with_feedback(activity_id: int):
             activity.ai_analyzed = True
             db.commit()
             logger.info("AI feedback analysis complete for activity %s: %s", activity.id, summary[:80])
-        except Exception as exc:
+        except Exception:
             logger.exception("AI feedback analysis failed for activity %s", activity_id)
-            _shim._save_error_insight(activity_id, exc, _shim._activity_user_id(activity_id))
+            raise
 
 
 def backfill_missing_insights(user_id: int = DEFAULT_USER_ID):
-    """Analyze past 7 days of activities and daily summaries that lack insights."""
+    """Analyze past 7 days of activities that lack insights."""
     from app import ai_coach as _shim
 
     with _shim.db_session() as db:
@@ -455,25 +482,6 @@ def backfill_missing_insights(user_id: int = DEFAULT_USER_ID):
                 analyze_activity(activity)
             except Exception:
                 logger.exception("Insight backfill failed for activity %s", activity.id)
-
-        # Daily summaries in past 7 days without insights
-        cutoff_date = (datetime.now(timezone.utc) - timedelta(days=7)).date()
-        summaries = (
-            db.query(DailySummary)
-            .filter(
-                DailySummary.user_id == user_id,
-                DailySummary.date >= cutoff_date,
-                DailySummary.ai_analyzed == False,
-            )
-            .order_by(DailySummary.date.asc())
-            .all()
-        )
-        logger.info("Backfilling insights for %d daily summaries", len(summaries))
-        for summary in summaries:
-            try:
-                analyze_daily_summary(summary)
-            except Exception:
-                logger.exception("Insight backfill failed for daily summary %s", summary.id)
 
         logger.info("Insight backfill complete")
 

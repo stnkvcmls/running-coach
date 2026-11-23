@@ -318,9 +318,9 @@ def test_extract_summary_from_marker():
 
 def test_extract_summary_fallback_first_line():
     content = "Just the first line here\nSecond line"
-    summary, category = ai_coach._extract_summary_and_category(content, "daily_summary")
+    summary, category = ai_coach._extract_summary_and_category(content, "weekly_review")
     assert summary == "Just the first line here"
-    assert category == "recovery"
+    assert category == "training_plan"
 
 
 def test_extract_category_default_for_unknown_trigger():
@@ -402,9 +402,9 @@ def test_call_gemini_uses_genai(monkeypatch):
     fake_client.models.generate_content.return_value = fake_response
     monkeypatch.setattr(ai_coach.genai, "Client", lambda **kw: fake_client)
 
-    content, summary, category = ai_coach._call_gemini("ctx", "daily_summary", "gemini-x")
+    content, summary, category = ai_coach._call_gemini("ctx", "weekly_review", "gemini-x")
     assert summary == "good"
-    assert category == "recovery"
+    assert category == "training_plan"
 
 
 def test_gemini_client_has_request_timeout(monkeypatch):
@@ -538,19 +538,46 @@ def test_analyze_activity_with_feedback_appends_feedback(db, patch_db_session, m
     assert db.query(Insight).filter(Insight.trigger_id == act.id).count() == 1
 
 
-def test_analyze_daily_summary_creates_insight(db, patch_db_session, stub_ai):
+def test_generate_briefing_includes_daily_summary_and_readiness(db, patch_db_session, monkeypatch):
+    from app.models import TrainingPlan, TrainingPlanDay
+
     patch_db_session(ai_coach)
-    summary = DailySummary(date=date(2026, 6, 10), steps=10000)
-    db.add(summary)
+    day_date = date(2026, 6, 17)
+    plan = TrainingPlan(user_id=1, week_start=day_date, plan_weeks=4, phase="build")
+    db.add(plan)
+    db.flush()
+    plan_day = TrainingPlanDay(
+        user_id=1, plan_id=plan.id, day_date=day_date, day_of_week="Wednesday",
+        week_number=1, workout_type="tempo", target_distance_m=10000, target_pace_display="4:30/km",
+    )
+    db.add(plan_day)
+    db.add(DailySummary(
+        user_id=1, date=day_date, sleep_seconds=7 * 3600 + 15 * 60, sleep_score=78,
+        resting_hr=49, body_battery_low=25, body_battery_high=88,
+        hrv_avg=62, hrv_weekly_avg=60, hrv_status="BALANCED",
+    ))
     db.commit()
-    db.refresh(summary)
+    db.refresh(plan_day)
 
-    ai_coach.analyze_daily_summary(summary)
+    captured = {}
 
-    insight = db.query(Insight).filter(Insight.trigger_type == "daily_summary").first()
-    assert insight is not None
-    db.expire_all()
-    assert db.get(DailySummary, summary.id).ai_analyzed is True
+    def fake_call_ai(db_, ctx, trigger, user_id=1, system_prompt=None):
+        captured["ctx"] = ctx
+        captured["trigger"] = trigger
+        return ("**Summary:** Ready to roll\nRun your tempo.", "Ready to roll", "briefing")
+
+    monkeypatch.setattr(ai_coach, "_call_ai", fake_call_ai)
+    ai_coach.generate_briefing(plan_day.id)
+
+    ctx = captured["ctx"]
+    assert captured["trigger"] == "briefing"
+    assert "## Training Readiness" in ctx
+    assert "- Verdict:" in ctx
+    assert f"**Daily Summary for {day_date}**" in ctx
+    assert "Sleep: 7h 15m" in ctx
+    assert "Resting HR: 49 bpm" in ctx
+    assert "Body Battery: 25-88" in ctx
+    assert "HRV (overnight): 62 ms (Balanced)" in ctx
 
 
 def test_save_error_insight(db, patch_db_session):
@@ -569,6 +596,7 @@ def test_save_error_insight(db, patch_db_session):
 
 
 def test_analyze_activity_force_saves_error_on_failure(db, patch_db_session, monkeypatch):
+    """Handler propagates failures so the job queue can retry and persist the error insight on final failure."""
     patch_db_session(ai_coach)
 
     def boom(*a, **k):
@@ -581,11 +609,10 @@ def test_analyze_activity_force_saves_error_on_failure(db, patch_db_session, mon
     db.commit()
     db.refresh(act)
 
-    ai_coach.analyze_activity_force(act.id)
+    with pytest.raises(RuntimeError, match="ai down"):
+        ai_coach.analyze_activity_force(act.id)
 
-    insight = db.query(Insight).filter(Insight.trigger_id == act.id).first()
-    assert insight is not None
-    assert "Analysis failed" in insight.content
+    assert db.query(Insight).filter(Insight.trigger_id == act.id).first() is None
 
 
 def test_build_context_full_sections(db):
@@ -809,14 +836,15 @@ def test_generate_briefing_includes_fuelling_for_long_run(db, patch_db_session, 
 
 
 def test_generate_briefing_ai_error_leaves_no_insight(db, patch_db_session, monkeypatch):
-    """An AI failure is swallowed (logged) rather than raised, matching weekly_review."""
+    """An AI failure propagates so the job queue can retry, without saving a briefing insight."""
     patch_db_session(ai_coach)
     plan_day = _seed_plan_day(db)
     monkeypatch.setattr(
         ai_coach, "_call_ai", MagicMock(side_effect=RuntimeError("boom")),
     )
 
-    ai_coach.generate_briefing(plan_day.id)  # should not raise
+    with pytest.raises(RuntimeError, match="boom"):
+        ai_coach.generate_briefing(plan_day.id)
 
     assert db.query(Insight).filter(Insight.trigger_type == "briefing").count() == 0
 
@@ -1400,8 +1428,8 @@ def test_generate_training_plan_claude_text_fallback(db, patch_db_session, monke
     assert result.plan_weeks == 4
 
 
-def test_generate_training_plan_exception_returns_none(db, patch_db_session, monkeypatch):
-    """Any unexpected exception during generation returns None without raising."""
+def test_generate_training_plan_exception_propagates(db, patch_db_session, monkeypatch):
+    """Exceptions during generation propagate so the job queue can retry/alert."""
     patch_db_session(ai_coach)
 
     def _raise(*a, **kw):
@@ -1409,9 +1437,8 @@ def test_generate_training_plan_exception_returns_none(db, patch_db_session, mon
 
     monkeypatch.setattr(ai_coach, "_get_ai_config", _raise)
 
-    result = ai_coach.generate_training_plan(reference_date=date(2026, 7, 3))
-
-    assert result is None
+    with pytest.raises(RuntimeError, match="unexpected boom"):
+        ai_coach.generate_training_plan(reference_date=date(2026, 7, 3))
 
 
 # --- P2-2: strength routine_id storage ---

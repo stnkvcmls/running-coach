@@ -7,6 +7,7 @@ from app import adherence as adherence_mod
 from app import records as records_mod
 from app.models import Activity, GarminCalendarEvent, PersonalRecord, TrainingPlanDay
 from app.schemas import CalendarEventResponse, PersonalRecordResponse
+from app.utils import local_today
 
 # Plan-day workout types fulfilled by a run, and the coarse activity
 # categories (see _categorize_activity_type) that fulfil a "cross" day.
@@ -21,11 +22,11 @@ PLAN_MATCH_MIN_DISTANCE_RATIO = 0.5
 
 def _parse_date(s: str | None) -> date:
     if not s:
-        return date.today()
+        return local_today()
     try:
         return datetime.strptime(s, "%Y-%m-%d").date()
     except ValueError:
-        return date.today()
+        return local_today()
 
 
 def _categorize_activity_type(activity_type: str | None) -> str:
@@ -62,7 +63,7 @@ def _fulfils_workout_type(workout_type: str, activity_category: str) -> bool:
 
 def _plan_day_matchable(plan_day: TrainingPlanDay) -> bool:
     """Only rest days and days after today can never have been completed."""
-    return plan_day.workout_type != "rest" and plan_day.day_date <= date.today()
+    return plan_day.workout_type != "rest" and plan_day.day_date <= local_today()
 
 
 def _select_plan_day_activity(

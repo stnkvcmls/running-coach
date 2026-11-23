@@ -19,6 +19,12 @@
   padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
 }
 
+.route-fallback {
+  padding: 16px;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
 /* Desktop: bottom nav becomes a left rail (BottomNav.css) sitting beside the
    scrollable content instead of overlaying its bottom edge. */
 @media (min-width: 1024px) {
@@ -33,5 +39,9 @@
 
   .app-main--with-nav {
     padding-bottom: 0;
+  }
+
+  .route-fallback {
+    max-width: 1080px;
   }
 }

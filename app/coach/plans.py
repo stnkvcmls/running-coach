@@ -37,10 +37,12 @@ from app.models import (
     TrainingPlanDay,
 )
 from app.strength_routines import catalog_summary, get_routine
+from app.utils import local_today
 from app.coach.context import (
     _build_context,
     _format_activity_context,
     _format_athlete_profile_context,
+    _format_daily_context,
     _load_zones,
     _load_zone_configs,
     recent_heat_stress,
@@ -766,18 +768,18 @@ def detect_plan_realignment(
 
 def generate_training_plan(
     reference_date: date | None = None, user_id: int = DEFAULT_USER_ID, note: str | None = None
-) -> TrainingPlan | None:
+) -> TrainingPlan:
     """Generate and persist a 4-week AI training plan.
 
     Can be called from the API (on demand) or from the scheduler (weekly).
     `note` carries an optional athlete-stated reason (e.g. from the chat
     adjust_upcoming_week tool) that should take priority over the default
-    rolling-adherence logic. Returns the new TrainingPlan or None on failure.
+    rolling-adherence logic. Returns the new TrainingPlan; raises on failure.
     """
     from app import ai_coach as _shim
 
     with _shim.db_session() as db:
-        ref = reference_date or date.today()
+        ref = reference_date or local_today()
         week_start = _next_monday(ref)
 
         try:
@@ -880,7 +882,7 @@ def generate_training_plan(
             return plan
         except Exception:
             logger.exception("Training plan generation failed")
-            return None
+            raise
 
 
 def weekly_review(user_id: int = DEFAULT_USER_ID):
@@ -889,7 +891,8 @@ def weekly_review(user_id: int = DEFAULT_USER_ID):
 
     with _shim.db_session() as db:
         try:
-            week_start = date.today() - timedelta(days=7)
+            today = local_today()
+            week_start = today - timedelta(days=7)
             week_activities = (
                 db.query(Activity)
                 .filter(
@@ -915,7 +918,7 @@ def weekly_review(user_id: int = DEFAULT_USER_ID):
                 )
                 for a in week_activities
             )
-            trigger_data = f"## Weekly Review ({week_start} to {date.today()})\n\n{activity_summaries}"
+            trigger_data = f"## Weekly Review ({week_start} to {today})\n\n{activity_summaries}"
             full_context = _build_context(db, "weekly_review", trigger_data, user_id=user_id)
             content, summary, category = _shim._call_ai(db, full_context, "weekly_review", user_id)
 
@@ -940,6 +943,7 @@ def weekly_review(user_id: int = DEFAULT_USER_ID):
             )
         except Exception:
             logger.exception("Weekly review failed")
+            raise
 
 
 _BRIEFING_SYSTEM_PROMPT = """You are an expert running coach writing a short, motivating pre-workout \
@@ -998,6 +1002,17 @@ def _build_briefing_trigger_data(
         if guidance:
             parts.append(f"Fuelling target: {guidance.note}")
 
+    # Fold last night's daily summary (sleep, HRV, resting HR, body battery) directly
+    # into the morning briefing context so recovery metrics are always front and center.
+    today_summary = (
+        db.query(DailySummary)
+        .filter(DailySummary.user_id == user_id, DailySummary.date == plan_day.day_date)
+        .first()
+    )
+    if today_summary is not None:
+        parts.append("")
+        parts.append(_format_daily_context(today_summary))
+
     return "\n".join(parts)
 
 
@@ -1053,3 +1068,4 @@ def generate_briefing(plan_day_id: int) -> None:
             )
         except Exception:
             logger.exception("Briefing generation failed for plan day %s", plan_day_id)
+            raise

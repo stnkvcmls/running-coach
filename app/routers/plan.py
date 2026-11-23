@@ -1,7 +1,6 @@
 """Training plan CRUD, season plan, adaptation, realignment, and Garmin push."""
-import json
 import logging
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -44,7 +43,7 @@ from app import training_load
 from app import plan_adaptation as plan_adaptation_mod
 from app import nutrition as nutrition_mod
 from app import adherence as adherence_mod
-from app import workout_translator as workout_translator_mod
+from app.utils import local_today
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +54,7 @@ def _match_activity_and_adherence(
     plan_day: TrainingPlanDay,
     db: Session,
     profile: AthleteProfile | None,
-) -> tuple[int | None, float | None]:
+) -> tuple[int | None, float | None, float | None]:
     """Find the activity (if any) that fulfilled a plan day, and score it.
 
     The choice among the day's activities is ``_select_plan_day_activity``,
@@ -68,7 +67,7 @@ def _match_activity_and_adherence(
     purely to score the match, not persisted or exposed as steps.
     """
     if not _plan_day_matchable(plan_day):
-        return None, None
+        return None, None, None
 
     day_start = datetime.combine(plan_day.day_date, datetime.min.time())
     day_end = day_start + timedelta(days=1)
@@ -83,18 +82,17 @@ def _match_activity_and_adherence(
     )
     matched = _select_plan_day_activity(plan_day, activities)
     if matched is None:
-        return None, None
+        return None, None, None
 
     adherence_score: float | None = None
     if plan_day.workout_type in _RUN_WORKOUT_TYPES:
-        translated = workout_translator_mod.translate_plan_day(plan_day, profile)
-        if translated:
-            steps = adherence_mod.parse_workout_steps(json.dumps(translated))
-            computed = adherence_mod.compute_adherence(matched, steps)
-            if computed is not None:
-                adherence_score = computed.adherence_score
+        computed = adherence_mod.adherence_for_activity(
+            db, matched, plan_day=plan_day, profile=profile
+        )
+        if computed is not None:
+            adherence_score = computed.adherence_score
 
-    return matched.id, adherence_score
+    return matched.id, matched.distance_m, adherence_score
 
 
 def _day_to_response(
@@ -119,7 +117,11 @@ def _day_to_response(
         )
         if guidance:
             resp.fuelling_guidance = FuellingGuidance(**guidance.__dict__)
-    resp.matched_activity_id, resp.adherence_score = _match_activity_and_adherence(d, db, profile)
+    (
+        resp.matched_activity_id,
+        resp.matched_distance_m,
+        resp.adherence_score,
+    ) = _match_activity_and_adherence(d, db, profile)
     return resp
 
 
@@ -128,7 +130,7 @@ def _build_plan_response(plan: TrainingPlan, db: Session) -> TrainingPlanRespons
     from app.ai_coach import recent_heat_stress
 
     profile = db.query(AthleteProfile).filter(AthleteProfile.user_id == plan.user_id).first()
-    heat_stress = recent_heat_stress(db, date.today(), plan.user_id)
+    heat_stress = recent_heat_stress(db, local_today(), plan.user_id)
 
     days = (
         db.query(TrainingPlanDay)
@@ -335,7 +337,7 @@ def api_adapt_plan_day(
     db.refresh(plan_day)
     profile = db.query(AthleteProfile).filter(AthleteProfile.user_id == uid).first()
     from app.ai_coach import recent_heat_stress
-    heat_stress = recent_heat_stress(db, date.today(), uid)
+    heat_stress = recent_heat_stress(db, local_today(), uid)
     return _day_to_response(plan_day, db, profile, heat_stress)
 
 
@@ -346,7 +348,7 @@ def api_get_realignment_status(
 ):
     """Return whether the current plan has enough missed sessions to warrant realignment."""
     from app.ai_coach import detect_plan_realignment
-    result = detect_plan_realignment(db, date.today(), user_id=current_user.id)
+    result = detect_plan_realignment(db, local_today(), user_id=current_user.id)
     return PlanRealignmentStatus(
         should_prompt=result["should_prompt"],
         missed_count=result["missed_count"],
@@ -371,7 +373,7 @@ def api_realign_plan(
 ):
     """Handle plan realignment: regenerate the plan or dismiss the banner for 7 days."""
     if body.action == "dismiss":
-        dismiss_until = (date.today() + timedelta(days=7)).isoformat()
+        dismiss_until = (local_today() + timedelta(days=7)).isoformat()
         row = db.query(SyncStatus).filter(
             SyncStatus.user_id == current_user.id,
             SyncStatus.key == "plan_realignment_dismissed_until",
@@ -409,8 +411,8 @@ def api_push_workout_to_garmin(
     """Upload a plan day as a structured workout to the user's Garmin device.
 
     Creates the workout on Garmin Connect and schedules it on the plan day's
-    date so it appears on the watch. Rest and cross-training days are rejected
-    with 422; Garmin API failures surface as 502.
+    date so it appears on the watch. Non-run days (e.g. rest, cross-training,
+    strength) are rejected with 422; Garmin API failures surface as 502.
     """
     from app import garmin_sync
 

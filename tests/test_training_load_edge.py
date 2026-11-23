@@ -35,17 +35,17 @@ def test_classify_tsb_boundaries():
 def test_classify_acwr_bands():
     zone, label, recommendation = classify_acwr(1.6)
     assert zone == "overreaching"
-    assert "high risk" in label.lower()
+    assert "large load spike" in label.lower()
     assert recommendation
 
     zone, label, recommendation = classify_acwr(1.4)
     assert zone == "overreaching"
-    assert "moderate risk" in label.lower()
+    assert "elevated load" in label.lower()
     assert recommendation
 
     zone, label, recommendation = classify_acwr(1.0)
     assert zone == "productive"
-    assert "sweet spot" in label.lower()
+    assert "steady progression" in label.lower()
     assert recommendation
 
     zone, label, recommendation = classify_acwr(0.5)

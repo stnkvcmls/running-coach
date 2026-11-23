@@ -42,6 +42,16 @@ def test_cross_returns_none():
     assert translate_plan_day(day) is None
 
 
+def test_strength_returns_none():
+    day = _make_day("strength")
+    assert translate_plan_day(day) is None
+
+
+def test_unknown_type_returns_none():
+    assert translate_plan_day(_make_day("yoga")) is None
+    assert translate_plan_day(_make_day("")) is None
+
+
 def test_easy_run_structure():
     day = _make_day("easy", dist_m=8000.0, pace=6.0)
     payload = translate_plan_day(day)
@@ -223,6 +233,34 @@ def test_push_endpoint_rest_day_returns_422(client, db, patch_db_session):
     resp = client.post(f"{_API}/training-plan/days/{rest_day.id}/push-to-garmin")
     assert resp.status_code == 422
     assert "not pushable" in resp.json()["detail"]
+
+
+def test_push_endpoint_strength_day_returns_422(client, db, patch_db_session):
+    """Returns 422 for non-run days such as strength."""
+    from app.models import DEFAULT_USER_ID, TrainingPlan, TrainingPlanDay, User
+
+    dev = User(email="dev@localhost", garmin_email="g@garmin.com")
+    db.add(dev)
+    plan = TrainingPlan(user_id=DEFAULT_USER_ID, week_start=date(2026, 7, 1), plan_weeks=1)
+    db.add(plan)
+    db.flush()
+    strength_day = TrainingPlanDay(
+        user_id=DEFAULT_USER_ID,
+        plan_id=plan.id,
+        day_date=date(2026, 7, 3),
+        day_of_week="Friday",
+        week_number=1,
+        workout_type="strength",
+    )
+    db.add(strength_day)
+    db.commit()
+    db.refresh(strength_day)
+
+    patch_db_session(__import__("app.garmin_sync", fromlist=["garmin_sync"]))
+
+    resp = client.post(f"{_API}/training-plan/days/{strength_day.id}/push-to-garmin")
+    assert resp.status_code == 422
+    assert "not a run workout" in resp.json()["detail"]
 
 
 def test_push_endpoint_success(client, db, patch_db_session):

@@ -32,10 +32,11 @@ def api_get_chat(
     messages = (
         db.query(ChatMessage)
         .filter(ChatMessage.user_id == current_user.id)
-        .order_by(ChatMessage.created_at.asc())
+        .order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc())
         .limit(limit)
         .all()
     )
+    messages.reverse()
     return ChatHistoryResponse(
         messages=[
             ChatMessageResponse(
@@ -88,10 +89,11 @@ def api_post_chat(
             ChatMessage.user_id == current_user.id,
             ChatMessage.id < user_msg.id,
         )
-        .order_by(ChatMessage.created_at.asc())
+        .order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc())
         .limit(20)
         .all()
     )
+    history_rows.reverse()
     history = [{"role": m.role, "content": m.content} for m in history_rows]
 
     user_id = current_user.id
@@ -147,7 +149,7 @@ def api_list_coach_memory(
     memories = (
         db.query(CoachMemory)
         .filter(CoachMemory.user_id == current_user.id)
-        .order_by(CoachMemory.created_at.desc())
+        .order_by(CoachMemory.created_at.desc(), CoachMemory.id.desc())
         .all()
     )
     return memories

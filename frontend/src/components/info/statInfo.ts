@@ -81,14 +81,15 @@ export const STAT_INFO: Record<string, InfoTopic> = {
         name: 'Workload ratio',
         acronym: 'ACWR (Acute:Chronic Workload Ratio)',
         description:
-          'A relative injury-risk gauge: how big your recent load (Fatigue) is compared with the load ' +
-          'your body is accustomed to (Fitness). It flags when you’re ramping up too fast. Only shown ' +
-          'once you have enough history for Fitness to be established.',
+          'A load-spike gauge: how big your recent load (Fatigue) is compared with the load your body ' +
+          'is accustomed to (Fitness). It flags when you’re ramping up too fast. Only shown once you ' +
+          'have enough history for Fitness to be established.',
         formula: 'ACWR = ATL (Fatigue) ÷ CTL (Fitness),  shown only when CTL > 1',
         limits:
-          'Risk bands: 0.8–1.3 = the “sweet spot” / optimal training zone; above 1.3 = moderate risk, ' +
-          'monitor fatigue; above 1.5 = high risk / significant overreaching. Below 0.8 suggests ' +
-          'detraining. A rapid 7-day rise in Fitness also bumps the risk rating.',
+          'Bands: 0.8–1.3 = steady progression; above 1.3 = elevated load, monitor fatigue; above ' +
+          '1.5 = large load spike / significant overreaching. Below 0.8 suggests detraining. A rapid ' +
+          '7-day rise in Fitness also raises the rating. This is a coarse heuristic built on rolling ' +
+          'averages, not an injury predictor: research on ACWR and injury is mixed.',
       },
     ],
   },

@@ -1,12 +1,11 @@
 import { useState, useEffect, type CSSProperties, type ReactNode } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { useQueries, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { ClipboardList, RefreshCw, Settings2, Watch, Check, ChevronDown, ChevronUp, Dumbbell, Droplet, PlayCircle, MoreHorizontal, ChevronRight } from 'lucide-react'
 import { useTrainingPlan, useGenerateTrainingPlan, useRealignmentStatus, useRealignPlan, usePushWorkoutToGarmin, useJobStatus } from '../../api/hooks'
-import { apiGet } from '../../api/client'
-import type { ActivityDetail, StrengthRoutine, FuellingGuidance, TrainingPlanDay, TrainingPlanWeek } from '../../api/types'
+import type { StrengthRoutine, FuellingGuidance, TrainingPlanDay, TrainingPlanWeek } from '../../api/types'
 import { WORKOUT_TYPE_COLORS } from '../../utils/colors'
-import { dayState, todayStr } from '../../utils/planDayState'
+import { dayState, isWatchPushable, todayStr } from '../../utils/planDayState'
 import { describeSession } from '../../utils/sessionNotation'
 import { toast } from '../ui/Toast'
 import AlertBanner from '../ui/AlertBanner'
@@ -64,7 +63,7 @@ function boilerplateNote(days: TrainingPlanDay[]): string | null {
 
 function isPushable(day: TrainingPlanDay): boolean {
   const state = dayState(day)
-  return (state === 'today' || state === 'upcoming') && day.workout_type !== 'cross'
+  return (state === 'today' || state === 'upcoming') && isWatchPushable(day.workout_type)
 }
 
 /** The next session still ahead — the only one that gets Send to watch. */
@@ -177,11 +176,9 @@ interface DayRowProps {
   /** The week's repeated note, hidden on rows that carry it. */
   defaultNote: string | null
   showWatch: boolean
-  /** Distance actually run, when the matched activity is loaded. */
-  actualM: number | null
 }
 
-function DayRow({ day, defaultNote, showWatch, actualM }: DayRowProps) {
+function DayRow({ day, defaultNote, showWatch }: DayRowProps) {
   const state = dayState(day)
   const isRest = state === 'rest'
   const label = WORKOUT_LABELS[day.workout_type] ?? day.workout_type
@@ -207,7 +204,7 @@ function DayRow({ day, defaultNote, showWatch, actualM }: DayRowProps) {
 
   let side: ReactNode = null
   if (state === 'done') {
-    const doneM = actualM ?? day.target_distance_m
+    const doneM = day.matched_distance_m ?? day.target_distance_m
     const pct = day.adherence_score != null ? `, ${Math.round(day.adherence_score)}%` : ''
     const content = (
       <>
@@ -299,13 +296,14 @@ function plannedM(week: TrainingPlanWeek): number {
   return week.days.reduce((s, d) => s + (d.target_distance_m ?? 0), 0)
 }
 
-function WeekProgress({ week, actual }: { week: TrainingPlanWeek; actual: Map<number, number> }) {
+function WeekProgress({ week }: { week: TrainingPlanWeek }) {
   const totalM = plannedM(week)
-  // Done days count what was actually run (falling back to the plan while
-  // the activity loads), so today's completed run shows up at once (P6).
+  // Done days count what was actually run (falling back to the planned target
+  // if the matched activity has no distance), so today's completed run shows
+  // up at once (P6) without extra per-day activity fetches.
   const doneM = week.days
     .filter(d => dayState(d) === 'done')
-    .reduce((s, d) => s + (actual.get(d.id) ?? d.target_distance_m ?? 0), 0)
+    .reduce((s, d) => s + (d.matched_distance_m ?? d.target_distance_m ?? 0), 0)
   const pct = totalM > 0 ? Math.min(100, (doneM / totalM) * 100) : 0
 
   if (!week.theme && totalM === 0) return null
@@ -329,30 +327,11 @@ function WeekProgress({ week, actual }: { week: TrainingPlanWeek; actual: Map<nu
   )
 }
 
-/** Actual run distance per done plan day, from the matched activities
- * (shared cache with the activity page). */
-function useActualDistances(week: TrainingPlanWeek | undefined): Map<number, number> {
-  const done = (week?.days ?? []).filter(d => dayState(d) === 'done' && d.matched_activity_id != null)
-  const results = useQueries({
-    queries: done.map(d => ({
-      queryKey: ['activity', d.matched_activity_id!],
-      queryFn: () => apiGet<ActivityDetail>(`/activities/${d.matched_activity_id}`),
-    })),
-  })
-  const map = new Map<number, number>()
-  done.forEach((d, i) => {
-    const m = results[i]?.data?.distance_m
-    if (m != null) map.set(d.id, m)
-  })
-  return map
-}
-
 function WeekView({ week, nextPushId }: { week: TrainingPlanWeek; nextPushId: number | null }) {
-  const actual = useActualDistances(week)
   const defaultNote = boilerplateNote(week.days)
   return (
     <div className="plan-week">
-      <WeekProgress week={week} actual={actual} />
+      <WeekProgress week={week} />
       <ol className="plan-days">
         {week.days.map(day => (
           <DayRow
@@ -360,7 +339,6 @@ function WeekView({ week, nextPushId }: { week: TrainingPlanWeek; nextPushId: nu
             day={day}
             defaultNote={defaultNote}
             showWatch={day.id === nextPushId}
-            actualM={actual.get(day.id) ?? null}
           />
         ))}
       </ol>

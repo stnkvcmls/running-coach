@@ -1,5 +1,6 @@
 """Web Push subscription management + notification preferences (P0-1)."""
 from fastapi import APIRouter, Depends
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app import notifications as notifications_mod
@@ -16,6 +17,16 @@ from app.schemas import (
 )
 
 router = APIRouter()
+
+
+def _push_status(db: Session, user_id: int) -> tuple[bool, int]:
+    count = (
+        db.query(func.count(PushSubscription.id))
+        .filter(PushSubscription.user_id == user_id)
+        .scalar()
+        or 0
+    )
+    return notifications_mod.is_configured(), count
 
 
 @router.get("/push/vapid-public-key", response_model=VapidPublicKeyResponse)
@@ -73,9 +84,12 @@ def api_get_notification_preferences(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    push_configured, push_subscriptions = _push_status(db, current_user.id)
     return NotificationPreferencesResponse(
         categories=notifications_mod.get_notification_preferences(db, current_user.id),
         labels=notifications_mod.CATEGORIES,
+        push_configured=push_configured,
+        push_subscriptions=push_subscriptions,
     )
 
 
@@ -88,7 +102,10 @@ def api_set_notification_preferences(
     categories = notifications_mod.set_notification_preferences(
         db, body.categories, current_user.id
     )
+    push_configured, push_subscriptions = _push_status(db, current_user.id)
     return NotificationPreferencesResponse(
         categories=categories,
         labels=notifications_mod.CATEGORIES,
+        push_configured=push_configured,
+        push_subscriptions=push_subscriptions,
     )

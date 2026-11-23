@@ -1,466 +1,221 @@
 # Running Coach — Current State
 
-_Last updated: 2026-07-01_
+Generated from the code on 2026-11-23. If code and this document disagree, the code wins.
 
-A multi-user running analytics and AI-coaching app. It syncs data from Garmin
-Connect, computes sports-science training metrics (training load, readiness,
-critical-power thresholds, aerobic durability, workout adherence), and layers
-automated **and conversational** AI coaching on top — all surfaced through a
-mobile-first React PWA backed by a FastAPI service. Data is per-user isolated; a
-single-tenant "bootstrap" deployment is still the common case but the codebase is
-scoped for multiple authenticated users.
+## 1. Architecture overview
 
-The v3 improvement plan and the follow-on **v4 plan** (`docs/IMPROVEMENT_PLAN.md`,
-phases P0–P3) are now essentially fully delivered. On top of the v3 baseline
-(conversational coach, aerobic decoupling/efficiency factor, race-day pacing,
-structured-output plan generation, a durable AI task queue, a strength routine
-library, incremental load/threshold compute, a startup security guard, a
-config-driven model catalog, a schema-drift canary, infinite-scroll history), the
-app now also ships: **weather-adjusted pace & heat-aware coaching**, a coach that
-**acts on the conversation** (chat tool-use), **daily readiness-driven workout
-adaptation**, **terrain/GAP-aware race pacing**, **persistent athlete memory**,
-**fuelling & hydration guidance**, **season-long periodization**, per-week
-**strength progression with demo links**, and **user-defined custom charts**.
+- **Backend process**: single `uvicorn app.main:app` process running FastAPI, an in-process APScheduler `BackgroundScheduler`, a 5-thread `ThreadPoolExecutor` (`_job_executor`) for AI jobs, a startup historical-backfill daemon thread (when env Garmin credentials are set), and ad-hoc daemon threads for manual sync requests. A scheduler event listener calls `libc.malloc_trim(0)` after each job and after backfill; the Docker image sets `MALLOC_ARENA_MAX=2` and `MALLOC_TRIM_THRESHOLD_=131072`.
+- **Data store**: SQLite in WAL mode (`PRAGMA journal_mode=WAL`, `PRAGMA foreign_keys=ON`) via SQLAlchemy 2.0 (`app/database.py`). Schema migrations live in `alembic/` (`render_as_batch=True`); `init_db()` runs `alembic upgrade head` on startup (stamping `head` if `activities` exists without `alembic_version`) and seeds `metric_zones` and default `zone_configs`.
+- **Frontend**: React 19 + TypeScript + Vite SPA using React Router v7, TanStack React Query (`staleTime: 30_000`, `retry: 1`), Recharts, and `react-markdown`. Production builds output to `frontend/dist`, served by FastAPI (`/assets` mount and `/{full_path:path}` catch-all). `static/sw.js` is served at `/sw.js` with `Service-Worker-Allowed: /` and `Cache-Control: no-cache`, and registered in production builds by `frontend/src/main.tsx`.
 
----
+## 2. Scheduled jobs
 
-## Core Features
+Registered in `lifespan()` (`app/main.py`). Cron jobs use `pytz.timezone(settings.timezone)`.
 
-### Garmin Sync (`app/garmin_sync.py`)
-- **Activity sync** runs every N minutes (default 5), pulling recent activities
-  with full detail: splits, laps, HR zones, power zones, weather, running
-  dynamics, respiration, and per-sample detail streams.
-- **Daily summary sync** runs once per day (default 7am) over a rolling window
-  (default 3 days) so last night's overnight metrics (sleep, HRV, resting HR)
-  land on the correct wake-up day and earlier days' totals finalize. Pulls
-  steps, calories, HR, sleep + sleep score, stress, body battery, intensity
-  minutes, floors, and HRV.
-- **Calendar sync** pulls Garmin calendar events — scheduled workouts (with full
-  step definitions) and races (distance, goal time, priority A/B/C, plus
-  Garmin's projected/predicted finish times).
-- **Athlete-profile sync** pulls Garmin-side athlete data (name, DOB, weight,
-  lactate-threshold HR) on the daily job and at startup. Name/DOB/weight are
-  Garmin-managed and not user-editable.
-- **Historical backfill** runs in a background thread on startup: all past
-  activities and ~365 days of daily summaries, then an initial weekly review.
-- **Schema-drift canary**: declared field contracts (`_ACTIVITY_SUMMARY_CONTRACT`
-  etc.) plus a `check_payload_fields` health surface flag when Garmin renames or
-  drops fields, so the silent `.get()` fallbacks can't corrupt synced data
-  unnoticed. Guarded by contract/snapshot tests over recorded fixtures
-  (`tests/test_garmin_schema_canary.py`).
-- **Per-user credentials & MFA**: each user connects their own Garmin account
-  from Settings. Passwords are stored as Fernet ciphertext (`app/crypto.py`);
-  OAuth tokens live on disk under `{garmin_token_dir}/{user_id}/`. The connect
-  flow supports an interactive MFA challenge/response. A background sync that
-  can't authenticate flags the user `needs_reauth` (a cron can't answer MFA) and
-  the Settings UI surfaces a "Reconnect" action.
+| Job ID | Trigger | Behavior |
+| --- | --- | --- |
+| `activity_sync` | Every `ACTIVITY_POLL_MINUTES` (default 5 m) | For each connected user not flagged `garmin_needs_reauth` and not in 429 cooldown: syncs up to 20 recent activities (`include_calendar=False`), detects PRs, and enqueues auto-analysis for eligible new runs. |
+| `calendar_sync` | Every `CALENDAR_SYNC_HOURS` (default 6 h) | For each eligible user: syncs 6 months of Garmin calendar workouts and races. |
+| `daily_sync` | Daily at `DAILY_SYNC_HOUR`:00 (default 07:00) | For each eligible user: syncs athlete profile, calendar, and rolling `daily_sync_window_days` (default 3) summaries; then runs plan-adaptation push, 7-day race-week reminder push, morning briefing enqueue, and canary drift push. |
+| `weekly_review` | Sunday 08:00 | Enqueues a `weekly_review` `AIJob` for each connected user. |
+| `plan_generation` | Sunday 09:00 | Enqueues a `generate_plan` `AIJob` for each connected user. |
+| `ai_job_worker` | Every 30 s | Atomically claims up to 5 oldest `pending` `AIJob`s (`_JOB_POOL_SIZE = 5`) and executes them concurrently on `_job_executor` (wait cap `_JOB_TIMEOUT_SECONDS = 120` s per batch). |
+| `ai_job_reaper` | Every 10 m | Calls `reap_stuck_jobs()` (`STUCK_JOB_MINUTES = 30`). Startup also runs `reap_stuck_jobs(older_than_minutes=0)` before starting the scheduler. |
 
-### Push Workouts to Garmin (`app/workout_translator.py`)
-- Translates a `TrainingPlanDay` into a Garmin structured-workout JSON payload
-  (warmup / interval / repeat / recovery / cooldown steps with pace targets) and
-  uploads + schedules it on the watch for the plan day's date. Rest/cross days
-  are rejected. Pace targets anchor to the athlete's threshold pace.
-- The same translator path is reused to push a **race-day pacing plan** to the
-  watch as a structured pace workout (`POST /races/{id}/pacing/push`).
+When `GARMIN_EMAIL` and `GARMIN_PASSWORD` are set, startup spawns a background backfill thread running `sync_athlete_profile()`, `backfill_activities()` (pages of 100, then `rebuild_personal_records()`), `backfill_daily_summaries()` (today back 365 days), and an initial `weekly_review()`.
 
-### Detail Streams, Mean-Maximal Curves & Aerobic Coupling (`app/streams.py`)
-- Parses Garmin's per-sample detail payload (power, speed, HR, elevation,
-  distance) into aligned stream arrays, with spike rejection and a robust time
-  axis (elapsed-duration column → epoch timestamp → sample index fallback).
-- Computes **grade-adjusted speed** via the Minetti running-cost model.
-- Computes **mean-maximal curves** — best sustained power / GAP-speed / HR over a
-  set of standard durations (5 s → 90 min) — stored compactly per activity
-  (`Activity.mean_max_json`). A bounded self-healing backfill fills curves for
-  activities synced before this existed.
-- Computes **aerobic decoupling** (`Activity.decoupling_pct` — Pa:HR drift between
-  the first and second half of an effort) and **efficiency factor**
-  (`Activity.efficiency_factor` — GAP-speed per bpm) from the aligned pace/power +
-  HR streams. Both surface on Activity Detail, drive an `/aerobic-trends`
-  endpoint, and feed a one-line aerobic-durability read into the AI context.
+## 3. Garmin sync
 
-### Weather-Adjusted Pace & Heat Coaching (`app/weather.py`)
-- Derives a **heat/humidity pace penalty** (sec/km) from stored Garmin activity
-  weather using a temp + dew-point model (Ely et al. 2007). Garmin returns
-  temp/dew point in Fahrenheit regardless of locale; the module converts to
-  Celsius before applying the model.
-- Surfaces a "cool-equivalent effort" pace and a plain-language note on Activity
-  Detail (`weather_adjusted_pace_min_km`, `weather_penalty_sec_per_km`,
-  `weather_description`), and feeds a heat read into the AI activity context.
-- A `recent_heat_stress` signal (any of the last 3 weathered runs in the past 7
-  days carrying a notable penalty) scales fuelling fluid targets for upcoming
-  long runs where no direct weather reading exists yet.
+- **Auth and tokens** (`app/garmin_sync.py`): uses `garminconnect.Garmin`. OAuth tokens live in `{GARMIN_TOKEN_DIR}/{user_id}/`; `_migrate_flat_token_dir` moves only `oauth1_token.json`, `oauth2_token.json`, and `garmin_tokens.json` from legacy flat layouts into `/1/`. Interactive connect in Settings supports MFA (5-minute in-memory `_mfa_sessions`, `_MFA_TTL = 300` s) and encrypts passwords with Fernet (`app/crypto.py`).
+- **`needs_reauth` rules** (`app/main.py`): `_authenticate_or_flag` sets `User.garmin_needs_reauth = True` (and sends a transition-only `reauth` push) only on `GarminConnectAuthenticationError` or `cryptography.fernet.InvalidToken`. Other errors log a warning without disabling scheduled sync.
+- **429 cooldown** (`app/main.py`): `GarminConnectTooManyRequestsError` pauses scheduled syncs for that user starting at 30 min (`_GARMIN_COOLDOWN_BASE_SECONDS = 1800`), doubling per consecutive 429 up to 4 h (`_GARMIN_COOLDOWN_MAX_SECONDS = 14400`), cleared on the next successful sync. Manual API syncs bypass cooldown.
+- **Sync payloads**:
+  - *Activities*: `get_activities(0, 20)` plus per-activity summary, splits, HR zones, weather, split summaries, typed splits, and detail streams (`maxchart=10000, maxpoly=10000`). Computes `mean_max_json`, `decoupling_pct`, `efficiency_factor`, and checks personal records.
+  - *Daily summaries*: rolling `daily_sync_window_days` (default 3: today + 2 prior days) via stats, user summary, heart rates, sleep, stress, and overnight HRV (including Garmin's `balancedLow`/`balancedUpper` range).
+  - *Athlete profile*: full name, DOB, weight (with 30-day body-composition fallback), and resting HR; overwrites Garmin-managed fields (`name`, `date_of_birth`, `weight_kg`).
+  - *Calendar*: current month + next 5 months (6 months total), plus per-workout step details and per-race shareable details (goal time, `isPrimaryEvent`, Garmin projected/predicted finish times).
+- **Calendar merge and cleanup**: `_merge_calendar_event` never lets `None` overwrite a stored non-null value and never lets an un-enriched `raw_json` overwrite an enriched one (`workoutSteps`, `workoutSegments`, `_eventDetail`). Stale future events are deleted only for months in `succeeded_months`; if all months fail, cleanup is skipped.
+- **Schema-drift canary**: `check_payload_fields` verifies top-level keys on `activity_summary`, `daily_stats`, `sleep_data`, `hrv_data`, `activity_stream`, and `calendar_response`, storing results in process memory (`_canary_status`).
 
-### Fuelling & Hydration Guidance (`app/nutrition.py`)
-- For efforts ≥ 60 min, derives **carb-per-hour and fluid-per-hour targets**
-  (plus totals) from duration, intensity (easy long vs race), athlete body
-  weight, and recent heat exposure. Consensus endurance-nutrition model: carbs
-  30 → 60 → 90 g/hr by duration (+15 at race intensity), fluid ~6.5 mL/kg/hr
-  (+15% under recent heat stress).
-- Rendered on the long-run / race-week surfaces and folded into the AI context
-  (`fuelling_guidance` on the scheduled-workout and calendar-event responses).
+## 4. AI coach
 
-### Threshold / Critical-Power Auto-Estimation (`app/threshold.py`)
-- Fits the 2-parameter Critical Power model `P(t) = CP + W'/t` (optionally
-  refined by the 3-parameter Morton model for Pmax) to the aggregated
-  power-duration frontier, with recency weighting so estimates track current
-  fitness.
-- Estimates **threshold pace** via the analogous critical-velocity model on the
-  GAP-speed frontier, and **threshold HR (LTHR)** from Garmin's value, else
-  drift-corrected steady-state segments, else a fraction of max HR.
-- Each field carries a method, confidence level, sample size, and guidance note.
-  Estimates can be reviewed and selectively applied to the athlete profile.
-- A **Performance Curve** endpoint exposes the fitted power/pace curves plus
-  race-time predictions derived from the critical-velocity / D' model.
-- Estimates are cached in `SyncStatus` keyed on a data fingerprint, and the
-  CP/CV fit is computed **incrementally** rather than refit from full history on
-  every cache miss.
+- **Providers** (`app/coach/providers.py`, `app/config.py`): `claude` (Anthropic SDK; default models `claude-opus-4-8`, `claude-opus-4-7`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001`) and `gemini` (`google-genai` SDK; default models `gemini-2.5-flash`, `gemini-3-flash-preview`, `gemini-3.1-flash-lite`, `gemini-3.5-flash`, `gemma-4-26b-a4b-it`, `gemma-4-31b-it`; timeouts 120 s / 300 s for plan calls). Provider/model are stored per user in `SyncStatus`. Transient failures retry `_MAX_RETRIES = 3` times with `2**attempt` s backoff; fatal errors raise `AIFatalError` without retry.
+- **Durable `AIJob` queue** (`app/coach/jobs.py`): statuses `pending`, `running`, `done`, `failed`; `max_attempts = 3`. Handlers raise on error; `_finish_claimed_job` marks `failed` immediately on `AIFatalError` or when `attempts >= max_attempts`, else returns the row to `pending`. Final failure triggers a `system_health` push and, for activity-analysis jobs, saves a tailored error `Insight` so the UI shows Re-analyze. `reap_stuck_jobs` recovers jobs stuck in `running` past 30 min (or all `running` jobs on startup), resetting retry-eligible rows to `pending` and marking exhausted rows `failed` with a `system_health` push.
+- **Job types**: `_dispatch` handles `analyze_activity`, `analyze_feedback` (retained in worker dispatch; no active API route enqueues it), `generate_plan`, `weekly_review`, and `generate_briefing`.
+- **Auto-analysis of new runs** (`app/main.py`): when `AUTO_ANALYZE_ACTIVITIES=true`, newly synced running activities (`training_load.is_run`) with `started_at` within the last 48 hours and no existing `activity` `Insight` enqueue `analyze_activity`.
+- **Morning briefing** (`app/coach/plans.py`): enqueued once per plan day during daily sync (`SyncStatus` key `briefing_generated:{plan_day.id}`) or on demand. Context includes today's `TrainingPlanDay`, parent `TrainingPlan` phase/overview, long-run fuelling target (when applicable), today's `DailySummary` (sleep, HRV, resting HR, stress, body battery), and `_build_context` (profile, active coach memories, estimated thresholds, load, readiness, check-in, recent heat stress, 14-day activities, 8-week volume, 4-week intensity, 7-day recovery, upcoming races, next Garmin workout, last 3 insights). Sends a `briefing` push.
+- **Weekly review and plan generation** (`app/coach/plans.py`): `weekly_review` summarizes the last 7 days' activities with full context and sends a `weekly_review` push. `generate_training_plan` produces a 4-week plan (`_PLAN_MAX_TOKENS = 16000`) via Anthropic forced tool-use (`generate_plan`) or Gemini `response_schema` (JSON fence-stripping fallback), incorporating prior-plan adherence, mandatory race periodization directives, and the `SeasonPlan` skeleton.
+- **Chat and memory** (`app/coach/chat.py`, `app/routers/chat.py`): SSE streaming (`POST /chat`) with up to 20 most recent prior messages, full context, and the next 7 days of the active plan. Allows at most one tool call per turn: `regenerate_plan`, `adjust_upcoming_week`, `mark_setback` (creates both a `chat_setback` `Insight` and `CoachMemory(category="niggle")`), and `explain_workout`. Up to `COACH_MEMORY_CONTEXT_LIMIT = 10` active `CoachMemory` entries are injected into every coaching context.
 
-### Race-Day Pacing Strategy (`app/pacing.py`)
-- Given a target finish time and race distance, generates a split-by-split
-  pacing plan in km or mile units, each split carrying target pace, split time,
-  and cumulative totals. Three strategies:
-  - **even** and **negative-split** (first half 2% slower, second 2% faster, net
-    time preserved), and
-  - **terrain / GAP-aware** — given a course elevation profile, interpolates the
-    grade per split and grade-adjusts each split's target so effort (not pace)
-    stays even, carrying a per-split `grade_pct`.
-- Anchored to the CP/CV race prediction from `get_performance_curve_data` for a
-  reference time, exposed via `GET /races/{id}/pacing`, and optionally pushable
-  to the watch.
+## 5. Training science as implemented
 
-### Training Load & Readiness (`app/training_load.py`)
-- **PMC / training-load model**: daily CTL (Fitness, 42d EWMA), ATL (Fatigue, 7d
-  EWMA), and TSB (Form = CTL − ATL) derived from per-activity TSS, plus ACWR and
-  ramp-rate-based injury-risk flags.
-- TSS uses stored power-based TSS when present, else estimated rTSS (pace),
-  hrTSS (HR), or a duration-only floor — so non-power runs still contribute.
-- The daily series is **persisted incrementally** in `DailyLoadSeries`: only rows
-  from the earliest newly-synced ("dirty") date are deleted and recomputed, so
-  the EWMA carries forward without re-scanning the full activity history.
-- **Readiness score** (0–100): weighted composite of sleep (duration + Garmin
-  sleep score), recovery (stress + body battery), fatigue (ATL), resting-HR
-  trend, and an HRV component, with graceful handling of missing inputs.
-- The TSB / Running Stress Balance state feeds explicit form guidance into the AI
-  context (fresh / neutral / fatigued bands).
+- **TSS** (`app/training_load.py`): fallback order `power` (stored `training_stress_score`) -> `pace` (runs only, `IF = threshold_pace / avg_pace_min_km`) -> `hr` (`IF = avg_hr / threshold_hr`, fallback `0.9 * max_hr`) -> `srpe` (`IF = rpe / 10.0`) -> `duration` (`_DEFAULT_IF = 0.70`). Formula: `duration_hr * min(IF, 1.50)^2 * 100`.
+- **CTL / ATL / TSB and ACWR** (`app/training_load.py`, `app/schemas.py`): `CTL_DAYS = 42` (`alpha = 1 - exp(-1/42)`), `ATL_DAYS = 7` (`alpha = 1 - exp(-1/7)`), `TSB = CTL - ATL`, persisted incrementally in `DailyLoadSeries`. `ACWR = ATL / CTL` (when `CTL > 1.0`), framed in prompts and labels as a load-spike heuristic rather than an injury predictor: `< 0.8` detraining, `0.8-1.3` productive, `> 1.3` (or `ramp_rate_7d > 7`) `moderate`, `> 1.5` (or `ramp_rate_7d > 10`) `high`.
+- **Readiness** (`app/training_load.py`): 0-100 weighted composite (weights sum to 1.20 and renormalize over present inputs): `sleep` 0.25 (avg of `sleep_score` and linear 5 h->0, 8 h->100 duration), `recovery` 0.25 (avg of `100 - stress_avg` and `body_battery_high`), `fatigue` 0.20 (TSB-based: `clamp(75 + 2 * TSB, 0, 100)`), `rhr` 0.10 (`clamp(75 - 7.5 * (rhr - avg_7d), 0, 100)`), `hrv` 0.20 (`clamp(75 + (hrv_avg / hrv_weekly_avg - 1.0) * 250, 0, 100)`, fallback enum `BALANCED=85`, `UNBALANCED=50`, `LOW=30`, `POOR=20`), `subjective` 0.20 (`(avg_taps - 1) / 4 * 100`). Verdict bands: `>= 51` `Train as planned`, `31-50` `Ease off today`, `<= 30` `Rest or go very easy`. Up to two lowest components below 50 produce reason lines.
+- **GAP, streams, and mean-max curves** (`app/streams.py`, `app/records.py`): Minetti running-cost polynomial (`_FLAT_COST = 3.6`, `_GRADE_CLAMP = 0.30`, floor `0.1`) using grade over a `_GRADE_WINDOW_M = 20.0` m rolling distance window. Spike caps: `_MAX_SPEED_MS = 9.0` (32.4 km/h), `_MAX_POWER_W = 2000.0`, HR `20-240` bpm. Mean-max curves span 16 `STANDARD_DURATIONS` (`5` s to `5400` s) plus rolling-window `distance_efforts` over 13 race distances (`400m` to `Marathon`, excluding treadmill). Aerobic decoupling (first vs second half pace/HR ratio drift, >= 20 samples and >= 600 s) and efficiency factor (`avg_speed / avg_hr`). Top-3 race efforts rank per-activity `distance_efforts` directly.
+- **CP / CV 2-parameter model and race predictions** (`app/threshold.py`): weighted OLS fit of `output(t) = asymptote + work/t` over `_FIT_MIN_S = 120` s to `_FIT_MAX_S = 2400` s (`DEFAULT_LOOKBACK_DAYS = 90`, exponential recency `_RECENCY_TAU_DAYS = 45.0`). Clamps: `W'` `3000-40000` J, `D'` `20-600` m. Power includes treadmill; GAP pace excludes treadmill. Race predictions (5K, 10K, Half Marathon, Marathon) use `t = (D - D') / CV` up to 2400 s and extrapolate beyond with `_RIEGEL_FATIGUE_EXPONENT = 1.06`.
+- **Race pacing, weather, and fuelling** (`app/pacing.py`, `app/weather.py`, `app/nutrition.py`): pacing supports `even` and `negative_split` (first half `1.02x` slower, second half `0.98x` faster) in `km` or `mile` splits, optionally scaled by heat penalty (`+0.4%/°C` above 10 °C temp + `+0.6%/°C` above 10 °C dew point; Garmin °F converted to °C). Fuelling (>= 60 min): `30 / 60 / 90` g/hr carbs (`+15` g/hr race), `6.5 mL/kg/hr` fluid (`+15%` under recent heat stress).
+- **Workout adherence** (`app/adherence.py`): `adherence_for_activity` prefers Garmin calendar workout steps on the activity's date and falls back to `workout_translator.translate_plan_day` for the matched `TrainingPlanDay`. Aligns laps to steps per channel (warmup/work/rest/cooldown; 85% distance consumption for auto-lap) and averages distance score (`min(100, actual/planned * 100)`) with per-interval or aggregate pace score (`max(0, 100 - |delta|/30 * 50)`).
 
-### Daily Readiness-Driven Plan Adaptation (`app/plan_adaptation.py`)
-- Closes the loop between the readiness score and the static `TrainingPlanDay`
-  prescription. Purely rule-based (readiness bands × workout type):
-  - a **hard day** (tempo/interval/long) at Low readiness (≤30) is downgraded to
-    rest; at Fair readiness (≤50) it's swapped to an easy effort at ~60% distance;
-  - an **easy day** at Excellent readiness (≥86) gets a small upgrade nudge
-    (strides / a modest distance bump, capped).
-- Surfaced on Today as a `PlanAdaptationCard` and applied via
-  `POST /training-plan/adapt-day`.
+## 6. Plans
 
-### Intensity Distribution (`app/intensity.py`)
-- Aggregates weekly time-in-zone (HR or power) from stored zone JSON or
-  recomputed from streams, and derives a polarization/distribution summary that
-  feeds both the Trends UI and the AI context.
+- **Generation and season skeleton**: `generate_training_plan` creates a 4-week plan starting `_next_monday`. `app/season_plan.py` builds a deterministic skeleton (`base`/`build`/`peak` ~45/35/20, cutback `0.8x` every 4th week, category-based taper 1-3 weeks and recovery 1-2 weeks) anchored to the nearest A-priority Garmin race, else nearest Garmin race, else profile `goal_race_date`.
+- **Active plan day selection** (`app/plan_days.py`): `get_active_plan_day(db, user_id, day)` joins `TrainingPlan` and orders by `generated_at DESC, TrainingPlan.id DESC, TrainingPlanDay.id DESC` so the newest plan covering `day` always wins. Old plans remain stored.
+- **Adaptation and realignment**: `app/plan_adaptation.py` downgrades `tempo`/`interval`/`long` to `rest` (readiness <= 30) or `easy` at `0.6x` distance (high `injury_risk`, active `niggle`, check-in tap <= 2, or readiness <= 50), and nudges `easy` up by `+15%` (capped `+2000 m`) at readiness >= 86 when risk is not high. `detect_plan_realignment` prompts after >= 2 missed non-rest days or a post-plan completed race within its recovery window (dismissible for 7 days).
+- **Push to Garmin** (`app/workout_translator.py`, `app/garmin_sync.py`): only `easy`, `long`, `tempo`, and `interval` plan days translate and push (`rest`, `cross`, `strength`, etc. return HTTP 422). Uploads via `upload_workout` and schedules via `schedule_workout` (±5% pace tolerance; ±3% for race pacing).
 
-### Workout Adherence (`app/adherence.py`)
-- Parses Garmin workout step definitions (including nested repeat blocks) and
-  compares a completed activity against its planned workout: planned vs actual
-  distance, pace delta, interval/lap alignment, per-rep deltas, and a 0–100
-  adherence score.
-- Adherence is rendered in the UI and folded into the AI coaching context.
+## 7. Data model
 
-### Strength & Mobility Routines (`app/strength_routines.py`)
-- A static library of strength/mobility routines (running-base, hip-glute,
-  lower-leg, core-stability, mobility-recovery, full-body), each with focus,
-  duration, structured sets/reps/cues, and **per-exercise demo links**.
-- The plan generator picks a routine per strength day; the slug is stored on
-  `TrainingPlanDay.routine_id` and hydrated into a concrete session at response
-  time, with **per-week progression** across the plan (`GET /strength-routines`,
-  plan/workout-detail views).
+20 tables defined in `app/models.py` (all data tables scoped by indexed `user_id`, defaulting to `DEFAULT_USER_ID = 1`):
 
-### Season-Long Periodization (`app/season_plan.py`)
-- A **deterministic, rule-based** (no AI call) periodization skeleton to the
-  athlete's goal race: selects the goal race (nearest upcoming A-priority Garmin
-  race → any upcoming race → profile goal-race date), then splits the weeks
-  between now and the race into phase blocks — **base / build / peak / taper /
-  race / recovery** — with a target weekly volume per week (baseline → peak ramp
-  with cutback weeks, category-specific taper and post-race recovery).
-- Persisted as `SeasonPlan` + `SeasonPlanWeek`, regenerated when the goal race
-  changes (`ensure_season_plan`). Exposed via `GET /season-plan` (rendered as a
-  `SeasonTimeline`) and **injected into the plan-generation AI context** so the
-  rolling 4-week generator fills in a season-long skeleton rather than working
-  week-to-week.
+| Table | Model | Purpose |
+| --- | --- | --- |
+| `users` | `User` | User identity, Garmin email, encrypted Garmin password, `garmin_needs_reauth` flag |
+| `activities` | `Activity` | Synced activities with metrics, JSON blobs (laps/streams, splits, zones, weather, mean-max), decoupling/EF, RPE |
+| `daily_summaries` | `DailySummary` | Per-day Garmin wellness (steps, calories, HR, sleep, stress, body battery, HRV + baseline range) |
+| `daily_checkins` | `DailyCheckin` | Per-day self-reported soreness/energy/mood (1-5) and optional `soreness_note` |
+| `insights` | `Insight` | AI outputs keyed by `trigger_type` (`activity`, `briefing`, `weekly_review`, `chat_setback`, legacy `daily_summary`) |
+| `garmin_calendar_events` | `GarminCalendarEvent` | Synced Garmin races (distance, goal/projected/predicted times, priority) and scheduled workouts |
+| `metric_zones` | `MetricZone` | Seeded global Garmin percentile bands for running dynamics (cadence, GCT, vert. osc., vert. ratio) |
+| `sync_status` | `SyncStatus` | Per-user key-value store (sync timestamps, AI provider/model, notification prefs, dedup keys, caches) |
+| `athlete_profiles` | `AthleteProfile` | Per-user demographics (Garmin-managed name/DOB/weight), thresholds, and plan preferences |
+| `zone_configs` | `ZoneConfig` | Per-user threshold-anchored HR, pace, and power zones (5 zones each) |
+| `training_plans` | `TrainingPlan` | AI-generated 4-week plan header (`week_start`, `phase`, `overview`, `raw_json`) |
+| `training_plan_days` | `TrainingPlanDay` | Daily workout prescriptions linked by `plan_id` (including optional `routine_id`) |
+| `season_plans` | `SeasonPlan` | Deterministic season-long periodization header anchored to a goal race |
+| `season_plan_weeks` | `SeasonPlanWeek` | Per-week phase and target weekly km belonging to a `SeasonPlan` |
+| `ai_jobs` | `AIJob` | Durable AI task queue (`task_type`, `payload_json`, `status`, `attempts`, `max_attempts`, timestamps) |
+| `chat_messages` | `ChatMessage` | Persisted user/assistant chat turns, optional `activity_id`, and `actions_json` |
+| `coach_memories` | `CoachMemory` | Durable athlete facts (`niggle`, `constraint`, `preference`, `note`) with `active` flag |
+| `daily_load_series` | `DailyLoadSeries` | Incremental per-day TSS, CTL, ATL, TSB, ACWR, ramp rates, `injury_risk`, and sport breakdown |
+| `personal_records` | `PersonalRecord` | Append-only duration (`power`, `gap_speed`) and race-distance all-time best milestones |
+| `push_subscriptions` | `PushSubscription` | Browser Web Push endpoints and encryption keys (`p256dh`, `auth`) |
 
-### AI Coaching (`app/ai_coach.py`)
-- **Multi-provider**: Claude (Opus 4.8 / 4.7, Sonnet 4.6, Haiku 4.5) and Google
-  (Gemini / Gemma variants). Provider/model are selectable from the UI, validated
-  against the catalog (sourced from `Settings.available_models`, overridable via
-  the `AVAILABLE_MODELS` env var), and persisted per user in `SyncStatus`.
-- **Conversational coach (chat)**: a multi-turn chat surface where the athlete can
-  ask "why this workout?", negotiate changes, or flag a niggle. `chat_stream`
-  reuses `_build_context` for a per-user system block and runs the message history
-  through the provider dispatch, **streaming tokens over SSE** (`POST /chat`).
-  Turns persist in `ChatMessage` (up to 20 prior turns of context), can be tied to
-  a specific activity, and are cleared via `DELETE /chat`.
-- **Chat tool-use (the coach acts, not just talks)**: the chat model may call at
-  most one tool per turn — e.g. `regenerate_plan`, `adjust_upcoming_week` (for a
-  specific stated reason like travel/illness), or recording an athlete fact to
-  memory. `_dispatch_chat_tool` executes the action, feeds a grounded result back
-  to the model, and streams a small public `action` object to the client (also
-  persisted as `ChatMessage.actions_json`) so the UI can show what changed.
-- **Persistent athlete memory** (`CoachMemory`): durable structured facts —
-  niggles, life constraints, preferences — recorded either by the athlete
-  directly (Settings → Coach Memory) or by the coach via chat tool-use. Active
-  entries are injected into every AI context until resolved/deleted (capped per
-  turn), so the coach remembers across sessions rather than only the last few
-  turns. CRUD via `/coach-memory`.
-- **Automated analysis**: every new activity or daily summary triggers an AI
-  insight built from rich context — recent activities, weekly volume, recovery
-  metrics, training load / RSB, readiness, intensity distribution, adherence,
-  aerobic decoupling, weather/heat, athlete profile, custom zones, threshold
-  estimates, coach memory, season skeleton, and upcoming races/workouts.
-- **Feedback-driven re-analysis**: rate an activity good/bad, attach setback
-  tags, and add free text; re-analysis incorporates the feedback.
-- **AI training-plan generation**: produces a periodized 4-week plan (phase,
-  weekly themes, per-day target workouts/paces, strength & cross sessions with
-  routine IDs) stored as `TrainingPlan` + `TrainingPlanDay`, regenerated weekly
-  (Sundays 9am) and on demand. Generation uses provider **structured output**
-  (tool schema / `response_schema`) with fence-stripping as a fallback, so a
-  malformed/truncated response can't silently yield an empty plan. Folds in
-  adherence to the prior plan and the season skeleton.
-- **Plan realignment**: detects when enough scheduled sessions have been missed
-  and prompts the user to regenerate (or dismiss the banner for 7 days).
-- **Weekly review**: training summary with recommendations every Sunday 8am.
-- **Durable execution**: on-demand analysis, feedback re-analysis, and plan
-  generation are **enqueued as `AIJob` rows** rather than run inline or on daemon
-  threads. An APScheduler worker polls the ledger every 30 s, claims up to 5
-  pending jobs (pending → running → done|failed), and retries up to
-  `max_attempts`. The frontend polls `GET /jobs/{id}` for "analysis in progress"
-  states.
-- **Robust error handling**: transient vs fatal error classification with
-  exponential-backoff retries; on failure a tailored error insight is saved so
-  the UI can prompt a re-analyze.
+## 8. API surface
 
-### Frontend (React 19 PWA)
-Mobile-first SPA with bottom navigation and an expandable calendar. Routes:
-- **Today** — selected day's activities, daily summary, scheduled workouts,
-  readiness card, plan-adaptation suggestion card, week overview, training-load
-  chart, race countdowns, insights.
-- **Activities** list (infinite scroll) + **Activity Detail** — 80+ metrics,
-  running dynamics with zone indicators, power metrics, aerobic decoupling /
-  efficiency factor, weather-adjusted pace, interactive charts
-  (HR/pace/cadence/elevation/power zones), laps table, route map, adherence card,
-  AI insight + feedback prompt, setback modal.
-- **Daily summaries** list (infinite scroll) + detail.
-- **Trends** — wellness (sleep/stress/body battery/RHR), intensity distribution,
-  aerobic trends, performance-curve views, and a **user-defined custom-chart
-  builder**.
-- **Chat** — conversational coach with streamed responses, persisted history, and
-  rendered coach actions.
-- **Plan** + **Plan Setup** — the AI-generated plan (with hydrated strength
-  routines), a **season timeline**, plus a guided setup flow (bottom-sheet pickers
-  for volume, difficulty, ability, elevation, mileage, schedule, race times)
-  writing structured plan preferences to the profile.
-- **Workout detail** — scheduled workout step breakdown, strength routines with
-  demo links, fuelling guidance.
-- **Settings** — AI backend/model selection, athlete profile, Garmin connect/MFA/
-  reconnect, custom zone configuration, threshold-estimate review/apply, coach
-  memory, sync status, manual sync, data export.
-- **Onboarding** — first-run flow when no athlete profile exists yet.
-- **Info** — contextual stat-explanation pages.
-- **Dark/light theme** toggle persisted to `localStorage`. PWA manifest +
-  service worker under `static/`.
+All routes below are mounted under `/api/v1` via `app/api.py` with `Depends(get_current_user)`. `app/main.py` also serves `GET /sw.js` and `GET /{full_path:path}` (SPA catch-all).
 
-### User-Defined Custom Charts
-- `GET /custom-charts/metrics` exposes the queryable metric catalog (activity and
-  daily-summary fields); `GET /custom-charts/data` returns a series for a chosen
-  metric/aggregation/window, rendered by `CustomChartsView` — an Intervals.icu-
-  style builder over the athlete's own data.
+### `app/routers/daily.py`
+| Method & path | Purpose |
+| --- | --- |
+| `GET /today` | Selected-date dashboard (activities, summary, 8-week volume, insights, races, workouts, load, readiness, adaptation, check-in, briefing) |
+| `POST /daily-checkin` | Upsert daily soreness/energy/mood check-in; auto-records a niggle memory after 3 consecutive sore check-ins (<= 2) with matching note |
+| `GET /daily-summaries` | Paginated daily summaries, newest first |
+| `GET /daily-summaries/{summary_id}` | Single daily summary with that day's activities and any stored daily insight |
+| `GET /insights` | Recent AI insights with optional `category` filter |
+| `POST /sync/{sync_type}` | Spawn background sync thread for current user (`activities`, `daily`, or `calendar`) |
+| `GET /jobs/{job_id}` | Poll status of a user-owned `AIJob` |
+| `POST /jobs/{job_id}/retry` | Reset a `failed` `AIJob` to `pending` |
 
-### Data Export
-- `GET /api/v1/export/activities` and `/export/insights` (CSV or JSON).
+### `app/routers/activities.py`
+| Method & path | Purpose |
+| --- | --- |
+| `GET /activities` | Paginated activity summaries (optional `type` filter) with personal record badges |
+| `GET /activities/{activity_id}` | Full activity detail (splits, zones, weather/heat pace, charts, route, adherence, insight, PRs); lazy-backfills route and aerobic metrics |
+| `POST /activities/{activity_id}/analyze` | Enqueue `analyze_activity` `AIJob` |
+| `PATCH /activities/{activity_id}/rpe` | Save Borg CR10 RPE (1-10) and mark `DailyLoadSeries` dirty |
 
----
+### `app/routers/calendar.py`
+| Method & path | Purpose |
+| --- | --- |
+| `GET /calendar` | Month grid (`month=YYYY-MM`) of activities and calendar events with parsed steps |
+| `GET /calendar/week` | Monday-Sunday week around `date` of activities and calendar events |
+| `GET /calendar-events/{event_id}` | Single calendar event with parsed workout steps and race fuelling guidance |
 
-## Architecture
+### `app/routers/settings.py`
+| Method & path | Purpose |
+| --- | --- |
+| `GET /me` | Current authenticated user email and name |
+| `GET /settings` | Row counts for activities, daily summaries, insights, and calendar events |
+| `GET /health-detail` | Last sync times, schema canary status, recent failed/stuck jobs, Garmin and push state |
+| `GET /ai-config` | Active AI provider/model and allowed model catalog |
+| `POST /ai-config` | Persist per-user AI provider and model |
+| `GET /garmin-credentials/status` | Garmin connection, pending MFA, and `needs_reauth` status |
+| `POST /garmin-credentials` | Start Garmin login (requires `ENCRYPTION_KEY`); returns `connected` or `mfa_required` |
+| `POST /garmin-credentials/mfa` | Complete pending Garmin MFA login with one-time code |
+| `DELETE /garmin-credentials` | Disconnect Garmin and remove cached client and token directory |
+| `GET /athlete-profile` | Current user's athlete profile (with derived `age`), or `null` |
+| `POST /athlete-profile` | Upsert athlete profile (ignores Garmin-managed `name`, `date_of_birth`, `weight_kg`) |
+| `GET /zones` | Custom HR, pace, and power zones with threshold-computed bounds |
+| `PUT /zones` | Bulk-update existing `ZoneConfig` rows |
+| `GET /threshold-estimate` | Auto-estimated CP/W', threshold pace, LTHR, and max HR vs current profile |
+| `POST /threshold-estimate/apply` | Apply selected (or all available) threshold estimates to the athlete profile |
 
-```
-[Garmin Connect API]
-        │
-   garmin_sync.py  ← APScheduler (5 background jobs + startup backfill)
-        │
-   SQLite (WAL mode)   — every data row scoped by user_id
-   ├── User                (identity + per-user Garmin credentials/flags)
-   ├── Activity            (80+ fields; laps/splits/zones/streams/mean-max/decoupling/weather)
-   ├── DailySummary        (steps, sleep, stress, body battery, HRV, …)
-   ├── DailyLoadSeries     (persisted per-day CTL/ATL/TSB for incremental compute)
-   ├── GarminCalendarEvent (races + workouts with step JSON)
-   ├── Race                (manually-tracked races)
-   ├── Insight             (AI-generated: activity / daily / weekly / plan)
-   ├── ChatMessage         (multi-turn coach conversation + actions_json)
-   ├── CoachMemory         (durable athlete facts: niggle/constraint/preference/note)
-   ├── AIJob               (durable AI task ledger)
-   ├── AthleteProfile      (per-user: DOB, weight, thresholds, plan preferences)
-   ├── ZoneConfig          (threshold-anchored HR/pace/power zones)
-   ├── MetricZone          (percentile bands for running-dynamics metrics)
-   ├── TrainingPlan / TrainingPlanDay  (AI-generated periodized plan + routine_id)
-   ├── SeasonPlan / SeasonPlanWeek     (deterministic season-long periodization)
-   └── SyncStatus          (per-user key-value: progress, AI config, caches)
-        │
-   streams · threshold · training_load · adherence · intensity · pacing  (analytics)
-   weather · nutrition · plan_adaptation · season_plan  (rule-based coaching helpers)
-   strength_routines (routine library) · workout_translator (plan day → Garmin workout)
-        │
-   ai_coach.py  → Anthropic / Google Generative AI  (retry + provider dispatch + chat SSE + tool-use)
-        │
-   FastAPI REST API (/api/v1, auth dependency) + SPA catch-all
-        │
-   React PWA  (TypeScript, React Router, React Query, Recharts)
-```
+### `app/routers/trends.py`
+| Method & path | Purpose |
+| --- | --- |
+| `GET /training-load` | Daily CTL/ATL/TSB/ACWR/ramp-rate series (`days` 7-365) and current snapshot |
+| `GET /wellness-trends` | Daily summaries over the last `days` (7-365) |
+| `GET /intensity-trends` | Weekly HR or power time-in-zone buckets and 3-zone polarization split |
+| `GET /performance-curve` | Mean-max power/pace frontiers, CP/CV fits, race predictions, optional window comparison |
+| `GET /personal-records` | Current duration/distance PRs, recent PR feed, and top-3 per-activity efforts per race distance |
+| `GET /aerobic-trends` | Per-run aerobic decoupling % and efficiency factor over `days` (30-365) |
 
-### Authentication & Multi-User
-- `app/auth.py` resolves the request user. With `auth_enabled=True`, it verifies
-  a **Cloudflare Access JWT** (`Cf-Access-Jwt-Assertion`) against the team's JWKS
-  and upserts a `User` by email claim. With `auth_enabled=False` (dev/CI) it
-  falls back to a synthetic dev user, so local runs and the test suite work
-  without Cloudflare.
-- A **startup security guard** (`_check_security_config` in `app/main.py`) logs a
-  prominent `CRITICAL` warning and **refuses to start** when `auth_enabled=False`
-  and `bind_host` is not a loopback address — the case where an unauthenticated
-  instance would be publicly readable/writable. `ALLOW_INSECURE_BIND=true` opts
-  out of the refusal (warning still logs) for trusted, firewalled networks.
-- All API queries and compute paths are scoped by `user_id`; `DEFAULT_USER_ID = 1`
-  is the bootstrap account that unscoped/test writes default to. The scheduler
-  fans each job out across all Garmin-connected users, isolating per-user
-  failures.
+### `app/routers/plan.py`
+| Method & path | Purpose |
+| --- | --- |
+| `GET /strength-routines` | Static strength/mobility routine library with demo URLs |
+| `GET /training-plan` | Latest 4-week plan with hydrated routines, long-run fuelling, matched activities, and adherence |
+| `POST /training-plan/generate` | Enqueue `generate_plan` `AIJob` |
+| `POST /training-plan/days/{day_id}/briefing` | Enqueue `generate_briefing` `AIJob` for a plan day |
+| `GET /season-plan` | Deterministic season-long periodization skeleton to goal race, or `null` |
+| `POST /training-plan/adapt-day` | Accept or dismiss today's rule-based adaptation suggestion |
+| `GET /training-plan/realignment-status` | Missed-session / post-race realignment prompt status |
+| `POST /training-plan/realign` | Enqueue plan regeneration or dismiss banner for 7 days |
+| `POST /training-plan/days/{day_id}/push-to-garmin` | Translate and push a run plan day (`easy`, `long`, `tempo`, `interval`) to Garmin |
 
-### Key Modules
+### `app/routers/races.py`
+| Method & path | Purpose |
+| --- | --- |
+| `GET /races/{race_id}/pacing` | Split-by-split pacing plan (`even` or `negative_split`, `km`/`mile`, optional heat conditions) |
+| `POST /races/{race_id}/pacing/push` | Upload and schedule a race pacing plan to Garmin |
 
-| File | Role |
-|------|------|
-| `app/main.py` | FastAPI init, APScheduler (5 jobs), lifespan, backfill, security guard, SPA catch-all, malloc-trim memory management |
-| `app/api.py` | All REST endpoints (~2200 lines, ~53 routes), auth-gated router |
-| `app/auth.py` | Cloudflare Access JWT verification + user resolution |
-| `app/garmin_sync.py` | Garmin auth/MFA, sync, backfill, calendar/profile parsing, schema canary, push-to-Garmin |
-| `app/ai_coach.py` | AI analysis, context building, plan generation (structured output), chat streaming + tool-use, coach memory injection, job ledger execution, provider dispatch, retry |
-| `app/workout_translator.py` | TrainingPlanDay / pacing plan → Garmin structured-workout JSON |
-| `app/streams.py` | Detail-stream parsing, GAP, mean-maximal curves, aerobic decoupling / efficiency factor |
-| `app/threshold.py` | Critical Power / CV / LTHR estimation, performance curve, race prediction (incremental) |
-| `app/training_load.py` | CTL/ATL/TSB, ACWR, readiness scoring, incremental daily series |
-| `app/pacing.py` | Race-day split-by-split pacing (even / negative-split / terrain-GAP) |
-| `app/weather.py` | Heat/humidity pace penalty from activity weather |
-| `app/nutrition.py` | Carb/fluid fuelling targets for long runs & races |
-| `app/plan_adaptation.py` | Readiness-band × workout-type daily plan-day adaptation |
-| `app/season_plan.py` | Deterministic season-long periodization skeleton |
-| `app/intensity.py` | Weekly time-in-zone aggregation + polarization |
-| `app/adherence.py` | Workout step parsing + planned-vs-actual (incl. per-rep) adherence |
-| `app/strength_routines.py` | Static strength/mobility routine library (+ demo links) for plan days |
-| `app/crypto.py` | Fernet encryption for stored Garmin passwords |
-| `app/models.py` | SQLAlchemy ORM models (all user-scoped) |
-| `app/schemas.py` | Pydantic request/response schemas |
-| `app/database.py` | DB/session setup, Alembic bootstrap, zone seeding |
-| `app/config.py` | Env-var config (pydantic-settings) + `available_models` catalog |
-| `frontend/src/api/` | HTTP client, TypeScript types, React Query hooks |
-| `frontend/src/components/` | UI by view (today, activities, activity-detail, daily, trends, chat, plan, plan-setup, settings, onboarding, profile, info, layout, workout-detail) |
+### `app/routers/export.py`
+| Method & path | Purpose |
+| --- | --- |
+| `GET /export/activities` | Download user activities as CSV or JSON |
+| `GET /export/insights` | Download user insights as CSV or JSON |
 
-### Scheduling
-Five APScheduler jobs (the first four iterate all Garmin-connected users):
-1. **Activity sync** — every `ACTIVITY_POLL_MINUTES`; new activities trigger AI
-   analysis; calendar sync piggybacks.
-2. **Daily summary sync** — daily at `DAILY_SYNC_HOUR`; rolling window + athlete
-   profile, then triggers daily AI analysis on today's summary.
-3. **Weekly review** — Sundays 8am.
-4. **Training-plan generation** — Sundays 9am (after the weekly review).
-5. **AI job worker** — every 30 s; claims and executes pending `AIJob` rows.
+### `app/routers/chat.py`
+| Method & path | Purpose |
+| --- | --- |
+| `GET /chat` | Recent chat messages (default `limit=50`, chronological) |
+| `DELETE /chat` | Delete all chat messages for current user |
+| `POST /chat` | Save user message and stream SSE coach reply (tokens, tool actions, `[DONE]`) |
+| `GET /coach-memory` | List coach memory entries |
+| `POST /coach-memory` | Create a coach memory entry |
+| `PUT /coach-memory/{memory_id}` | Update a coach memory entry (including `active`) |
+| `DELETE /coach-memory/{memory_id}` | Delete a coach memory entry |
 
-Plus a startup background-thread backfill (profile → activities → daily
-summaries → initial weekly review), gated on bootstrap Garmin credentials.
-A `malloc_trim` listener returns freed heap pages to the OS after each job to
-keep RSS from pinning at its high-water mark.
+### `app/routers/notifications.py`
+| Method & path | Purpose |
+| --- | --- |
+| `GET /push/vapid-public-key` | Return server VAPID public key and configured flag |
+| `POST /push-subscriptions` | Register or update a Web Push subscription by `endpoint` |
+| `DELETE /push-subscriptions` | Remove a Web Push subscription for current user |
+| `GET /notification-preferences` | Return per-category preferences (8 categories), labels, and push state |
+| `PUT /notification-preferences` | Update per-category Web Push opt-in/out preferences |
 
-### Persistence & Migrations
-- SQLite in WAL mode. Schema evolution is managed by **Alembic** (15 revisions to
-  date: initial schema → race predictions → per-user Garmin credentials →
-  user_id data isolation → plan-preference fields → target weekly km → chat
-  messages → aerobic metrics → stride cm→m fix → AI jobs → daily load series →
-  routine_id on plan days → chat actions JSON → coach memory → season plan).
-  `init_db()` bootstraps/stamps via Alembic and seeds metric zones + default
-  zone configs.
+## 9. Frontend
 
-### Testing & CI
-- **~745 backend test functions across 31 test files** (`tests/`), covering
-  adherence, AI coach, AI context, API endpoints/helpers, athlete profile, auth,
-  coach memory, config, custom charts, database, data isolation, garmin
-  sync/connect, the schema-drift canary, the AI job queue, intensity, main/app
-  wiring, nutrition, pacing, plan adaptation, readiness, season plan, streams,
-  strength routines, threshold, training load (incl. edge cases), weather, the
-  workout translator, and utils.
-- **~57 frontend vitest** cases (date/colors/formatting/pagination utils).
-- `pyproject.toml` configures pytest (`pythonpath=["."]`) and coverage
-  (`fail_under = 80`).
-- `perf/` holds a seeded load-test harness (`test_perf_endpoints.py`,
-  `seed_perf_db.py`, summary reporter) — see `docs/performance-testing.md`.
-- GitHub Actions: `tests.yml` (CI), `performance.yml`, and `docker-publish.yml`
-  (build & push image to GHCR).
+- **Routes** (`frontend/src/App.tsx`): 14 routes. `/` (`TodayView`) is eagerly imported; the other 13 (`/activities`, `/activities/:id`, `/daily`, `/daily/:id`, `/workouts/:id`, `/trends`, `/plan`, `/plan/setup`, `/settings`, `/settings/:section`, `/info/:topic`, `/onboarding`, `/chat`) are `React.lazy` with manual Vite chunks for `react`, `charts`, and `markdown`. Bottom navigation links to **Today**, **Plan**, **Coach**, **Activities**, and **Progress**. Missing athlete profile redirects to `/onboarding`.
+- **Today screen** (`TodayView.tsx`, `TodayHero.tsx`): realignment banner (when triggered), `WeekRail`, `TodayHero` (readiness verdict line with expandable 6-component breakdown + session block showing planned workout, inline briefing, and Send-to-watch OR completed session, rep chart, adherence, and inline 1-10 `EffortPrompt`), `DailyCheckinCard` (shown before a running activity exists today, or once saved), optional `PlanAdaptationCard`, `BodyPanel`, `RacesPanel`, `CoachNotes`, and any extra same-day activities.
+- **Progress tabs** (`TrendsView.tsx`): **Body** (wellness trends), **Fitness** (Fitness & fatigue, Weekly volume, Performance curve, Intensity, Aerobic efficiency), and **Records** (peak performances).
+- **Settings sections** (`SettingsView.tsx`, `SettingsSectionView.tsx`): index links into 7 sub-pages under `/settings/:section` — `profile`, `zones` (threshold estimates + zone editor), `garmin` (connect/MFA + manual sync), `coach` (coach memory + AI model), `notifications` (device push toggle + 8 categories), `appearance` (system/dark/light), and `data` (CSV/JSON export, DB counts, system health).
 
-### Deployment
-Docker Compose: single multi-stage container (Node builds the React app, Python
-3.12 runs the backend), `/data` volume for SQLite and Garmin tokens. Configured
-via env vars / `.env` (see `.env.example`).
+## 10. Security and deployment
 
----
+- **Authentication** (`app/auth.py`): `AUTH_ENABLED=true` verifies `Cf-Access-Jwt-Assertion` (RS256) against `https://{CF_ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs` (1 h JWKS cache) and `CF_ACCESS_AUD`, upserting `User` by email. `AUTH_ENABLED=false` uses `DEV_USER_EMAIL` / `GARMIN_EMAIL` / `dev@localhost`.
+- **Bind guard** (`app/main.py`, `Dockerfile`, `docker-compose.yml`): `_check_security_config()` refuses startup when `AUTH_ENABLED=false` and `BIND_HOST` is non-loopback, unless `ALLOW_INSECURE_BIND=true`. `Dockerfile` and `docker-compose.yml` set `BIND_HOST=0.0.0.0` so the guard always sees the container bind.
+- **Secrets and transport**: per-user Garmin passwords are Fernet-encrypted with `ENCRYPTION_KEY`. `docker-compose.yml` binds `127.0.0.1:8080:8000` (loopback only on the host), Watchtower is restricted by `WATCHTOWER_LABEL_ENABLE=true`, and `.github/workflows/docker-publish.yml` publishes `:latest` only after `Tests` passes on a push to `main`.
 
-## Notable Gaps and Rough Edges
+## 11. Known limitations
 
-### Garmin API Fragility (monitored, not eliminated)
-`garmin_sync.py`, `adherence.py`, `streams.py`, `weather.py`, and
-`workout_translator.py` still carry extensive field-name fallback logic (e.g.
-`stepType` vs `type`, metric-descriptor key normalization, race goal-time
-extraction, `temp`/`dewPoint` spelling variants, the undocumented Fahrenheit
-weather units, hard-coded Garmin step/condition type IDs). The schema-drift
-canary raises an alarm when contracted fields disappear, but a Garmin change
-*within* a tolerated field (units, nesting, semantics) can still silently degrade
-parsing.
+Open items confirmed against code and `docs/SECOND_OPINION_REVIEW.md` (§5, §7.1):
 
-### Rule-Based Coaching Helpers Are Heuristic, Not Personalized
-Weather pace adjustment, fuelling/hydration, readiness-driven adaptation, and the
-season skeleton are all fixed-formula models from published consensus (Ely heat
-model, generic carb/fluid ramps, readiness bands, 45/35/20 phase split). They're
-deliberately deterministic and cheap, but they don't yet learn an individual's
-heat tolerance, gut tolerance, or historical response — the numbers are
-population averages nudged by a few profile fields.
-
-### Fatigue Resistance: Reframed as the Aerobic Efficiency Trend
-The originally-specced Garmin Endurance Score / Stryd durability analogue
-(comparing late-effort mean-maximal curves against the fresh curve) was
-**redesigned** rather than built as specced. Fatigue-resistance is instead
-surfaced through the **aerobic efficiency trend** — per-activity aerobic
-decoupling (`Activity.decoupling_pct`) and efficiency factor
-(`Activity.efficiency_factor`) tracked over time via `/aerobic-trends` and the
-Trends UI. This reads "can you hold it?" from within-effort drift and economy
-rather than from a separate endurance index, so a discrete durability score is
-intentionally absent.
-
-### Season Plan Is a Skeleton, Not Detailed Sessions
-`season_plan.py` produces phase + target-weekly-volume per week; it does **not**
-prescribe individual workouts. Detailed sessions still come from the rolling
-4-week AI generator, which now consumes the skeleton as context. The two can
-drift if the AI plan diverges from the skeleton's targets, and there's no
-reconciliation pass that flags such divergence.
-
-### Single Bootstrap Tenant in Practice
-The multi-user plumbing (auth, per-user scoping, per-user Garmin credentials) is
-in place, and a startup guard refuses to start on unauthenticated public binds
-(opt-out via `ALLOW_INSECURE_BIND=true`), but the common deployment is still
-single-tenant (env `GARMIN_EMAIL/PASSWORD` seeds user #1, and `auth_enabled`
-defaults to `False`).
-
-### AI Output Still Model-Dependent
-Plan generation uses structured output with a fence-stripping fallback, chat
-tool-use forces schema-valid actions, and the job queue retries failures — but
-chat and analysis quality still depend on the configured provider/model, and a
-provider outage surfaces as a failed `AIJob` / error insight rather than a
-degraded-but-useful result.
-
-### Recompute Cost (reduced, not gone)
-Training-load and CP/CV persist incrementally, so steady-state syncs are cheap.
-But a fingerprint change or a backdated activity still forces recompute from the
-earliest dirty date forward, and some endpoints (custom charts, aerobic trends,
-season plan) recompute derived series per request rather than reading a fully
-materialized cache.
+- **Single-household deployment**: multi-user plumbing exists, but default zone seeding runs once for user #1, startup backfill only uses env credentials, `TIMEZONE`/`DAILY_SYNC_HOUR` are global, canary state is in-memory, and `GET /activities/{id}`'s on-demand route backfill authenticates without passing `current_user` (A4, P4, X2).
+- **Auth and hardening gaps**: container runs as root; CF Access JWT verification skips `iss`, does not refresh JWKS on unknown `kid`, and does not fail closed at startup on empty domain/AUD; push subscription endpoints are unvalidated and overwrite `user_id` on collision; Garmin OAuth tokens are plaintext on disk; CSV export is not formula-escaped; compose healthcheck ignores HTTP status (P3, P5, P6, G5).
+- **Schema and concurrency debt**: zero `ForeignKey` constraints across 20 tables while `user_id` defaults to `1`; `Activity` stores large JSON blobs inline; `SyncStatus` mixes settings, dedup keys, and unbounded performance-curve range caches; manual sync spawns raw daemon threads without per-user locking; dismissing an adaptation twice triggers a unique-constraint 500; `init_db()` silently stamps `head` on unstamped DBs (D1-D4, D6, A5, A6).
+- **AI coach guardrails**: no deterministic post-generation validator on AI plans and no explicit medical red-flag deferral; no prompt caching or spend caps; `mark_setback` always records `category="niggle"` and chat plan tools run without confirmation; provider error/retry logic is duplicated across `providers.py`, `plans.py`, and `chat.py`; `app/ai_coach.py` remains as a test monkeypatch shim (I2-I6, N10).
+- **Analytics caveats**: existing stored `mean_max_json` curves are not recomputed after the 9 m/s speed-cap and 20 m GAP-window change; CTL blends power/average-pace/HR/sRPE/duration TSS and profile threshold edits do not invalidate `DailyLoadSeries`; weather heat adjustment adds temperature and dew-point terms directly; negative-split totals can drift slightly on odd distances; browser pace time-in-zone (`PaceZonesChart`) aggregates ~200 decimated samples (S2 note, S4, S6, S7, N3).
+- **Frontend and CI caveats**: Onboarding "Skip for now" loops back while profile is `null`; `ChatView` does not abort SSE streams on unmount or invalidate caches on tool actions; CI tests run Python 3.11 vs Python 3.12 in Docker; tests build tables via `create_all()` instead of Alembic; `perf/` benchmarks query relative dates against a static committed `perf/perf.db` (F2, F5, T2-T4).

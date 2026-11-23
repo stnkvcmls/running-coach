@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { dayState } from './planDayState'
+import { dayState, isWatchPushable } from './planDayState'
 import type { TrainingPlanDay } from '../api/types'
 
 function day(overrides: Partial<TrainingPlanDay> = {}): TrainingPlanDay {
@@ -19,6 +19,7 @@ function day(overrides: Partial<TrainingPlanDay> = {}): TrainingPlanDay {
     routine: null,
     fuelling_guidance: null,
     matched_activity_id: null,
+    matched_distance_m: null,
     adherence_score: null,
     ...overrides,
   }
@@ -52,5 +53,25 @@ describe('dayState', () => {
   it('is "upcoming" for a future day regardless of match', () => {
     expect(dayState(day({ day_date: '2026-07-10', matched_activity_id: null }), TODAY)).toBe('upcoming')
     expect(dayState(day({ day_date: '2026-07-10', matched_activity_id: 9 }), TODAY)).toBe('upcoming')
+  })
+})
+
+describe('isWatchPushable', () => {
+  it('returns true only for structured run workout types', () => {
+    expect(isWatchPushable('easy')).toBe(true)
+    expect(isWatchPushable('long')).toBe(true)
+    expect(isWatchPushable('tempo')).toBe(true)
+    expect(isWatchPushable('interval')).toBe(true)
+    expect(isWatchPushable('Easy')).toBe(true)
+  })
+
+  it('returns false for non-run and missing workout types', () => {
+    expect(isWatchPushable('strength')).toBe(false)
+    expect(isWatchPushable('cross')).toBe(false)
+    expect(isWatchPushable('rest')).toBe(false)
+    expect(isWatchPushable('race')).toBe(false)
+    expect(isWatchPushable('')).toBe(false)
+    expect(isWatchPushable(null)).toBe(false)
+    expect(isWatchPushable(undefined)).toBe(false)
   })
 })

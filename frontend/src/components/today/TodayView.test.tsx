@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { screen, fireEvent, within } from '@testing-library/react'
 import { renderWithProviders } from '../../test/test-utils'
+import { DateContext } from '../../App'
 import TodayView from './TodayView'
 import type {
   PlanRealignmentStatus,
@@ -39,7 +40,8 @@ const TODAY: TodayResponse = {
     rsb_zone_label: 'Productive', rsb_recommendation: null, sport_breakdown: null,
   },
   readiness: {
-    score: 78, label: 'Good', sleep_component: 80, recovery_component: 75,
+    score: 78, label: 'Good', verdict: 'train', verdict_label: 'Train as planned', reasons: [],
+    sleep_component: 80, recovery_component: 75,
     fatigue_component: 70, rhr_component: 82, hrv_component: 76, subjective_component: null,
   },
   plan_adaptation: {
@@ -65,14 +67,16 @@ interface Options {
   today?: TodayResponse
   plan?: TrainingPlanResponse | null
   season?: SeasonPlanResponse | null
+  activityDetail?: Record<string, unknown> | null
 }
 
-function mockFetch({ today = TODAY, plan = null, season = null }: Options = {}) {
+function mockFetch({ today = TODAY, plan = null, season = null, activityDetail = null }: Options = {}) {
   const fn = vi.fn().mockImplementation((url: string) => {
     const body =
       url.includes('/realignment-status') ? REALIGNMENT
       : url.endsWith('/training-plan') ? plan
       : url.includes('/season-plan') ? season
+      : url.includes('/activities/') ? activityDetail
       : url.includes('/today') ? today
       : url.includes('/calendar/week') ? []
       : url.includes('/wellness-trends') ? []
@@ -84,22 +88,27 @@ function mockFetch({ today = TODAY, plan = null, season = null }: Options = {}) 
   return fn
 }
 
+const NON_RUN_ACTIVITY = {
+  ...TODAY.activities[0],
+  activity_type: 'cycling',
+  name: 'Easy spin',
+}
+
 describe('TodayView layout', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
   })
 
-  it('renders rail, hero, check-in, Body, Form, Races, coach notes and "Also today" in that order', async () => {
-    mockFetch()
+  it('renders rail, hero, check-in, Body, Races, coach notes and "Also today" in that order', async () => {
+    mockFetch({ today: { ...TODAY, activities: [NON_RUN_ACTIVITY] } })
     const { container } = renderWithProviders(<TodayView />)
     await screen.findByText('Body')
 
     const order = [
       container.querySelector('.week-rail'),
       screen.getByRole('region', { name: "Today's session" }),
-      screen.getByText('How do you feel this morning?'),
+      screen.getByText('How do you feel today?'),
       screen.getByRole('heading', { name: 'Body' }),
-      screen.getByRole('heading', { name: 'Form' }),
       screen.getByRole('heading', { name: 'Races' }),
       screen.getByRole('heading', { name: 'From your coach' }),
       screen.getByRole('heading', { name: 'Also today' }),
@@ -107,6 +116,7 @@ describe('TodayView layout', () => {
     for (let i = 1; i < order.length; i++) {
       expect(order[i - 1]!.compareDocumentPosition(order[i]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     }
+    expect(screen.queryByRole('heading', { name: 'Form' })).not.toBeInTheDocument()
   })
 
   it('drops the old score ring, glance grid (with steps), training-load chart and week overview', async () => {
@@ -142,12 +152,11 @@ describe('TodayView layout', () => {
     expect(within(body).getByRole('link', { name: 'Daily history' })).toHaveAttribute('href', '/daily/42')
   })
 
-  it('Form reads as one sentence from the server form band', async () => {
+  it('does not render the Form panel on Today', async () => {
     mockFetch()
     renderWithProviders(<TodayView />)
-    const form = (await screen.findByRole('heading', { name: 'Form' })).closest('section')!
-    expect(within(form).getByText('Very fresh, +17.')).toBeInTheDocument()
-    expect(within(form).getByRole('link', { name: 'Progress' })).toHaveAttribute('href', '/trends')
+    await screen.findByText('Body')
+    expect(screen.queryByRole('heading', { name: 'Form' })).not.toBeInTheDocument()
   })
 
   it('From your coach shows the latest two notes with dates and expands to all', async () => {
@@ -174,16 +183,16 @@ describe('TodayView layout', () => {
   })
 
   it('groups panels into the desktop two-column layout', async () => {
-    mockFetch()
+    mockFetch({ today: { ...TODAY, activities: [NON_RUN_ACTIVITY] } })
     const { container } = renderWithProviders(<TodayView />)
     await screen.findByText('Body')
 
     const left = container.querySelector('.today-col-left')!
     const right = container.querySelector('.today-col-right')!
     expect(within(left as HTMLElement).getByRole('region', { name: "Today's session" })).toBeInTheDocument()
-    expect(left).toHaveTextContent('How do you feel this morning?')
+    expect(left).toHaveTextContent('How do you feel today?')
     expect(right).toHaveTextContent('Body')
-    expect(right).toHaveTextContent('Form')
+    expect(right).not.toHaveTextContent('Form')
     expect(right).toHaveTextContent('Races')
 
     const columns = container.querySelector('.today-columns')!
@@ -191,6 +200,70 @@ describe('TodayView layout', () => {
     const alsoToday = screen.getByRole('heading', { name: 'Also today' })
     expect(columns.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(columns.compareDocumentPosition(alsoToday) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+})
+
+describe('TodayView check-in visibility', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  it('shows the check-in card today before a run exists', async () => {
+    mockFetch({ today: { ...TODAY, activities: [], daily_checkin: null } })
+    renderWithProviders(<TodayView />)
+
+    expect(await screen.findByRole('heading', { name: 'How do you feel today?' })).toBeInTheDocument()
+  })
+
+  it('hides the check-in card once a running activity exists today and shows the RPE prompt instead', async () => {
+    const matchedRun = {
+      ...TODAY.activities[0],
+      id: 3,
+      activity_type: 'running',
+      matched_plan_day_id: 5,
+      workout_tag: 'Easy',
+    }
+    mockFetch({
+      today: { ...TODAY, activities: [matchedRun], daily_checkin: null, plan_day_id: 5 },
+      activityDetail: {
+        id: 3, rpe: null, feedback_rating: null, feedback_tags: null, feedback_text: null,
+        scheduled_workout: null, adherence: null,
+      },
+    })
+    renderWithProviders(<TodayView />)
+
+    expect(await screen.findByText('How hard did it feel?')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'How do you feel today?' })).not.toBeInTheDocument()
+  })
+
+  it('shows the compact check-in chip when a check-in already exists even after a run', async () => {
+    mockFetch({
+      today: {
+        ...TODAY,
+        daily_checkin: { date: '2026-07-09', soreness: 4, energy: 4, mood: 5, soreness_note: null },
+      },
+    })
+    renderWithProviders(<TodayView />)
+
+    expect(await screen.findByRole('button', { name: /feeling great.*low soreness.*edit/i })).toBeInTheDocument()
+  })
+
+  it('does not render the check-in card on a past day without a check-in', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 6, 9, 12, 0))
+    const yesterday = new Date(2026, 6, 8, 12, 0)
+    mockFetch({ today: { ...TODAY, selected_date: '2026-07-08', activities: [], daily_checkin: null } })
+
+    renderWithProviders(
+      <DateContext.Provider value={{ selectedDate: yesterday, setSelectedDate: () => {} }}>
+        <TodayView />
+      </DateContext.Provider>,
+    )
+
+    await screen.findByRole('heading', { name: 'Body' })
+    expect(screen.queryByRole('heading', { name: 'How do you feel today?' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /edit/i })).not.toBeInTheDocument()
   })
 })
 

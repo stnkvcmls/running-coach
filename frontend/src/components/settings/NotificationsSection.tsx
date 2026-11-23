@@ -9,8 +9,9 @@ import {
 } from '../../api/hooks'
 import './NotificationsSection.css'
 
-const PUSH_SUPPORTED =
-  typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window
+function isPushSupported(): boolean {
+  return typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window
+}
 
 function urlBase64ToUint8Array(base64: string): Uint8Array {
   const padding = '='.repeat((4 - (base64.length % 4)) % 4)
@@ -26,23 +27,43 @@ export default function NotificationsSection() {
   const unsubscribe = useDeletePushSubscription()
   const setPrefs = useSetNotificationPreferences()
 
+  const pushSupported = isPushSupported()
   const [subscribed, setSubscribed] = useState(false)
+  const [swReady, setSwReady] = useState(false)
   const [checking, setChecking] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!PUSH_SUPPORTED) {
+    if (!pushSupported) {
       setChecking(false)
       return
     }
-    navigator.serviceWorker.ready
-      .then(reg => reg.pushManager.getSubscription())
-      .then(sub => setSubscribed(!!sub))
-      .catch(() => {})
-      .finally(() => setChecking(false))
-  }, [])
+    let cancelled = false
+    navigator.serviceWorker
+      .getRegistration()
+      .then(reg => {
+        if (cancelled) return
+        if (!reg) {
+          setSwReady(false)
+          return
+        }
+        setSwReady(true)
+        return reg.pushManager.getSubscription().then(sub => {
+          if (!cancelled) setSubscribed(!!sub)
+        })
+      })
+      .catch(() => {
+        if (!cancelled) setSwReady(false)
+      })
+      .finally(() => {
+        if (!cancelled) setChecking(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [pushSupported])
 
-  if (!PUSH_SUPPORTED) {
+  if (!pushSupported) {
     return (
       <section className="settings-section">
         <h2 className="section-title">Notifications</h2>
@@ -60,12 +81,17 @@ export default function NotificationsSection() {
       return
     }
     try {
+      const reg = await navigator.serviceWorker.getRegistration()
+      if (!reg) {
+        setSwReady(false)
+        setError('Notifications need the installed app (service worker not active).')
+        return
+      }
       const permission = await Notification.requestPermission()
       if (permission !== 'granted') {
         setError('Notification permission was denied.')
         return
       }
-      const reg = await navigator.serviceWorker.ready
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapid.public_key),
@@ -85,8 +111,8 @@ export default function NotificationsSection() {
   const handleDisable = async () => {
     setError(null)
     try {
-      const reg = await navigator.serviceWorker.ready
-      const sub = await reg.pushManager.getSubscription()
+      const reg = await navigator.serviceWorker.getRegistration()
+      const sub = await reg?.pushManager.getSubscription()
       if (sub) {
         await unsubscribe.mutateAsync(sub.endpoint)
         await sub.unsubscribe()
@@ -101,7 +127,11 @@ export default function NotificationsSection() {
     <section className="settings-section">
       <h2 className="section-title">Notifications</h2>
       <div className="card notif-card">
-        {checking ? null : subscribed ? (
+        {checking ? null : !swReady ? (
+          <p className="notif-unsupported">
+            Notifications need the installed app (service worker not active).
+          </p>
+        ) : subscribed ? (
           <div className="notif-status">
             <span className="notif-status-line">
               <Bell size={16} /> Push notifications enabled on this device

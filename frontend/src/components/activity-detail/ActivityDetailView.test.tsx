@@ -186,30 +186,58 @@ describe('ActivityDetailView headline and coach verdict', () => {
     expect(screen.queryByText('Workout insights')).not.toBeInTheDocument()
   })
 
-  it('omits the verdict when there is no insight yet, and asks for a rating instead', async () => {
+  it('offers Get coach analysis and an RPE-only prompt when there is no insight and no RPE yet', async () => {
     vi.stubGlobal('fetch', mockFetch(activityDetail()))
     renderDetail()
 
     await screen.findByRole('heading', { name: 'Tempo Run' })
     expect(screen.queryByRole('button', { name: /Full analysis/ })).not.toBeInTheDocument()
-    expect(screen.getByText('How did you find this workout?')).toBeInTheDocument()
-  })
-
-  it('says the analysis is being written once rated', async () => {
-    vi.stubGlobal('fetch', mockFetch(activityDetail({ feedback_rating: 'good' })))
-    renderDetail()
-
-    expect(await screen.findByText('Generating insights...')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Get coach analysis' })).toBeInTheDocument()
+    expect(screen.getByText('How hard did it feel?')).toBeInTheDocument()
     expect(screen.queryByText('How did you find this workout?')).not.toBeInTheDocument()
   })
 
-  it('lists RPE as Effort under More stats', async () => {
+  it('triggers POST /activities/{id}/analyze and shows pending state when Get coach analysis is clicked', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes('/analyze') && init?.method === 'POST') {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ status: 'queued', job_id: 99 }) })
+      }
+      if (url.includes('/jobs/99')) {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ id: 99, task_type: 'analyze_activity', status: 'running', attempts: 1, max_attempts: 3, error_message: null, created_at: null, started_at: null, completed_at: null }) })
+      }
+      if (url.includes('/activities/1')) {
+        return Promise.resolve({ ok: true, status: 200, json: async () => activityDetail() })
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({}) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    renderDetail()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Get coach analysis' }))
+
+    expect(await screen.findByText('Generating insights...')).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/activities/1/analyze',
+      expect.objectContaining({ method: 'POST' }),
+    )
+  })
+
+  it('does not show pending insights state from feedback_rating alone', async () => {
+    vi.stubGlobal('fetch', mockFetch(activityDetail({ feedback_rating: 'good' })))
+    renderDetail()
+
+    expect(await screen.findByRole('button', { name: 'Get coach analysis' })).toBeInTheDocument()
+    expect(screen.queryByText('Generating insights...')).not.toBeInTheDocument()
+  })
+
+  it('lists RPE as Effort under More stats and hides the RPE prompt when already rated', async () => {
     vi.stubGlobal('fetch', mockFetch(activityDetail({ rpe: 7 })))
     renderDetail()
 
     await screen.findByText('More stats')
     const effort = screen.getByText('Effort').closest('.stat-cell') as HTMLElement
     expect(effort).toHaveTextContent('7of 10')
+    expect(screen.queryByText('How hard did it feel?')).not.toBeInTheDocument()
   })
 })
 

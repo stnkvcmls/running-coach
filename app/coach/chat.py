@@ -28,6 +28,7 @@ from app.models import (
 )
 from app.coach.context import SYSTEM_PROMPT, _build_context, _format_activity_context, _load_zones, _load_zone_configs
 from app.coach.providers import AITransientError, AIFatalError, _gemini_client
+from app.utils import local_today
 
 CHAT_SYSTEM_PROMPT = SYSTEM_PROMPT + """
 
@@ -65,7 +66,7 @@ def _format_upcoming_plan_context(db: Session, user_id: int) -> str:
     )
     if not plan:
         return ""
-    today = date.today()
+    today = local_today()
     days = (
         db.query(TrainingPlanDay)
         .filter(

@@ -57,7 +57,7 @@ def _essentials_only():
     the prior-activities lookup below) would multiply that cost across
     thousands of rows for no reason.
     """
-    return load_only(Activity.activity_type, Activity.started_at, Activity.mean_max_json)
+    return load_only(Activity.id, Activity.activity_type, Activity.started_at, Activity.mean_max_json)
 
 
 def _is_run(activity_type: str | None) -> bool:
@@ -324,26 +324,55 @@ def get_recent_records(
 def get_distance_top_n(
     db: Session, user_id: int = DEFAULT_USER_ID, top_n: int = 3
 ) -> dict[str, list[PersonalRecord]]:
-    """Top-``top_n`` historical bests per race distance, fastest first.
+    """Top-``top_n`` fastest per-activity efforts per race distance, fastest first.
 
-    ``PersonalRecord`` is append-only and a row is only created when a time
-    actually beats the prior best for that distance, so the sequence of rows
-    for a given distance label is already strictly improving over time — the
-    most-recently-achieved row is the fastest, the one before it is the
-    second-fastest, and so on. Sorting by ``achieved_at`` descending therefore
-    gives the fastest-first rank directly, with no separate ranking query.
+    Ranks actual per-activity rolling-window ``distance_efforts`` across all of
+    the user's runs rather than reading the append-only ``PersonalRecord``
+    table (which only stores PR milestones that beat an earlier all-time best
+    and omits fast efforts run after an earlier PR). Returns transient
+    ``PersonalRecord`` instances (never added to the session) so callers can
+    serialize them with the standard PR response helper; ties are broken by
+    earlier ``started_at``.
     """
-    all_records = (
-        db.query(PersonalRecord)
-        .filter(PersonalRecord.user_id == user_id, PersonalRecord.record_type == "distance")
-        .order_by(PersonalRecord.achieved_at.desc())
+    if top_n <= 0:
+        return {}
+    activities = (
+        db.query(Activity)
+        .options(_essentials_only())
+        .filter(
+            Activity.user_id == user_id,
+            Activity.started_at.isnot(None),
+            Activity.mean_max_json.isnot(None),
+        )
         .all()
     )
+    by_label: dict[str, list[tuple[float, datetime, int, Activity]]] = {}
+    for activity in activities:
+        if not _is_run(activity.activity_type):
+            continue
+        for label, seconds in _distance_efforts(activity).items():
+            by_label.setdefault(label, []).append(
+                (seconds, activity.started_at, activity.id, activity)
+            )
+
     out: dict[str, list[PersonalRecord]] = {}
-    for r in all_records:
-        bucket = out.setdefault(r.distance_label, [])
-        if len(bucket) < top_n:
-            bucket.append(r)
+    for label, entries in by_label.items():
+        entries.sort(key=lambda e: (e[0], e[1], e[2]))
+        out[label] = [
+            PersonalRecord(
+                id=activity.id,
+                user_id=user_id,
+                record_type="distance",
+                metric=None,
+                duration_sec=None,
+                distance_label=label,
+                value=seconds,
+                previous_value=None,
+                activity_id=activity.id,
+                achieved_at=activity.started_at,
+            )
+            for seconds, _started_at, _act_id, activity in entries[:top_n]
+        ]
     return out
 
 

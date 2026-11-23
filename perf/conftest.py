@@ -17,6 +17,7 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
+from datetime import date, datetime, time
 from pathlib import Path
 
 import pytest
@@ -116,7 +117,7 @@ def ids():
             "activity_id": recent_acts[0].id,
             # A second, distinct activity is the target for mutating endpoints
             # so it cannot perturb the activity-detail read benchmark.
-            "feedback_activity_id": recent_acts[1].id,
+            "mutate_activity_id": recent_acts[1].id,
             "summary_id": summary.id,
             "event_id": workout_event.id,
             # Anchored to seeded data so date-scoped endpoints hit populated
@@ -126,3 +127,24 @@ def ids():
         }
     finally:
         session.close()
+
+
+@pytest.fixture
+def seed_clock(monkeypatch, ids):
+    """Pin app.threshold's clock to the last seeded day.
+
+    The threshold estimate looks back 90 days from ``datetime.utcnow()``; the
+    committed perf.db ends on a fixed date, so without this the estimate is
+    empty once that date is more than 90 days old (the apply endpoint then
+    400s and the GET benchmark measures an empty path).
+    """
+    import app.threshold as threshold
+
+    anchor = datetime.combine(date.fromisoformat(ids["day"]), time(23, 59))
+
+    class _SeedDatetime(datetime):
+        @classmethod
+        def utcnow(cls):
+            return anchor
+
+    monkeypatch.setattr(threshold, "datetime", _SeedDatetime)

@@ -18,6 +18,7 @@ from datetime import date, datetime, timedelta
 from sqlalchemy.orm import Session
 
 from app.models import DEFAULT_USER_ID, Activity, ZoneConfig
+from app.utils import local_today
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +127,7 @@ def aggregate_weekly_intensity(
     each with ``week_start``, ``zone_seconds``, ``total_seconds``,
     ``easy_pct``, ``moderate_pct``, ``hard_pct``.
     """
-    ref = as_of or date.today()
+    ref = as_of or local_today()
     cutoff = datetime.combine(ref - timedelta(days=days), datetime.min.time())
     ref_dt = datetime.combine(ref + timedelta(days=1), datetime.min.time())
 

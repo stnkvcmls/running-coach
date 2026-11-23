@@ -21,6 +21,7 @@ function day(overrides: Partial<TrainingPlanDay> = {}): TrainingPlanDay {
     routine: null,
     fuelling_guidance: null,
     matched_activity_id: null,
+    matched_distance_m: null,
     adherence_score: null,
     ...overrides,
   }
@@ -100,24 +101,21 @@ describe('PlanView', () => {
     expect(link).toHaveAttribute('href', '/activities/123')
   })
 
-  it("counts today's completed run toward the week, using the actual distance", async () => {
+  it("counts today's completed run toward the week, using matched_distance_m without extra activity fetches", async () => {
     const weeks = [
       week(1, '2026-07-06', '2026-07-12', [
-        day({ id: 12, day_date: '2026-07-10', workout_type: 'interval', target_distance_m: 9000, matched_activity_id: 55, adherence_score: 96 }),
+        day({ id: 12, day_date: '2026-07-10', workout_type: 'interval', target_distance_m: 9000, matched_activity_id: 55, matched_distance_m: 9220, adherence_score: 96 }),
         day({ id: 13, day_date: '2026-07-12', workout_type: 'long', target_distance_m: 20000 }),
       ]),
     ]
-    const fetchMock = vi.fn().mockImplementation((url: string) => {
-      if (url.endsWith('/training-plan')) return Promise.resolve({ ok: true, status: 200, json: async () => plan(weeks) })
-      if (url.endsWith('/activities/55')) return Promise.resolve({ ok: true, status: 200, json: async () => ({ id: 55, distance_m: 9220 }) })
-      return Promise.resolve({ ok: true, status: 200, json: async () => null })
-    })
+    const fetchMock = mockFetch(plan(weeks))
     vi.stubGlobal('fetch', fetchMock)
     renderWithProviders(<PlanView />)
 
     expect(await screen.findByText('9.22')).toBeInTheDocument()
     expect(screen.getByText(/of 29 km/)).toBeInTheDocument()
     expect(screen.getByText('9.2')).toBeInTheDocument()
+    expect(calledUrl(fetchMock, '/activities/55')).toBe(false)
   })
 
   it('shows "Missed" for a past day with no matching activity', async () => {

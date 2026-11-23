@@ -873,3 +873,129 @@ def test_format_adherence_context_minimal():
     ctx = adh.format_adherence_context(adherence)
     assert "## Workout Adherence" in ctx
     assert "100" in ctx
+
+
+# ---------------------------------------------------------------------------
+# adherence_for_activity — single source of truth across detail & plan (N1)
+# ---------------------------------------------------------------------------
+
+def _seed_plan_and_run_for_date(db, day_date):
+    from datetime import datetime
+    from app.models import Activity, TrainingPlan, TrainingPlanDay
+
+    plan = TrainingPlan(
+        week_start=day_date,
+        plan_weeks=1,
+        phase="build",
+        overview="Test plan",
+    )
+    db.add(plan)
+    db.flush()
+
+    # Plan day whose translated workout (10 km tempo @ 4:30/km) differs from
+    # a 6x800m @ 4:00/km watch workout.
+    plan_day = TrainingPlanDay(
+        plan_id=plan.id,
+        week_number=1,
+        day_date=day_date,
+        day_of_week=day_date.strftime("%A"),
+        workout_type="tempo",
+        target_distance_m=10000.0,
+        target_pace_min_km=4.5,
+        target_pace_display="4:30/km",
+        description="10 km tempo",
+    )
+    db.add(plan_day)
+
+    # Executed run matching 6x800m @ 4:00/km (plus 1 km warmup, 1 km cooldown,
+    # 6x400m rest = 6800 m running + 2400 m rest = 9200 m total).
+    lap_dtos = [{"distance": 1000, "duration": 330, "intensityType": "WARMUP"}]
+    for _ in range(6):
+        lap_dtos.append({"distance": 800, "duration": 192, "intensityType": "INTERVAL"})
+        lap_dtos.append({"distance": 400, "duration": 180, "intensityType": "REST"})
+    lap_dtos.append({"distance": 1000, "duration": 330, "intensityType": "COOLDOWN"})
+
+    activity = Activity(
+        garmin_id=900100 + day_date.toordinal(),
+        activity_type="running",
+        name="6x800m Intervals",
+        started_at=datetime.combine(day_date, datetime.min.time().replace(hour=7)),
+        distance_m=9200.0,
+        duration_sec=2892.0,
+        avg_pace_min_km=4.5,
+        splits_json=json.dumps({"lapDTOs": lap_dtos}),
+    )
+    db.add(activity)
+    db.commit()
+    db.refresh(plan_day)
+    db.refresh(activity)
+    return plan_day, activity
+
+
+def test_activity_detail_and_plan_agree_when_garmin_workout_exists(client, db):
+    from datetime import date, timedelta
+    from app.models import GarminCalendarEvent
+
+    day_date = date.today() - timedelta(days=1)
+    plan_day, activity = _seed_plan_and_run_for_date(db, day_date)
+
+    garmin_steps = {
+        "workoutSteps": [
+            {"stepType": "warmup", "endCondition": "distance", "endConditionValue": 1000},
+            {
+                "stepType": "repeat",
+                "repeatCount": 6,
+                "workoutSteps": [
+                    {
+                        "stepType": "interval",
+                        "endCondition": "distance",
+                        "endConditionValue": 800,
+                        "targetType": "pace",
+                        "targetValueOne": 1000 / 240,  # 4:00/km
+                    },
+                    {"stepType": "rest", "endCondition": "distance", "endConditionValue": 400},
+                ],
+            },
+            {"stepType": "cooldown", "endCondition": "distance", "endConditionValue": 1000},
+        ]
+    }
+    db.add(GarminCalendarEvent(
+        garmin_id="wo-n1-6x800",
+        event_type="workout",
+        date=day_date,
+        title="6x800m",
+        raw_json=json.dumps(garmin_steps),
+    ))
+    db.commit()
+
+    detail_resp = client.get(f"/api/v1/activities/{activity.id}")
+    assert detail_resp.status_code == 200
+    detail_score = detail_resp.json()["adherence"]["adherence_score"]
+
+    plan_resp = client.get("/api/v1/training-plan")
+    assert plan_resp.status_code == 200
+    days = [d for w in plan_resp.json()["weeks"] for d in w["days"]]
+    plan_day_resp = next(d for d in days if d["id"] == plan_day.id)
+
+    assert detail_score == pytest.approx(100.0)
+    assert plan_day_resp["adherence_score"] == detail_score
+
+
+def test_activity_detail_and_plan_agree_without_garmin_event(client, db):
+    from datetime import date, timedelta
+
+    day_date = date.today() - timedelta(days=2)
+    plan_day, activity = _seed_plan_and_run_for_date(db, day_date)
+
+    detail_resp = client.get(f"/api/v1/activities/{activity.id}")
+    assert detail_resp.status_code == 200
+    detail_adherence = detail_resp.json()["adherence"]
+    assert detail_adherence is not None
+
+    plan_resp = client.get("/api/v1/training-plan")
+    assert plan_resp.status_code == 200
+    days = [d for w in plan_resp.json()["weeks"] for d in w["days"]]
+    plan_day_resp = next(d for d in days if d["id"] == plan_day.id)
+
+    assert plan_day_resp["adherence_score"] is not None
+    assert detail_adherence["adherence_score"] == plan_day_resp["adherence_score"]

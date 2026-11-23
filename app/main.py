@@ -4,9 +4,10 @@ import json
 import logging
 import os
 import threading
+import time
 
 from contextlib import asynccontextmanager
-from datetime import date, timedelta
+from datetime import datetime, timedelta, timezone
 
 from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_EXECUTED
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -18,7 +19,9 @@ import pytz
 
 from app.config import settings
 from app.database import db_session, init_db
-from app.models import DailySummary, GarminCalendarEvent, SyncStatus, TrainingPlanDay, User
+from app.models import DailySummary, GarminCalendarEvent, Insight, SyncStatus, User
+from app.plan_days import get_active_plan_day
+from app.utils import local_today
 
 logging.basicConfig(
     level=logging.INFO,
@@ -117,26 +120,132 @@ def _iter_garmin_users() -> list[User]:
         return users
 
 
-def _authenticate_or_flag(user: User) -> bool:
-    """Verify a user's Garmin client authenticates; flag for re-auth if not.
+# Per-user Garmin 429 rate-limit cooldown state (G2/G1).
+# Starts at 30 min and doubles on consecutive 429s up to 4 h; cleared on
+# the next successful sync. Only gates scheduled loops; manual API syncs
+# still run on demand.
+_GARMIN_COOLDOWN_BASE_SECONDS = 30 * 60
+_GARMIN_COOLDOWN_MAX_SECONDS = 4 * 60 * 60
+_garmin_cooldown_until: dict[int, float] = {}
+_garmin_cooldown_step: dict[int, int] = {}
 
-    A cron can't satisfy an interactive MFA prompt, so when a user's tokens are
-    gone/expired and login fails we mark them ``needs_reauth`` and skip — the
-    Settings UI surfaces a Reconnect action. Returns True when authenticated.
+
+def _start_garmin_cooldown(user_id: int) -> float:
+    """Start or escalate a Garmin 429 cooldown for ``user_id`` (30m -> 4h)."""
+    step = _garmin_cooldown_step.get(user_id, 0)
+    delay = min(_GARMIN_COOLDOWN_BASE_SECONDS * (2 ** step), _GARMIN_COOLDOWN_MAX_SECONDS)
+    _garmin_cooldown_step[user_id] = step + 1
+    _garmin_cooldown_until[user_id] = time.monotonic() + delay
+    logger.warning(
+        "Garmin rate-limited (429) for user %s; pausing scheduled syncs for %d minutes",
+        user_id, delay // 60,
+    )
+    return delay
+
+
+def _garmin_in_cooldown(user_id: int) -> bool:
+    """Return True if ``user_id`` is currently inside a 429 cooldown window."""
+    until = _garmin_cooldown_until.get(user_id)
+    if until is None:
+        return False
+    if time.monotonic() >= until:
+        _garmin_cooldown_until.pop(user_id, None)
+        return False
+    return True
+
+
+def _clear_garmin_cooldown(user_id: int) -> None:
+    """Clear any active 429 cooldown and backoff step after a successful sync."""
+    _garmin_cooldown_until.pop(user_id, None)
+    _garmin_cooldown_step.pop(user_id, None)
+
+
+def _authenticate_or_flag(user: User) -> bool:
+    """Verify a user's Garmin client authenticates; flag for re-auth only on auth errors.
+
+    A cron can't satisfy an interactive MFA prompt or recover from bad/undecryptable
+    credentials, so those mark ``needs_reauth`` and skip until the user reconnects.
+    Rate limits (429) start a temporary cooldown; transient network/5xx errors only
+    log a warning and leave background sync enabled. Returns True when authenticated.
     """
+    from cryptography.fernet import InvalidToken
+    from garminconnect.exceptions import (
+        GarminConnectAuthenticationError,
+        GarminConnectTooManyRequestsError,
+    )
     from app.garmin_sync import get_garmin_client, mark_garmin_needs_reauth
 
     try:
         get_garmin_client(user)
         return True
-    except Exception:
+    except (GarminConnectAuthenticationError, InvalidToken):
         logger.exception("Garmin auth failed for user %s; flagging needs_reauth", user.id)
         mark_garmin_needs_reauth(user.id, True)
         return False
+    except GarminConnectTooManyRequestsError:
+        _start_garmin_cooldown(user.id)
+        return False
+    except Exception as exc:
+        logger.warning(
+            "Transient Garmin error during auth for user %s (not flagging needs_reauth): %s",
+            user.id, exc,
+        )
+        return False
 
 
-def run_activity_sync_for_user(user_id: int) -> None:
-    """Sync one user's activities + calendar (used by the API manual trigger)."""
+def _auto_analyze_new_activities(user_id: int, new_activities) -> None:
+    """Enqueue AI analysis for newly synced recent runs without an existing insight."""
+    if not settings.auto_analyze_activities or not new_activities:
+        return
+    try:
+        candidates = list(new_activities)
+    except TypeError:
+        return
+    if not candidates:
+        return
+
+    from app import training_load
+    from app.ai_coach import enqueue_job
+
+    cutoff_utc = datetime.now(timezone.utc) - timedelta(hours=48)
+    cutoff_naive = cutoff_utc.replace(tzinfo=None)
+
+    with db_session() as db:
+        for a in candidates:
+            try:
+                if not training_load.is_run(getattr(a, "activity_type", None)):
+                    continue
+                started_at = getattr(a, "started_at", None)
+                if started_at is None:
+                    continue
+                if started_at.tzinfo is not None:
+                    if started_at < cutoff_utc:
+                        continue
+                elif started_at < cutoff_naive:
+                    continue
+                existing = (
+                    db.query(Insight)
+                    .filter(
+                        Insight.user_id == user_id,
+                        Insight.trigger_type == "activity",
+                        Insight.trigger_id == a.id,
+                    )
+                    .first()
+                )
+                if existing is not None:
+                    continue
+                enqueue_job("analyze_activity", {"activity_id": a.id}, user_id)
+            except Exception:
+                logger.exception(
+                    "Auto-analyze enqueue failed for activity %s (user %s)",
+                    getattr(a, "id", None),
+                    user_id,
+                )
+
+
+def run_activity_sync_for_user(user_id: int, include_calendar: bool = True) -> None:
+    """Sync one user's activities (and optionally calendar; manual trigger keeps default True)."""
+    from garminconnect.exceptions import GarminConnectTooManyRequestsError
     from app.garmin_sync import sync_activities, sync_calendar
 
     with db_session() as db:
@@ -147,23 +256,38 @@ def run_activity_sync_for_user(user_id: int) -> None:
 
     if not _authenticate_or_flag(user):
         return
-    sync_activities(user)
     try:
-        sync_calendar(user)
+        new_activities = sync_activities(user)
+    except GarminConnectTooManyRequestsError:
+        _start_garmin_cooldown(user_id)
+        return
+
+    try:
+        _auto_analyze_new_activities(user_id, new_activities)
     except Exception:
-        logger.exception("Calendar sync failed for user %s", user_id)
+        logger.exception("Auto-analyze check failed for user %s", user_id)
+
+    if include_calendar:
+        try:
+            sync_calendar(user)
+        except GarminConnectTooManyRequestsError:
+            _start_garmin_cooldown(user_id)
+            return
+        except Exception:
+            logger.exception("Calendar sync failed for user %s", user_id)
+
+    _clear_garmin_cooldown(user_id)
 
 
 def run_daily_sync_for_user(user_id: int) -> None:
-    """Sync one user's rolling window of daily summaries and analyze today.
+    """Sync one user's rolling window of daily summaries and trigger morning checks.
 
     Garmin attributes overnight metrics (sleep, HRV, resting HR) to the wake-up
     day, so we sync *today* to capture last night's data on the correct date, and
-    re-sync the prior days in the window so their full-day totals finalize. AI
-    analysis runs only on today's (newest) summary.
+    re-sync the prior days in the window so their full-day totals finalize.
     """
-    from app.garmin_sync import sync_athlete_profile, sync_daily_summary
-    from app.ai_coach import analyze_daily_summary
+    from garminconnect.exceptions import GarminConnectTooManyRequestsError
+    from app.garmin_sync import sync_athlete_profile, sync_calendar, sync_daily_summary
 
     with db_session() as db:
         user = db.query(User).filter(User.id == user_id).first()
@@ -176,23 +300,34 @@ def run_daily_sync_for_user(user_id: int) -> None:
 
     try:
         sync_athlete_profile(user)
+    except GarminConnectTooManyRequestsError:
+        _start_garmin_cooldown(user_id)
+        return
     except Exception:
         logger.exception("Athlete profile sync failed for user %s", user_id)
 
+    try:
+        sync_calendar(user)
+    except GarminConnectTooManyRequestsError:
+        _start_garmin_cooldown(user_id)
+        return
+    except Exception:
+        logger.exception("Calendar sync failed for user %s", user_id)
+
     window = max(1, settings.daily_sync_window_days)
-    today = date.today()
+    today = local_today()
     today_summary = None
     for offset in range(window):
         target = today - timedelta(days=offset)
-        summary = sync_daily_summary(target, user)
+        try:
+            summary = sync_daily_summary(target, user)
+        except GarminConnectTooManyRequestsError:
+            _start_garmin_cooldown(user_id)
+            return
         if offset == 0:
             today_summary = summary
 
-    if today_summary:
-        try:
-            analyze_daily_summary(today_summary)
-        except Exception:
-            logger.exception("AI analysis failed for daily summary %s", today_summary.id)
+    _clear_garmin_cooldown(user_id)
 
     try:
         _push_plan_adaptation_if_needed(user_id, today_summary)
@@ -230,14 +365,10 @@ def _push_plan_adaptation_if_needed(user_id: int, today_summary: DailySummary | 
 
     if today_summary is None:
         return
-    today = date.today()
+    today = local_today()
 
     with db_session() as db:
-        plan_day = (
-            db.query(TrainingPlanDay)
-            .filter(TrainingPlanDay.user_id == user_id, TrainingPlanDay.day_date == today)
-            .first()
-        )
+        plan_day = get_active_plan_day(db, user_id, today)
         if plan_day is None:
             return
 
@@ -294,13 +425,9 @@ def _generate_briefing_if_needed(user_id: int) -> None:
     """
     from app.ai_coach import enqueue_job
 
-    today = date.today()
+    today = local_today()
     with db_session() as db:
-        plan_day = (
-            db.query(TrainingPlanDay)
-            .filter(TrainingPlanDay.user_id == user_id, TrainingPlanDay.day_date == today)
-            .first()
-        )
+        plan_day = get_active_plan_day(db, user_id, today)
         if plan_day is None:
             return
 
@@ -329,7 +456,7 @@ def _push_race_week_reminders(user_id: int, days_out: int = 7) -> None:
     """
     from app import notifications as notifications_mod
 
-    target_date = date.today() + timedelta(days=days_out)
+    target_date = local_today() + timedelta(days=days_out)
     with db_session() as db:
         races = (
             db.query(GarminCalendarEvent)
@@ -355,7 +482,7 @@ def _push_race_week_reminders(user_id: int, days_out: int = 7) -> None:
                 body=f"{race.title or 'Your race'} is one week away ({race.date}).",
                 url="/",
             )
-            db.add(SyncStatus(user_id=user_id, key=dedup_key, value=date.today().isoformat()))
+            db.add(SyncStatus(user_id=user_id, key=dedup_key, value=local_today().isoformat()))
         db.commit()
 
 
@@ -407,43 +534,76 @@ def _push_canary_alarms_if_needed(user_id: int) -> None:
 
 
 def _scheduled_activity_sync():
-    """Scheduled job: sync activities + calendar for every connected user."""
+    """Scheduled job: sync activities for every connected user."""
     for user in _iter_garmin_users():
+        if _garmin_in_cooldown(user.id):
+            logger.info("Skipping scheduled activity sync for user %s (Garmin cooldown)", user.id)
+            continue
         try:
-            run_activity_sync_for_user(user.id)
+            run_activity_sync_for_user(user.id, include_calendar=False)
         except Exception:
             logger.exception("Activity sync failed for user %s", user.id)
 
 
 def _scheduled_daily_sync():
-    """Scheduled job: per-user rolling daily-summary sync + AI analysis."""
+    """Scheduled job: per-user rolling daily-summary sync."""
     for user in _iter_garmin_users():
+        if _garmin_in_cooldown(user.id):
+            logger.info("Skipping scheduled daily sync for user %s (Garmin cooldown)", user.id)
+            continue
         try:
             run_daily_sync_for_user(user.id)
         except Exception:
             logger.exception("Daily sync failed for user %s", user.id)
 
 
+def _scheduled_calendar_sync():
+    """Scheduled job: sync Garmin calendar (races + workouts) for every connected user."""
+    from garminconnect.exceptions import GarminConnectTooManyRequestsError
+    from app.garmin_sync import sync_calendar
+
+    for user in _iter_garmin_users():
+        if _garmin_in_cooldown(user.id):
+            logger.info("Skipping scheduled calendar sync for user %s (Garmin cooldown)", user.id)
+            continue
+        try:
+            if not _authenticate_or_flag(user):
+                continue
+            sync_calendar(user)
+            _clear_garmin_cooldown(user.id)
+        except GarminConnectTooManyRequestsError:
+            _start_garmin_cooldown(user.id)
+        except Exception:
+            logger.exception("Calendar sync failed for user %s", user.id)
+
+
 def _scheduled_weekly_review():
-    """Scheduled job: weekly training review for every connected user."""
-    from app.ai_coach import weekly_review
+    """Scheduled job: enqueue weekly training review for every connected user."""
+    from app.ai_coach import enqueue_job
 
     for user in _iter_garmin_users():
         try:
-            weekly_review(user_id=user.id)
+            enqueue_job("weekly_review", {}, user.id)
         except Exception:
-            logger.exception("Weekly review failed for user %s", user.id)
+            logger.exception("Weekly review enqueue failed for user %s", user.id)
 
 
 def _scheduled_plan_generation():
-    """Scheduled job: regenerate the training plan for every connected user."""
-    from app.ai_coach import generate_training_plan
+    """Scheduled job: enqueue training plan regeneration for every connected user."""
+    from app.ai_coach import enqueue_job
 
     for user in _iter_garmin_users():
         try:
-            generate_training_plan(user_id=user.id)
+            enqueue_job("generate_plan", {}, user.id)
         except Exception:
-            logger.exception("Plan generation failed for user %s", user.id)
+            logger.exception("Plan generation enqueue failed for user %s", user.id)
+
+
+def _reap_stuck_jobs():
+    """APScheduler job: recover AIJobs stuck in 'running' past the timeout."""
+    from app.ai_coach import reap_stuck_jobs
+
+    reap_stuck_jobs()
 
 
 def _worker_run_pending_jobs():
@@ -457,29 +617,32 @@ def _worker_run_pending_jobs():
     job (e.g. a large plan generation) no longer delays every other user's
     jobs or the next scheduler tick.
 
-    Each claimed job gets up to _JOB_TIMEOUT_SECONDS of wait time per poll.
-    A job that runs longer keeps executing on its pool thread and records
-    its own outcome whenever it finishes -- the poll just stops waiting on
-    it, so the scheduler thread is never blocked past the cap.
+    The batch shares one _JOB_TIMEOUT_SECONDS wait window per poll. Any job
+    that runs longer keeps executing on its pool thread and records its own
+    outcome whenever it finishes -- the poll just stops waiting on it, so
+    the scheduler thread is never blocked past the cap.
     """
     from app.ai_coach import _claim_pending_jobs, _run_claimed_job, _JOB_TIMEOUT_SECONDS
 
     claimed_jobs = _claim_pending_jobs(limit=_JOB_POOL_SIZE)
+    if not claimed_jobs:
+        return
     futures = {
         _job_executor.submit(_run_claimed_job, claimed): claimed["job_id"]
         for claimed in claimed_jobs
     }
-    for future, job_id in futures.items():
+    done, not_done = concurrent.futures.wait(futures, timeout=_JOB_TIMEOUT_SECONDS)
+    for future in done:
         try:
-            future.result(timeout=_JOB_TIMEOUT_SECONDS)
-        except concurrent.futures.TimeoutError:
-            logger.warning(
-                "Worker: job %s still running past %ds timeout; continuing "
-                "in the background, worker moving on to the next poll",
-                job_id, _JOB_TIMEOUT_SECONDS,
-            )
+            future.result()
         except Exception:
-            logger.exception("Worker: unexpected error executing job %s", job_id)
+            logger.exception("Worker: unexpected error executing job %s", futures[future])
+    for future in not_done:
+        logger.warning(
+            "Worker: job %s still running past %ds timeout; continuing "
+            "in the background, worker moving on to the next poll",
+            futures[future], _JOB_TIMEOUT_SECONDS,
+        )
 
 
 def _run_backfill():
@@ -520,6 +683,14 @@ async def lifespan(app: FastAPI):
         logger.exception("Bootstrap user seeding failed")
     logger.info("Database initialized")
 
+    # Nothing can legitimately be running before the scheduler starts, so every
+    # "running" job left over is from a previous process: reap them all now.
+    from app.ai_coach import reap_stuck_jobs
+    try:
+        reap_stuck_jobs(older_than_minutes=0)
+    except Exception:
+        logger.exception("Startup stuck AI job reaping failed")
+
     tz = pytz.timezone(settings.timezone)
 
     # Schedule activity sync every N minutes
@@ -528,6 +699,15 @@ async def lifespan(app: FastAPI):
         IntervalTrigger(minutes=settings.activity_poll_minutes),
         id="activity_sync",
         name="Activity Sync",
+        replace_existing=True,
+    )
+
+    # Schedule calendar sync every N hours (races + scheduled workouts)
+    scheduler.add_job(
+        _scheduled_calendar_sync,
+        IntervalTrigger(hours=settings.calendar_sync_hours),
+        id="calendar_sync",
+        name="Calendar Sync",
         replace_existing=True,
     )
 
@@ -567,11 +747,21 @@ async def lifespan(app: FastAPI):
         replace_existing=True,
     )
 
+    # Reap AI jobs left stuck in 'running' past the timeout every 10 minutes
+    scheduler.add_job(
+        _reap_stuck_jobs,
+        IntervalTrigger(minutes=10),
+        id="ai_job_reaper",
+        name="AI Job Reaper",
+        replace_existing=True,
+    )
+
     scheduler.add_listener(_trim_after_job, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR)
     scheduler.start()
     logger.info(
-        "Scheduler started (activities every %dm, daily at %d:00 %s)",
+        "Scheduler started (activities every %dm, calendar every %dh, daily at %d:00 %s)",
         settings.activity_poll_minutes,
+        settings.calendar_sync_hours,
         settings.daily_sync_hour,
         settings.timezone,
     )
@@ -608,6 +798,16 @@ app.include_router(api_router)
 
 # SPA: serve React index.html for all non-API, non-static paths
 from fastapi.responses import FileResponse  # noqa: E402
+
+
+@app.get("/sw.js", include_in_schema=False)
+async def service_worker():
+    """Serve the PWA service worker at root scope so it can control '/' and push."""
+    return FileResponse(
+        os.path.join(static_dir, "sw.js"),
+        media_type="application/javascript",
+        headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"},
+    )
 
 
 @app.get("/{full_path:path}", include_in_schema=False)

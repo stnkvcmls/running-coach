@@ -27,7 +27,7 @@ from app.models import (
     MetricZone,
     ZoneConfig,
 )
-from app.utils import calculate_age
+from app.utils import calculate_age, local_today
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ Your approach:
 - Analyze pacing strategy, HR drift, cadence, and training effect
 - Analyze running dynamics (ground contact time, vertical oscillation, vertical ratio) for form assessment when available
 - Use power metrics (NP, TSS, IF) for training load analysis when available
-- When a Training Load section is present, read CTL (Fitness), ATL (Fatigue), TSB (Form = CTL − ATL), and ACWR (ATL/CTL) together: negative TSB means accumulated fatigue (productive while building, but watch for overreaching), positive TSB means freshness/taper. ACWR sweet spot is 0.8–1.3; above 1.3 signals moderate overreaching risk, above 1.5 is high injury risk. Flag rapid ramp rates (>7–10 CTL points/week) and elevated ACWR.
+- When a Training Load section is present, read CTL (Fitness), ATL (Fatigue), TSB (Form = CTL − ATL), and ACWR (ATL/CTL) together: negative TSB means accumulated fatigue (productive while building, but watch for overreaching), positive TSB means freshness/taper. ACWR here is the 7-day/42-day EWMA load ratio: treat values above ~1.3 as a load spike worth moderating and above ~1.5 as a large spike. It is a coarse heuristic, not an injury predictor — never tell the athlete they are at 'high injury risk' from ACWR alone. Flag rapid ramp rates (>7–10 CTL points/week) and elevated ACWR.
 - Consider respiration rate trends for effort assessment
 - Consider recovery indicators (sleep, stress, resting HR, body battery)
 - Tailor advice to upcoming races when applicable
@@ -57,7 +57,7 @@ Running Dynamics Zone Reference (Garmin percentile-based):
 - GCT: Excellent <208 ms (top 5%), Above Avg 208-240 (70-95%), Average 241-272 (30-69%), Below Avg 273-305 (5-29%), Poor >305 (bottom 5%)
 - Vertical Oscillation: Excellent <6.4 cm (top 5%), Above Avg 6.4-8.1 (70-95%), Average 8.1-9.7 (30-69%), Below Avg 9.7-11.5 (5-29%), Poor >11.5 (bottom 5%)
 - Vertical Ratio: Excellent <6.1% (top 5%), Above Avg 6.1-7.4 (70-95%), Average 7.4-8.6 (30-69%), Below Avg 8.6-10.1 (5-29%), Poor >10.1 (bottom 5%)
-When a runner's metrics fall outside the average zone, note this and suggest corrective drills if appropriate.
+These are Garmin population percentiles. Cadence, ground contact time and vertical oscillation depend strongly on pace and body size, so do not judge an easy run against them or prescribe drills from them alone; compare to the athlete's own values at similar paces and mention form only when a metric changes markedly for the same pace.
 
 When user feedback is provided (rating, reported issues, comments), prioritize addressing those specific concerns in your analysis. If the user reports setbacks like tough paces, not feeling well, or conditions issues, offer practical advice tailored to those reported problems."""
 
@@ -321,7 +321,7 @@ def _format_athlete_profile_context(profile: AthleteProfile, reference_date: dat
     """Format the athlete profile as a markdown block, emitting only set fields."""
     import json as _json
 
-    ref = reference_date or date.today()
+    ref = reference_date or local_today()
     lines = []
     if profile.name:
         lines.append(f"- Name: {profile.name}")
@@ -424,7 +424,7 @@ def _format_coach_memory_context(db: Session, user_id: int) -> str:
     memories = (
         db.query(CoachMemory)
         .filter(CoachMemory.user_id == user_id, CoachMemory.active.is_(True))
-        .order_by(CoachMemory.created_at.desc())
+        .order_by(CoachMemory.created_at.desc(), CoachMemory.id.desc())
         .limit(COACH_MEMORY_CONTEXT_LIMIT)
         .all()
     )
@@ -529,11 +529,11 @@ def _build_context(
 
     Args:
         reference_date: The date to use as "today" for temporal context.
-                        Defaults to date.today() if not provided.
+                        Defaults to local_today() if not provided.
         user_id: Scope all data to this user.
     """
     if reference_date is None:
-        reference_date = date.today()
+        reference_date = local_today()
     ref_datetime = datetime.combine(reference_date, datetime.min.time(), tzinfo=timezone.utc)
 
     sections = [f"## Current Data\n{trigger_data}"]
@@ -750,7 +750,7 @@ def _build_context(
         .filter(
             GarminCalendarEvent.user_id == user_id,
             GarminCalendarEvent.event_type == "workout",
-            GarminCalendarEvent.date >= date.today(),
+            GarminCalendarEvent.date >= local_today(),
         )
         .order_by(GarminCalendarEvent.date.asc())
         .first()

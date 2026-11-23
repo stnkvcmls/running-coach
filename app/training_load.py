@@ -35,6 +35,7 @@ from app.models import (
     SyncStatus,
 )
 from app.schemas import TrainingLoadPoint, TrainingReadiness, classify_acwr, classify_tsb
+from app.utils import local_today
 
 logger = logging.getLogger(__name__)
 
@@ -200,6 +201,13 @@ def _find_dirty_date(db: Session, user_id: int, watermark: datetime | None) -> d
     return result.date() if isinstance(result, datetime) else result
 
 
+def mark_activity_load_dirty(activity: Activity) -> None:
+    """Force the load series to recompute from this activity's date on next read."""
+    # Reuses _find_dirty_date's synced_at > watermark mechanism so the next load
+    # read deletes and recomputes DailyLoadSeries from this activity's date.
+    activity.synced_at = datetime.now(timezone.utc)
+
+
 # ---------------------------------------------------------------------------
 # DB-backed series read / write
 # ---------------------------------------------------------------------------
@@ -307,7 +315,7 @@ def _ensure_series_current(
       load CTL/ATL from the preceding row, recompute only from there.
     - No dirty activities and series already covers today: nothing to do.
     """
-    today = date.today()
+    today = local_today()
     compute_to = today if end_date <= today else end_date
 
     watermark = _get_load_watermark(db, user_id)
@@ -458,7 +466,7 @@ def compute_load_series(
     db: Session, end_date: date | None = None, days: int = 90, user_id: int = DEFAULT_USER_ID
 ) -> list[TrainingLoadPoint]:
     """Return the last ``days`` of the CTL/ATL/TSB series ending at ``end_date``."""
-    end_date = end_date or date.today()
+    end_date = end_date or local_today()
     _ensure_series_current(db, end_date, user_id)
     if days and days > 0:
         start_date = end_date - timedelta(days=days - 1)
@@ -470,7 +478,7 @@ def current_load(
     db: Session, as_of: date | None = None, user_id: int = DEFAULT_USER_ID
 ) -> TrainingLoadPoint | None:
     """Return the most recent CTL/ATL/TSB snapshot as of ``as_of``."""
-    as_of = as_of or date.today()
+    as_of = as_of or local_today()
     _ensure_series_current(db, as_of, user_id)
     points = _load_series_points(db, user_id, as_of, start_date=as_of)
     if points:
@@ -504,6 +512,32 @@ def _readiness_label(score: int) -> str:
     if score >= 31:
         return "Fair"
     return "Low"
+
+
+def _readiness_verdict(score: int) -> tuple[str, str]:
+    if score >= 51:
+        return "train", "Train as planned"
+    if score >= 31:
+        return "ease", "Ease off today"
+    return "rest", "Rest or go very easy"
+
+
+_READINESS_REASON_COPY: dict[str, str] = {
+    "sleep": "Short or poor sleep last night.",
+    "recovery": "Body battery / stress show incomplete recovery.",
+    "fatigue": "Recent training load is high.",
+    "rhr": "Resting heart rate is up on your recent average.",
+    "hrv": "Overnight HRV is below your baseline.",
+    "subjective": "Your check-in says you're not feeling great.",
+}
+
+
+def _readiness_reasons(
+    components: tuple[tuple[str, int | None], ...],
+) -> list[str]:
+    low = [(val, key) for key, val in components if val is not None and val < 50]
+    low.sort(key=lambda item: item[0])
+    return [_READINESS_REASON_COPY[key] for _, key in low[:2]]
 
 
 # Fallback scores when no personal HRV baseline is available, keyed on Garmin's
@@ -560,7 +594,7 @@ def compute_readiness(
     Components (each 0–100):
     - sleep_component: average of Garmin sleep_score and a duration-based score
     - recovery_component: average of inverted stress and body_battery_high
-    - fatigue_component: 100 − ATL (capped 0–100); higher = less fatigued
+    - fatigue_component: TSB-based (75 + 2 * TSB, capped 0–100); higher = fresher
     - rhr_component: resting HR today vs 7-day average; lower today = better
     - hrv_component: overnight HRV vs personal baseline; higher = better recovered
     - subjective_component: the athlete's own daily check-in (soreness/energy/mood)
@@ -568,8 +602,8 @@ def compute_readiness(
     Any missing component is excluded from the weighted average so a partial
     data day still yields a meaningful score.
     """
-    # Weights — sum to 1.0 when every component is present; missing components
-    # are excluded and the remainder is renormalized (see total_weight below).
+    # Weights sum to 1.2 and are renormalised over the components present
+    # (see total_weight below).
     WEIGHTS = {
         "sleep": 0.25,
         "recovery": 0.25,
@@ -600,9 +634,11 @@ def compute_readiness(
         int(sum(recovery_scores) / len(recovery_scores)) if recovery_scores else None
     )
 
-    # Fatigue component (ATL-based)
+    # Fatigue component (TSB-based: form = CTL − ATL)
     fatigue_component = (
-        int(min(100, max(0, 100 - load_point.atl))) if load_point is not None else None
+        int(round(min(100, max(0, 75 + 2 * load_point.tsb))))
+        if load_point is not None
+        else None
     )
 
     # RHR trend component
@@ -638,9 +674,21 @@ def compute_readiness(
         return None
 
     score = int(round(weighted_sum / total_weight))
+    verdict, verdict_label = _readiness_verdict(score)
+    reasons = _readiness_reasons((
+        ("sleep", sleep_component),
+        ("recovery", recovery_component),
+        ("fatigue", fatigue_component),
+        ("rhr", rhr_component),
+        ("hrv", hrv_component),
+        ("subjective", subjective_component),
+    ))
     return TrainingReadiness(
         score=score,
         label=_readiness_label(score),
+        verdict=verdict,
+        verdict_label=verdict_label,
+        reasons=reasons,
         sleep_component=sleep_component,
         recovery_component=recovery_component,
         fatigue_component=fatigue_component,
@@ -654,12 +702,12 @@ def _interpret_acwr(acwr: float) -> str:
     zone, _label, _recommendation = classify_acwr(acwr)
     if zone == "overreaching":
         return (
-            "high injury risk — significant overreaching"
+            "large load spike — significant overreaching"
             if acwr > 1.5
-            else "moderate risk — monitor fatigue closely"
+            else "elevated load — monitor fatigue"
         )
     if zone == "productive":
-        return "sweet spot — optimal training zone"
+        return "steady progression — balanced training zone"
     return "low / detraining risk"
 
 
@@ -682,10 +730,10 @@ def format_training_load_context(point: TrainingLoadPoint | None) -> str:
     if point.ramp_rate_28d is not None:
         lines.append(f"- Ramp rate (28d CTL change): {point.ramp_rate_28d:+.1f}")
     if point.injury_risk:
-        lines.append(f"- Injury risk: {point.injury_risk}")
+        lines.append(f"- Load spike level: {point.injury_risk}")
     if point.injury_risk == "high":
         lines.append(
-            "- **Load caution (mandatory)**: injury risk is HIGH — do not prescribe "
+            "- **Load caution (mandatory)**: load spike is HIGH — do not prescribe "
             "or encourage hard/interval/tempo/long efforts until ACWR falls back "
             "under 1.3; prioritize easy running and recovery."
         )
@@ -698,7 +746,12 @@ def format_readiness_context(readiness: TrainingReadiness | None) -> str:
     """Render the readiness score as a markdown ``## Training Readiness`` section."""
     if readiness is None:
         return ""
-    lines = [f"- Score: {readiness.score}/100 ({readiness.label})"]
+    lines = [
+        f"- Score: {readiness.score}/100 ({readiness.label})",
+        f"- Verdict: {readiness.verdict_label}",
+    ]
+    if readiness.reasons:
+        lines.append(f"- Why: {' '.join(readiness.reasons)}")
     if readiness.sleep_component is not None:
         lines.append(f"- Sleep: {readiness.sleep_component}/100")
     if readiness.recovery_component is not None:

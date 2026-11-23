@@ -24,6 +24,7 @@ describe('DailyCheckinCard', () => {
   it('renders one joined 1–5 control per question with end labels and no Log button', () => {
     renderWithQueryClient(<DailyCheckinCard date="2026-07-09" checkin={null} />)
 
+    expect(screen.getByRole('heading', { name: 'How do you feel today?' })).toBeInTheDocument()
     for (const name of ['Soreness', 'Energy', 'Mood']) {
       expect(within(scale(name)).getAllByRole('button')).toHaveLength(5)
     }

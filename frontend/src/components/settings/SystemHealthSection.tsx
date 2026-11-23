@@ -39,6 +39,30 @@ export default function SystemHealthSection() {
       <h2 className="section-title">System health</h2>
       <div className="card health-card">
         <div className="health-subsection">
+          <h3 className="health-subtitle">Services</h3>
+          <div className="sync-list">
+            <div className="sync-item">
+              <div className="sync-key">Garmin</div>
+              <div className={`sync-value${data.garmin_needs_reauth || !data.garmin_connected ? ' health-status-alarm' : ''}`}>
+                {data.garmin_needs_reauth
+                  ? 'Reconnect needed'
+                  : data.garmin_connected
+                    ? 'Connected'
+                    : 'Not connected'}
+              </div>
+            </div>
+            <div className="sync-item">
+              <div className="sync-key">Push</div>
+              <div className="sync-value">
+                {!data.push_configured
+                  ? 'Not configured on server'
+                  : `${data.push_subscriptions} device${data.push_subscriptions === 1 ? '' : 's'} subscribed`}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="health-subsection">
           <h3 className="health-subtitle">Last sync</h3>
           <div className="sync-list">
             {Object.entries(LAST_SYNC_LABELS).map(([key, label]) => (

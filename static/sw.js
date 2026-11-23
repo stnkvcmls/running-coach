@@ -1,14 +1,21 @@
-const CACHE_NAME = 'running-coach-v4';
+const CACHE_NAME = 'running-coach-v5';
 const SHELL_URLS = [
-    '/static/style.css',
+    '/',
     '/static/manifest.json',
+    '/static/icon-192.png',
 ];
 
 self.addEventListener('install', event => {
     event.waitUntil(
-        caches.open(CACHE_NAME)
-            .then(cache => cache.addAll(SHELL_URLS))
-            .then(() => self.skipWaiting())
+        (async () => {
+            try {
+                const cache = await caches.open(CACHE_NAME);
+                await cache.addAll(SHELL_URLS);
+            } catch {
+                // Never block SW install if a precache URL fails.
+            }
+            await self.skipWaiting();
+        })()
     );
 });
 
@@ -21,30 +28,43 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-    // Network-first for HTML pages
+    if (event.request.method !== 'GET') {
+        return;
+    }
+
+    const url = new URL(event.request.url);
+    if (url.origin !== self.location.origin) {
+        return;
+    }
+
+    // Never intercept or cache API calls.
+    if (url.pathname.startsWith('/api/')) {
+        return;
+    }
+
+    // Network-first for navigations; fall back to cached SPA shell on failure.
     if (event.request.mode === 'navigate') {
         event.respondWith(
             fetch(event.request)
-                .catch(() => caches.match(event.request))
+                .catch(() => caches.match('/'))
         );
         return;
     }
 
-    // Cache-first for static assets
-    if (event.request.url.includes('/static/')) {
+    // Cache-first for Vite-hashed assets and static files.
+    if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/static/')) {
         event.respondWith(
             caches.match(event.request)
                 .then(cached => cached || fetch(event.request).then(response => {
-                    const clone = response.clone();
-                    caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+                    if (response && response.ok) {
+                        const clone = response.clone();
+                        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+                    }
                     return response;
                 }))
         );
         return;
     }
-
-    // Network-first for everything else
-    event.respondWith(fetch(event.request));
 });
 
 // Web Push (P0-1): payload is JSON { category, title, body, url } — see

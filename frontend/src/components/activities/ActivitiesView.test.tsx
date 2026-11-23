@@ -101,7 +101,7 @@ function planDay(day_date: string, target_distance_m: number | null): TrainingPl
     id: Number(day_date.replace(/-/g, '')), plan_id: 1, day_date, day_of_week: '', week_number: 1,
     workout_type: 'easy', target_distance_m, target_pace_min_km: null, target_pace_display: null,
     description: null, notes: null, week_theme: null, routine: null, fuelling_guidance: null,
-    matched_activity_id: null, adherence_score: null,
+    matched_activity_id: null, matched_distance_m: null, adherence_score: null,
   }
 }
 

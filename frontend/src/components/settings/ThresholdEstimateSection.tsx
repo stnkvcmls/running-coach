@@ -47,10 +47,7 @@ export default function ThresholdEstimateSection() {
       display: (v) => `${Math.round(v)} W`,
       current: d.current_threshold_power,
       currentDisplay: (v) => `${Math.round(v)} W`,
-      extra: [
-        d.w_prime != null ? `W' ${Math.round(d.w_prime)} J` : null,
-        d.pmax != null ? `Pmax ${Math.round(d.pmax)} W` : null,
-      ].filter(Boolean).join(' · ') || undefined,
+      extra: d.w_prime != null ? `W' ${Math.round(d.w_prime)} J` : undefined,
     },
     {
       label: 'Threshold pace',

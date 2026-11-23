@@ -19,3 +19,10 @@ export function dayState(day: TrainingPlanDay, today: string = todayStr()): Plan
   if (day.day_date < today) return day.matched_activity_id != null ? 'done' : 'missed'
   return 'upcoming'
 }
+
+const WATCH_PUSHABLE_TYPES = new Set(['easy', 'long', 'tempo', 'interval'])
+
+/** Only structured run workouts can be translated and pushed to a Garmin watch. */
+export function isWatchPushable(workoutType: string | null | undefined): boolean {
+  return workoutType != null && WATCH_PUSHABLE_TYPES.has(workoutType.toLowerCase())
+}

@@ -1,13 +1,15 @@
 import { useState, type CSSProperties, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Check, RefreshCw, Watch } from 'lucide-react'
-import { useTrainingPlan, useActivity, usePushWorkoutToGarmin, useSubmitFeedback } from '../../api/hooks'
-import type { ActivityDetail, ActivitySummary, CalendarEvent, TodayResponse, TrainingPlanDay } from '../../api/types'
+import { useTrainingPlan, useActivity, usePushWorkoutToGarmin } from '../../api/hooks'
+import type { ActivitySummary, CalendarEvent, TodayResponse, TrainingPlanDay } from '../../api/types'
 import { formatDistance, formatDuration } from '../../utils/formatting'
 import { format, parseISO } from '../../utils/date'
 import { WORKOUT_TYPE_COLORS, getActivityColor } from '../../utils/colors'
 import { firstSentence } from '../../utils/text'
+import { isWatchPushable } from '../../utils/planDayState'
 import { describeSession, formatPaceSec, type SessionDescription } from '../../utils/sessionNotation'
+import EffortPrompt from '../ui/EffortPrompt'
 import WorkoutStructureBar from '../ui/WorkoutStructureBar'
 import RepChart, { repsFromAdherence, type RepPoint } from '../ui/RepChart'
 import ReadinessLine from './ReadinessLine'
@@ -131,7 +133,7 @@ function PlannedSession({ data, planDay, event }: PlannedProps) {
   const ends = stripEnds(session)
   const distanceM = planDay?.target_distance_m ?? event?.distance_m ?? null
   const est = estimatedTime(planDay)
-  const pushable = planDay != null && planDay.workout_type !== 'rest' && planDay.workout_type !== 'cross'
+  const pushable = isWatchPushable(planDay?.workout_type)
 
   return (
     <>
@@ -160,7 +162,7 @@ function PlannedSession({ data, planDay, event }: PlannedProps) {
       </dl>
       <BriefingLine data={data} />
       <div className="session-actions">
-        {pushable ? (
+        {planDay && pushable ? (
           <button
             type="button"
             className="btn-primary"
@@ -199,50 +201,6 @@ function repVerdict(reps: RepPoint[]): string | null {
     ? `All ${count} reps within 5 s of ${formatPaceSec(target)}.`
     : `${within} of ${n} reps within 5 s of ${formatPaceSec(target)}.`
   return head + tail
-}
-
-/** Inline RPE (§8 Q2): written through the same feedback mutation as the run
- * page, so there's one source of truth. Hidden once rated. */
-function EffortPrompt({ detail }: { detail: ActivityDetail }) {
-  const submit = useSubmitFeedback()
-  const [picked, setPicked] = useState<number | null>(null)
-  const rated = detail.rpe ?? (submit.isSuccess ? picked : null)
-
-  if (rated != null) return <p className="session-felt">Felt <span className="num">{rated}</span>/10</p>
-
-  return (
-    <div className="session-rpe">
-      <p className="session-rpe-q" id="session-rpe-q">How hard did it feel?</p>
-      <div className="seg-control seg-control--10" role="group" aria-labelledby="session-rpe-q">
-        {Array.from({ length: 10 }, (_, i) => i + 1).map(v => (
-          <button
-            key={v}
-            type="button"
-            aria-pressed={picked === v}
-            aria-label={`${v} of 10`}
-            disabled={submit.isPending}
-            onClick={() => {
-              setPicked(v)
-              // The endpoint requires a rating; keep the athlete's existing
-              // one (and tags/text) so rating effort here changes only the RPE.
-              submit.mutate({
-                id: detail.id,
-                feedback: {
-                  rating: detail.feedback_rating === 'bad' ? 'bad' : 'good',
-                  tags: detail.feedback_tags ?? undefined,
-                  text: detail.feedback_text ?? undefined,
-                  rpe: v,
-                },
-              })
-            }}
-          >
-            {v}
-          </button>
-        ))}
-      </div>
-      <div className="seg-control-ends"><span>Easy</span><span>All out</span></div>
-    </div>
-  )
 }
 
 interface DoneProps {

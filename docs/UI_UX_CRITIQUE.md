@@ -58,6 +58,10 @@ images in this document live in [`docs/mockups/ui-ux-critique/`](mockups/ui-ux-c
 
 ### Relationship to earlier documents
 
+> The documents below were deleted in November 2026 (second-opinion review,
+> week 4, finding N7); they remain in git history. This critique and
+> `SECOND_OPINION_REVIEW.md` are the current design references.
+
 | Document | Status | How this one relates |
 |---|---|---|
 | `UI_UX_REDESIGN_PLAN.md` + review | Delivered (Phases 0–6, A–D1) | This builds on it. The 5-tab IA, hero concept, day-state machine and tokens all stay. |

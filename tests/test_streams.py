@@ -47,6 +47,16 @@ def test_parse_streams_rejects_spikes():
     assert s["power"][1] == 200
 
 
+def test_parse_streams_speed_cap_rejects_10ms_keeps_8_5ms():
+    details = _make_details([
+        {"t": 0, "power": 250, "speed": 10.0, "hr": 160, "elev": 0, "dist": 0},
+        {"t": 1, "power": 250, "speed": 8.5, "hr": 160, "elev": 0, "dist": 8.5},
+    ])
+    s = streams.parse_streams(details)
+    assert s["speed"][0] is None  # 10.0 m/s exceeds 9.0 m/s GPS-glitch cap
+    assert s["speed"][1] == 8.5   # 8.5 m/s is kept
+
+
 def test_parse_streams_none_without_metrics():
     assert streams.parse_streams(None) is None
     assert streams.parse_streams({}) is None
@@ -88,6 +98,40 @@ def test_grade_adjusted_speed_uphill_faster_equivalent():
 def test_grade_adjusted_speed_falls_back_without_elevation():
     speed = [3.0, 3.2]
     assert streams.grade_adjusted_speed(speed, [], []) == speed
+
+
+def test_grade_adjusted_speed_damps_flat_altitude_jitter():
+    # 1 km flat run with +/-1 m alternating elevation jitter every 2 m.
+    # Point-to-point grading would explode into +/-30% grades; the 20 m window
+    # keeps GAP within 2% of raw speed everywhere after the first 20 m.
+    n = 501
+    dist = [2.0 * i for i in range(n)]
+    elev = [100.0 + (1.0 if i % 2 == 0 else -1.0) for i in range(n)]
+    speed = [3.5] * n
+
+    gap = streams.grade_adjusted_speed(speed, elev, dist)
+    deviations = [
+        abs(gap[i] - speed[i]) / speed[i]
+        for i in range(n)
+        if dist[i] >= 20.0
+    ]
+    assert deviations
+    assert max(deviations) < 0.02
+
+
+def test_grade_adjusted_speed_steady_uphill_climb():
+    # Steady 10% climb over 500 m: raw speed preserved before 20 m, GAP > raw after.
+    n = 101
+    dist = [5.0 * i for i in range(n)]
+    elev = [0.10 * d for d in dist]
+    speed = [3.0] * n
+
+    gap = streams.grade_adjusted_speed(speed, elev, dist)
+    for i in range(n):
+        if dist[i] < 20.0:
+            assert gap[i] == speed[i]
+        else:
+            assert gap[i] > speed[i]
 
 
 # --- mean-maximal curve ---

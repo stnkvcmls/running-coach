@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session, load_only
 logger = logging.getLogger(__name__)
 
 # Durations (seconds) at which the mean-maximal curve is sampled. Spans the
-# anaerobic short end (for W'/Pmax) through ~90 min (aerobic threshold end).
+# anaerobic short end (for W') through ~90 min (aerobic threshold end).
 STANDARD_DURATIONS: list[int] = [
     5, 15, 30, 60, 120, 180, 300, 480, 600, 720,
     1200, 1800, 2400, 3000, 3600, 5400,
@@ -57,7 +57,7 @@ RACE_DISTANCES_M: list[tuple[str, float]] = [
 
 # Spike-rejection caps — anything beyond these is a sensor/GPS glitch for running.
 _MAX_POWER_W = 2000.0
-_MAX_SPEED_MS = 12.0          # ~22 km/h, faster than a 2:45/km sprint
+_MAX_SPEED_MS = 9.0           # 9 m/s = 32.4 km/h (1:51 /km); faster samples are GPS glitches for running
 _MAX_HR = 240
 _MIN_HR = 20
 
@@ -65,6 +65,7 @@ _MIN_HR = 20
 # used to convert pace on a slope to its flat-ground (grade-adjusted) equivalent.
 _FLAT_COST = 3.6
 _GRADE_CLAMP = 0.30           # ignore gradients steeper than ±30%
+_GRADE_WINDOW_M = 20.0        # distance window for grade calculation to damp elevation jitter
 
 
 def _normalize_key(key: str) -> str:
@@ -198,25 +199,39 @@ def grade_adjusted_speed(
 ) -> list[float | None]:
     """Convert a speed stream to grade-adjusted (flat-equivalent) speed.
 
-    Falls back to raw speed wherever elevation/distance is unavailable.
+    Computes grade over a ``_GRADE_WINDOW_M`` (20 m) distance window rather
+    than point-to-point: raw elevation samples have ~1 m barometric/GPS jitter,
+    which over a few metres of step spacing inflates flat ground into ±30%
+    grades. For each sample ``i``, a two-pointer scan finds the nearest earlier
+    sample ``j`` with valid elevation and distance such that
+    ``distance[i] - distance[j] >= _GRADE_WINDOW_M``, and uses
+    ``(e[i] - e[j]) / (d[i] - d[j])``. Falls back to raw speed over the first
+    20 m or wherever elevation/distance is unavailable.
+
+    This only affects newly computed curves; existing ``mean_max_json`` rows
+    are not recomputed.
     """
     n = len(speed)
     out: list[float | None] = list(speed)
     if not elevation or not distance:
         return out
-    for i in range(1, n):
+    valid: list[tuple[float, float]] = []
+    ptr = -1
+    for i in range(n):
+        ei = elevation[i] if i < len(elevation) else None
+        di = distance[i] if i < len(distance) else None
+        if ei is None or di is None:
+            continue
+        while ptr + 1 < len(valid) and di - valid[ptr + 1][0] >= _GRADE_WINDOW_M:
+            ptr += 1
         s = speed[i]
-        if s is None:
-            continue
-        e0, e1 = elevation[i - 1], elevation[i]
-        d0, d1 = distance[i - 1], distance[i]
-        if None in (e0, e1, d0, d1):
-            continue
-        dd = d1 - d0
-        if dd <= 0:
-            continue
-        grade = (e1 - e0) / dd
-        out[i] = s * minetti_factor(grade)
+        if s is not None and ptr >= 0:
+            d0, e0 = valid[ptr]
+            dd = di - d0
+            if dd >= _GRADE_WINDOW_M:
+                grade = (ei - e0) / dd
+                out[i] = s * minetti_factor(grade)
+        valid.append((di, ei))
     return out
 
 

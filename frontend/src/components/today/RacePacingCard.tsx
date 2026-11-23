@@ -18,18 +18,13 @@ function formatSplitDist(distM: number, splitUnit: string): string {
   return distM >= 950 ? `${(distM / 1000).toFixed(0)} km` : `${Math.round(distM)} m`
 }
 
-function formatGrade(gradePct: number): string {
-  const sign = gradePct > 0 ? '+' : ''
-  return `${sign}${gradePct.toFixed(1)}%`
-}
-
 interface Props {
   race: RaceInfo
 }
 
 export default function RacePacingCard({ race }: Props) {
   const [expanded, setExpanded] = useState(false)
-  const [strategy, setStrategy] = useState<'even' | 'negative_split' | 'terrain'>('even')
+  const [strategy, setStrategy] = useState<'even' | 'negative_split'>('even')
   const [splitUnit] = useState<'km' | 'mile'>('km')
   const [pushed, setPushed] = useState(false)
   const [tempC, setTempC] = useState('')
@@ -104,12 +99,6 @@ export default function RacePacingCard({ race }: Props) {
               >
                 Negative Split
               </button>
-              <button
-                className={`race-pacing-strategy-btn${strategy === 'terrain' ? ' active' : ''}`}
-                onClick={() => setStrategy('terrain')}
-              >
-                Terrain
-              </button>
             </div>
           </div>
 
@@ -170,12 +159,6 @@ export default function RacePacingCard({ race }: Props) {
                 </span>
               </div>
 
-              {strategy === 'terrain' && plan.course_activity_name && (
-                <div className="race-pacing-course-note">
-                  Course profile from "{plan.course_activity_name}" — effort held constant over the grade.
-                </div>
-              )}
-
               {conditionsCostSec != null && conditionsCostSec > 0 && plan.conditions_temp_c != null && (
                 <div className="race-pacing-conditions-note">
                   At {plan.conditions_temp_c.toFixed(0)}°C
@@ -190,7 +173,6 @@ export default function RacePacingCard({ race }: Props) {
                     <tr>
                       <th>Split</th>
                       <th>Dist</th>
-                      {strategy === 'terrain' && <th>Grade</th>}
                       <th>Pace</th>
                       <th>Time</th>
                       <th>Cumul.</th>
@@ -201,11 +183,6 @@ export default function RacePacingCard({ race }: Props) {
                       <tr key={s.split_number}>
                         <td>{s.split_number}</td>
                         <td>{formatSplitDist(s.split_distance_m, plan.split_unit)}</td>
-                        {strategy === 'terrain' && (
-                          <td className="race-pacing-grade">
-                            {s.grade_pct != null ? formatGrade(s.grade_pct) : '—'}
-                          </td>
-                        )}
                         <td className="race-pacing-pace">{formatPace(s.target_pace_min_km)}</td>
                         <td>{formatDuration(s.split_time_sec)}</td>
                         <td className="race-pacing-cumul">{formatDuration(s.cumulative_time_sec)}</td>

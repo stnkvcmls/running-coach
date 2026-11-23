@@ -1,10 +1,9 @@
 """Race pacing strategy generation and Garmin push."""
 import logging
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from statistics import median
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
@@ -12,9 +11,8 @@ from app.database import get_db
 from app.models import Activity, GarminCalendarEvent, User
 from app.schemas import PacingPushRequest, PacingStrategyResponse, PushWorkoutResponse
 from app import threshold as threshold_mod
-from app import streams as streams_mod
 from app import weather as weather_mod
-from app.utils import safe_json_loads
+from app.utils import local_today
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +29,7 @@ def _estimated_race_conditions(user_id: int, db: Session) -> tuple[float | None,
     just the same weather data already synced from Garmin for past runs.
     """
     cutoff = datetime.combine(
-        date.today() - timedelta(days=_CONDITIONS_LOOKBACK_DAYS), datetime.min.time(), tzinfo=timezone.utc
+        local_today() - timedelta(days=_CONDITIONS_LOOKBACK_DAYS), datetime.min.time(), tzinfo=timezone.utc
     )
     recent = (
         db.query(Activity)
@@ -71,47 +69,10 @@ def _get_race_event(race_id: int, user_id: int, db: Session) -> GarminCalendarEv
     return race
 
 
-_MIN_COURSE_PROFILE_SAMPLES = 10
-
-
-def _matched_course_profile(
-    race: GarminCalendarEvent, user_id: int, db: Session,
-) -> tuple[list[tuple[float, float]], Activity] | None:
-    """Find the athlete's closest-distance past run with a usable elevation stream
-    and build a (distance_m, elevation_m) course profile from it.
-    """
-    candidates = (
-        db.query(Activity)
-        .filter(
-            Activity.user_id == user_id,
-            Activity.activity_type == "running",
-            Activity.laps_json.isnot(None),
-            Activity.distance_m.isnot(None),
-        )
-        .order_by(func.abs(Activity.distance_m - race.distance_m))
-        .limit(20)
-        .all()
-    )
-    for act in candidates:
-        details = safe_json_loads(act.laps_json)
-        parsed = streams_mod.parse_streams(details)
-        if not parsed:
-            continue
-        profile = sorted(
-            (d, e)
-            for d, e in zip(parsed["distance"], parsed["elevation"])
-            if isinstance(d, (int, float)) and isinstance(e, (int, float))
-        )
-        if len(profile) < _MIN_COURSE_PROFILE_SAMPLES or profile[-1][0] - profile[0][0] <= 0:
-            continue
-        return profile, act
-    return None
-
-
 @router.get("/races/{race_id}/pacing", response_model=PacingStrategyResponse)
 def api_race_pacing(
     race_id: int,
-    strategy: str = Query("even", pattern="^(even|negative_split|terrain)$"),
+    strategy: str = Query("even", pattern="^(even|negative_split)$"),
     split_unit: str = Query("km", pattern="^(km|mile)$"),
     target_time_sec: int | None = Query(None),
     expected_temp_c: float | None = Query(None),
@@ -122,11 +83,10 @@ def api_race_pacing(
     """Generate a race-day split-by-split pacing strategy.
 
     target_time_sec overrides goal_time_sec; if neither is set, falls back to
-    the CV-model prediction from the performance curve. "terrain" strategy
-    sources an elevation profile from the athlete's closest-distance past run.
+    the CV-model prediction from the performance curve.
     expected_temp_c/expected_dew_point_c scale every split for expected race-day
-    heat/humidity (composes with the terrain strategy); the response always
-    includes a median estimate from recent weathered runs for the UI to pre-fill.
+    heat/humidity; the response always includes a median estimate from recent
+    weathered runs for the UI to pre-fill.
     """
     from app import pacing as pacing_mod
 
@@ -174,17 +134,6 @@ def api_race_pacing(
         except Exception:
             pass
 
-    course_activity: Activity | None = None
-    elevation_profile: list[tuple[float, float]] | None = None
-    if strategy == "terrain":
-        match = _matched_course_profile(race, current_user.id, db)
-        if not match:
-            raise HTTPException(
-                status_code=422,
-                detail="No terrain profile available: sync a past run with elevation data close to this race's distance.",
-            )
-        elevation_profile, course_activity = match
-
     plan = pacing_mod.generate_pacing_strategy(
         distance_m=race.distance_m,
         target_time_sec=float(effective_target),
@@ -192,7 +141,6 @@ def api_race_pacing(
         split_unit=split_unit,
         predicted_time_sec=predicted_time,
         source=source,
-        elevation_profile=elevation_profile,
         expected_temp_c=expected_temp_c,
         expected_dew_point_c=expected_dew_point_c,
     )
@@ -216,14 +164,11 @@ def api_race_pacing(
                 "target_pace_min_km": s.target_pace_min_km,
                 "split_time_sec": s.split_time_sec,
                 "cumulative_time_sec": s.cumulative_time_sec,
-                "grade_pct": s.grade_pct,
             }
             for s in plan.splits
         ],
         predicted_time_sec=plan.predicted_time_sec,
         source=plan.source,
-        course_activity_id=course_activity.id if course_activity else None,
-        course_activity_name=course_activity.name if course_activity else None,
         conditions_temp_c=plan.conditions_temp_c,
         conditions_dew_point_c=plan.conditions_dew_point_c,
         conditions_penalty_pct=plan.conditions_penalty_pct,
@@ -275,21 +220,10 @@ def api_push_race_pacing(
                 detail="No target time available to build pacing plan.",
             )
 
-    elevation_profile: list[tuple[float, float]] | None = None
-    if body.strategy == "terrain":
-        match = _matched_course_profile(race, current_user.id, db)
-        if not match:
-            raise HTTPException(
-                status_code=422,
-                detail="No terrain profile available: sync a past run with elevation data close to this race's distance.",
-            )
-        elevation_profile, _course_activity = match
-
     plan = pacing_mod.generate_pacing_strategy(
         distance_m=race.distance_m,
         target_time_sec=float(effective_target),
         strategy=body.strategy,
-        elevation_profile=elevation_profile,
         split_unit=body.split_unit,
         expected_temp_c=body.expected_temp_c,
         expected_dew_point_c=body.expected_dew_point_c,
