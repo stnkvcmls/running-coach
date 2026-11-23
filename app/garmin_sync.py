@@ -8,6 +8,7 @@ import time
 from datetime import datetime, date, timedelta, timezone
 
 from garminconnect import Garmin
+from garminconnect.exceptions import GarminConnectTooManyRequestsError
 from sqlalchemy.orm import Session
 
 from app import crypto, records, streams
@@ -253,6 +254,9 @@ def mark_garmin_needs_reauth(user_id: int, value: bool = True) -> None:
 
 # --- Bootstrap (env account → user #1) + token-dir migration ---------------
 
+_TOKEN_FILENAMES = ("oauth1_token.json", "oauth2_token.json", "garmin_tokens.json")
+
+
 def _migrate_flat_token_dir(user_id: int) -> None:
     """Move legacy flat-dir OAuth token files into the per-user token dir."""
     base = settings.garmin_token_dir
@@ -261,7 +265,9 @@ def _migrate_flat_token_dir(user_id: int) -> None:
         return  # already migrated
     if not os.path.isdir(base):
         return
-    token_files = [f for f in os.listdir(base) if os.path.isfile(os.path.join(base, f))]
+    token_files = [
+        f for f in _TOKEN_FILENAMES if os.path.isfile(os.path.join(base, f))
+    ]
     if not token_files:
         return
     os.makedirs(user_dir, exist_ok=True)
@@ -673,6 +679,8 @@ def sync_activities(user: User | None = None) -> list[Activity]:
                 db, "last_activity_sync", datetime.now(timezone.utc).isoformat(), user_id=uid
             )
             logger.info("Activity sync complete. %d new activities.", len(new_activities))
+        except GarminConnectTooManyRequestsError:
+            raise
         except Exception:
             logger.exception("Activity sync failed")
 
@@ -844,6 +852,8 @@ def sync_daily_summary(
             logger.info("Daily summary synced for %s", date_str)
             return summary
 
+        except GarminConnectTooManyRequestsError:
+            raise
         except Exception:
             logger.exception("Daily summary sync failed for %s", date_str)
             return None
@@ -943,6 +953,8 @@ def sync_athlete_profile(user: User | None = None) -> AthleteProfile | None:
             )
             logger.info("Athlete profile synced from Garmin: %s", ", ".join(fields))
             return profile
+        except GarminConnectTooManyRequestsError:
+            raise
         except Exception:
             logger.exception("Athlete profile sync failed")
             return None
@@ -1258,6 +1270,8 @@ def _fetch_workout_details(client: Garmin, workout_id) -> dict | None:
         data = client.connectapi(f"/workout-service/workout/{workout_id}")
         if isinstance(data, dict):
             return data
+    except GarminConnectTooManyRequestsError:
+        raise
     except Exception as e:
         logger.debug("Failed to fetch workout details for %s: %s", workout_id, e)
     return None
@@ -1277,6 +1291,8 @@ def _fetch_race_event_details(client: Garmin, event_item: dict) -> dict | None:
             logger.info("Race detail response keys: %s", list(data.keys()))
             return data
         logger.debug("Race detail response was not a dict: type=%s", type(data).__name__)
+    except GarminConnectTooManyRequestsError:
+        raise
     except Exception as e:
         logger.info("Failed to fetch race details from %s: %s", endpoint, e)
     return None
@@ -1305,6 +1321,40 @@ def _extract_goal_time_from_details(detail: dict) -> int | None:
     return None
 
 
+# raw_json markers that only exist after a successful detail fetch.
+_ENRICHED_RAW_MARKERS = ("workoutSteps", "workoutSegments", "_eventDetail")
+
+
+def _raw_is_enriched(raw_json: str | None) -> bool:
+    if not raw_json:
+        return False
+    try:
+        raw = json.loads(raw_json)
+    except (TypeError, ValueError):
+        return False
+    return isinstance(raw, dict) and any(raw.get(k) for k in _ENRICHED_RAW_MARKERS)
+
+
+def _merge_calendar_event(existing: GarminCalendarEvent, evt: dict) -> None:
+    """Update a stored calendar event from a fresh fetch without losing data.
+
+    Detail fetches (workout steps, race goal/priority/projections) can be
+    skipped or fail (429, transient errors) while the month listing succeeds.
+    The listing alone carries those fields as None and an un-enriched
+    raw_json, so a blind overwrite would wipe a race's goal time or a
+    workout's steps on every partial sync. Rule: a None never replaces a
+    stored value, and an un-enriched raw_json never replaces an enriched one.
+    """
+    for key, value in evt.items():
+        if key == "garmin_id":
+            continue
+        if value is None and getattr(existing, key, None) is not None:
+            continue
+        if key == "raw_json" and not _raw_is_enriched(value) and _raw_is_enriched(existing.raw_json):
+            continue
+        setattr(existing, key, value)
+
+
 def sync_calendar(user: User | None = None) -> int:
     """Sync Garmin calendar events (races + workouts). Returns count of upserted events."""
     logger.info("Syncing Garmin calendar...")
@@ -1322,80 +1372,102 @@ def sync_calendar(user: User | None = None) -> int:
         months_to_fetch.append((y, m))
 
     all_events = []
+    succeeded_months: set[tuple[int, int]] = set()
+    rate_limit_exc: GarminConnectTooManyRequestsError | None = None
     for year, month in months_to_fetch:
         try:
             # Garmin API uses 0-indexed months
             data = client.connectapi(f"/calendar-service/year/{year}/month/{month - 1}")
             parsed = _parse_calendar_response(data)
             all_events.extend(parsed)
+            succeeded_months.add((year, month))
             time.sleep(0.3)
+        except GarminConnectTooManyRequestsError as exc:
+            logger.warning(
+                "Garmin rate-limited (429) fetching calendar for %d-%02d; stopping further fetches",
+                year, month,
+            )
+            rate_limit_exc = exc
+            break
         except Exception:
             logger.exception("Failed to fetch calendar for %d-%02d", year, month)
 
     # Fetch full workout details (including steps) for workout events
-    for evt in all_events:
-        if evt["event_type"] != "workout":
-            continue
-        raw = json.loads(evt["raw_json"]) if evt["raw_json"] else {}
-        workout_id = raw.get("workoutId") or raw.get("id")
-        if not workout_id:
-            continue
-        # Skip if raw_json already has workout steps data (re-sync case)
-        if raw.get("workoutSteps") or raw.get("workoutSegments"):
-            continue
-        time.sleep(0.3)
-        workout_data = _fetch_workout_details(client, workout_id)
-        if workout_data:
-            # Store the full workout response as raw_json so step parsing can find the data
-            evt["raw_json"] = json.dumps(workout_data, default=str)
+    if rate_limit_exc is None:
+        for evt in all_events:
+            if evt["event_type"] != "workout":
+                continue
+            raw = json.loads(evt["raw_json"]) if evt["raw_json"] else {}
+            workout_id = raw.get("workoutId") or raw.get("id")
+            if not workout_id:
+                continue
+            # Skip if raw_json already has workout steps data (re-sync case)
+            if raw.get("workoutSteps") or raw.get("workoutSegments"):
+                continue
+            time.sleep(0.3)
+            try:
+                workout_data = _fetch_workout_details(client, workout_id)
+            except GarminConnectTooManyRequestsError as exc:
+                logger.warning("Garmin rate-limited (429) fetching workout details; keeping fetched events")
+                rate_limit_exc = exc
+                break
+            if workout_data:
+                # Store the full workout response as raw_json so step parsing can find the data
+                evt["raw_json"] = json.dumps(workout_data, default=str)
 
     # Fetch full details for race events to get goal time and priority
-    race_events = [e for e in all_events if e["event_type"] == "race"]
-    logger.info("Found %d race events to fetch details for", len(race_events))
-    for evt in race_events:
-        raw = json.loads(evt["raw_json"]) if evt["raw_json"] else {}
-        uuid = raw.get("shareableEventUuid")
-        if not uuid:
-            logger.debug("Race %r has no shareableEventUuid, skipping detail fetch", evt["title"])
-            continue
-        time.sleep(0.3)
-        detail = _fetch_race_event_details(client, raw)
-        if not detail:
-            logger.info("No detail response for race %r", evt["title"])
-            continue
-
-        # Extract goal time from eventCustomization.customGoal
-        if not evt.get("goal_time_sec"):
-            goal_time = _extract_goal_time_from_details(detail)
-            if goal_time:
-                evt["goal_time_sec"] = goal_time
-                logger.info("Race %r: goal_time=%ds", evt["title"], goal_time)
-
-        # Extract priority from isPrimaryEvent
-        customization = detail.get("eventCustomization") or {}
-        if not evt.get("priority") and customization.get("isPrimaryEvent") is True:
-            evt["priority"] = "A"
-            logger.info("Race %r: set priority=A from isPrimaryEvent", evt["title"])
-
-        # Store Garmin's projected/predicted finish times
-        projected = customization.get("projectedRaceTimeDurationSeconds")
-        predicted = customization.get("predictedRaceTimeDurationSeconds")
-        if projected:
+    if rate_limit_exc is None:
+        race_events = [e for e in all_events if e["event_type"] == "race"]
+        logger.info("Found %d race events to fetch details for", len(race_events))
+        for evt in race_events:
+            raw = json.loads(evt["raw_json"]) if evt["raw_json"] else {}
+            uuid = raw.get("shareableEventUuid")
+            if not uuid:
+                logger.debug("Race %r has no shareableEventUuid, skipping detail fetch", evt["title"])
+                continue
+            time.sleep(0.3)
             try:
-                evt["projected_race_time_sec"] = int(projected)
-            except (TypeError, ValueError):
-                pass
-        if predicted:
-            try:
-                evt["predicted_race_time_sec"] = int(predicted)
-            except (TypeError, ValueError):
-                pass
-        if projected or predicted:
-            logger.info("Race %r: projected=%s predicted=%s", evt["title"], projected, predicted)
+                detail = _fetch_race_event_details(client, raw)
+            except GarminConnectTooManyRequestsError as exc:
+                logger.warning("Garmin rate-limited (429) fetching race details; keeping fetched events")
+                rate_limit_exc = exc
+                break
+            if not detail:
+                logger.info("No detail response for race %r", evt["title"])
+                continue
 
-        # Store detail in raw_json for future reference
-        raw["_eventDetail"] = detail
-        evt["raw_json"] = json.dumps(raw, default=str)
+            # Extract goal time from eventCustomization.customGoal
+            if not evt.get("goal_time_sec"):
+                goal_time = _extract_goal_time_from_details(detail)
+                if goal_time:
+                    evt["goal_time_sec"] = goal_time
+                    logger.info("Race %r: goal_time=%ds", evt["title"], goal_time)
+
+            # Extract priority from isPrimaryEvent
+            customization = detail.get("eventCustomization") or {}
+            if not evt.get("priority") and customization.get("isPrimaryEvent") is True:
+                evt["priority"] = "A"
+                logger.info("Race %r: set priority=A from isPrimaryEvent", evt["title"])
+
+            # Store Garmin's projected/predicted finish times
+            projected = customization.get("projectedRaceTimeDurationSeconds")
+            predicted = customization.get("predictedRaceTimeDurationSeconds")
+            if projected:
+                try:
+                    evt["projected_race_time_sec"] = int(projected)
+                except (TypeError, ValueError):
+                    pass
+            if predicted:
+                try:
+                    evt["predicted_race_time_sec"] = int(predicted)
+                except (TypeError, ValueError):
+                    pass
+            if projected or predicted:
+                logger.info("Race %r: projected=%s predicted=%s", evt["title"], projected, predicted)
+
+            # Store detail in raw_json for future reference
+            raw["_eventDetail"] = detail
+            evt["raw_json"] = json.dumps(raw, default=str)
 
     with db_session() as db:
         uid = _scope_uid(db, user)
@@ -1409,25 +1481,33 @@ def sync_calendar(user: User | None = None) -> int:
                     GarminCalendarEvent.garmin_id == evt["garmin_id"],
                 ).first()
                 if existing:
-                    for key, value in evt.items():
-                        if key != "garmin_id":
-                            setattr(existing, key, value)
+                    _merge_calendar_event(existing, evt)
                     existing.synced_at = datetime.now(timezone.utc)
                 else:
                     db.add(GarminCalendarEvent(user_id=uid, **evt, synced_at=datetime.now(timezone.utc)))
 
-            # Remove stale future events no longer in API response
-            stale_query = db.query(GarminCalendarEvent).filter(
-                GarminCalendarEvent.user_id == uid,
-                GarminCalendarEvent.date >= today,
-            )
-            if seen_garmin_ids:
-                stale_query = stale_query.filter(
-                    ~GarminCalendarEvent.garmin_id.in_(seen_garmin_ids)
+            # Remove stale future events no longer in API response, but only
+            # for months whose fetch actually succeeded so a transient API error
+            # never wipes upcoming races in failed/unfetched months.
+            if not succeeded_months:
+                logger.warning("Skipping stale calendar event cleanup: no calendar months fetched successfully")
+            else:
+                stale_query = db.query(GarminCalendarEvent).filter(
+                    GarminCalendarEvent.user_id == uid,
+                    GarminCalendarEvent.date >= today,
                 )
-            stale_count = stale_query.delete(synchronize_session="fetch")
-            if stale_count:
-                logger.info("Removed %d stale calendar events", stale_count)
+                if seen_garmin_ids:
+                    stale_query = stale_query.filter(
+                        ~GarminCalendarEvent.garmin_id.in_(seen_garmin_ids)
+                    )
+                stale_rows = [
+                    row for row in stale_query.all()
+                    if row.date and (row.date.year, row.date.month) in succeeded_months
+                ]
+                for row in stale_rows:
+                    db.delete(row)
+                if stale_rows:
+                    logger.info("Removed %d stale calendar events", len(stale_rows))
 
             db.commit()
             _set_sync_status(
@@ -1436,6 +1516,9 @@ def sync_calendar(user: User | None = None) -> int:
             logger.info("Calendar sync complete. %d events.", len(seen_garmin_ids))
         except Exception:
             logger.exception("Calendar sync failed")
+
+    if rate_limit_exc is not None:
+        raise rate_limit_exc
 
     return len(all_events)
 
@@ -1476,7 +1559,7 @@ def push_workout_to_garmin(
     """Upload a TrainingPlanDay as a structured workout to Garmin and schedule it.
 
     Returns a dict with keys: workout_name, garmin_workout_id, scheduled_date.
-    Raises ValueError when the day is not pushable (rest/cross) or not found.
+    Raises ValueError when the day is not a pushable run workout or not found.
     Raises RuntimeError on Garmin API failures.
     """
     from app.adherence import parse_workout_steps  # noqa: F401 (imported for side-effect check)
@@ -1502,7 +1585,7 @@ def push_workout_to_garmin(
         if workout_payload is None:
             raise ValueError(
                 f"Workout type '{plan_day.workout_type}' is not pushable to Garmin "
-                "(rest and cross-training days are skipped)"
+                "(not a run workout)"
             )
 
         scheduled_date = plan_day.day_date.isoformat()

@@ -7,6 +7,7 @@ import { formatDistance, formatDuration } from '../../utils/formatting'
 import { format, parseISO } from '../../utils/date'
 import { WORKOUT_TYPE_COLORS, getActivityColor } from '../../utils/colors'
 import { firstSentence } from '../../utils/text'
+import { isWatchPushable } from '../../utils/planDayState'
 import { describeSession, formatPaceSec, type SessionDescription } from '../../utils/sessionNotation'
 import WorkoutStructureBar from '../ui/WorkoutStructureBar'
 import RepChart, { repsFromAdherence, type RepPoint } from '../ui/RepChart'
@@ -131,7 +132,7 @@ function PlannedSession({ data, planDay, event }: PlannedProps) {
   const ends = stripEnds(session)
   const distanceM = planDay?.target_distance_m ?? event?.distance_m ?? null
   const est = estimatedTime(planDay)
-  const pushable = planDay != null && planDay.workout_type !== 'rest' && planDay.workout_type !== 'cross'
+  const pushable = isWatchPushable(planDay?.workout_type)
 
   return (
     <>
@@ -160,7 +161,7 @@ function PlannedSession({ data, planDay, event }: PlannedProps) {
       </dl>
       <BriefingLine data={data} />
       <div className="session-actions">
-        {pushable ? (
+        {planDay && pushable ? (
           <button
             type="button"
             className="btn-primary"

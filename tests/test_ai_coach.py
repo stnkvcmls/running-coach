@@ -569,6 +569,7 @@ def test_save_error_insight(db, patch_db_session):
 
 
 def test_analyze_activity_force_saves_error_on_failure(db, patch_db_session, monkeypatch):
+    """Handler propagates failures so the job queue can retry and persist the error insight on final failure."""
     patch_db_session(ai_coach)
 
     def boom(*a, **k):
@@ -581,11 +582,10 @@ def test_analyze_activity_force_saves_error_on_failure(db, patch_db_session, mon
     db.commit()
     db.refresh(act)
 
-    ai_coach.analyze_activity_force(act.id)
+    with pytest.raises(RuntimeError, match="ai down"):
+        ai_coach.analyze_activity_force(act.id)
 
-    insight = db.query(Insight).filter(Insight.trigger_id == act.id).first()
-    assert insight is not None
-    assert "Analysis failed" in insight.content
+    assert db.query(Insight).filter(Insight.trigger_id == act.id).first() is None
 
 
 def test_build_context_full_sections(db):
@@ -809,14 +809,15 @@ def test_generate_briefing_includes_fuelling_for_long_run(db, patch_db_session, 
 
 
 def test_generate_briefing_ai_error_leaves_no_insight(db, patch_db_session, monkeypatch):
-    """An AI failure is swallowed (logged) rather than raised, matching weekly_review."""
+    """An AI failure propagates so the job queue can retry, without saving a briefing insight."""
     patch_db_session(ai_coach)
     plan_day = _seed_plan_day(db)
     monkeypatch.setattr(
         ai_coach, "_call_ai", MagicMock(side_effect=RuntimeError("boom")),
     )
 
-    ai_coach.generate_briefing(plan_day.id)  # should not raise
+    with pytest.raises(RuntimeError, match="boom"):
+        ai_coach.generate_briefing(plan_day.id)
 
     assert db.query(Insight).filter(Insight.trigger_type == "briefing").count() == 0
 
@@ -1400,8 +1401,8 @@ def test_generate_training_plan_claude_text_fallback(db, patch_db_session, monke
     assert result.plan_weeks == 4
 
 
-def test_generate_training_plan_exception_returns_none(db, patch_db_session, monkeypatch):
-    """Any unexpected exception during generation returns None without raising."""
+def test_generate_training_plan_exception_propagates(db, patch_db_session, monkeypatch):
+    """Exceptions during generation propagate so the job queue can retry/alert."""
     patch_db_session(ai_coach)
 
     def _raise(*a, **kw):
@@ -1409,9 +1410,8 @@ def test_generate_training_plan_exception_returns_none(db, patch_db_session, mon
 
     monkeypatch.setattr(ai_coach, "_get_ai_config", _raise)
 
-    result = ai_coach.generate_training_plan(reference_date=date(2026, 7, 3))
-
-    assert result is None
+    with pytest.raises(RuntimeError, match="unexpected boom"):
+        ai_coach.generate_training_plan(reference_date=date(2026, 7, 3))
 
 
 # --- P2-2: strength routine_id storage ---

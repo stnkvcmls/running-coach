@@ -393,16 +393,26 @@ export function useVapidPublicKey() {
 }
 
 export function useCreatePushSubscription() {
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: (sub: PushSubscriptionRequest) =>
       apiPost<{ status: string }>('/push-subscriptions', sub),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['notification-preferences'] })
+      qc.invalidateQueries({ queryKey: ['system-health'] })
+    },
   })
 }
 
 export function useDeletePushSubscription() {
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: (endpoint: string) =>
       apiDelete<{ status: string }>('/push-subscriptions', { endpoint }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['notification-preferences'] })
+      qc.invalidateQueries({ queryKey: ['system-health'] })
+    },
   })
 }
 

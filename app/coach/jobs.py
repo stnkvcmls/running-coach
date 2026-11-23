@@ -67,6 +67,11 @@ def enqueue_job(task_type: str, payload: dict, user_id: int) -> int:
 # user's jobs or the next scheduler tick.
 _JOB_TIMEOUT_SECONDS = 120
 
+# A job "running" longer than this is presumed dead (process restart, hung
+# provider call). Generous on purpose: a plan generation can legitimately run
+# several minutes x provider retries, and reaping a live job re-runs it.
+STUCK_JOB_MINUTES = 30
+
 
 def _claim_job(job_id: int) -> dict | None:
     """Atomically transition one job pending -> running.
@@ -158,6 +163,8 @@ def _finish_claimed_job(claimed: dict, exc: Exception | None) -> None:
     from app import ai_coach as _shim
     from app.models import AIJob
 
+    ended_failed = False
+    job_user_id = claimed["user_id"]
     with _shim.db_session() as db:
         job = db.query(AIJob).filter(AIJob.id == claimed["job_id"]).first()
         if not job:
@@ -167,8 +174,13 @@ def _finish_claimed_job(claimed: dict, exc: Exception | None) -> None:
             job.status = "done"
         else:
             job.error_message = str(exc)[:1000]
-            job.status = "failed" if claimed["attempts"] >= claimed["max_attempts"] else "pending"
+            if isinstance(exc, AIFatalError) or claimed["attempts"] >= claimed["max_attempts"]:
+                job.status = "failed"
+            else:
+                job.status = "pending"
             if job.status == "failed":
+                ended_failed = True
+                job_user_id = job.user_id
                 notifications_mod.notify(
                     db, job.user_id, "system_health",
                     title="A background job failed",
@@ -176,6 +188,57 @@ def _finish_claimed_job(claimed: dict, exc: Exception | None) -> None:
                     url="/settings",
                 )
         db.commit()
+
+    if (
+        ended_failed
+        and exc is not None
+        and claimed["task_type"] in ("analyze_activity", "analyze_feedback")
+    ):
+        activity_id = claimed.get("payload", {}).get("activity_id")
+        if activity_id is not None:
+            _shim._save_error_insight(activity_id, exc, job_user_id)
+
+
+def _as_utc_naive(dt: datetime) -> datetime:
+    if dt.tzinfo is not None:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
+def reap_stuck_jobs(older_than_minutes: int = STUCK_JOB_MINUTES) -> int:
+    """Recover AIJobs left in 'running' past ``older_than_minutes`` (or with NULL started_at).
+
+    Moves retry-eligible jobs back to 'pending' and marks exhausted ones 'failed'.
+    Returns the number of jobs updated.
+    """
+    from app import ai_coach as _shim
+    from app.models import AIJob
+
+    now = datetime.now(timezone.utc)
+    cutoff_naive = now.replace(tzinfo=None) - timedelta(minutes=older_than_minutes)
+    reaped = 0
+    with _shim.db_session() as db:
+        running = db.query(AIJob).filter(AIJob.status == "running").all()
+        for job in running:
+            if job.started_at is not None and _as_utc_naive(job.started_at) >= cutoff_naive:
+                continue
+            job.error_message = "Interrupted (worker restart or timeout)"
+            job.completed_at = now
+            if job.attempts < job.max_attempts:
+                job.status = "pending"
+            else:
+                job.status = "failed"
+                notifications_mod.notify(
+                    db, job.user_id, "system_health",
+                    title="A background job failed",
+                    body=f"{job.task_type} failed after {job.attempts} attempts: {job.error_message}",
+                    url="/settings",
+                )
+            reaped += 1
+        if reaped:
+            db.commit()
+            logger.warning("Reaped %d stuck running AI job(s)", reaped)
+    return reaped
 
 
 def _run_claimed_job(claimed: dict) -> None:
@@ -356,9 +419,9 @@ def analyze_activity_force(activity_id: int):
             activity.ai_analyzed = True
             db.commit()
             logger.info("AI re-analysis complete for activity %s: %s", activity.id, summary[:80])
-        except Exception as exc:
+        except Exception:
             logger.exception("AI re-analysis failed for activity %s", activity_id)
-            _shim._save_error_insight(activity_id, exc, _shim._activity_user_id(activity_id))
+            raise
 
 
 def analyze_activity_with_feedback(activity_id: int):
@@ -426,9 +489,9 @@ def analyze_activity_with_feedback(activity_id: int):
             activity.ai_analyzed = True
             db.commit()
             logger.info("AI feedback analysis complete for activity %s: %s", activity.id, summary[:80])
-        except Exception as exc:
+        except Exception:
             logger.exception("AI feedback analysis failed for activity %s", activity_id)
-            _shim._save_error_insight(activity_id, exc, _shim._activity_user_id(activity_id))
+            raise
 
 
 def backfill_missing_insights(user_id: int = DEFAULT_USER_ID):

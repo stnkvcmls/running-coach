@@ -217,3 +217,71 @@ tsc clean.
 - [x] After each wave: build + tests + real-browser screenshots (390/1280, light/dark)
       against perf.db with pinned clocks; fix; commit
 - [x] PR #153
+
+# Second-opinion week 1 (branch fix/second-opinion-week1)
+
+Source: docs/SECOND_OPINION_REVIEW.md §4/§7. Implementation drafted by Gemini
+(agy), reviewed and gated by Claude.
+
+- [x] P1 Docker guard: image sets BIND_HOST=0.0.0.0 and uvicorn binds ${BIND_HOST};
+      compose publishes 127.0.0.1:8080 and passes BIND_HOST/ALLOW_INSECURE_BIND.
+      (Non-root USER deferred: existing root-owned ./data volumes would break on upgrade.)
+- [x] P2 CI: image publishes only after Tests succeed on main; Watchtower label-scoped.
+- [x] A2 `get_active_plan_day()` (latest plan wins) used by /today, adaptation push,
+      briefing enqueue, chat explain_workout.
+- [x] I1 chat history = newest N, oldest-first.
+- [x] G3 calendar sync never deletes events in months that failed to fetch.
+- [x] G4 only run types (easy/long/tempo/interval) translate/push; UI hides push otherwise.
+- [x] N4 token-dir migration moves only known token files.
+- [x] Tests for each; full backend + frontend suites green; tsc clean.
+
+## Review
+
+- Drafted by Gemini 4 Neon XHigh (agy, accept-edits) from one spec; reviewed by Claude.
+- Claude change on review: `docker-publish.yml` also requires
+  `workflow_run.event == 'push'` and the head repo to be this repo; otherwise a
+  fork PR whose branch is named `main` would satisfy `branches: [main]` and publish.
+- Checked other `TrainingPlanDay` date queries (`coach/chat.py:70`,
+  `coach/plans.py:266,699`): all already scoped to the latest plan's `plan_id`.
+- Gates: backend pytest green (exit 0, `PYTHONUTF8=1` on Windows); every new
+  test fails on the pre-fix `app/` (stash check); frontend vitest 346/346,
+  `tsc --noEmit` clean, `vite build` OK.
+- Runtime: on a copy of perf.db with a newer plan inserted, `/today?date=2026-06-24`
+  now returns the new plan's day (31, rest) and Today renders "Rest day",
+  matching the week strip (before: stale day 3, empty "Easy" card).
+- Deploy note: with BIND_HOST now honest, an instance running AUTH_ENABLED=false
+  refuses to start unless ALLOW_INSECURE_BIND=true. Compose now publishes on
+  127.0.0.1 only. Non-root USER deferred (root-owned ./data volumes).
+
+# Second-opinion week 2 (branch fix/second-opinion-week1)
+
+- [x] A3+reaper — let AI job handlers propagate errors, fail fast on AIFatalError, write error insights on final failure, reap stuck running jobs on startup & every 10 min, single `concurrent.futures.wait`, route scheduled review/plan through AIJob queue
+- [x] G2 — flag `garmin_needs_reauth` only on real auth/decryption errors; add exponential 429 cooldown (30 min to 4 h) for scheduled Garmin sync loops
+- [x] G1 — decouple calendar sync from 5-min activity poll into its own scheduled job (`CALENDAR_SYNC_HOURS=6`) + daily sync; break/store/re-raise on 429 in `sync_calendar`
+- [x] F1 — serve `/sw.js` at root scope with `Service-Worker-Allowed: /`, rewrite `static/sw.js` (`running-coach-v5`), register in production `main.tsx`, use `getRegistration()` in `NotificationsSection`, align `manifest.json` theme colors
+- [x] N9 — expose Garmin/push/stuck-job status on `/health-detail` and push status on `/notification-preferences`; reflect them honestly in `settingsSummary.ts` and `SystemHealthSection.tsx`
+- [x] T1 — end-to-end tests in `tests/test_e2e_core_loop.py` covering plan regeneration -> Today, transient job failure -> `/health-detail`, and 30-message chat continuity
+
+## Review
+
+- Drafted by Gemini 4 Neon XHigh (agy, accept-edits) from one spec; reviewed by Claude.
+- Claude changes on review:
+  - Startup reap uses `older_than_minutes=0` (nothing can be running before the
+    scheduler starts); periodic reaper + health "stuck" threshold share
+    `STUCK_JOB_MINUTES = 30` (15 min could re-run a live plan generation).
+  - `sync_calendar` upsert now goes through `_merge_calendar_event`: a None never
+    overwrites a stored value and an un-enriched raw_json never replaces one with
+    workout steps / race detail. Pre-existing bug (any failed detail fetch wiped
+    goal times), made routine by the new 429 early-stop. 3 tests added.
+- Gemini went beyond spec in `garmin_sync.py`: 429 now propagates out of
+  `sync_activities` / `sync_daily_summary` / `sync_athlete_profile` and the
+  workout/race detail fetchers so callers can start the cooldown. Reviewed; kept.
+- Gates: backend pytest exit 0 (1,063 tests); every new week-2 test fails or
+  errors on the pre-week-2 code; frontend vitest 351/351, `tsc --noEmit` and
+  `tsc -b && vite build` clean.
+- Runtime (perf.db copy, clock pinned): stale `running` job -> `pending` with
+  "Interrupted" on restart; `/sw.js` 200 with `Service-Worker-Allowed: /`;
+  production build registers the SW at `/` (active); Settings shows
+  "Notifications: Not set up on server" and "System health: Garmin not
+  connected" instead of "8 of 8 on" / "All checks pass"; scheduler lists
+  Calendar Sync (6 h) and AI Job Reaper.

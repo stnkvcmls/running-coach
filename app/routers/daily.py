@@ -18,9 +18,9 @@ from app.models import (
     GarminCalendarEvent,
     Insight,
     SyncStatus,
-    TrainingPlanDay,
     User,
 )
+from app.plan_days import get_active_plan_day
 from app.schemas import (
     AIJobEnqueuedResponse,
     AIJobResponse,
@@ -233,11 +233,7 @@ def api_today(
     readiness = training_load.compute_readiness(daily_summary, current_load, recent_rhr, checkin)
 
     # Readiness-driven plan adaptation suggestion for the selected day's plan day
-    plan_day = (
-        db.query(TrainingPlanDay)
-        .filter(TrainingPlanDay.user_id == uid, TrainingPlanDay.day_date == selected)
-        .first()
-    )
+    plan_day = get_active_plan_day(db, uid, selected)
 
     # Mark the activity that completed the AI plan day. It is chosen from all
     # of the day's activities, exactly as the training plan's
@@ -529,9 +525,17 @@ def api_retry_job(
 
 def _sync_calendar_for_user(user_id: int) -> None:
     """Resolve a user by id and sync their Garmin calendar (background thread)."""
+    from garminconnect.exceptions import GarminConnectTooManyRequestsError
     from app.database import db_session as make_session
     from app.garmin_sync import sync_calendar
+    from app.main import _start_garmin_cooldown
+
     with make_session() as db:
         user = db.query(User).filter(User.id == user_id).first()
         if user is not None:
+            db.expunge(user)
+    if user is not None:
+        try:
             sync_calendar(user)
+        except GarminConnectTooManyRequestsError:
+            _start_garmin_cooldown(user_id)

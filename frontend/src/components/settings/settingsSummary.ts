@@ -65,6 +65,8 @@ export function memorySummary(memories: CoachMemory[] | undefined): string | nul
 
 export function notificationsSummary(prefs: NotificationPreferencesResponse | undefined): string | null {
   if (!prefs) return null
+  if (!prefs.push_configured) return 'Not set up on server'
+  if (prefs.push_subscriptions === 0) return 'Off on all devices'
   const keys = Object.keys(prefs.labels)
   if (keys.length === 0) return null
   const on = keys.filter(k => prefs.categories[k] ?? true).length
@@ -77,8 +79,12 @@ export function appearanceSummary(preference: ThemePreference): string {
 
 export function healthSummary(health: SystemHealthResponse | undefined): RowValue | null {
   if (!health) return null
+  if (health.garmin_needs_reauth) return { text: 'Garmin reconnect needed', tone: 'warn' }
+  if (!health.garmin_connected) return { text: 'Garmin not connected', tone: 'warn' }
   if (!health.canary_ok) return { text: 'Schema drift', tone: 'warn' }
   const failed = health.recent_failed_jobs.length
   if (failed > 0) return { text: `${failed} failed job${failed === 1 ? '' : 's'}`, tone: 'warn' }
+  const stuck = health.stuck_jobs ?? 0
+  if (stuck > 0) return { text: `${stuck} stuck job${stuck === 1 ? '' : 's'}`, tone: 'warn' }
   return { text: 'All checks pass', tone: 'ok' }
 }

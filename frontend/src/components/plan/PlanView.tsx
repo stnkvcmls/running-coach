@@ -6,7 +6,7 @@ import { useTrainingPlan, useGenerateTrainingPlan, useRealignmentStatus, useReal
 import { apiGet } from '../../api/client'
 import type { ActivityDetail, StrengthRoutine, FuellingGuidance, TrainingPlanDay, TrainingPlanWeek } from '../../api/types'
 import { WORKOUT_TYPE_COLORS } from '../../utils/colors'
-import { dayState, todayStr } from '../../utils/planDayState'
+import { dayState, isWatchPushable, todayStr } from '../../utils/planDayState'
 import { describeSession } from '../../utils/sessionNotation'
 import { toast } from '../ui/Toast'
 import AlertBanner from '../ui/AlertBanner'
@@ -64,7 +64,7 @@ function boilerplateNote(days: TrainingPlanDay[]): string | null {
 
 function isPushable(day: TrainingPlanDay): boolean {
   const state = dayState(day)
-  return (state === 'today' || state === 'upcoming') && day.workout_type !== 'cross'
+  return (state === 'today' || state === 'upcoming') && isWatchPushable(day.workout_type)
 }
 
 /** The next session still ahead — the only one that gets Send to watch. */

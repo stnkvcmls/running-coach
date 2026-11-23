@@ -352,6 +352,11 @@ export interface SystemHealthResponse {
   canary_ok: boolean
   canary: Record<string, CanaryStatusEntry>
   recent_failed_jobs: AIJobResponse[]
+  garmin_connected: boolean
+  garmin_needs_reauth: boolean
+  push_configured: boolean
+  push_subscriptions: number
+  stuck_jobs: number
 }
 
 export interface AiConfigResponse {
@@ -813,6 +818,8 @@ export interface PushSubscriptionRequest {
 export interface NotificationPreferencesResponse {
   categories: Record<string, boolean>
   labels: Record<string, string>
+  push_configured: boolean
+  push_subscriptions: number
 }
 
 export interface NotificationPreferencesRequest {

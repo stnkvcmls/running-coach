@@ -1,10 +1,16 @@
 import { describe, it, expect } from 'vitest'
-import type { AthleteProfile, CoachMemory, SystemHealthResponse } from '../../api/types'
+import type {
+  AthleteProfile,
+  CoachMemory,
+  NotificationPreferencesResponse,
+  SystemHealthResponse,
+} from '../../api/types'
 import {
   formatSyncTime,
   garminSummary,
   healthSummary,
   memorySummary,
+  notificationsSummary,
   profileSummary,
   thresholdsSummary,
 } from './settingsSummary'
@@ -42,10 +48,50 @@ describe('settings index summaries', () => {
   })
 
   it('summarises system health', () => {
-    const h = (o: Partial<SystemHealthResponse>): SystemHealthResponse =>
-      ({ last_sync: {}, canary_ok: true, canary: {}, recent_failed_jobs: [], ...o })
+    const h = (o: Partial<SystemHealthResponse>): SystemHealthResponse => ({
+      last_sync: {},
+      canary_ok: true,
+      canary: {},
+      recent_failed_jobs: [],
+      garmin_connected: true,
+      garmin_needs_reauth: false,
+      push_configured: true,
+      push_subscriptions: 1,
+      stuck_jobs: 0,
+      ...o,
+    })
+    expect(healthSummary(undefined)).toBeNull()
     expect(healthSummary(h({}))).toEqual({ text: 'All checks pass', tone: 'ok' })
-    expect(healthSummary(h({ canary_ok: false }))?.text).toBe('Schema drift')
-    expect(healthSummary(h({ recent_failed_jobs: [{}] as SystemHealthResponse['recent_failed_jobs'] }))?.text).toBe('1 failed job')
+    expect(healthSummary(h({ garmin_needs_reauth: true, garmin_connected: false, canary_ok: false }))).toEqual({
+      text: 'Garmin reconnect needed',
+      tone: 'warn',
+    })
+    expect(healthSummary(h({ garmin_connected: false, canary_ok: false }))).toEqual({
+      text: 'Garmin not connected',
+      tone: 'warn',
+    })
+    expect(healthSummary(h({ canary_ok: false }))).toEqual({ text: 'Schema drift', tone: 'warn' })
+    expect(
+      healthSummary(h({ recent_failed_jobs: [{}] as SystemHealthResponse['recent_failed_jobs'], stuck_jobs: 2 })),
+    ).toEqual({ text: '1 failed job', tone: 'warn' })
+    expect(
+      healthSummary(h({ recent_failed_jobs: [{}, {}] as SystemHealthResponse['recent_failed_jobs'] })),
+    ).toEqual({ text: '2 failed jobs', tone: 'warn' })
+    expect(healthSummary(h({ stuck_jobs: 1 }))).toEqual({ text: '1 stuck job', tone: 'warn' })
+    expect(healthSummary(h({ stuck_jobs: 3 }))).toEqual({ text: '3 stuck jobs', tone: 'warn' })
+  })
+
+  it('summarises notification preferences', () => {
+    const p = (o: Partial<NotificationPreferencesResponse>): NotificationPreferencesResponse => ({
+      categories: { insight: true, review: false, race: true },
+      labels: { insight: 'Insights', review: 'Weekly review', race: 'Race reminders' },
+      push_configured: true,
+      push_subscriptions: 1,
+      ...o,
+    })
+    expect(notificationsSummary(undefined)).toBeNull()
+    expect(notificationsSummary(p({ push_configured: false, push_subscriptions: 0 }))).toBe('Not set up on server')
+    expect(notificationsSummary(p({ push_configured: true, push_subscriptions: 0 }))).toBe('Off on all devices')
+    expect(notificationsSummary(p({}))).toBe('2 of 3 on')
   })
 })

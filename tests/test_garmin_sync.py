@@ -661,6 +661,114 @@ def test_sync_calendar_upserts_events(db, patch_db_session, monkeypatch):
     assert any(r.title == "Future Race" for r in races)
 
 
+def test_sync_calendar_all_months_fail_preserves_existing_events(db, patch_db_session, monkeypatch):
+    patch_db_session(garmin_sync)
+    today = date.today()
+    y1, m1 = (today.year + 1, 1) if today.month == 12 else (today.year, today.month + 1)
+
+    db.add_all([
+        GarminCalendarEvent(
+            garmin_id="race_cur", event_type="race", date=today, title="Current Month Race",
+        ),
+        GarminCalendarEvent(
+            garmin_id="race_next", event_type="race", date=date(y1, m1, 15), title="Next Month Race",
+        ),
+    ])
+    db.commit()
+
+    fake_client = MagicMock()
+    fake_client.connectapi.side_effect = RuntimeError("garmin unavailable")
+    monkeypatch.setattr(garmin_sync, "get_garmin_client", lambda *a, **k: fake_client)
+    monkeypatch.setattr(garmin_sync.time, "sleep", lambda *a, **k: None)
+
+    count = garmin_sync.sync_calendar()
+    assert count == 0
+    db.expire_all()
+    remaining = {e.garmin_id for e in db.query(GarminCalendarEvent).all()}
+    assert remaining == {"race_cur", "race_next"}
+
+
+def test_sync_calendar_partial_failure_only_deletes_in_succeeded_months(db, patch_db_session, monkeypatch):
+    patch_db_session(garmin_sync)
+    today = date.today()
+    y1, m1 = (today.year + 1, 1) if today.month == 12 else (today.year, today.month + 1)
+
+    db.add_all([
+        GarminCalendarEvent(
+            garmin_id="stale_in_ok_month", event_type="race", date=today, title="Removed Race",
+        ),
+        GarminCalendarEvent(
+            garmin_id="kept_in_failed_month", event_type="race", date=date(y1, m1, 15), title="Failed Month Race",
+        ),
+    ])
+    db.commit()
+
+    failed_endpoint = f"/calendar-service/year/{y1}/month/{m1 - 1}"
+
+    def fake_connectapi(endpoint):
+        if endpoint == failed_endpoint:
+            raise RuntimeError("503 service unavailable")
+        return {"calendarItems": []}
+
+    fake_client = MagicMock()
+    fake_client.connectapi.side_effect = fake_connectapi
+    monkeypatch.setattr(garmin_sync, "get_garmin_client", lambda *a, **k: fake_client)
+    monkeypatch.setattr(garmin_sync.time, "sleep", lambda *a, **k: None)
+
+    garmin_sync.sync_calendar()
+    db.expire_all()
+    remaining = {e.garmin_id for e in db.query(GarminCalendarEvent).all()}
+    assert "kept_in_failed_month" in remaining
+    assert "stale_in_ok_month" not in remaining
+
+
+def test_sync_calendar_429_stops_further_months_keeps_month1_and_reraises(db, patch_db_session, monkeypatch):
+    from garminconnect.exceptions import GarminConnectTooManyRequestsError
+
+    patch_db_session(garmin_sync)
+    today = date.today()
+    y1, m1 = (today.year + 1, 1) if today.month == 12 else (today.year, today.month + 1)
+    y2, m2 = (y1 + 1, 1) if m1 == 12 else (y1, m1 + 1)
+
+    # Pre-existing event in an unfetched later month must be preserved.
+    db.add(GarminCalendarEvent(
+        garmin_id="existing_later_month", event_type="race",
+        date=date(y2, m2, 10), title="Later Race",
+    ))
+    db.commit()
+
+    month1_endpoint = f"/calendar-service/year/{today.year}/month/{today.month - 1}"
+    month2_endpoint = f"/calendar-service/year/{y1}/month/{m1 - 1}"
+
+    def fake_connectapi(endpoint):
+        if endpoint == month1_endpoint:
+            return {"calendarItems": [{
+                "itemType": "race",
+                "date": today.isoformat(),
+                "eventId": 101,
+                "title": "Month One Race",
+                "distance": 10000,
+            }]}
+        if endpoint == month2_endpoint:
+            raise GarminConnectTooManyRequestsError("429 too many requests")
+        raise AssertionError(f"Should not have requested {endpoint} after 429")
+
+    fake_client = MagicMock()
+    fake_client.connectapi.side_effect = fake_connectapi
+    monkeypatch.setattr(garmin_sync, "get_garmin_client", lambda *a, **k: fake_client)
+    monkeypatch.setattr(garmin_sync.time, "sleep", lambda *a, **k: None)
+
+    with pytest.raises(GarminConnectTooManyRequestsError):
+        garmin_sync.sync_calendar()
+
+    # Stopped immediately after month 2's 429 (months 3..6 never requested).
+    assert fake_client.connectapi.call_count == 2
+    db.expire_all()
+    titles = {e.title for e in db.query(GarminCalendarEvent).all()}
+    assert "Month One Race" in titles
+    assert "Later Race" in titles
+
+
 # --- Phase 3: per-user scoping + needs_reauth ------------------------------
 
 def test_sync_activities_tags_rows_with_user_id(db, patch_db_session, monkeypatch):
@@ -705,3 +813,67 @@ def test_mark_garmin_needs_reauth_sets_and_clears(db, patch_db_session):
     garmin_sync.mark_garmin_needs_reauth(4, False)
     db.expire_all()
     assert db.query(User).filter(User.id == 4).first().garmin_needs_reauth is False
+
+
+# --- _merge_calendar_event: partial syncs must not wipe stored detail -------
+
+def _stored_race(**overrides):
+    from app.models import GarminCalendarEvent
+
+    fields = dict(
+        user_id=1,
+        garmin_id="race-1",
+        event_type="race",
+        date=date(2026, 9, 27),
+        title="Berlin Marathon",
+        goal_time_sec=12600,
+        priority="A",
+        raw_json=json.dumps({"shareableEventUuid": "u1", "_eventDetail": {"x": 1}}),
+    )
+    fields.update(overrides)
+    return GarminCalendarEvent(**fields)
+
+
+def test_merge_calendar_event_keeps_values_when_listing_has_none():
+    existing = _stored_race()
+    # Month listing only: no detail fetched, so goal/priority are None and
+    # raw_json is the bare listing item.
+    listing = {
+        "garmin_id": "race-1",
+        "event_type": "race",
+        "date": date(2026, 9, 27),
+        "title": "Berlin Marathon 2026",
+        "goal_time_sec": None,
+        "priority": None,
+        "raw_json": json.dumps({"shareableEventUuid": "u1"}),
+    }
+    garmin_sync._merge_calendar_event(existing, listing)
+    assert existing.title == "Berlin Marathon 2026"  # real changes still apply
+    assert existing.goal_time_sec == 12600
+    assert existing.priority == "A"
+    assert "_eventDetail" in json.loads(existing.raw_json)
+
+
+def test_merge_calendar_event_applies_new_detail():
+    existing = _stored_race()
+    enriched = {
+        "garmin_id": "race-1",
+        "goal_time_sec": 12300,
+        "priority": "B",
+        "raw_json": json.dumps({"shareableEventUuid": "u1", "_eventDetail": {"x": 2}}),
+    }
+    garmin_sync._merge_calendar_event(existing, enriched)
+    assert existing.goal_time_sec == 12300
+    assert existing.priority == "B"
+    assert json.loads(existing.raw_json)["_eventDetail"] == {"x": 2}
+
+
+def test_merge_calendar_event_keeps_workout_steps():
+    existing = _stored_race(
+        garmin_id="wo-1", event_type="workout",
+        raw_json=json.dumps({"workoutId": 7, "workoutSegments": [{"segmentOrder": 1}]}),
+    )
+    garmin_sync._merge_calendar_event(
+        existing, {"garmin_id": "wo-1", "raw_json": json.dumps({"workoutId": 7})}
+    )
+    assert "workoutSegments" in json.loads(existing.raw_json)

@@ -323,6 +323,46 @@ def test_health_detail_lists_recent_failed_jobs_for_current_user_only(client, db
     assert body["recent_failed_jobs"][0]["error_message"] == "boom"
 
 
+def test_health_detail_reports_garmin_push_and_stuck_jobs(client, db, monkeypatch):
+    from datetime import timezone
+    from app.config import settings
+    from app.models import PushSubscription, User
+
+    # Ensure the dev user exists and is connected to Garmin.
+    client.get("/api/v1/me")
+    user = db.query(User).first()
+    user.garmin_email = "runner@garmin.com"
+    user.garmin_needs_reauth = True
+    db.add(PushSubscription(
+        user_id=user.id, endpoint="https://push.example/1", p256dh="k", auth="a",
+    ))
+    now = datetime.now(timezone.utc)
+    # Stuck running job (> 15 min) vs fresh running job (< 15 min) vs other user's stuck job.
+    db.add(AIJob(
+        user_id=user.id, task_type="generate_plan", status="running",
+        started_at=now - timedelta(minutes=30),
+    ))
+    db.add(AIJob(
+        user_id=user.id, task_type="weekly_review", status="running",
+        started_at=now - timedelta(minutes=2),
+    ))
+    db.add(AIJob(
+        user_id=user.id + 1, task_type="generate_plan", status="running",
+        started_at=now - timedelta(minutes=30),
+    ))
+    db.commit()
+
+    monkeypatch.setattr(settings, "vapid_public_key", "pub")
+    monkeypatch.setattr(settings, "vapid_private_key", "priv")
+
+    body = client.get("/api/v1/health-detail").json()
+    assert body["garmin_connected"] is True
+    assert body["garmin_needs_reauth"] is True
+    assert body["push_configured"] is True
+    assert body["push_subscriptions"] == 1
+    assert body["stuck_jobs"] == 1
+
+
 # --- /ai-config ---
 
 def test_ai_config_defaults(client):
@@ -1455,6 +1495,51 @@ def test_api_post_chat_plain_text_has_no_actions(client, db, patch_db_session, m
     assert assistant_entry["actions"] is None
 
 
+def test_api_get_chat_returns_newest_messages_oldest_first(client, db):
+    base = datetime(2026, 6, 1, 10, 0)
+    for i in range(25):
+        db.add(ChatMessage(
+            user_id=1,
+            role="user" if i % 2 == 0 else "assistant",
+            content=f"msg-{i}",
+            created_at=base + timedelta(minutes=i),
+        ))
+    db.commit()
+
+    resp = client.get("/api/v1/chat?limit=10")
+    assert resp.status_code == 200
+    contents = [m["content"] for m in resp.json()["messages"]]
+    assert contents == [f"msg-{i}" for i in range(15, 25)]
+
+
+def test_api_post_chat_passes_newest_20_history_oldest_first(client, db, patch_db_session, monkeypatch):
+    import app.ai_coach as ai_mod
+    import app.database as database_mod
+    patch_db_session(database_mod)
+
+    base = datetime(2026, 6, 1, 10, 0)
+    for i in range(25):
+        db.add(ChatMessage(
+            user_id=1,
+            role="user" if i % 2 == 0 else "assistant",
+            content=f"msg-{i}",
+            created_at=base + timedelta(minutes=i),
+        ))
+    db.commit()
+
+    captured = {}
+
+    def fake_chat_stream(db_, new_message, history, user_id, activity_id):
+        captured["history"] = history
+        yield {"type": "token", "text": "Reply"}
+
+    monkeypatch.setattr(ai_mod, "chat_stream", fake_chat_stream)
+
+    resp = client.post("/api/v1/chat", json={"message": "latest turn"})
+    assert resp.status_code == 200
+    assert [m["content"] for m in captured["history"]] == [f"msg-{i}" for i in range(5, 25)]
+
+
 # --- /races/{id}/pacing terrain strategy ---
 
 def _elevation_details(samples: list[tuple[float, float]]) -> str:
@@ -1655,11 +1740,33 @@ def test_notification_preferences_default_and_update(client):
     body = resp.json()
     assert body["categories"]["insight"] is True
     assert "insight" in body["labels"]
+    assert body["push_configured"] is False
+    assert body["push_subscriptions"] == 0
 
     resp = client.put("/api/v1/notification-preferences", json={"categories": {"insight": False}})
     assert resp.status_code == 200
     assert resp.json()["categories"]["insight"] is False
+    assert resp.json()["push_configured"] is False
+    assert resp.json()["push_subscriptions"] == 0
 
     resp = client.get("/api/v1/notification-preferences")
     assert resp.json()["categories"]["insight"] is False
     assert resp.json()["categories"]["weekly_review"] is True
+
+
+def test_notification_preferences_reports_push_status(client, db, monkeypatch):
+    from app.config import settings
+    from app.models import PushSubscription, User
+
+    client.get("/api/v1/me")
+    user = db.query(User).first()
+    db.add(PushSubscription(
+        user_id=user.id, endpoint="https://push.example/dev-1", p256dh="k", auth="a",
+    ))
+    db.commit()
+    monkeypatch.setattr(settings, "vapid_public_key", "pub")
+    monkeypatch.setattr(settings, "vapid_private_key", "priv")
+
+    body = client.get("/api/v1/notification-preferences").json()
+    assert body["push_configured"] is True
+    assert body["push_subscriptions"] == 1

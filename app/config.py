@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     db_path: str = "/data/running_coach.db"
     garmin_token_dir: str = "/data/garmin_tokens"
     activity_poll_minutes: int = 5
+    # Calendar sync fetches 6 months + workout/race detail payloads; run on its
+    # own slower schedule rather than every activity poll to avoid Garmin 429s.
+    calendar_sync_hours: int = 6
     daily_sync_hour: int = 7
     # Each daily run syncs today plus the prior (window-1) days, so last night's
     # overnight stats land on the wake-up day while earlier days' full-day totals

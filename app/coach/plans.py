@@ -766,13 +766,13 @@ def detect_plan_realignment(
 
 def generate_training_plan(
     reference_date: date | None = None, user_id: int = DEFAULT_USER_ID, note: str | None = None
-) -> TrainingPlan | None:
+) -> TrainingPlan:
     """Generate and persist a 4-week AI training plan.
 
     Can be called from the API (on demand) or from the scheduler (weekly).
     `note` carries an optional athlete-stated reason (e.g. from the chat
     adjust_upcoming_week tool) that should take priority over the default
-    rolling-adherence logic. Returns the new TrainingPlan or None on failure.
+    rolling-adherence logic. Returns the new TrainingPlan; raises on failure.
     """
     from app import ai_coach as _shim
 
@@ -880,7 +880,7 @@ def generate_training_plan(
             return plan
         except Exception:
             logger.exception("Training plan generation failed")
-            return None
+            raise
 
 
 def weekly_review(user_id: int = DEFAULT_USER_ID):
@@ -940,6 +940,7 @@ def weekly_review(user_id: int = DEFAULT_USER_ID):
             )
         except Exception:
             logger.exception("Weekly review failed")
+            raise
 
 
 _BRIEFING_SYSTEM_PROMPT = """You are an expert running coach writing a short, motivating pre-workout \
@@ -1053,3 +1054,4 @@ def generate_briefing(plan_day_id: int) -> None:
             )
         except Exception:
             logger.exception("Briefing generation failed for plan day %s", plan_day_id)
+            raise

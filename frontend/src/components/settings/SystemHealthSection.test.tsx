@@ -10,6 +10,11 @@ function health(overrides: Partial<SystemHealthResponse> = {}): SystemHealthResp
     canary_ok: true,
     canary: {},
     recent_failed_jobs: [],
+    garmin_connected: true,
+    garmin_needs_reauth: false,
+    push_configured: true,
+    push_subscriptions: 1,
+    stuck_jobs: 0,
     ...overrides,
   }
 }
@@ -149,5 +154,43 @@ describe('SystemHealthSection', () => {
 
     await waitFor(() => expect(screen.getByRole('button', { name: /retrying/i })).toBeDisabled())
     resolveRetry({ ok: true, status: 200, json: async () => ({ id: 7, status: 'pending' }) })
+  })
+
+  it('shows Garmin connection state and Push subscription status', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetch(
+        health({
+          garmin_connected: true,
+          garmin_needs_reauth: false,
+          push_configured: true,
+          push_subscriptions: 2,
+        }),
+      ),
+    )
+    renderWithQueryClient(<SystemHealthSection />)
+
+    expect(await screen.findByText('Garmin')).toBeInTheDocument()
+    expect(screen.getByText('Garmin').nextSibling).toHaveTextContent('Connected')
+    expect(screen.getByText('Push').nextSibling).toHaveTextContent('2 devices subscribed')
+  })
+
+  it('shows Reconnect needed and Not configured on server when Garmin/Push are broken', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetch(
+        health({
+          garmin_connected: true,
+          garmin_needs_reauth: true,
+          push_configured: false,
+          push_subscriptions: 0,
+        }),
+      ),
+    )
+    renderWithQueryClient(<SystemHealthSection />)
+
+    expect(await screen.findByText('Garmin')).toBeInTheDocument()
+    expect(screen.getByText('Garmin').nextSibling).toHaveTextContent('Reconnect needed')
+    expect(screen.getByText('Push').nextSibling).toHaveTextContent('Not configured on server')
   })
 })

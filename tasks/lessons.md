@@ -262,3 +262,37 @@ branch exists, review that branch (scratch `git worktree add --detach`; link
 `frontend/node_modules` with a junction when `package*.json` is unchanged,
 and `rmdir` the junction **before** `git worktree remove`) and state the
 baseline explicitly at the top of the document.
+
+## Backend: `.first()` without `order_by` on an append-only table picks the OLDEST row
+
+**Symptom:** After the weekly plan regeneration, Today showed an empty "Easy"
+card while the week strip (latest plan) showed a rest day.
+
+**Cause:** Plans are append-only (each Sunday adds a 4-week `TrainingPlan` +
+days; old rows stay for history). `/today`, the morning adaptation push and the
+briefing enqueue looked up `TrainingPlanDay` by `(user_id, day_date).first()`
+with no plan scope and no `order_by`, so SQLite returned the lowest rowid, i.e.
+the oldest plan's day. Unit tests seeded a single plan, so they could never see it.
+
+**Fix:** One helper, `app/plan_days.get_active_plan_day()`, joins to
+`TrainingPlan` and orders by `generated_at desc, id desc`. Rule: any lookup on a
+table that keeps superseded versions must name its version (scope by the
+current parent id, or order explicitly), and its test must seed at least two
+versions.
+
+## Tooling: don't diff-test with `git stash --keep-index` when staged and unstaged edits share a file
+
+**Symptom:** To prove new tests fail on the old code, I ran
+`git stash push --keep-index -- app/`, ran the tests, then `git stash pop`.
+The pop hit a merge conflict in `app/garmin_sync.py`.
+
+**Cause:** With `--keep-index`, the stash records the worktree on top of the
+index, and the index stays applied. Popping then re-applies the
+index-to-worktree diff onto a tree that already contains the index changes.
+When staged (week 1) and unstaged (week 2) hunks touch the same region, that
+three-way merge conflicts.
+
+**Fix / rule:** Recovery: `git checkout 'stash@{0}' -- <paths>` (worktree and
+index = full stashed worktree), then `git restore --staged --source='stash@{0}^2'
+-- <paths>` (index back to the staged state). Next time, test against older code
+in a throwaway `git worktree add` checkout instead of stashing the live tree.

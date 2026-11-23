@@ -212,10 +212,18 @@ def translate_plan_day(
 ) -> dict | None:
     """Convert a TrainingPlanDay into a Garmin structured-workout payload.
 
-    Returns None for rest and cross-training days (no Garmin workout to push).
+    Returns None for non-run days (only easy, long, tempo, and interval
+    workouts translate to a Garmin running workout).
     """
     wtype = (plan_day.workout_type or "").lower()
-    if wtype in ("rest", "cross"):
+    builders = {
+        "easy": _build_easy,
+        "long": _build_long,
+        "tempo": _build_tempo,
+        "interval": _build_interval,
+    }
+    builder = builders.get(wtype)
+    if builder is None:
         return None
 
     dist_m = plan_day.target_distance_m
@@ -226,13 +234,6 @@ def translate_plan_day(
     if pace is None and profile and profile.threshold_pace_min_km:
         pace = profile.threshold_pace_min_km * 1.20
 
-    builders = {
-        "easy": _build_easy,
-        "long": _build_long,
-        "tempo": _build_tempo,
-        "interval": _build_interval,
-    }
-    builder = builders.get(wtype, _build_easy)
     steps = builder(dist_m, pace)
 
     speed_mps = _pace_to_mps(pace) if pace else _DEFAULT_PACE_MPS

@@ -157,6 +157,28 @@ def test_seed_bootstrap_user_and_migrate_tokens(
     assert not (tmp_path / "oauth1_token.json").exists()
 
 
+def test_migrate_flat_token_dir_leaves_unrelated_files_in_place(
+    db, patch_db_session, enc_key, monkeypatch, tmp_path
+):
+    patch_db_session(garmin_sync)
+    monkeypatch.setattr(garmin_sync.settings, "garmin_email", "boot@garmin.com")
+    monkeypatch.setattr(garmin_sync.settings, "garmin_password", "bootpw")
+    monkeypatch.setattr(garmin_sync.settings, "dev_user_email", "boot@id.com")
+    monkeypatch.setattr(garmin_sync.settings, "garmin_token_dir", str(tmp_path))
+
+    (tmp_path / "oauth1_token.json").write_text("{}")
+    (tmp_path / "running_coach.db").write_text("sqlite-data")
+
+    garmin_sync.seed_bootstrap_user()
+
+    user = db.query(User).filter(User.email == "boot@id.com").first()
+    assert user is not None
+    assert (tmp_path / str(user.id) / "oauth1_token.json").exists()
+    assert not (tmp_path / "oauth1_token.json").exists()
+    assert (tmp_path / "running_coach.db").exists()
+    assert not (tmp_path / str(user.id) / "running_coach.db").exists()
+
+
 def test_seed_bootstrap_user_noop_without_garmin_email(
     db, patch_db_session, monkeypatch
 ):

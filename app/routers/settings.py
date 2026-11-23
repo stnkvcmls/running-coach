@@ -2,6 +2,7 @@
 zone configs, and threshold/CP estimation.
 """
 import logging
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
@@ -16,6 +17,7 @@ from app.models import (
     DailySummary,
     GarminCalendarEvent,
     Insight,
+    PushSubscription,
     SyncStatus,
     User,
     ZoneConfig,
@@ -90,9 +92,10 @@ def api_health_detail(
     current_user: User = Depends(get_current_user),
 ):
     """Ops observability surface (P3-4): last sync per job, canary status,
-    and recent failed AI jobs, over data already tracked elsewhere.
+    recent failed/stuck AI jobs, and Garmin/push connection state.
     """
     from app import garmin_sync
+    from app import notifications as notifications_mod
 
     uid = current_user.id
     sync_rows = {
@@ -117,11 +120,43 @@ def api_health_detail(
         .all()
     )
 
+    from app.coach.jobs import STUCK_JOB_MINUTES
+
+    stuck_cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=STUCK_JOB_MINUTES)
+    running_started = (
+        db.query(AIJob.started_at)
+        .filter(AIJob.user_id == uid, AIJob.status == "running")
+        .all()
+    )
+    stuck_jobs = sum(
+        1
+        for (started_at,) in running_started
+        if started_at is not None
+        and (
+            started_at.astimezone(timezone.utc).replace(tzinfo=None)
+            if started_at.tzinfo is not None
+            else started_at
+        )
+        < stuck_cutoff
+    )
+
+    push_subscriptions = (
+        db.query(func.count(PushSubscription.id))
+        .filter(PushSubscription.user_id == uid)
+        .scalar()
+        or 0
+    )
+
     return SystemHealthResponse(
         last_sync=last_sync,
         canary_ok=canary_ok,
         canary=canary,
         recent_failed_jobs=failed_jobs,
+        garmin_connected=current_user.garmin_email is not None,
+        garmin_needs_reauth=bool(current_user.garmin_needs_reauth),
+        push_configured=notifications_mod.is_configured(),
+        push_subscriptions=push_subscriptions,
+        stuck_jobs=stuck_jobs,
     )
 
 

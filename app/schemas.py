@@ -971,6 +971,11 @@ class SystemHealthResponse(BaseModel):
     canary_ok: bool
     canary: dict[str, CanaryStatusEntry] = {}
     recent_failed_jobs: list[AIJobResponse] = []
+    garmin_connected: bool = False
+    garmin_needs_reauth: bool = False
+    push_configured: bool = False
+    push_subscriptions: int = 0
+    stuck_jobs: int = 0
 
 
 class VapidPublicKeyResponse(BaseModel):
@@ -996,6 +1001,8 @@ class PushSubscriptionDeleteRequest(BaseModel):
 class NotificationPreferencesResponse(BaseModel):
     categories: dict[str, bool]
     labels: dict[str, str]
+    push_configured: bool = False
+    push_subscriptions: int = 0
 
 
 class NotificationPreferencesRequest(BaseModel):

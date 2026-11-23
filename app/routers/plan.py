@@ -409,8 +409,8 @@ def api_push_workout_to_garmin(
     """Upload a plan day as a structured workout to the user's Garmin device.
 
     Creates the workout on Garmin Connect and schedules it on the plan day's
-    date so it appears on the watch. Rest and cross-training days are rejected
-    with 422; Garmin API failures surface as 502.
+    date so it appears on the watch. Non-run days (e.g. rest, cross-training,
+    strength) are rejected with 422; Garmin API failures surface as 502.
     """
     from app import garmin_sync
 
