@@ -51,7 +51,6 @@ from app.coach.jobs import (
     _activity_user_id,
     _save_error_insight,
     analyze_activity,
-    analyze_daily_summary,
     analyze_activity_force,
     analyze_activity_with_feedback,
 )

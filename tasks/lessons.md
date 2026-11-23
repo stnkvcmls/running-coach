@@ -296,3 +296,18 @@ three-way merge conflicts.
 index = full stashed worktree), then `git restore --staged --source='stash@{0}^2'
 -- <paths>` (index back to the staged state). Next time, test against older code
 in a throwaway `git worktree add` checkout instead of stashing the live tree.
+
+## Delegated agent specs must not ask for shell commands (2026-11-23)
+
+**Symptom:** The week-4 Gemini delegation (`agy-delegate --mode accept-edits`)
+returned `"response": ""` after one turn and 12 s, with
+`denied_actions: [Bash]`. No files changed.
+
+**Cause:** The spec's last section said "run pytest / vitest / npm run build".
+In accept-edits mode shell commands are denied, and the agent stops at the
+first denial instead of carrying on with edits.
+
+**Fix / rule:** Every delegation spec carries a "Tooling rules" block: file
+read/search/edit tools only, no shell, the reviewer runs tests and builds.
+Check the JSON for `denied_actions` and an empty `response` before assuming
+the work happened.

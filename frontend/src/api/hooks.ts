@@ -1,5 +1,5 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiPost, apiPut, apiDelete } from './client'
+import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from './client'
 import { toast } from '../components/ui/Toast'
 import type {
   AIJobEnqueuedResponse,
@@ -13,7 +13,6 @@ import type {
   CalendarEvent,
   DailyCheckin,
   DailyCheckinRequest,
-  FeedbackRequest,
   GarminConnectResult,
   GarminConnectionStatus,
   GarminCredentialsRequest,
@@ -45,8 +44,6 @@ import type {
   ThresholdEstimateResponse,
   ThresholdApplyRequest,
   AerobicTrendsResponse,
-  CustomChartMetricsResponse,
-  CustomChartDataResponse,
   VapidPublicKeyResponse,
   PushSubscriptionRequest,
   NotificationPreferencesResponse,
@@ -256,17 +253,17 @@ export function useTriggerAnalysis() {
   })
 }
 
-export function useSubmitFeedback() {
+export function useSetRpe() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, feedback }: { id: number; feedback: FeedbackRequest }) =>
-      apiPost<AIJobEnqueuedResponse>(`/activities/${id}/feedback`, feedback),
+    mutationFn: ({ id, rpe }: { id: number; rpe: number }) =>
+      apiPatch<{ status: string; rpe: number }>(`/activities/${id}/rpe`, { rpe }),
     onSuccess: (_, { id }) => {
-      // Immediately refresh so the card shows the pending state; job polling
-      // in ActivityDetailView handles subsequent refreshes on completion.
       qc.invalidateQueries({ queryKey: ['activity', id] })
+      qc.invalidateQueries({ queryKey: ['today'] })
+      qc.invalidateQueries({ queryKey: ['training-load'] })
     },
-    onError: () => toast('Could not submit feedback — try again', { kind: 'error' }),
+    onError: () => toast('Could not save effort rating — try again', { kind: 'error' }),
   })
 }
 
@@ -534,24 +531,6 @@ export function useAerobicTrends(days = 90) {
   return useQuery({
     queryKey: ['aerobic-trends', days],
     queryFn: () => apiGet<AerobicTrendsResponse>(`/aerobic-trends?days=${days}`),
-  })
-}
-
-export function useCustomChartMetrics() {
-  return useQuery({
-    queryKey: ['custom-chart-metrics'],
-    queryFn: () => apiGet<CustomChartMetricsResponse>('/custom-charts/metrics'),
-    staleTime: Infinity,
-  })
-}
-
-export function useCustomChartData(metricIds: string[], days: number, compare = false) {
-  return useQuery({
-    queryKey: ['custom-chart-data', metricIds, days, compare],
-    queryFn: () => apiGet<CustomChartDataResponse>(
-      `/custom-charts/data?metrics=${metricIds.join(',')}&days=${days}&compare=${compare}`
-    ),
-    enabled: metricIds.length > 0,
   })
 }
 

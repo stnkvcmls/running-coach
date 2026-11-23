@@ -3,15 +3,22 @@ import { screen, fireEvent, within } from '@testing-library/react'
 import { renderWithProviders } from '../../test/test-utils'
 import TrendsView from './TrendsView'
 
+const LOAD_POINT = {
+  date: '2026-07-01', tss: 50, ctl: 62, atl: 44, tsb: 17, acwr: 1.1,
+  ramp_rate_7d: null, ramp_rate_28d: null, injury_risk: 'low',
+  form_zone: 'very_fresh', form_zone_label: 'Very fresh — detraining risk',
+  rsb_zone: 'productive', rsb_zone_label: 'Productive', rsb_recommendation: null,
+  sport_breakdown: null,
+}
+
 /** Empty-but-well-formed payload per endpoint, so every sub-view reaches its
  * empty state instead of choking on a bare []. */
 function mockApi() {
   return vi.fn((url: string) => {
-    const body = url.includes('/performance-curve') ? { pace_points: [], power_points: [], deltas: [] }
+    const body = url.includes('/training-load') ? { points: [LOAD_POINT], current: LOAD_POINT }
+      : url.includes('/performance-curve') ? { pace_points: [], power_points: [], deltas: [] }
       : url.includes('/intensity-trends') ? { weeks: [], zone_type: 'hr', days: 90 }
       : url.includes('/aerobic-trends') ? { points: [], days: 90 }
-      : url.includes('/custom-charts/metrics') ? { metrics: [] }
-      : url.includes('/custom-charts/data') ? { points: [] }
       : url.includes('/personal-records')
         ? { current_bests: [], recent: [], recent_days: 90, distance_bests: {}, distance_labels: [] }
       : url.includes('/wellness-trends') ? [{ id: 1, date: '2026-07-01', sleep_score: 82, resting_hr: 46 }]
@@ -52,7 +59,7 @@ describe('TrendsView', () => {
     expect(recordsTab).toHaveAttribute('aria-controls', 'trends-panel-records')
   })
 
-  it('Fitness stacks Weekly volume, Performance, Intensity and Aerobic as sections, ending with "Build a chart"', async () => {
+  it('Fitness stacks Fitness & fatigue, Weekly volume, Performance, Intensity and Aerobic as sections', async () => {
     vi.stubGlobal('fetch', mockApi())
     renderWithProviders(<TrendsView />)
 
@@ -62,7 +69,7 @@ describe('TrendsView', () => {
     expect(panel).toHaveAttribute('aria-labelledby', 'trends-tab-fitness')
     const headings = within(panel).getAllByRole('heading', { level: 2 })
     expect(headings.map(h => h.textContent)).toEqual([
-      'Weekly volume', 'Performance curve', 'Intensity', 'Aerobic efficiency', 'Build a chart',
+      'Fitness & fatigue', 'Weekly volume', 'Performance curve', 'Intensity', 'Aerobic efficiency',
     ])
     // Each heading labels its own section region.
     for (const h of headings) {
@@ -71,11 +78,12 @@ describe('TrendsView', () => {
     // The performance curve's explainer link moved up to its section heading.
     expect(within(panel).getByRole('button', { name: 'About Performance curve' })).toBeInTheDocument()
 
-    // All four sub-views actually mount (each reaches its empty state).
+    // Sub-views mount cleanly: Form renders its sentence, others reach empty states.
+    expect(await within(panel).findByText('Very fresh, +17.')).toBeInTheDocument()
     expect(await within(panel).findByText(/no mean-maximal curve data yet/i)).toBeInTheDocument()
     expect(await within(panel).findByText(/no zone data available/i)).toBeInTheDocument()
     expect(await within(panel).findByText(/no aerobic data yet/i)).toBeInTheDocument()
-    expect(await within(panel).findByText('Compare to previous period')).toBeInTheDocument()
+    expect(screen.queryByText('Build a chart')).not.toBeInTheDocument()
   })
 
   it('drops the sub-view headings that repeated the tab or section name', async () => {
@@ -89,8 +97,8 @@ describe('TrendsView', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'Fitness' }))
     await screen.findByText(/no aerobic data yet/i)
+    expect(screen.queryByRole('heading', { name: 'Form' })).not.toBeInTheDocument()
     expect(screen.queryByText('Performance Curve')).not.toBeInTheDocument()
     expect(screen.queryByText('Aerobic Efficiency')).not.toBeInTheDocument()
-    expect(screen.queryByText('Custom Chart')).not.toBeInTheDocument()
   })
 })

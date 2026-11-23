@@ -42,7 +42,7 @@
   display: none;
 }
 
-/* Shared panel anatomy (Body, Form, Races, From your coach): a heading row
+/* Shared panel anatomy (Body, Races, From your coach): a heading row
    with a quiet text link, then rows separated by hairlines. */
 .today-panel .panel-head {
   display: flex;
@@ -96,7 +96,7 @@
 }
 
 /* Desktop: banner and week rail full-width on top, then two independent
-   flex columns (hero + check-in left; Body, Form, Races right), then coach
+   flex columns (hero + check-in left; Body, Races right), then coach
    notes and extra activities full-width. Flex columns, not grid rows, so a
    tall panel in one column never forces blank space into the other. */
 @media (min-width: 1024px) {

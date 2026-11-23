@@ -46,7 +46,7 @@ def get_active_niggle(db: Session, user_id: int) -> CoachMemory | None:
             CoachMemory.category == "niggle",
             CoachMemory.active.is_(True),
         )
-        .order_by(CoachMemory.created_at.desc())
+        .order_by(CoachMemory.created_at.desc(), CoachMemory.id.desc())
         .first()
     )
 

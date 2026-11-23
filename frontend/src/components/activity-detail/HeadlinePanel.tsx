@@ -82,11 +82,17 @@ export default function HeadlinePanel({ activity, onReanalyze, isAnalyzing }: Pr
             </div>
           )}
         </div>
-      ) : !insight && (activity.feedback_rating || isAnalyzing) ? (
+      ) : !insight && isAnalyzing ? (
         <p className="headline-verdict verdict verdict-pending">
           <Loader size={16} className="spin" aria-hidden="true" />
           Generating insights...
         </p>
+      ) : !insight ? (
+        <div className="headline-verdict">
+          <button type="button" className="analyze-btn" onClick={onReanalyze}>
+            Get coach analysis
+          </button>
+        </div>
       ) : null}
     </section>
   )

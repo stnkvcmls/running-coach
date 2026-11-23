@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 
-from app.models import Activity
+from sqlalchemy.orm import Session
+
+from app.models import Activity, AthleteProfile, GarminCalendarEvent, TrainingPlanDay
 from app.schemas import IntervalAdherence, WorkoutAdherence, WorkoutStepResponse
 
 
@@ -727,6 +730,54 @@ def compute_adherence(
         summary=", ".join(summary_parts),
         intervals=intervals,
     )
+
+
+def adherence_for_activity(
+    db: Session,
+    activity: Activity,
+    plan_day: TrainingPlanDay | None = None,
+    profile: AthleteProfile | None = None,
+) -> WorkoutAdherence | None:
+    """Compute workout adherence for an activity from one canonical source.
+
+    1. Prefer a Garmin calendar workout event on the activity's date when it
+       carries parseable workout steps (this is what the watch executed, and
+       also what a pushed plan day becomes).
+    2. Otherwise, if ``plan_day`` is provided and translates to a Garmin
+       workout payload, parse and score against those steps.
+    3. Otherwise return ``None``.
+    """
+    if activity.started_at is not None:
+        activity_date = (
+            activity.started_at.date()
+            if isinstance(activity.started_at, datetime)
+            else activity.started_at
+        )
+        workout_events = (
+            db.query(GarminCalendarEvent)
+            .filter(
+                GarminCalendarEvent.user_id == activity.user_id,
+                GarminCalendarEvent.date == activity_date,
+                GarminCalendarEvent.event_type == "workout",
+            )
+            .all()
+        )
+        for workout_event in workout_events:
+            if workout_event.raw_json:
+                steps = parse_workout_steps(workout_event.raw_json)
+                if steps:
+                    return compute_adherence(activity, steps)
+
+    if plan_day is not None:
+        from app import workout_translator
+
+        translated = workout_translator.translate_plan_day(plan_day, profile)
+        if translated:
+            steps = parse_workout_steps(json.dumps(translated))
+            if steps:
+                return compute_adherence(activity, steps)
+
+    return None
 
 
 def format_adherence_context(adherence: WorkoutAdherence) -> str:

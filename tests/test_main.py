@@ -93,11 +93,8 @@ def test_run_activity_sync_skips_when_auth_fails(monkeypatch):
 
 # --- per-user daily sync ---------------------------------------------------
 
-def test_run_daily_sync_for_user_window_and_analyzes_today(monkeypatch):
-    from datetime import date
-
+def test_run_daily_sync_for_user_window(monkeypatch):
     import app.garmin_sync as garmin_sync
-    import app.ai_coach as ai_coach
 
     user = _user(3)
     monkeypatch.setattr(main, "db_session", _fake_db_session_returning(user))
@@ -107,43 +104,52 @@ def test_run_daily_sync_for_user_window_and_analyzes_today(monkeypatch):
     sync_calendar = MagicMock()
     monkeypatch.setattr(garmin_sync, "sync_calendar", sync_calendar)
 
-    summaries = {}
-
     def fake_sync(target, user=None):
-        s = MagicMock(id=target.toordinal(), date=target)
-        summaries[target] = s
-        return s
+        return MagicMock(id=target.toordinal(), date=target)
 
     sync = MagicMock(side_effect=fake_sync)
     monkeypatch.setattr(garmin_sync, "sync_daily_summary", sync)
-    analyze = MagicMock()
-    monkeypatch.setattr(ai_coach, "analyze_daily_summary", analyze)
 
     main.run_daily_sync_for_user(3)
 
     sync_calendar.assert_called_once_with(user)
     assert sync.call_count == 3
     synced_dates = {c.args[0] for c in sync.call_args_list}
-    assert date.today() in synced_dates
-    analyze.assert_called_once_with(summaries[date.today()])
+    assert main.local_today() in synced_dates
 
 
-def test_run_daily_sync_no_summary_skips_ai(monkeypatch):
+def test_run_daily_sync_does_not_create_daily_summary_insight(db, patch_db_session, monkeypatch):
     import app.garmin_sync as garmin_sync
-    import app.ai_coach as ai_coach
+    from app.models import DailySummary, Insight, User
 
-    user = _user(3)
-    monkeypatch.setattr(main, "db_session", _fake_db_session_returning(user))
+    patch_db_session(main)
+    db.add(User(id=1, email="runner@example.com", garmin_email="g@example.com"))
+    db.commit()
+
     monkeypatch.setattr(main, "_authenticate_or_flag", lambda u: True)
+    monkeypatch.setattr(main.settings, "daily_sync_window_days", 1)
     monkeypatch.setattr(garmin_sync, "sync_athlete_profile", MagicMock())
     monkeypatch.setattr(garmin_sync, "sync_calendar", MagicMock())
-    monkeypatch.setattr(garmin_sync, "sync_daily_summary", MagicMock(return_value=None))
-    analyze = MagicMock()
-    monkeypatch.setattr(ai_coach, "analyze_daily_summary", analyze)
 
-    main.run_daily_sync_for_user(3)
+    def fake_sync(target, user=None):
+        summary = DailySummary(
+            user_id=1, date=target, sleep_seconds=7 * 3600, resting_hr=54, body_battery_high=80
+        )
+        db.add(summary)
+        db.commit()
+        db.refresh(summary)
+        return summary
 
-    analyze.assert_not_called()
+    monkeypatch.setattr(garmin_sync, "sync_daily_summary", MagicMock(side_effect=fake_sync))
+
+    main.run_daily_sync_for_user(1)
+
+    daily_insights = (
+        db.query(Insight)
+        .filter(Insight.user_id == 1, Insight.trigger_type == "daily_summary")
+        .all()
+    )
+    assert daily_insights == []
 
 
 # --- push notifications: plan adaptation + race-week reminders (P0-1) ------
@@ -377,9 +383,7 @@ def test_generate_briefing_if_needed_skips_without_plan_day(db, patch_db_session
 
 
 def test_run_daily_sync_generates_briefing_for_todays_plan_day(monkeypatch):
-    from datetime import date
     import app.garmin_sync as garmin_sync
-    import app.ai_coach as ai_coach
 
     user = _user(3)
     monkeypatch.setattr(main, "db_session", _fake_db_session_returning(user))
@@ -387,7 +391,6 @@ def test_run_daily_sync_generates_briefing_for_todays_plan_day(monkeypatch):
     monkeypatch.setattr(garmin_sync, "sync_athlete_profile", MagicMock())
     monkeypatch.setattr(garmin_sync, "sync_calendar", MagicMock())
     monkeypatch.setattr(garmin_sync, "sync_daily_summary", MagicMock(return_value=None))
-    monkeypatch.setattr(ai_coach, "analyze_daily_summary", MagicMock())
 
     briefing_check = MagicMock()
     monkeypatch.setattr(main, "_generate_briefing_if_needed", briefing_check)
@@ -640,3 +643,109 @@ def test_service_worker_served_at_root_scope():
     assert "javascript" in resp.headers["content-type"]
     assert resp.headers.get("service-worker-allowed") == "/"
     assert "addEventListener('push'" in resp.text
+
+
+# --- U2: auto-analyze newly synced recent runs -----------------------------
+
+def test_run_activity_sync_auto_analyzes_only_new_recent_runs(db, patch_db_session, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    import app.ai_coach as ai_coach
+    import app.garmin_sync as garmin_sync
+    from app.models import Activity, Insight, User
+
+    patch_db_session(main)
+    user = User(id=1, email="runner@example.com", garmin_email="g@example.com")
+    db.add(user)
+    now = datetime.now(timezone.utc)
+    recent_run = Activity(
+        user_id=1, garmin_id=501, activity_type="running",
+        started_at=now - timedelta(hours=2),
+    )
+    old_run = Activity(
+        user_id=1, garmin_id=502, activity_type="running",
+        started_at=now - timedelta(hours=72),
+    )
+    recent_ride = Activity(
+        user_id=1, garmin_id=503, activity_type="road_biking",
+        started_at=now - timedelta(hours=2),
+    )
+    already_analyzed = Activity(
+        user_id=1, garmin_id=504, activity_type="running",
+        started_at=now - timedelta(hours=1),
+    )
+    db.add_all([recent_run, old_run, recent_ride, already_analyzed])
+    db.flush()
+    db.add(Insight(
+        user_id=1, trigger_type="activity", trigger_id=already_analyzed.id,
+        content="Already done", summary="Done",
+    ))
+    db.commit()
+
+    monkeypatch.setattr(main, "_authenticate_or_flag", lambda u: True)
+    monkeypatch.setattr(main.settings, "auto_analyze_activities", True)
+    monkeypatch.setattr(
+        garmin_sync, "sync_activities",
+        MagicMock(return_value=[recent_run, old_run, recent_ride, already_analyzed]),
+    )
+    monkeypatch.setattr(garmin_sync, "sync_calendar", MagicMock())
+    enqueue_mock = MagicMock()
+    monkeypatch.setattr(ai_coach, "enqueue_job", enqueue_mock)
+
+    main.run_activity_sync_for_user(1, include_calendar=False)
+
+    enqueue_mock.assert_called_once_with(
+        "analyze_activity", {"activity_id": recent_run.id}, 1
+    )
+
+
+def test_run_activity_sync_skips_auto_analyze_when_disabled(db, patch_db_session, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    import app.ai_coach as ai_coach
+    import app.garmin_sync as garmin_sync
+    from app.models import Activity, User
+
+    patch_db_session(main)
+    db.add(User(id=1, email="runner@example.com", garmin_email="g@example.com"))
+    recent_run = Activity(
+        user_id=1, garmin_id=511, activity_type="running",
+        started_at=datetime.now(timezone.utc) - timedelta(hours=1),
+    )
+    db.add(recent_run)
+    db.commit()
+
+    monkeypatch.setattr(main, "_authenticate_or_flag", lambda u: True)
+    monkeypatch.setattr(main.settings, "auto_analyze_activities", False)
+    monkeypatch.setattr(garmin_sync, "sync_activities", MagicMock(return_value=[recent_run]))
+    enqueue_mock = MagicMock()
+    monkeypatch.setattr(ai_coach, "enqueue_job", enqueue_mock)
+
+    main.run_activity_sync_for_user(1, include_calendar=False)
+
+    enqueue_mock.assert_not_called()
+
+
+def test_run_activity_sync_survives_auto_analyze_enqueue_failure(db, patch_db_session, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    import app.ai_coach as ai_coach
+    import app.garmin_sync as garmin_sync
+    from app.models import Activity, User
+
+    patch_db_session(main)
+    db.add(User(id=1, email="runner@example.com", garmin_email="g@example.com"))
+    recent_run = Activity(
+        user_id=1, garmin_id=512, activity_type="running",
+        started_at=datetime.now(timezone.utc) - timedelta(hours=1),
+    )
+    db.add(recent_run)
+    db.commit()
+
+    monkeypatch.setattr(main, "_authenticate_or_flag", lambda u: True)
+    monkeypatch.setattr(main.settings, "auto_analyze_activities", True)
+    monkeypatch.setattr(garmin_sync, "sync_activities", MagicMock(return_value=[recent_run]))
+    sync_calendar = MagicMock()
+    monkeypatch.setattr(garmin_sync, "sync_calendar", sync_calendar)
+    monkeypatch.setattr(ai_coach, "enqueue_job", MagicMock(side_effect=RuntimeError("db busy")))
+
+    main.run_activity_sync_for_user(1, include_calendar=True)
+
+    sync_calendar.assert_called_once()

@@ -253,6 +253,11 @@
 .slot-stats { order: 6; }
 .slot-feedback { order: 7; }
 
+.slot-feedback .session-rpe,
+.slot-feedback .session-felt {
+  margin-top: 0;
+}
+
 /* Desktop: two independent flex columns (not grid rows, so a tall chart never
    leaves a gap in the other column). Figures, verdict, reps and stats lead
    the left column (D6); charts, zones and route fill the right. */

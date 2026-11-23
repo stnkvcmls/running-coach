@@ -291,6 +291,23 @@ Agreed by both reviewers. Freeze or delete:
 Deliberately **not** in the first month: FKs/blob split (D1, D3), the
 provider-plumbing refactor (I5), or another visual pass.
 
+### 7.1 Implementation status (branch `fix/second-opinion-week1`)
+
+All four weeks are implemented; see `tasks/todo.md` for the per-week review
+notes, gates and runtime checks.
+
+| Week | Done | Not done / deviations |
+|---|---|---|
+| 1 | P1, P2, A2, I1, G3, G4, N4 | Non-root container user deferred (existing root-owned `./data` volumes) |
+| 2 | A3 + reaper, G2, G1, F1, N9, T1 | — |
+| 3 | S1, S2, S5, N1, U2, D5, N6 | S2 applies to newly computed curves only; automatic post-run analysis restored behind `AUTO_ANALYZE_ACTIVITIES` |
+| 4 | Cut list items 1–4 and 6, `Race` table + `static/style.css` (item 5), F3, F4b, N2, N8, N7 | Multi-user plumbing (item 5, X2) left in place: removing it is a schema-wide refactor, not a cut. `static/sw.js` is no longer legacy (week 2 made it the real service worker) |
+
+Still open from §5: everything not listed above, notably the data-model items
+(D1–D4, D6), the provider refactor (I5), P3–P6, A4–A6, G5, I2–I4, I6,
+S4, S6, S7, T2–T4, F2, F4r, F5, F6, N3, U1, U3–U5, X1, X2. S3 was resolved
+by cutting the 3-parameter model; X3 by the cut list.
+
 ---
 
 ## 8. How we reached agreement

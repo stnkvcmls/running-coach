@@ -1,27 +1,29 @@
-import { useState, useEffect, createContext, useContext } from 'react'
+import { useState, useEffect, createContext, useContext, lazy, Suspense } from 'react'
 import { Routes, Route, useLocation, useNavigate, matchPath } from 'react-router-dom'
 import TopBar from './components/layout/TopBar'
 import BottomNav from './components/layout/BottomNav'
 import CalendarContainer from './components/layout/CalendarContainer'
 import TodayView from './components/today/TodayView'
-import ActivitiesView from './components/activities/ActivitiesView'
-import ActivityDetailView from './components/activity-detail/ActivityDetailView'
-import DailySummariesView from './components/daily/DailySummariesView'
-import DailyDetailView from './components/daily/DailyDetailView'
-import SettingsView from './components/settings/SettingsView'
-import SettingsSectionView from './components/settings/SettingsSectionView'
-import WorkoutDetailView from './components/workout-detail/WorkoutDetailView'
-import OnboardingView from './components/onboarding/OnboardingView'
-import TrendsView from './components/trends/TrendsView'
-import PlanView from './components/plan/PlanView'
-import PlanSetupView from './components/plan-setup/PlanSetupView'
-import StatInfoView from './components/info/StatInfoView'
-import ChatView from './components/chat/ChatView'
 import { ToastHost } from './components/ui/Toast'
 import ErrorBoundary from './components/ui/ErrorBoundary'
+import Skeleton from './components/ui/Skeleton'
 import { useAthleteProfile } from './api/hooks'
 import { useThemePreference, type ResolvedTheme, type ThemePreference } from './hooks/useThemePreference'
 import './App.css'
+
+const ActivitiesView = lazy(() => import('./components/activities/ActivitiesView'))
+const ActivityDetailView = lazy(() => import('./components/activity-detail/ActivityDetailView'))
+const DailySummariesView = lazy(() => import('./components/daily/DailySummariesView'))
+const DailyDetailView = lazy(() => import('./components/daily/DailyDetailView'))
+const SettingsView = lazy(() => import('./components/settings/SettingsView'))
+const SettingsSectionView = lazy(() => import('./components/settings/SettingsSectionView'))
+const WorkoutDetailView = lazy(() => import('./components/workout-detail/WorkoutDetailView'))
+const OnboardingView = lazy(() => import('./components/onboarding/OnboardingView'))
+const TrendsView = lazy(() => import('./components/trends/TrendsView'))
+const PlanView = lazy(() => import('./components/plan/PlanView'))
+const PlanSetupView = lazy(() => import('./components/plan-setup/PlanSetupView'))
+const StatInfoView = lazy(() => import('./components/info/StatInfoView'))
+const ChatView = lazy(() => import('./components/chat/ChatView'))
 
 interface DateContextType {
   selectedDate: Date
@@ -148,22 +150,30 @@ export default function App() {
         <div className="app-body">
           <main className={`app-main ${!isDetailPage ? 'app-main--with-nav' : ''}`}>
             <ErrorBoundary key={location.pathname}>
-              <Routes>
-                <Route path="/" element={<TodayView />} />
-                <Route path="/activities" element={<ActivitiesView />} />
-                <Route path="/activities/:id" element={<ActivityDetailView />} />
-                <Route path="/daily" element={<DailySummariesView />} />
-                <Route path="/daily/:id" element={<DailyDetailView />} />
-                <Route path="/workouts/:id" element={<WorkoutDetailView />} />
-                <Route path="/trends" element={<TrendsView />} />
-                <Route path="/plan" element={<PlanView />} />
-                <Route path="/plan/setup" element={<PlanSetupView />} />
-                <Route path="/settings" element={<SettingsView />} />
-                <Route path="/settings/:section" element={<SettingsSectionView />} />
-                <Route path="/info/:topic" element={<StatInfoView />} />
-                <Route path="/onboarding" element={<OnboardingView />} />
-                <Route path="/chat" element={<ChatView />} />
-              </Routes>
+              <Suspense
+                fallback={
+                  <div className="route-fallback" aria-busy="true">
+                    <Skeleton height={220} radius="var(--radius)" />
+                  </div>
+                }
+              >
+                <Routes>
+                  <Route path="/" element={<TodayView />} />
+                  <Route path="/activities" element={<ActivitiesView />} />
+                  <Route path="/activities/:id" element={<ActivityDetailView />} />
+                  <Route path="/daily" element={<DailySummariesView />} />
+                  <Route path="/daily/:id" element={<DailyDetailView />} />
+                  <Route path="/workouts/:id" element={<WorkoutDetailView />} />
+                  <Route path="/trends" element={<TrendsView />} />
+                  <Route path="/plan" element={<PlanView />} />
+                  <Route path="/plan/setup" element={<PlanSetupView />} />
+                  <Route path="/settings" element={<SettingsView />} />
+                  <Route path="/settings/:section" element={<SettingsSectionView />} />
+                  <Route path="/info/:topic" element={<StatInfoView />} />
+                  <Route path="/onboarding" element={<OnboardingView />} />
+                  <Route path="/chat" element={<ChatView />} />
+                </Routes>
+              </Suspense>
             </ErrorBoundary>
           </main>
           {!isDetailPage && <BottomNav />}

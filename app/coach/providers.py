@@ -61,7 +61,6 @@ def _extract_summary_and_category(content: str, trigger_type: str) -> tuple[str,
         summary = content.split("\n")[0][:200]
     category_map = {
         "activity": "workout_analysis",
-        "daily_summary": "recovery",
         "weekly_review": "training_plan",
         "briefing": "briefing",
     }

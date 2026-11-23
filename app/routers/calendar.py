@@ -11,6 +11,7 @@ from app.models import Activity, AthleteProfile, GarminCalendarEvent, User
 from app.schemas import ActivitySummary, CalendarDay, CalendarEventResponse, FuellingGuidance
 from app import nutrition as nutrition_mod
 from app.routers._shared import _enrich_event_with_steps, _parse_date
+from app.utils import local_today
 
 router = APIRouter()
 
@@ -25,9 +26,9 @@ def api_calendar_month(
         try:
             view_date = datetime.strptime(month, "%Y-%m").date()
         except ValueError:
-            view_date = date.today().replace(day=1)
+            view_date = local_today().replace(day=1)
     else:
-        view_date = date.today().replace(day=1)
+        view_date = local_today().replace(day=1)
 
     if view_date.month == 12:
         next_month = view_date.replace(year=view_date.year + 1, month=1)
@@ -86,7 +87,7 @@ def api_calendar_week(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    target = _parse_date(date_str) if date_str else date.today()
+    target = _parse_date(date_str) if date_str else local_today()
     # Monday of the week
     week_start = target - timedelta(days=target.weekday())
     week_end = week_start + timedelta(days=7)
@@ -160,7 +161,7 @@ def api_calendar_event_detail(
                 .filter(AthleteProfile.user_id == current_user.id)
                 .first()
             )
-            heat_stress = recent_heat_stress(db, date.today(), current_user.id)
+            heat_stress = recent_heat_stress(db, local_today(), current_user.id)
             guidance = nutrition_mod.compute_fuelling_guidance(
                 duration_sec=float(duration_sec),
                 intensity="race",

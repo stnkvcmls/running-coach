@@ -243,6 +243,30 @@ def test_get_distance_top_n_scoped_to_distance_type(db):
     assert list(top_n.keys()) == ["5K"]
 
 
+def test_get_distance_top_n_ranks_real_efforts_not_only_pr_milestones(db):
+    # Oldest run is fastest (19:00), followed by 19:05 and 25:00. Because neither
+    # later run beats 19:00, only 19:00 has a PersonalRecord row — yet top-3
+    # must include 19:05 and 25:00 ranked by actual effort time.
+    fastest = _add_activity(db, days_ago=30, mean_max=_curve_json(distance_efforts={"5K": 1140.0}))
+    second = _add_activity(db, days_ago=20, mean_max=_curve_json(distance_efforts={"5K": 1145.0}))
+    slowest = _add_activity(db, days_ago=10, mean_max=_curve_json(distance_efforts={"5K": 1500.0}))
+    records.rebuild_personal_records(db)
+
+    assert db.query(PersonalRecord).filter(PersonalRecord.record_type == "distance").count() == 1
+
+    top3 = records.get_distance_top_n(db, top_n=3)
+    assert [r.value for r in top3["5K"]] == [1140.0, 1145.0, 1500.0]
+    assert [r.activity_id for r in top3["5K"]] == [fastest.id, second.id, slowest.id]
+
+    top2 = records.get_distance_top_n(db, top_n=2)
+    assert [r.value for r in top2["5K"]] == [1140.0, 1145.0]
+    assert [r.activity_id for r in top2["5K"]] == [fastest.id, second.id]
+
+    # Returned PersonalRecord objects must be transient (never added to the session).
+    assert not db.new
+    assert db.query(PersonalRecord).filter(PersonalRecord.record_type == "distance").count() == 1
+
+
 # --- lazy backfill (pre-existing history synced before this feature shipped) ---
 
 def test_ensure_records_backfilled_mines_pre_existing_history(db):

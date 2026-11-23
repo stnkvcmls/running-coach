@@ -12,7 +12,7 @@ import ChartTabs from './ChartTabs'
 import HrZonesChart from './HrZonesChart'
 import PaceZonesChart from './PaceZonesChart'
 import SplitsBars from './SplitsBars'
-import FeedbackPrompt from './FeedbackPrompt'
+import EffortPrompt from '../ui/EffortPrompt'
 import AdherenceCard from './AdherenceCard'
 import HeadlinePanel from './HeadlinePanel'
 import RepsPanel from './RepsPanel'
@@ -287,11 +287,11 @@ export default function ActivityDetailView() {
           </div>
         </div>
 
-        {/* Rating is the gate to the coach's analysis; once rated, the
-            headline panel shows the analysis (or that it's being written). */}
-        {!activity.insight && !activity.feedback_rating && (
+        {activity.rpe == null && (
           <div className="detail-slot slot-feedback">
-            <FeedbackPrompt activityId={activity.id} />
+            <section className="detail-panel">
+              <EffortPrompt detail={activity} />
+            </section>
           </div>
         )}
       </div>

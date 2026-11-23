@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     # overnight stats land on the wake-up day while earlier days' full-day totals
     # finalize the morning after.
     daily_sync_window_days: int = 3
+    # Automatically enqueue AI analysis for newly synced recent runs (within 48h).
+    auto_analyze_activities: bool = True
     ai_model: str = "claude-sonnet-4-6"
     # Overridable via AVAILABLE_MODELS env var as a JSON object, e.g.:
     # AVAILABLE_MODELS='{"claude": ["claude-opus-4-8"], "gemini": ["gemini-2.5-flash"]}'

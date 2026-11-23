@@ -7,12 +7,15 @@ import WeekRail from './WeekRail'
 import DailyCheckinCard from './DailyCheckinCard'
 import PlanAdaptationCard from './PlanAdaptationCard'
 import BodyPanel from './BodyPanel'
-import FormPanel from './FormPanel'
 import RacesPanel from './RacesPanel'
 import CoachNotes from './CoachNotes'
 import AlertBanner from '../ui/AlertBanner'
 import Skeleton from '../ui/Skeleton'
 import './TodayView.css'
+
+function isRunningActivity(activityType: string | null | undefined): boolean {
+  return (activityType ?? '').toLowerCase().includes('running')
+}
 
 function TodayRealignmentBanner() {
   const { data: status } = useRealignmentStatus()
@@ -51,12 +54,12 @@ function TodaySkeleton() {
 
 /*
  * Order (mobile, one flat stack): banner 1, week rail 2, hero 3 (readiness +
- * session), check-in 4, plan adaptation 5, Body 6, Form 7, Races 8, From your
- * coach 9, Also today 10. At >=1024px the banner and rail stay full-width
- * above two independent flex columns (left: hero, check-in, adaptation;
- * right: Body, Form, Races) and the notes + extra activities run full-width
- * below. `.today-columns`/`.today-col-*` are `display: contents` on mobile,
- * so the explicit `order` on every leaf restores this sequence there — see
+ * session), check-in 4, plan adaptation 5, Body 6, Races 7, From your coach 8,
+ * Also today 9. At >=1024px the banner and rail stay full-width above two
+ * independent flex columns (left: hero, check-in, adaptation; right: Body,
+ * Races) and the notes + extra activities run full-width below.
+ * `.today-columns`/`.today-col-*` are `display: contents` on mobile, so the
+ * explicit `order` on every leaf restores this sequence there — see
  * tasks/lessons.md on why this isn't a CSS grid.
  */
 export default function TodayView() {
@@ -69,6 +72,13 @@ export default function TodayView() {
   // else recorded that day is listed under "Also today".
   const matched = data ? findMatchedActivity(data.activities) : null
   const extraActivities = data?.activities.filter(a => a !== matched) ?? []
+
+  // One survey at a time: before the run today (or once a check-in is saved,
+  // as a compact chip) show the check-in; once a run exists, EffortPrompt in
+  // the hero takes over and past days without a check-in stay uncluttered.
+  const hasRunningActivity = data?.activities.some(a => isRunningActivity(a.activity_type)) ?? false
+  const hasCheckin = Boolean(data?.daily_checkin)
+  const showCheckin = Boolean(data) && (hasCheckin || (isViewingToday && !hasRunningActivity))
 
   return (
     <div className="today-view">
@@ -84,9 +94,11 @@ export default function TodayView() {
             <div className="today-col today-col-left">
               {data && <TodayHero data={data} />}
 
-              <div className="today-section" style={{ order: 4 }}>
-                <DailyCheckinCard date={dateKey} checkin={data?.daily_checkin ?? null} />
-              </div>
+              {showCheckin && (
+                <div className="today-section" style={{ order: 4 }}>
+                  <DailyCheckinCard date={dateKey} checkin={data?.daily_checkin ?? null} />
+                </div>
+              )}
 
               {data?.plan_adaptation && (
                 <div className="today-section" style={{ order: 5 }}>
@@ -102,14 +114,8 @@ export default function TodayView() {
                 </div>
               )}
 
-              {data?.training_load && (
-                <div className="today-section" style={{ order: 7 }}>
-                  <FormPanel current={data.training_load} dateKey={dateKey} />
-                </div>
-              )}
-
               {data && (
-                <div className="today-section" style={{ order: 8 }}>
+                <div className="today-section" style={{ order: 7 }}>
                   <RacesPanel races={data.next_races} dateKey={dateKey} />
                 </div>
               )}
@@ -117,13 +123,13 @@ export default function TodayView() {
           </div>
 
           {data?.insights && data.insights.length > 0 && (
-            <div className="today-section today-full" style={{ order: 9 }}>
+            <div className="today-section today-full" style={{ order: 8 }}>
               <CoachNotes insights={data.insights} />
             </div>
           )}
 
           {extraActivities.length > 0 && (
-            <section className="today-section today-full" style={{ order: 10 }} aria-labelledby="also-today-title">
+            <section className="today-section today-full" style={{ order: 9 }} aria-labelledby="also-today-title">
               <h2 id="also-today-title" className="section-title">{isViewingToday ? 'Also today' : 'Also that day'}</h2>
               <div className="workout-list">
                 {extraActivities.map(a => (

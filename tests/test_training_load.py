@@ -320,7 +320,7 @@ def test_format_training_load_context_includes_acwr_when_present():
     ctx = training_load.format_training_load_context(point)
     assert "ACWR" in ctx
     assert "1.25" in ctx
-    assert "sweet spot" in ctx
+    assert "steady progression" in ctx
     assert "Ramp rate (7d" in ctx
     assert "Ramp rate (28d" in ctx
 
@@ -335,7 +335,7 @@ def test_training_load_point_derives_rsb_zone_fields():
     assert point.form_zone == "neutral"
     assert point.form_zone_label == "Neutral — race-ready range"
     assert point.rsb_zone == "productive"
-    assert point.rsb_zone_label == "Productive — sweet spot"
+    assert point.rsb_zone_label == "Productive — steady progression"
     assert point.rsb_recommendation
 
 
@@ -358,11 +358,11 @@ def test_format_training_load_context_includes_rsb_recommendation():
     )
     ctx = training_load.format_training_load_context(point)
     assert "Running Stress Balance" in ctx
-    assert "Overreaching — high risk" in ctx
+    assert "Overreaching — large load spike" in ctx
 
 
 def test_format_training_load_context_injects_mandatory_caution_when_risk_high():
-    """P2-1: high injury risk becomes a directive, not just a data point."""
+    """P2-1 / N6: high load spike becomes a mandatory directive without overstating injury prediction."""
     from app.schemas import TrainingLoadPoint
     high_risk_point = TrainingLoadPoint(
         date=date(2026, 6, 10),
@@ -372,6 +372,8 @@ def test_format_training_load_context_injects_mandatory_caution_when_risk_high()
     ctx = training_load.format_training_load_context(high_risk_point)
     assert "Load caution" in ctx
     assert "mandatory" in ctx.lower()
+    assert "load spike is HIGH" in ctx
+    assert "injury risk" not in ctx.lower()
 
     moderate_risk_point = TrainingLoadPoint(
         date=date(2026, 6, 10),
@@ -379,6 +381,20 @@ def test_format_training_load_context_injects_mandatory_caution_when_risk_high()
         acwr=1.35, injury_risk="moderate",
     )
     assert "Load caution" not in training_load.format_training_load_context(moderate_risk_point)
+
+
+def test_acwr_and_prompt_use_load_spike_framing_not_injury_predictor():
+    from app.coach.context import SYSTEM_PROMPT
+    from app.schemas import classify_acwr
+
+    for val in (0.6, 1.0, 1.4, 1.7):
+        _zone, label, rec = classify_acwr(val)
+        assert "injury risk" not in label.lower()
+        assert "injury risk" not in rec.lower()
+        assert "injury risk" not in training_load._interpret_acwr(val).lower()
+
+    assert "coarse heuristic, not an injury predictor" in SYSTEM_PROMPT
+    assert "Garmin population percentiles" in SYSTEM_PROMPT
 
 
 def test_training_load_endpoint_includes_acwr_fields(client, db):

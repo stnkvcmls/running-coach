@@ -215,20 +215,6 @@ class Insight(Base):
     category = Column(Text)  # workout_analysis, recovery, training_plan, trend, recommendation
 
 
-class Race(Base):
-    __tablename__ = "races"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = _user_id_column()
-    name = Column(Text, nullable=False)
-    date = Column(Date, nullable=False, index=True)
-    distance_m = Column(Float)
-    distance_label = Column(Text)  # 5K, 10K, Half Marathon, Marathon, custom
-    goal_time_sec = Column(Integer, nullable=True)
-    notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=_utcnow)
-
-
 class GarminCalendarEvent(Base):
     __tablename__ = "garmin_calendar_events"
     __table_args__ = (

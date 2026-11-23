@@ -40,6 +40,7 @@ function planDay(overrides: Partial<TrainingPlanDay> = {}): TrainingPlanDay {
     routine: null,
     fuelling_guidance: null,
     matched_activity_id: null,
+    matched_distance_m: null,
     adherence_score: null,
     ...overrides,
   }
@@ -87,6 +88,7 @@ type Routes = Record<string, unknown>
 /** Fetch mock: the first route whose key the URL contains wins. */
 function mockFetch(routes: Routes) {
   const fn = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+    if (init?.method === 'PATCH') return Promise.resolve({ ok: true, status: 200, json: async () => ({ status: 'ok', rpe: 7 }) })
     if (init?.method === 'POST') return Promise.resolve({ ok: true, status: 200, json: async () => ({ status: 'queued', job_id: 0 }) })
     const key = Object.keys(routes).find(k => url.includes(k))
     const body = key ? routes[key] : {}
@@ -216,18 +218,20 @@ describe('TodayHero, planned', () => {
 describe('TodayHero, readiness line', () => {
   afterEach(() => vi.unstubAllGlobals())
 
-  it('shows score, word and the limiting factor, and toggles the breakdown', async () => {
+  it('shows verdict, score and server reasons, and toggles the breakdown', async () => {
     mockFetch({ '/training-plan': null })
     const data = today({
       readiness: {
-        score: 55, label: 'Good', sleep_component: 40, recovery_component: 70, fatigue_component: 80,
+        score: 55, label: 'Good', verdict: 'train', verdict_label: 'Train as planned',
+        reasons: ['Short or poor sleep last night.'],
+        sleep_component: 40, recovery_component: 70, fatigue_component: 80,
         rhr_component: 75, hrv_component: 60, subjective_component: null,
       },
     })
     renderWithProviders(<TodayHero data={data} />)
 
-    const line = screen.getByRole('button', { name: /readiness 55 out of 100, good/i })
-    expect(line).toHaveTextContent('Short sleep is holding it back.')
+    const line = screen.getByRole('button', { name: /train as planned\. readiness 55 out of 100/i })
+    expect(line).toHaveTextContent('Short or poor sleep last night.')
     expect(line).toHaveAttribute('aria-expanded', 'false')
     fireEvent.click(line)
     expect(line).toHaveAttribute('aria-expanded', 'true')
@@ -286,7 +290,7 @@ describe('TodayHero, done', () => {
     expect(screen.queryByRole('img', { name: /rep paces/i })).not.toBeInTheDocument()
   })
 
-  it('asks for RPE inline and posts it through the feedback mutation', async () => {
+  it('asks for RPE inline and saves it via PATCH /rpe without calling /feedback', async () => {
     const fetchMock = mockFetch({
       '/training-plan': trainingPlan([INTERVAL_DAY]),
       '/activities/77': DETAIL,
@@ -296,10 +300,11 @@ describe('TodayHero, done', () => {
     fireEvent.click(await screen.findByRole('button', { name: '7 of 10' }))
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
-        '/api/v1/activities/77/feedback',
-        expect.objectContaining({ method: 'POST', body: expect.stringContaining('"rpe":7') }),
+        '/api/v1/activities/77/rpe',
+        expect.objectContaining({ method: 'PATCH', body: expect.stringContaining('"rpe":7') }),
       ),
     )
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/feedback'))).toBe(false)
   })
 
   it('shows "Felt N/10" once rated', async () => {

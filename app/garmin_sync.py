@@ -23,6 +23,7 @@ from app.models import (
     SyncStatus,
     User,
 )
+from app.utils import local_today
 
 logger = logging.getLogger(__name__)
 
@@ -675,6 +676,13 @@ def sync_activities(user: User | None = None) -> list[Activity]:
                     except Exception:
                         logger.exception("Personal-record detection failed for activity %s", activity.id)
 
+            # Detach fully-loaded Activity rows before _set_sync_status commits
+            # and expires session state, so callers can inspect id/type/started_at.
+            for act in new_activities:
+                if act in db:
+                    db.refresh(act)
+                    db.expunge(act)
+
             _set_sync_status(
                 db, "last_activity_sync", datetime.now(timezone.utc).isoformat(), user_id=uid
             )
@@ -752,7 +760,7 @@ def sync_daily_summary(
 ) -> DailySummary | None:
     """Sync daily summary for a given date (defaults to yesterday)."""
     if target_date is None:
-        target_date = date.today() - timedelta(days=1)
+        target_date = local_today() - timedelta(days=1)
 
     date_str = target_date.strftime("%Y-%m-%d")
     logger.info("Syncing daily summary for %s", date_str)
@@ -866,7 +874,7 @@ GARMIN_PROFILE_FIELDS = ("name", "date_of_birth", "weight_kg")
 def _fetch_latest_garmin_weight(client: Garmin) -> float | None:
     """Return the most recent weight (in grams) from Garmin body composition."""
     try:
-        today = date.today()
+        today = local_today()
         start = today - timedelta(days=30)
         data = client.get_body_composition(start.isoformat(), today.isoformat()) or {}
         latest = None
@@ -909,7 +917,7 @@ def _fetch_garmin_profile_fields(client: Garmin) -> dict:
     # Resting HR: try today then yesterday (today's value may not be available yet)
     try:
         for delta in (0, 1):
-            day_str = (date.today() - timedelta(days=delta)).isoformat()
+            day_str = (local_today() - timedelta(days=delta)).isoformat()
             stats = client.get_stats(day_str) or {}
             rhr = stats.get("restingHeartRate")
             if rhr:
@@ -1050,7 +1058,7 @@ def backfill_daily_summaries():
                 except ValueError:
                     start_days_ago = 0
 
-            today = date.today()
+            today = local_today()
             for days_ago in range(start_days_ago, 366):
                 target = today - timedelta(days=days_ago)
 
@@ -1359,7 +1367,7 @@ def sync_calendar(user: User | None = None) -> int:
     """Sync Garmin calendar events (races + workouts). Returns count of upserted events."""
     logger.info("Syncing Garmin calendar...")
     client = get_garmin_client(user)
-    today = date.today()
+    today = local_today()
 
     # Fetch current month + next 5 months (6 total) to capture races up to ~6 months out
     months_to_fetch = []

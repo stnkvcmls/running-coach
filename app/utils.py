@@ -1,14 +1,48 @@
 import json
-from datetime import date
+import logging
+from datetime import date, datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from app.config import settings
 from app.streams import grade_adjusted_speed
+
+logger = logging.getLogger(__name__)
+_warned_invalid_tz: set[str] = set()
+
+
+def _resolve_timezone(tz_name: str):
+    """Resolve an IANA timezone name via stdlib zoneinfo (falling back to pytz
+    only if the host lacks system tzdata, e.g. Windows without the tzdata pkg)."""
+    try:
+        return ZoneInfo(tz_name)
+    except (ZoneInfoNotFoundError, KeyError, ValueError):
+        try:
+            import pytz
+
+            return pytz.timezone(tz_name)
+        except Exception:
+            return None
+
+
+def local_today() -> date:
+    """Today's date in the configured TIMEZONE (settings.timezone)."""
+    tz_name = settings.timezone
+    tz = _resolve_timezone(tz_name)
+    if tz is None:
+        if tz_name not in _warned_invalid_tz:
+            _warned_invalid_tz.add(tz_name)
+            logger.warning(
+                "Invalid TIMEZONE %r; falling back to system date.today()", tz_name
+            )
+        return date.today()
+    return datetime.now(tz).date()
 
 
 def calculate_age(dob: date | None, reference: date | None = None) -> int | None:
     """Return age in whole years from a date of birth, or None if unset."""
     if dob is None:
         return None
-    today = reference or date.today()
+    today = reference or local_today()
     years = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
     return years if years >= 0 else None
 

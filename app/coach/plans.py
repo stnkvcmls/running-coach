@@ -37,10 +37,12 @@ from app.models import (
     TrainingPlanDay,
 )
 from app.strength_routines import catalog_summary, get_routine
+from app.utils import local_today
 from app.coach.context import (
     _build_context,
     _format_activity_context,
     _format_athlete_profile_context,
+    _format_daily_context,
     _load_zones,
     _load_zone_configs,
     recent_heat_stress,
@@ -777,7 +779,7 @@ def generate_training_plan(
     from app import ai_coach as _shim
 
     with _shim.db_session() as db:
-        ref = reference_date or date.today()
+        ref = reference_date or local_today()
         week_start = _next_monday(ref)
 
         try:
@@ -889,7 +891,8 @@ def weekly_review(user_id: int = DEFAULT_USER_ID):
 
     with _shim.db_session() as db:
         try:
-            week_start = date.today() - timedelta(days=7)
+            today = local_today()
+            week_start = today - timedelta(days=7)
             week_activities = (
                 db.query(Activity)
                 .filter(
@@ -915,7 +918,7 @@ def weekly_review(user_id: int = DEFAULT_USER_ID):
                 )
                 for a in week_activities
             )
-            trigger_data = f"## Weekly Review ({week_start} to {date.today()})\n\n{activity_summaries}"
+            trigger_data = f"## Weekly Review ({week_start} to {today})\n\n{activity_summaries}"
             full_context = _build_context(db, "weekly_review", trigger_data, user_id=user_id)
             content, summary, category = _shim._call_ai(db, full_context, "weekly_review", user_id)
 
@@ -998,6 +1001,17 @@ def _build_briefing_trigger_data(
         )
         if guidance:
             parts.append(f"Fuelling target: {guidance.note}")
+
+    # Fold last night's daily summary (sleep, HRV, resting HR, body battery) directly
+    # into the morning briefing context so recovery metrics are always front and center.
+    today_summary = (
+        db.query(DailySummary)
+        .filter(DailySummary.user_id == user_id, DailySummary.date == plan_day.day_date)
+        .first()
+    )
+    if today_summary is not None:
+        parts.append("")
+        parts.append(_format_daily_context(today_summary))
 
     return "\n".join(parts)
 

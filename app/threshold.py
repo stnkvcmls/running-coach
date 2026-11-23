@@ -16,9 +16,8 @@ visible.
 Estimates produced:
 
 - **Critical Power (CP)** + **W'** via the 2-parameter model ``P(t) = CP + W'/t``,
-  weighted toward recent efforts, optionally refined by the 3-parameter Morton
-  model (which adds **Pmax** and fits the short end better). For running, CP is
-  treated as functional threshold power.
+  weighted toward recent efforts. For running, CP is treated as functional
+  threshold power.
 - **Threshold pace** via the analogous critical-velocity model on the
   grade-adjusted speed frontier.
 - **Threshold HR (LTHR)**: Garmin's lactate-threshold HR if synced, else the
@@ -96,7 +95,6 @@ def _empty(note: str | None = None) -> FieldEstimate:
 class ThresholdEstimate:
     critical_power: FieldEstimate
     w_prime: float | None
-    pmax: float | None
     threshold_pace_min_km: FieldEstimate
     threshold_hr: FieldEstimate
     max_hr: FieldEstimate
@@ -195,79 +193,6 @@ def _fit_two_param(
     return asymptote, work, used
 
 
-def _model_3p(t: float, cp: float, w: float, pmax: float) -> float:
-    """Morton 3-parameter critical-power model."""
-    denom = t + w / (pmax - cp)
-    return cp + w / denom
-
-
-def _weighted_sse(points, weights, fn) -> float:
-    return sum(w * (y - fn(x)) ** 2 for (x, y), w in zip(points, weights))
-
-
-def _golden_min(fn, lo: float, hi: float, iters: int = 40) -> float:
-    """1-D golden-section minimization on ``[lo, hi]``."""
-    gr = (math.sqrt(5) - 1) / 2
-    c = hi - gr * (hi - lo)
-    d = lo + gr * (hi - lo)
-    for _ in range(iters):
-        if fn(c) < fn(d):
-            hi = d
-        else:
-            lo = c
-        c = hi - gr * (hi - lo)
-        d = lo + gr * (hi - lo)
-    return (lo + hi) / 2
-
-
-def _fit_three_param(
-    frontier: list[_FrontierPoint], cp2: float, w2: float
-) -> tuple[float, float, float] | None:
-    """Refine CP/W' with the 3-parameter model, adding Pmax.
-
-    A scipy-free bounded search: grid over (CP, Pmax), inner golden-section over
-    W'. Uses the full frontier (including the short end Pmax governs). Returns
-    ``(cp, w_prime, pmax)`` only if it stays physiological and fits the same
-    points at least 5% better than the 2-parameter model.
-    """
-    used = [p for p in frontier if 60 <= p.duration <= _FIT_MAX_S]
-    if len(used) < 3:
-        return None
-    pts = [(float(p.duration), p.value) for p in used]
-    wts = [p.weight for p in used]
-    sse_2p = _weighted_sse(pts, wts, lambda t: cp2 + w2 / t)
-
-    best = None  # (sse, cp, w, pmax)
-    cp_lo, cp_hi = 0.6 * cp2, 1.15 * cp2
-    for ci in range(12):
-        cp = cp_lo + (cp_hi - cp_lo) * ci / 11
-        if cp <= 0:
-            continue
-        for pi in range(12):
-            pmax = cp * (1.3 + (4.0 - 1.3) * pi / 11)
-            if pmax <= cp:
-                continue
-
-            def sse_for_w(w: float) -> float:
-                if w <= 0:
-                    return float("inf")
-                return _weighted_sse(pts, wts, lambda t: _model_3p(t, cp, w, pmax))
-
-            w = _golden_min(sse_for_w, _W_PRIME_MIN, _W_PRIME_MAX)
-            sse = sse_for_w(w)
-            if best is None or sse < best[0]:
-                best = (sse, cp, w, pmax)
-
-    if best is None:
-        return None
-    sse, cp, w, pmax = best
-    if sse >= 0.95 * sse_2p:
-        return None
-    if not (_W_PRIME_MIN <= w <= _W_PRIME_MAX and pmax > cp > 0):
-        return None
-    return cp, w, pmax
-
-
 def _confidence_and_note(
     used: list[_FrontierPoint], kind: str
 ) -> tuple[str, str | None]:
@@ -302,35 +227,28 @@ def _confidence_and_note(
 
 def _fit_critical_power_from_frontier(
     frontier: list[_FrontierPoint],
-) -> tuple[FieldEstimate, float | None, float | None]:
-    """Fit the CP model from a pre-built frontier (skips the _build_frontier call).
+) -> tuple[FieldEstimate, float | None]:
+    """Fit the 2-parameter CP model from a pre-built frontier (skips the _build_frontier call).
 
     Used by both the full-recompute path and the incremental merge path so the
     fitting logic is not duplicated.
     """
     if not frontier:
-        return _empty("No power data in recent activities."), None, None
+        return _empty("No power data in recent activities."), None
     fit = _fit_two_param(frontier)
     if fit is None:
         return (
             _empty("Not enough power efforts across durations to model Critical Power."),
-            None, None,
+            None,
         )
     cp, w_prime, used = fit
-    pmax = None
-    method = "critical_power_2p"
-    refined = _fit_three_param(frontier, cp, w_prime)
-    if refined is not None:
-        cp, w_prime, pmax = refined
-        method = "critical_power_3p"
     w_prime = max(_W_PRIME_MIN, min(_W_PRIME_MAX, w_prime))
     conf, note = _confidence_and_note(used, "power")
     sample = max(p.sample_size for p in used)
     return (
-        FieldEstimate(value=round(cp, 0), method=method, confidence=conf,
+        FieldEstimate(value=round(cp, 0), method="critical_power_2p", confidence=conf,
                       sample_size=sample, note=note),
         round(w_prime, 0),
-        round(pmax, 0) if pmax is not None else None,
     )
 
 
@@ -357,8 +275,8 @@ def _fit_threshold_pace_from_frontier(
 
 def _estimate_critical_power(
     curves: list[tuple[float, dict]]
-) -> tuple[FieldEstimate, float | None, float | None]:
-    """Estimate CP (W), and the supporting W' (J) and Pmax (W)."""
+) -> tuple[FieldEstimate, float | None]:
+    """Estimate CP (W) and the supporting W' (J)."""
     frontier = _build_frontier(curves, "power")
     return _fit_critical_power_from_frontier(frontier)
 
@@ -564,7 +482,6 @@ def _deserialize_estimate(d: dict) -> ThresholdEstimate:
     return ThresholdEstimate(
         critical_power=FieldEstimate(**d["critical_power"]),
         w_prime=d["w_prime"],
-        pmax=d["pmax"],
         threshold_pace_min_km=FieldEstimate(**d["threshold_pace_min_km"]),
         threshold_hr=FieldEstimate(**d["threshold_hr"]),
         max_hr=FieldEstimate(**d["max_hr"]),
@@ -743,7 +660,7 @@ def _try_incremental_threshold(
 
     # Frontier changed: refit from the updated frontier (no full activity re-scan).
     try:
-        cp, w_prime, pmax = _fit_critical_power_from_frontier(power_frontier_new)
+        cp, w_prime = _fit_critical_power_from_frontier(power_frontier_new)
         pace, cv = _fit_threshold_pace_from_frontier(pace_frontier_new)
         # HR estimates still require the full run list (they use raw laps/streams).
         all_runs = [
@@ -757,7 +674,7 @@ def _try_incremental_threshold(
         max_hr_est = _estimate_max_hr(all_runs)
         thr_hr = _estimate_threshold_hr(all_runs, max_hr_est.value, cv)
         estimate = ThresholdEstimate(
-            critical_power=cp, w_prime=w_prime, pmax=pmax,
+            critical_power=cp, w_prime=w_prime,
             threshold_pace_min_km=pace, threshold_hr=thr_hr, max_hr=max_hr_est,
             lookback_days=lookback_days, activities_analyzed=len(all_runs),
         )
@@ -843,7 +760,7 @@ def estimate_thresholds(
     power_frontier = _build_frontier(power_curves, "power")
     pace_frontier = _build_frontier(pace_curves, "gap_speed")
 
-    cp, w_prime, pmax = _fit_critical_power_from_frontier(power_frontier)
+    cp, w_prime = _fit_critical_power_from_frontier(power_frontier)
     pace, cv = _fit_threshold_pace_from_frontier(pace_frontier)
     max_hr = _estimate_max_hr(runs)
     thr_hr = _estimate_threshold_hr(runs, max_hr.value, cv)
@@ -851,7 +768,6 @@ def estimate_thresholds(
     estimate = ThresholdEstimate(
         critical_power=cp,
         w_prime=w_prime,
-        pmax=pmax,
         threshold_pace_min_km=pace,
         threshold_hr=thr_hr,
         max_hr=max_hr,
@@ -976,12 +892,7 @@ def _fit_window_curves(
 
     power_fit = _fit_two_param(power_frontier)
     if power_fit is not None:
-        cp_val, wp_val, _ = power_fit
-        refined = _fit_three_param(power_frontier, cp_val, wp_val)
-        if refined:
-            cp, w_prime_out, _ = refined
-        else:
-            cp, w_prime_out = cp_val, wp_val
+        cp, w_prime_out, _ = power_fit
         w_prime_out = max(_W_PRIME_MIN, min(_W_PRIME_MAX, w_prime_out))
 
     def _power_model(t: float) -> float | None:
@@ -1310,8 +1221,6 @@ def format_threshold_estimate_context(
         detail = f" (confidence: {estimate.critical_power.confidence}"
         if estimate.w_prime is not None:
             detail += f", W' {estimate.w_prime:.0f} J"
-        if estimate.pmax is not None:
-            detail += f", Pmax {estimate.pmax:.0f} W"
         detail += ")"
         lines.append(f"- Critical Power (≈FTP): {cp:.0f} W{detail}")
 

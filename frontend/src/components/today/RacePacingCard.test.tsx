@@ -33,13 +33,10 @@ function pacingResponse(overrides: Partial<PacingStrategyResponse> = {}): Pacing
         target_pace_min_km: 5.0,
         split_time_sec: 300,
         cumulative_time_sec: 300,
-        grade_pct: null,
       },
     ],
     predicted_time_sec: 6200,
     source: 'goal',
-    course_activity_id: null,
-    course_activity_name: null,
     conditions_temp_c: null,
     conditions_dew_point_c: null,
     conditions_penalty_pct: null,
@@ -75,6 +72,10 @@ describe('RacePacingCard', () => {
     fireEvent.click(toggle)
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
     await waitFor(() => expect(screen.getByText('Target')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'Even' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Negative Split' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /terrain/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: /grade/i })).not.toBeInTheDocument()
   })
 
   it('refetches with the new strategy when a strategy button is clicked', async () => {

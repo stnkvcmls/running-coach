@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { formSentence, formWord } from './FormPanel'
-import { limitingFactor } from './ReadinessLine'
-import type { TrainingLoadPoint, TrainingReadiness } from '../../api/types'
+import type { TrainingLoadPoint } from '../../api/types'
 
 function point(ctl: number, atl: number, label: string | null): TrainingLoadPoint {
   return {
@@ -25,18 +24,3 @@ describe('Form sentence', () => {
   })
 })
 
-describe('Readiness limiting factor', () => {
-  const base: TrainingReadiness = {
-    score: 55, label: 'Good', sleep_component: 80, recovery_component: 80, fatigue_component: 80,
-    rhr_component: 80, hrv_component: 80, subjective_component: null,
-  }
-
-  it('names the lowest component', () => {
-    expect(limitingFactor({ ...base, sleep_component: 40 })).toBe('Short sleep is holding it back.')
-    expect(limitingFactor({ ...base, hrv_component: 50 })).toBe('Low HRV is holding it back.')
-  })
-
-  it('says nothing is holding it back when every component is high', () => {
-    expect(limitingFactor(base)).toBe('Nothing is holding it back.')
-  })
-})

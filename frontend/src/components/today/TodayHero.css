@@ -139,23 +139,3 @@
   background: var(--text);
   color: var(--on-ink);
 }
-
-.session-rpe {
-  margin-top: 16px;
-}
-
-.session-rpe-q {
-  margin: 0 0 8px;
-  font-weight: 650;
-}
-
-.session-felt {
-  margin: 16px 0 0;
-  font-size: 0.9375rem;
-  color: var(--text-muted);
-}
-
-.session-felt .num {
-  color: var(--text);
-  font-size: 1.125rem;
-}

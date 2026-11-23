@@ -29,6 +29,7 @@ function day(overrides: Partial<TrainingPlanDay> = {}): TrainingPlanDay {
     routine: null,
     fuelling_guidance: null,
     matched_activity_id: null,
+    matched_distance_m: null,
     adherence_score: null,
     ...overrides,
   }

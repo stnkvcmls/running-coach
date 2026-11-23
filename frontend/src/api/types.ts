@@ -49,13 +49,6 @@ export interface InsightResponse {
   category: string | null
 }
 
-export interface FeedbackRequest {
-  rating: 'good' | 'bad'
-  tags?: string[]
-  text?: string
-  rpe?: number | null
-}
-
 export interface GarminCredentialsRequest {
   email: string
   password: string
@@ -281,6 +274,9 @@ export interface TrainingLoadPoint {
 export interface TrainingReadiness {
   score: number
   label: string
+  verdict: 'train' | 'ease' | 'rest'
+  verdict_label: string
+  reasons: string[]
   sleep_component: number | null
   recovery_component: number | null
   fatigue_component: number | null
@@ -476,7 +472,6 @@ export interface ThresholdEstimateField {
 export interface ThresholdEstimateResponse {
   critical_power: ThresholdEstimateField
   w_prime: number | null
-  pmax: number | null
   threshold_pace_min_km: ThresholdEstimateField
   threshold_hr: ThresholdEstimateField
   max_hr: ThresholdEstimateField
@@ -527,6 +522,7 @@ export interface TrainingPlanDay {
   // and its adherence score, when day_date is in the past. Null for
   // today/future days and for days with no matching activity.
   matched_activity_id: number | null
+  matched_distance_m: number | null
   adherence_score: number | null
 }
 
@@ -682,31 +678,6 @@ export interface AerobicTrendsResponse {
   days: number
 }
 
-export type CustomChartMetricGroup = 'activity' | 'wellness' | 'load'
-
-export interface CustomChartMetric {
-  id: string
-  label: string
-  unit: string
-  group: CustomChartMetricGroup
-}
-
-export interface CustomChartMetricsResponse {
-  metrics: CustomChartMetric[]
-}
-
-export interface CustomChartPoint {
-  date: string
-  values: Record<string, number | null>
-  day_index: number
-}
-
-export interface CustomChartDataResponse {
-  points: CustomChartPoint[]
-  days: number
-  compare_points: CustomChartPoint[] | null
-}
-
 export interface PushWorkoutResponse {
   workout_name: string
   garmin_workout_id: number | string
@@ -770,7 +741,6 @@ export interface PacingSplit {
   target_pace_min_km: number
   split_time_sec: number
   cumulative_time_sec: number
-  grade_pct: number | null
 }
 
 export interface PacingStrategyResponse {
@@ -781,13 +751,11 @@ export interface PacingStrategyResponse {
   race_date: string
   target_time_sec: number
   target_pace_min_km: number
-  strategy: string        // "even" | "negative_split" | "terrain"
+  strategy: string        // "even" | "negative_split"
   split_unit: string      // "km" | "mile"
   splits: PacingSplit[]
   predicted_time_sec: number | null
   source: string          // "goal" | "predicted" | "custom"
-  course_activity_id: number | null
-  course_activity_name: string | null
   conditions_temp_c: number | null
   conditions_dew_point_c: number | null
   conditions_penalty_pct: number | null
@@ -797,7 +765,7 @@ export interface PacingStrategyResponse {
 }
 
 export interface PacingPushRequest {
-  strategy: string
+  strategy: 'even' | 'negative_split'
   split_unit: string
   target_time_sec?: number | null
   expected_temp_c?: number | null

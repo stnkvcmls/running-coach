@@ -22,6 +22,7 @@ from app.models import (
     SeasonPlan,
     SeasonPlanWeek,
 )
+from app.utils import local_today
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +84,7 @@ def select_goal_race(
     else the nearest upcoming race of any priority, else the profile's
     freeform goal race date, else None.
     """
-    ref = reference_date or date.today()
+    ref = reference_date or local_today()
 
     upcoming_races = (
         db.query(GarminCalendarEvent)
@@ -172,7 +173,7 @@ def generate_season_plan(
     Returns None if there's no goal race to periodize toward, or the goal
     race falls before the skeleton could start (this week or already past).
     """
-    ref = reference_date or date.today()
+    ref = reference_date or local_today()
     goal = select_goal_race(db, user_id, ref)
     if goal is None:
         return None
@@ -289,7 +290,7 @@ def ensure_season_plan(
     """Return the current season plan, regenerating it if the goal race is
     new, has changed, or no longer applies.
     """
-    ref = reference_date or date.today()
+    ref = reference_date or local_today()
     goal = select_goal_race(db, user_id, ref)
 
     existing = (

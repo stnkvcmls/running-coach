@@ -149,7 +149,7 @@ def api_list_coach_memory(
     memories = (
         db.query(CoachMemory)
         .filter(CoachMemory.user_id == current_user.id)
-        .order_by(CoachMemory.created_at.desc())
+        .order_by(CoachMemory.created_at.desc(), CoachMemory.id.desc())
         .all()
     )
     return memories

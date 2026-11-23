@@ -69,11 +69,8 @@ class UserResponse(BaseModel):
         from_attributes = True
 
 
-class FeedbackRequest(BaseModel):
-    rating: Literal["good", "bad"]
-    tags: list[str] | None = None
-    text: str | None = None
-    rpe: int | None = Field(default=None, ge=1, le=10)
+class RpeRequest(BaseModel):
+    rpe: int = Field(ge=1, le=10)
 
 
 class GarminCredentialsRequest(BaseModel):
@@ -332,21 +329,21 @@ def classify_acwr(acwr: float) -> tuple[str, str, str]:
     read."""
     if acwr > 1.5:
         return (
-            "overreaching", "Overreaching — high risk",
-            "ACWR is above 1.5 — significant overreaching and high injury risk. "
+            "overreaching", "Overreaching — large load spike",
+            "ACWR is above 1.5 — large load spike — significant overreaching. "
             "Prioritize recovery and avoid hard sessions until the ratio comes down.",
         )
     if acwr > 1.3:
         return (
-            "overreaching", "Overreaching — moderate risk",
-            "ACWR is elevated (1.3–1.5) — moderate injury risk. "
+            "overreaching", "Overreaching — elevated load",
+            "ACWR is elevated (1.3–1.5) — elevated load — monitor fatigue. "
             "Hold your current load rather than ramping further this week.",
         )
     if acwr >= 0.8:
         return (
-            "productive", "Productive — sweet spot",
-            "ACWR is in the 0.8–1.3 sweet spot — load is well-balanced for fitness "
-            "gains with low injury risk. Keep building at this rate.",
+            "productive", "Productive — steady progression",
+            "ACWR is in the 0.8–1.3 range — steady progression with load "
+            "well-balanced for fitness gains. Keep building at this rate.",
         )
     return (
         "detraining", "Detraining",
@@ -387,9 +384,12 @@ class TrainingLoadPoint(BaseModel):
 class TrainingReadiness(BaseModel):
     score: int           # 0-100 composite readiness
     label: str           # "Low", "Fair", "Good", "Very Good", "Excellent"
+    verdict: str = "train"                     # "train" | "ease" | "rest"
+    verdict_label: str = "Train as planned"
+    reasons: list[str] = Field(default_factory=list)
     sleep_component: int | None = None      # 0-100, from sleep duration + quality
     recovery_component: int | None = None   # 0-100, from stress + body battery
-    fatigue_component: int | None = None    # 0-100, ATL-based (higher = less fatigued)
+    fatigue_component: int | None = None    # 0-100, TSB-based (higher = fresher)
     rhr_component: int | None = None        # 0-100, resting HR trend vs 7d avg
     hrv_component: int | None = None        # 0-100, overnight HRV vs personal baseline
     subjective_component: int | None = None  # 0-100, from the athlete's daily check-in
@@ -576,7 +576,6 @@ class ThresholdEstimateField(BaseModel):
 class ThresholdEstimateResponse(BaseModel):
     critical_power: ThresholdEstimateField          # W (≈ running FTP)
     w_prime: float | None = None                    # J (anaerobic work capacity)
-    pmax: float | None = None                       # W (3-param model max power)
     threshold_pace_min_km: ThresholdEstimateField
     threshold_hr: ThresholdEstimateField            # LTHR, bpm
     max_hr: ThresholdEstimateField                  # bpm
@@ -685,35 +684,6 @@ class AerobicTrendsResponse(BaseModel):
     days: int
 
 
-class CustomChartMetric(BaseModel):
-    id: str
-    label: str
-    unit: str
-    group: str  # "activity" | "wellness" | "load"
-
-
-class CustomChartMetricsResponse(BaseModel):
-    metrics: list[CustomChartMetric] = []
-
-
-class CustomChartPoint(BaseModel):
-    date: str
-    values: dict[str, float | None] = {}
-    # Days since the start of this point's period (0 = first day). Lets the
-    # frontend align a comparison series against the current one even though
-    # their calendar dates don't overlap.
-    day_index: int
-
-
-class CustomChartDataResponse(BaseModel):
-    points: list[CustomChartPoint] = []
-    days: int
-    # Present only when the request asked for a comparison series: the same
-    # metrics over the immediately preceding period of equal length, aligned by
-    # day_index (day offset from each period's start) rather than calendar date.
-    compare_points: list[CustomChartPoint] | None = None
-
-
 class StrengthExercise(BaseModel):
     name: str
     sets: int
@@ -749,6 +719,7 @@ class TrainingPlanDayResponse(BaseModel):
     # that fulfilled this day, and its adherence score, when day_date is in the
     # past. Both stay null for today/future days and for days with no match.
     matched_activity_id: int | None = None
+    matched_distance_m: float | None = None
     adherence_score: float | None = None
 
     class Config:
@@ -906,7 +877,6 @@ class PacingSplit(BaseModel):
     target_pace_min_km: float     # target pace for this split (min/km)
     split_time_sec: float         # time for this split (s)
     cumulative_time_sec: float    # running total (s)
-    grade_pct: float | None = None  # avg grade over this split (terrain strategy only)
 
 
 class PacingStrategyResponse(BaseModel):
@@ -917,13 +887,11 @@ class PacingStrategyResponse(BaseModel):
     race_date: date
     target_time_sec: float
     target_pace_min_km: float
-    strategy: str               # "even" | "negative_split" | "terrain"
+    strategy: str               # "even" | "negative_split"
     split_unit: str             # "km" | "mile"
     splits: list[PacingSplit]
     predicted_time_sec: float | None = None
     source: str                 # "goal" | "predicted" | "custom"
-    course_activity_id: int | None = None    # activity the terrain profile was sourced from
-    course_activity_name: str | None = None
     conditions_temp_c: float | None = None       # expected race-day temp, if applied (°C)
     conditions_dew_point_c: float | None = None  # expected race-day dew point, if applied (°C)
     conditions_penalty_pct: float | None = None  # heat penalty %, if conditions applied
@@ -933,7 +901,7 @@ class PacingStrategyResponse(BaseModel):
 
 
 class PacingPushRequest(BaseModel):
-    strategy: str = "even"
+    strategy: Literal["even", "negative_split"] = "even"
     split_unit: str = "km"
     target_time_sec: int | None = None
     expected_temp_c: float | None = None

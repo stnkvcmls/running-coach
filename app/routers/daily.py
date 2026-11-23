@@ -43,6 +43,7 @@ from app.routers._shared import (
     _personal_records_by_activity,
     _select_plan_day_activity,
 )
+from app.utils import local_today
 from app.workout_translator import plan_workout_label
 
 router = APIRouter()
@@ -55,7 +56,8 @@ def api_today(
     current_user: User = Depends(get_current_user),
 ):
     uid = current_user.id
-    selected = _parse_date(date_str) if date_str else date.today()
+    today = local_today()
+    selected = _parse_date(date_str) if date_str else today
 
     # Activities for the selected date
     day_start = datetime.combine(selected, datetime.min.time())
@@ -79,7 +81,7 @@ def api_today(
     )
 
     # Weekly mileage (last 8 weeks) - split by activity type
-    week_start_base = date.today() - timedelta(days=date.today().weekday())
+    week_start_base = today - timedelta(days=today.weekday())
     eight_weeks_ago = week_start_base - timedelta(weeks=7)
     all_activities = (
         db.query(Activity.started_at, Activity.distance_m, Activity.activity_type)
@@ -131,7 +133,7 @@ def api_today(
         .filter(
             GarminCalendarEvent.user_id == uid,
             GarminCalendarEvent.event_type == "race",
-            GarminCalendarEvent.date >= date.today(),
+            GarminCalendarEvent.date >= today,
         )
         .order_by(GarminCalendarEvent.date.asc())
         .limit(2)
@@ -143,7 +145,7 @@ def api_today(
             title=row.title,
             date=row.date,
             distance_label=row.distance_label,
-            days_away=(row.date - date.today()).days,
+            days_away=(row.date - today).days,
             goal_time_sec=row.goal_time_sec,
             priority=row.priority,
         )
@@ -153,14 +155,14 @@ def api_today(
     # Fallback: show profile goal race when the Garmin calendar has no race events
     if not next_races:
         profile = db.query(AthleteProfile).filter(AthleteProfile.user_id == uid).first()
-        if profile and profile.goal_race_date and profile.goal_race_date >= date.today():
+        if profile and profile.goal_race_date and profile.goal_race_date >= today:
             next_races = [
                 RaceInfo(
                     id=0,  # sentinel: profile-sourced race, no Garmin calendar entry
                     title=profile.goal_race or "Goal Race",
                     date=profile.goal_race_date,
                     distance_label=None,
-                    days_away=(profile.goal_race_date - date.today()).days,
+                    days_away=(profile.goal_race_date - today).days,
                     goal_time_sec=None,
                     priority=None,
                 )
@@ -363,7 +365,8 @@ def api_submit_daily_checkin(
 ):
     """Upsert the athlete's soreness/energy/mood check-in for a day (default today)."""
     uid = current_user.id
-    selected = _parse_date(date_str) if date_str else date.today()
+    today = local_today()
+    selected = _parse_date(date_str) if date_str else today
 
     checkin = (
         db.query(DailyCheckin)

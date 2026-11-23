@@ -1,11 +1,49 @@
-from datetime import date
+import logging
+from datetime import date, datetime, timezone
 
+from app import utils
+from app.config import settings
 from app.utils import (
     calculate_age,
+    local_today,
     safe_json_loads,
     parse_activity_charts,
     parse_activity_route,
 )
+
+
+# --- local_today ---
+
+def test_local_today_uses_configured_timezone(monkeypatch):
+    # 2026-06-15 10:30 UTC is 2026-06-16 00:30 in Pacific/Kiritimati (UTC+14)
+    # and 2026-06-14 23:30 in Pacific/Pago_Pago (UTC-11).
+    fixed_utc = datetime(2026, 6, 15, 10, 30, tzinfo=timezone.utc)
+
+    class _FrozenDatetime:
+        @classmethod
+        def now(cls, tz=None):
+            return fixed_utc.astimezone(tz) if tz is not None else fixed_utc.replace(tzinfo=None)
+
+    monkeypatch.setattr(utils, "datetime", _FrozenDatetime)
+
+    monkeypatch.setattr(settings, "timezone", "Pacific/Kiritimati")
+    assert local_today() == date(2026, 6, 16)
+
+    monkeypatch.setattr(settings, "timezone", "Pacific/Pago_Pago")
+    assert local_today() == date(2026, 6, 14)
+
+
+def test_local_today_invalid_timezone_falls_back_and_warns_once(monkeypatch, caplog):
+    monkeypatch.setattr(utils, "_warned_invalid_tz", set())
+    monkeypatch.setattr(settings, "timezone", "Not/A_Valid_Zone")
+
+    with caplog.at_level(logging.WARNING, logger="app.utils"):
+        first = local_today()
+        second = local_today()
+
+    assert first == date.today()
+    assert second == date.today()
+    assert len(caplog.records) == 1
 
 
 # --- calculate_age ---

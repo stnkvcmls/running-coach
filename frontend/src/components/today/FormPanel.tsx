@@ -4,6 +4,7 @@ import { ComposedChart, Area, Line, XAxis, YAxis, ResponsiveContainer } from 're
 import { useTrainingLoad } from '../../api/hooks'
 import type { TrainingLoadPoint } from '../../api/types'
 import { useTheme } from '../../App'
+import { formatDateKey } from '../../utils/date'
 import { getAxisTick, SERIES_COLORS, SERIES_DASHES, usePrefersReducedMotion } from '../../utils/chartTheme'
 import './FormPanel.css'
 
@@ -46,11 +47,14 @@ export function formSentence(current: TrainingLoadPoint, weekAgo: TrainingLoadPo
 interface Props {
   current: TrainingLoadPoint
   dateKey: string
+  /** When embedded under a section heading (Progress → Fitness), omit the
+   * standalone "Form" heading and "Progress" link to avoid duplication. */
+  embedded?: boolean
 }
 
-/** Today's Form panel: one sentence plus fitness (solid ink, faint area) and
- * fatigue (dashed ink-2) over six weeks. ACWR lives on Progress. */
-export default function FormPanel({ current, dateKey }: Props) {
+/** Form panel: one sentence plus fitness (solid ink, faint area) and fatigue
+ * (dashed ink-2) over six weeks. */
+export default function FormPanel({ current, dateKey, embedded = false }: Props) {
   const { data } = useTrainingLoad(90)
   const { theme } = useTheme()
   const reduceMotion = usePrefersReducedMotion()
@@ -59,12 +63,8 @@ export default function FormPanel({ current, dateKey }: Props) {
   const { lead, rest } = formSentence(current, weekAgo)
   const chartData = points.map(p => ({ label: p.date.slice(5), ctl: p.ctl, atl: p.atl }))
 
-  return (
-    <section className="card today-panel form-panel" aria-labelledby="form-panel-title">
-      <div className="panel-head">
-        <h2 id="form-panel-title" className="section-title">Form</h2>
-        <Link to="/trends" className="text-link panel-head-link">Progress</Link>
-      </div>
+  const body = (
+    <>
       <p className="form-line"><b>{lead}</b> {rest}</p>
       {chartData.length > 1 && (
         <>
@@ -109,6 +109,36 @@ export default function FormPanel({ current, dateKey }: Props) {
           </div>
         </>
       )}
+    </>
+  )
+
+  if (embedded) {
+    return <div className="card form-panel">{body}</div>
+  }
+
+  return (
+    <section className="card today-panel form-panel" aria-labelledby="form-panel-title">
+      <div className="panel-head">
+        <h2 id="form-panel-title" className="section-title">Form</h2>
+        <Link to="/trends" className="text-link panel-head-link">Progress</Link>
+      </div>
+      {body}
     </section>
   )
+}
+
+/** Progress → Fitness section wrapper: reads the training load series and
+ * renders FormPanel embedded under the "Fitness & fatigue" heading. */
+export function FitnessFormSection() {
+  const { data, isLoading } = useTrainingLoad(90)
+  if (isLoading) return <div className="spinner" />
+  const current = data?.current ?? data?.points?.[data.points.length - 1] ?? null
+  if (!current) {
+    return (
+      <div className="card form-panel">
+        <p className="form-line">No training load data yet.</p>
+      </div>
+    )
+  }
+  return <FormPanel current={current} dateKey={formatDateKey(new Date())} embedded />
 }

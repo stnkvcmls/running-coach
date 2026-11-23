@@ -417,7 +417,6 @@ def _build_threshold_response(
     return ThresholdEstimateResponse(
         critical_power=_field(estimate.critical_power),
         w_prime=estimate.w_prime,
-        pmax=estimate.pmax,
         threshold_pace_min_km=_field(estimate.threshold_pace_min_km),
         threshold_hr=_field(estimate.threshold_hr),
         max_hr=_field(estimate.max_hr),

@@ -1,27 +1,43 @@
-"""Activity list/detail, analysis trigger, and feedback submission."""
+"""Activity list/detail, analysis trigger, and RPE updates."""
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import Activity, GarminCalendarEvent, Insight, MetricZone, PersonalRecord, User
+from app.models import (
+    Activity,
+    AthleteProfile,
+    GarminCalendarEvent,
+    Insight,
+    MetricZone,
+    PersonalRecord,
+    User,
+)
+from app.plan_days import get_active_plan_day
 from app.schemas import (
     AIJobEnqueuedResponse,
     ActivityDetail,
     ActivitySummary,
-    FeedbackRequest,
     InsightResponse,
     MetricZoneResponse,
+    RpeRequest,
 )
 from app import adherence as adherence_mod
 from app import records as records_mod
 from app import streams as streams_mod
+from app import training_load
 from app import weather as weather_mod
 from app.utils import safe_json_loads, parse_activity_charts, parse_activity_route
-from app.routers._shared import _enrich_event_with_steps, _personal_records_by_activity, _to_pr_response
+from app.routers._shared import (
+    _RUN_WORKOUT_TYPES,
+    _enrich_event_with_steps,
+    _personal_records_by_activity,
+    _select_plan_day_activity,
+    _to_pr_response,
+)
 
 import logging
 
@@ -129,7 +145,7 @@ def api_activity_detail(
             MetricZoneResponse.model_validate(z)
         )
 
-    # Find scheduled workout for this activity's date
+    # Find scheduled workout and compute adherence via the shared canonical helper.
     scheduled_workout = None
     activity_adherence = None
     if activity.started_at:
@@ -143,11 +159,42 @@ def api_activity_detail(
             )
             .first()
         )
+        has_garmin_steps = False
         if workout_event:
             scheduled_workout = _enrich_event_with_steps(workout_event)
-            if workout_event.raw_json:
-                workout_steps = adherence_mod.parse_workout_steps(workout_event.raw_json)
-                activity_adherence = adherence_mod.compute_adherence(activity, workout_steps)
+            has_garmin_steps = bool(scheduled_workout.workout_steps)
+
+        matched_plan_day = None
+        profile = None
+        if not has_garmin_steps:
+            candidate_plan_day = get_active_plan_day(db, current_user.id, activity_date)
+            if (
+                candidate_plan_day is not None
+                and candidate_plan_day.workout_type in _RUN_WORKOUT_TYPES
+            ):
+                day_start = datetime.combine(activity_date, datetime.min.time())
+                day_end = day_start + timedelta(days=1)
+                day_activities = (
+                    db.query(Activity)
+                    .filter(
+                        Activity.user_id == current_user.id,
+                        Activity.started_at >= day_start,
+                        Activity.started_at < day_end,
+                    )
+                    .all()
+                )
+                matched = _select_plan_day_activity(candidate_plan_day, day_activities)
+                if matched is not None and matched.id == activity.id:
+                    matched_plan_day = candidate_plan_day
+                    profile = (
+                        db.query(AthleteProfile)
+                        .filter(AthleteProfile.user_id == current_user.id)
+                        .first()
+                    )
+
+        activity_adherence = adherence_mod.adherence_for_activity(
+            db, activity, plan_day=matched_plan_day, profile=profile
+        )
 
     wx_adjusted_pace, wx_penalty_sec, wx_description = weather_mod.weather_pace_info(
         weather, activity.avg_pace_min_km
@@ -199,10 +246,10 @@ def api_trigger_analysis(
     return AIJobEnqueuedResponse(status="queued", job_id=job_id)
 
 
-@router.post("/activities/{activity_id}/feedback")
-def api_submit_feedback(
+@router.patch("/activities/{activity_id}/rpe")
+def api_set_activity_rpe(
     activity_id: int,
-    feedback: FeedbackRequest,
+    body: RpeRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -214,20 +261,7 @@ def api_submit_feedback(
     if not activity:
         raise HTTPException(status_code=404, detail="Activity not found")
 
-    activity.feedback_rating = feedback.rating
-    activity.feedback_tags = json.dumps(feedback.tags) if feedback.tags else None
-    activity.feedback_text = feedback.text
-    activity.rpe = feedback.rpe
-    activity.ai_analyzed = False
-
-    # Delete existing insight
-    db.query(Insight).filter(
-        Insight.user_id == current_user.id,
-        Insight.trigger_type == "activity",
-        Insight.trigger_id == activity.id,
-    ).delete()
+    activity.rpe = body.rpe
+    training_load.mark_activity_load_dirty(activity)
     db.commit()
-
-    from app.ai_coach import enqueue_job
-    job_id = enqueue_job("analyze_feedback", {"activity_id": activity_id}, current_user.id)
-    return AIJobEnqueuedResponse(status="queued", job_id=job_id)
+    return {"status": "ok", "rpe": body.rpe}

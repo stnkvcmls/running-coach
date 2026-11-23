@@ -368,7 +368,7 @@ def test_sync_daily_summary_creates_row(db, patch_db_session, monkeypatch):
     summary = garmin_sync.sync_daily_summary(date(2026, 6, 10))
     assert summary is not None
     # The returned object is read by the AI analysis after its session has
-    # closed (analyze_daily_summary -> _format_daily_context accesses .date).
+    # closed (the plan-adaptation push check reads it in run_daily_sync_for_user).
     # Touch attributes here to guard against a DetachedInstanceError regression.
     assert summary.date == date(2026, 6, 10)
     assert summary.id is not None

@@ -63,7 +63,6 @@ def test_init_db_creates_all_tables():
         "activities",
         "daily_summaries",
         "insights",
-        "races",
         "garmin_calendar_events",
         "metric_zones",
         "sync_status",
@@ -74,6 +73,7 @@ def test_init_db_creates_all_tables():
         "users",
     }
     assert expected.issubset(set(table_names))
+    assert "races" not in table_names
 
 
 def test_init_db_is_idempotent():

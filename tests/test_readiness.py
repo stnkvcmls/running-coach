@@ -38,8 +38,8 @@ def _daily(
     )
 
 
-def _load(atl: float) -> TrainingLoadPoint:
-    return TrainingLoadPoint(date=date.today(), tss=0, ctl=0, atl=atl, tsb=0)
+def _load(atl: float = 0.0, *, ctl: float = 0.0, tsb: float = 0.0) -> TrainingLoadPoint:
+    return TrainingLoadPoint(date=date.today(), tss=0, ctl=ctl, atl=atl, tsb=tsb)
 
 
 def _checkin(*, soreness=None, energy=None, mood=None):
@@ -131,22 +131,33 @@ def test_recovery_averages_stress_and_battery():
 
 
 # ---------------------------------------------------------------------------
-# Fatigue component (ATL-based)
+# Fatigue component (TSB-based: 75 + 2 * TSB, clamped 0..100)
 # ---------------------------------------------------------------------------
 
-def test_zero_atl_gives_full_freshness():
-    result = training_load.compute_readiness(None, _load(0.0), [])
-    assert result.fatigue_component == 100
+def test_steady_state_fit_runner_tsb_zero_gives_75():
+    # A fit runner at steady state (CTL=85, ATL=85, TSB=0) is balanced, not exhausted.
+    result = training_load.compute_readiness(None, _load(85.0, ctl=85.0, tsb=0.0), [])
+    assert result.fatigue_component == 75
 
 
-def test_atl_50_gives_50_freshness():
-    result = training_load.compute_readiness(None, _load(50.0), [])
-    assert result.fatigue_component == 50
+def test_positive_tsb_10_gives_95():
+    result = training_load.compute_readiness(None, _load(60.0, ctl=70.0, tsb=10.0), [])
+    assert result.fatigue_component == 95
 
 
-def test_atl_above_100_clamps_to_zero():
-    result = training_load.compute_readiness(None, _load(120.0), [])
+def test_negative_tsb_25_gives_25():
+    result = training_load.compute_readiness(None, _load(85.0, ctl=60.0, tsb=-25.0), [])
+    assert result.fatigue_component == 25
+
+
+def test_deep_negative_tsb_clamps_to_zero():
+    result = training_load.compute_readiness(None, _load(120.0, ctl=60.0, tsb=-60.0), [])
     assert result.fatigue_component == 0
+
+
+def test_high_positive_tsb_clamps_to_100():
+    result = training_load.compute_readiness(None, _load(20.0, ctl=60.0, tsb=40.0), [])
+    assert result.fatigue_component == 100
 
 
 # ---------------------------------------------------------------------------
@@ -315,6 +326,73 @@ def test_readiness_labels(score, expected_label):
     assert training_load._readiness_label(score) == expected_label
 
 
+@pytest.mark.parametrize("score,expected_verdict,expected_label", [
+    (0, "rest", "Rest or go very easy"),
+    (30, "rest", "Rest or go very easy"),
+    (31, "ease", "Ease off today"),
+    (50, "ease", "Ease off today"),
+    (51, "train", "Train as planned"),
+    (100, "train", "Train as planned"),
+])
+def test_readiness_verdict_bands(score, expected_verdict, expected_label):
+    assert training_load._readiness_verdict(score) == (expected_verdict, expected_label)
+    # Also verify through compute_readiness using sleep_score alone (1:1 with score).
+    result = training_load.compute_readiness(_daily(sleep_score=score), None, [])
+    assert result is not None
+    assert result.score == score
+    assert result.verdict == expected_verdict
+    assert result.verdict_label == expected_label
+
+
+def test_readiness_reasons_ordered_lowest_first_and_capped_at_two():
+    # fatigue: TSB=-32.5 -> 75 - 65 = 10 (lowest)
+    # sleep: sleep_score=20 (second lowest)
+    # hrv: 36 / 45 = 0.8 -> 25 (third lowest, excluded by cap of 2)
+    # recovery: stress_avg=60 -> 40 (fourth lowest, excluded)
+    daily = _daily(sleep_score=20, stress_avg=60, hrv_avg=36, hrv_weekly_avg=45)
+    result = training_load.compute_readiness(daily, _load(80.0, ctl=47.5, tsb=-32.5), [])
+    assert result is not None
+    assert result.reasons == [
+        "Recent training load is high.",
+        "Short or poor sleep last night.",
+    ]
+
+
+def test_readiness_reasons_empty_when_all_components_at_or_above_50():
+    # sleep=50, recovery=50, fatigue=75 (TSB=0), rhr=75, hrv=50 (UNBALANCED), subjective=50
+    daily = _daily(
+        sleep_score=50,
+        stress_avg=50,
+        body_battery_high=50,
+        resting_hr=55,
+        hrv_avg=45,
+        hrv_status="UNBALANCED",
+    )
+    result = training_load.compute_readiness(
+        daily,
+        _load(40.0, ctl=40.0, tsb=0.0),
+        [55, 55],
+        _checkin(soreness=3, energy=3, mood=3),
+    )
+    assert result is not None
+    assert result.reasons == []
+
+
+def test_readiness_reasons_cover_rhr_hrv_recovery_and_subjective():
+    # Check each remaining component copy individually.
+    r_rec = training_load.compute_readiness(_daily(stress_avg=80), None, [])
+    assert r_rec.reasons == ["Body battery / stress show incomplete recovery."]
+
+    r_rhr = training_load.compute_readiness(_daily(resting_hr=65), None, [55, 55])
+    assert r_rhr.reasons == ["Resting heart rate is up on your recent average."]
+
+    r_hrv = training_load.compute_readiness(_daily(hrv_avg=36, hrv_weekly_avg=45), None, [])
+    assert r_hrv.reasons == ["Overnight HRV is below your baseline."]
+
+    r_sub = training_load.compute_readiness(None, None, [], _checkin(soreness=1, energy=2, mood=2))
+    assert r_sub.reasons == ["Your check-in says you're not feeling great."]
+
+
 # ---------------------------------------------------------------------------
 # Composite score bounds
 # ---------------------------------------------------------------------------
@@ -373,6 +451,20 @@ def test_format_readiness_context_includes_score_and_label():
     assert "## Training Readiness" in text
     assert "/100" in text
     assert result.label in text
+    assert "- Verdict: Train as planned" in text
+    assert "- Why:" not in text
+
+
+def test_format_readiness_context_includes_verdict_and_why_when_low():
+    daily = _daily(sleep_score=40, stress_avg=60, body_battery_high=40)
+    result = training_load.compute_readiness(daily, None, [])
+    assert result is not None
+    assert result.verdict == "ease"
+    text = training_load.format_readiness_context(result)
+    assert "- Verdict: Ease off today" in text
+    assert "- Why:" in text
+    assert "Short or poor sleep last night." in text
+    assert "Body battery / stress show incomplete recovery." in text
 
 
 def test_format_readiness_context_includes_components():
@@ -420,6 +512,9 @@ def test_today_endpoint_includes_readiness_when_data_available(client, db):
     r = body["readiness"]
     assert 0 <= r["score"] <= 100
     assert r["label"] in ("Low", "Fair", "Good", "Very Good", "Excellent")
+    assert r["verdict"] in ("train", "ease", "rest")
+    assert r["verdict_label"] in ("Train as planned", "Ease off today", "Rest or go very easy")
+    assert isinstance(r["reasons"], list)
 
 
 def test_today_endpoint_folds_in_daily_checkin(client, db):

@@ -1,4 +1,4 @@
-"""The AIJob durable queue and its job handlers (activity/daily insights).
+"""The AIJob durable queue and its job handlers (activity insights).
 
 ``db_session()`` opens, the ``_call_ai`` provider dispatch, and execute_job's
 dispatch to analyze_activity_force/analyze_activity_with_feedback/
@@ -16,7 +16,6 @@ from datetime import datetime, timezone, timedelta
 from app.models import (
     DEFAULT_USER_ID,
     Activity,
-    DailySummary,
     GarminCalendarEvent,
     Insight,
 )
@@ -25,7 +24,6 @@ from app import notifications as notifications_mod
 from app.coach.context import (
     _build_context,
     _format_activity_context,
-    _format_daily_context,
     _load_zones,
     _load_zone_configs,
 )
@@ -339,40 +337,6 @@ def analyze_activity(activity: Activity):
             logger.exception("AI analysis failed for activity %s", activity.id)
 
 
-def analyze_daily_summary(daily: DailySummary):
-    """Generate AI insight for a daily summary."""
-    from app import ai_coach as _shim
-
-    user_id = daily.user_id or DEFAULT_USER_ID
-    with _shim.db_session() as db:
-        try:
-            daily_context = _format_daily_context(daily)
-            full_context = _build_context(
-                db, "daily_summary", daily_context, reference_date=daily.date, user_id=user_id
-            )
-            content, summary, category = _shim._call_ai(db, full_context, "daily_summary", user_id)
-
-            insight = Insight(
-                user_id=user_id,
-                created_at=datetime.now(timezone.utc),
-                trigger_type="daily_summary",
-                trigger_id=daily.id,
-                content=content,
-                summary=summary,
-                category=category,
-            )
-            db.add(insight)
-
-            db_daily = db.query(DailySummary).get(daily.id)
-            if db_daily:
-                db_daily.ai_analyzed = True
-
-            db.commit()
-            logger.info("AI analysis complete for daily summary %s: %s", daily.date, summary[:80])
-        except Exception:
-            logger.exception("AI analysis failed for daily summary %s", daily.id)
-
-
 def analyze_activity_force(activity_id: int):
     """Generate AI insight for an activity, replacing any existing insight."""
     from app import ai_coach as _shim
@@ -495,7 +459,7 @@ def analyze_activity_with_feedback(activity_id: int):
 
 
 def backfill_missing_insights(user_id: int = DEFAULT_USER_ID):
-    """Analyze past 7 days of activities and daily summaries that lack insights."""
+    """Analyze past 7 days of activities that lack insights."""
     from app import ai_coach as _shim
 
     with _shim.db_session() as db:
@@ -518,25 +482,6 @@ def backfill_missing_insights(user_id: int = DEFAULT_USER_ID):
                 analyze_activity(activity)
             except Exception:
                 logger.exception("Insight backfill failed for activity %s", activity.id)
-
-        # Daily summaries in past 7 days without insights
-        cutoff_date = (datetime.now(timezone.utc) - timedelta(days=7)).date()
-        summaries = (
-            db.query(DailySummary)
-            .filter(
-                DailySummary.user_id == user_id,
-                DailySummary.date >= cutoff_date,
-                DailySummary.ai_analyzed == False,
-            )
-            .order_by(DailySummary.date.asc())
-            .all()
-        )
-        logger.info("Backfilling insights for %d daily summaries", len(summaries))
-        for summary in summaries:
-            try:
-                analyze_daily_summary(summary)
-            except Exception:
-                logger.exception("Insight backfill failed for daily summary %s", summary.id)
 
         logger.info("Insight backfill complete")
 

@@ -285,3 +285,87 @@ Source: docs/SECOND_OPINION_REVIEW.md §4/§7. Implementation drafted by Gemini
   "Notifications: Not set up on server" and "System health: Garmin not
   connected" instead of "8 of 8 on" / "All checks pass"; scheduler lists
   Calendar Sync (6 h) and AI Job Reaper.
+
+# Second-opinion week 3 (branch fix/second-opinion-week1)
+
+- [x] S1 — base readiness fatigue component on TSB (`75 + 2 * TSB`) instead of `100 - ATL`; fix `WEIGHTS` sum comment (1.2, renormalised)
+- [x] S2 — lower speed spike cap `_MAX_SPEED_MS` to 9.0 m/s with accurate comment; switch `grade_adjusted_speed` to a 20 m distance-window two-pointer grade
+- [x] S5 — rewrite `get_distance_top_n` to rank real per-activity `distance_efforts` (transient `PersonalRecord` objects) rather than PR milestone rows
+- [x] N1 — unify activity-detail and training-plan adherence behind `adherence_for_activity` (Garmin workout event first, plan-day translation fallback)
+- [x] U2 (+auto-analysis) — add `PATCH /activities/{id}/rpe` + `mark_activity_load_dirty`, switch `TodayHero` RPE buttons to `useSetRpe`, and auto-enqueue `analyze_activity` for newly synced recent runs (`AUTO_ANALYZE_ACTIVITIES`)
+- [x] D5 — add `local_today()` in `app/utils.py` using `settings.timezone` (`zoneinfo`) and replace all `date.today()` calls in `app/`
+- [x] N6 — replace over-confident ACWR "injury risk" and Running Dynamics percentile framing in `SYSTEM_PROMPT`, `classify_acwr`, `_interpret_acwr`, and `format_training_load_context`
+
+## Review
+
+- Drafted by Gemini 4 Neon XHigh (agy, accept-edits) from one spec; reviewed by Claude.
+- Claude changes on review:
+  - Three stale assertions in `tests/test_training_load_edge.py` ("high risk",
+    "moderate risk", "sweet spot") that Gemini missed, updated to the new wording.
+  - `frontend/src/components/info/statInfo.ts` ACWR help text still said
+    "sweet spot / high risk"; reworded to match the backend, with a note that
+    ACWR is a coarse heuristic, not an injury predictor.
+  - Coach-memory lists ordered by `created_at` alone were flaky on Windows
+    (two rows in one clock tick); added `id desc` as a tie-breaker in
+    `routers/chat.py`, `coach/context.py`, `plan_adaptation.py`.
+- Product note: U2 restores automatic post-run analysis (removed in c26d2ea),
+  limited to new runs started in the last 48 h without an insight, behind
+  `AUTO_ANALYZE_ACTIVITIES` (default true). The RPE tap no longer triggers it.
+- Known limits: S2 applies to newly computed curves only (no recompute of
+  stored mean_max_json). S5's transient top-N records reuse the activity id as
+  `id` (only used as a React key within one distance's list).
+- Gates: backend 1,080 tests, exit 0; every new week-3 test fails or errors on
+  the pre-week-3 tree (exported with `git checkout-index`, no stash); frontend
+  vitest 351/351, `tsc --noEmit` clean, `vite build` OK.
+- Runtime (perf.db copy, clock pinned to 2026-06-23): readiness 55 -> 64
+  (fatigue 100 at TSB +17); activity 877 adherence 100 on its detail page and
+  100 on the plan day (was 100 vs 61); Today says "100% adherence";
+  PATCH /activities/877/rpe -> ok and Today shows "Felt 7/10". S5 can't be shown
+  on the seed (no distance efforts in any seeded activity); covered by unit test.
+
+# Second-opinion week 4 — Shrink (branch fix/second-opinion-week1)
+
+- [x] C1 — cut the custom chart builder (view, hooks, types, `/custom-charts/*`, schemas, tests)
+- [x] C2 — cut the 3-parameter Morton CP / Pmax (2-parameter fit only; fixes S3)
+- [x] C3 — cut "terrain" race pacing (strategies: even, negative_split)
+- [x] C4 — cut the separate daily-summary AI insight; recovery lives in the morning briefing
+- [x] C5 — drop the orphan `Race` model/table (alembic migration) and legacy `static/style.css`
+- [x] C6 — drop the thumbs-up/down feedback step; RPE-only prompt + "Get coach analysis" on the run page
+- [x] F3 — `matched_distance_m` on plan days; delete PlanView's per-day full-detail fetches
+- [x] F4b — lazy routes + `charts` / `markdown` chunks
+- [x] N2 — one readiness verdict (Train as planned / Ease off / Rest) with ≤2 server-side reasons; Form panel moves to Progress
+- [x] N8 — check-in only before the run (or as a chip once logged); "How do you feel today?"
+- [x] N7 — delete stale plan docs and mockups; regenerate `docs/CURRENT_STATE.md` and README from code
+
+## Review
+
+- Drafted by Gemini 4 Neon XHigh (agy, accept-edits) from one spec, docs from
+  a second spec; reviewed by Claude. The first code delegation did nothing (the
+  spec asked it to run tests; shell is denied in that mode) — lesson added.
+- Claude changes on review:
+  - Deleted the 9 files Gemini could only empty (no delete tool).
+  - Removed stale `limitingFactor` tests left in `FormPanel.test.ts`; fixed a
+    `TrainingPlanDay` fixture missing `matched_distance_m` (tsc).
+  - F4b: Gemini's `manualChunks` let rollup hoist React-DOM into the `charts`
+    chunk, so Today still downloaded Recharts. Added a `react` chunk. First load
+    is now index 189 kB + react 194 kB + markdown 118 kB = 501 kB (154 kB gz),
+    was one 1.1 MB chunk (322 kB gz); `charts` (417 kB) loads only on pages with charts.
+  - Deleted 6 stale plan docs + 2 mockups; `UI_UX_CRITIQUE.md` notes it;
+    review gained §7.1 implementation status. Spot-checked the regenerated
+    README / CURRENT_STATE against config defaults, scheduler ids/times, job
+    constants, bind guard and chat tool names.
+- Not done: multi-user plumbing (cut item 5 / X2) stays — it is a schema-wide
+  refactor, not a cut. Morning briefing now also gets last night's daily
+  summary explicitly (it had readiness + 7-day recovery but not HRV/sleep score).
+- Gates: backend 1,060 passed / 0 failed (was 1,080; cut features took their
+  tests); frontend vitest 351/351, `tsc --noEmit` clean, `vite build` OK.
+  Fail-before proof not possible this week: weeks 3 and 4 share the unstaged
+  tree; the new tests target fields/behaviour that did not exist before
+  (`verdict`, `reasons`, `matched_distance_m`, check-in gating).
+- Runtime (app4.db copy, clock 2026-06-23 18:30): migration `s2t3u4v5w6x7`
+  applied on startup and `races` is gone; `/today` readiness 64 ->
+  "Train as planned" + "Overnight HRV is below your baseline."; Today is
+  1,762 px tall at 390 px (was 2,434), no check-in after the run, no Form
+  panel; Progress -> Fitness opens with "Fitness & fatigue"; run 697 (no
+  insight) shows "Get coach analysis" and the RPE-only prompt; plan day
+  returns `matched_distance_m: 9219.0`.

@@ -153,7 +153,7 @@ export default function DailyCheckinCard({ date, checkin }: Props) {
 
   return (
     <div className="card daily-checkin-card">
-      <h3 className="checkin-title">How do you feel this morning?</h3>
+      <h3 className="checkin-title">How do you feel today?</h3>
       <ScaleRow label="Soreness" low="Very sore" high="None" value={soreness} onChange={v => pick('soreness', v)} disabled={submitCheckin.isPending} />
       <ScaleRow label="Energy" low="Drained" high="Full" value={energy} onChange={v => pick('energy', v)} disabled={submitCheckin.isPending} />
       <ScaleRow label="Mood" low="Low" high="Great" value={mood} onChange={v => pick('mood', v)} disabled={submitCheckin.isPending} />
