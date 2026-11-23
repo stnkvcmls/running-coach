@@ -93,7 +93,7 @@ def test_get_zones(benchmark, client):
     _ok(benchmark(lambda: client.get("/api/v1/zones")))
 
 
-def test_threshold_estimate(benchmark, client):
+def test_threshold_estimate(benchmark, client, seed_clock):
     _ok(benchmark(lambda: client.get("/api/v1/threshold-estimate")))
 
 
@@ -150,7 +150,7 @@ def test_update_zones(benchmark, client):
     ]})))
 
 
-def test_apply_threshold_estimate(benchmark, client):
+def test_apply_threshold_estimate(benchmark, client, seed_clock):
     _ok(benchmark(lambda: client.post(
         "/api/v1/threshold-estimate/apply", json={"fields": ["max_hr"]})))
 
@@ -170,10 +170,9 @@ def test_trigger_analysis(benchmark, client, ids):
     _ok(benchmark(lambda: client.post(f"/api/v1/activities/{ids['activity_id']}/analyze")))
 
 
-def test_submit_feedback(benchmark, client, ids):
-    _ok(benchmark(lambda: client.post(
-        f"/api/v1/activities/{ids['feedback_activity_id']}/feedback",
-        json={"rating": "good", "tags": ["felt-strong"], "text": "Smooth session."})))
+def test_set_rpe(benchmark, client, ids):
+    _ok(benchmark(lambda: client.patch(
+        f"/api/v1/activities/{ids['mutate_activity_id']}/rpe", json={"rpe": 6})))
 
 
 def test_trigger_sync(benchmark, client):
