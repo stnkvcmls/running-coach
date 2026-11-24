@@ -33,19 +33,26 @@
   color: var(--text-muted);
 }
 
-/* Outside the usual range: ink + a dot, never a hue (colour means effort). */
-.body-metric-verdict.is-flag {
-  color: var(--text);
-  font-weight: 600;
-}
-
-.body-metric-verdict.is-flag::before {
+/* In the usual range: a petrol dot (the body channel). */
+.body-metric-verdict.is-in::before {
   content: '';
   display: inline-block;
   width: 7px;
   height: 7px;
   margin-right: 6px;
   border-radius: 50%;
-  background: var(--text);
+  background: var(--body);
   vertical-align: 1px;
+}
+
+/* Outside the usual range: an inverted ink pill. Never green/red, which
+   would read as Z3/Z5 effort. */
+.body-metric-verdict.is-flag {
+  display: inline-block;
+  margin-top: 3px;
+  padding: 2px 8px;
+  border-radius: 7px;
+  background: var(--text);
+  color: var(--on-ink);
+  font-weight: 600;
 }

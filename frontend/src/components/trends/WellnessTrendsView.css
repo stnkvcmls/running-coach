@@ -55,9 +55,15 @@
   color: var(--text-muted);
 }
 
-/* Out of range: said in ink and weight, not a hue (colour means effort). */
+/* Out of range: an inverted ink pill, never a hue (green/red would read as
+   Z3/Z5 effort). */
 .trend-status-flag {
-  color: var(--text);
+  display: inline-block;
+  margin-top: 3px;
+  padding: 2px 8px;
+  border-radius: 7px;
+  background: var(--text);
+  color: var(--on-ink);
   font-weight: 600;
 }
 
@@ -90,14 +96,15 @@
   overflow: visible;
 }
 
+/* Body trends are the body channel (petrol): line, usual-range band and the
+   in-range end marker. An out-of-range end marker is solid ink. */
 .trend-band {
-  fill: var(--text);
-  fill-opacity: 0.08;
+  fill: var(--body-subtle);
 }
 
 .trend-line {
   fill: none;
-  stroke: var(--text);
+  stroke: var(--body);
   stroke-width: 1.7;
   stroke-linejoin: round;
   stroke-linecap: round;
@@ -110,11 +117,12 @@
   border-radius: 50%;
   transform: translate(-50%, -50%);
   background: var(--bg-card);
-  box-shadow: inset 0 0 0 1.7px var(--text);
+  box-shadow: inset 0 0 0 1.7px var(--body);
 }
 
 .trend-dot-flag {
   background: var(--text);
+  box-shadow: none;
 }
 
 .trends-footnote {

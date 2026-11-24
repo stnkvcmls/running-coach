@@ -13,10 +13,17 @@ export type Theme = 'dark' | 'light'
  * The `theme` parameters below are kept for call-site compatibility; the
  * values no longer depend on them.
  *
- * Colour means effort (docs/UI_UX_CRITIQUE.md §5.1): a series that IS an
- * effort or zone uses the --z1…--z5 scale; every other series is ink,
- * distinguished by line style rather than hue.
+ * Three channels (docs/UI_UX_CRITIQUE.md §5.1): a series that IS an effort or
+ * zone uses the --z1…--z5 scale; a series that describes the athlete's body or
+ * fitness (fitness line, wellness trends, usual-range bands) uses --body; every
+ * other series is ink, distinguished by line style rather than hue.
  */
+
+/** The body channel: fitness and wellness lines, usual-range markers. */
+export const BODY_COLOR = 'var(--body)'
+
+/** Usual-range band behind a body series. */
+export const BODY_BAND_COLOR = 'var(--body-subtle)'
 
 /**
  * Tracks `prefers-reduced-motion`. Recharts animates via its own rAF loop
@@ -140,6 +147,67 @@ export const PERFORMANCE_CURVE_COLORS = {
 export function getZoneColor(value: number, zones: MetricZone[]): string {
   const index = zoneIndexFor(value, zones)
   return index < 0 ? 'var(--color-default)' : effortZoneColor(index + 1)
+}
+
+export interface GradientStop {
+  /** 0 = top of the stroke's bounding box, 1 = bottom. */
+  offset: number
+  color: string
+}
+
+/**
+ * Hard-edged vertical gradient stops that colour a line by the zone each
+ * value falls in, for an SVG `<linearGradient x1=0 y1=0 x2=0 y2=1>` in the
+ * default objectBoundingBox units — so 0/1 are the line's own min/max, not
+ * the axis domain. Zones are coloured by list position like getZoneColor.
+ * `reversed` matches a reversed Y axis (pace: faster is higher). Returns []
+ * when the data has no vertical extent (a flat line has a zero-height
+ * bounding box, which an objectBoundingBox gradient cannot paint).
+ */
+export function zoneGradientStops(
+  zones: MetricZone[],
+  dataMin: number,
+  dataMax: number,
+  reversed = false,
+): GradientStop[] {
+  if (zones.length === 0 || !(dataMax > dataMin)) return []
+  const span = dataMax - dataMin
+  const pos = (v: number) => {
+    const t = reversed ? (v - dataMin) / span : (dataMax - v) / span
+    return Math.min(1, Math.max(0, t))
+  }
+  return zones
+    .map((z, i) => {
+      const a = pos(z.min_value ?? -Infinity)
+      const b = pos(z.max_value ?? Infinity)
+      return { from: Math.min(a, b), to: Math.max(a, b), color: effortZoneColor(i + 1) }
+    })
+    .filter(s => s.to > s.from)
+    .sort((x, y) => x.from - y.from)
+    .flatMap(s => [{ offset: s.from, color: s.color }, { offset: s.to, color: s.color }])
+}
+
+/**
+ * Garmin's per-activity HR time-in-zone payload ([{zoneNumber, secsInZone,
+ * zoneLowBoundary}]) as contiguous MetricZone bands, Z1 first, so the HR trace
+ * can be coloured with the same zone edges the watch used. Anything below the
+ * Z1 boundary counts as Z1. Returns [] when boundaries are missing.
+ */
+export function hrZoneBands(hrZones: unknown): MetricZone[] {
+  if (!Array.isArray(hrZones)) return []
+  const lows = hrZones
+    .map(z => (z && typeof z === 'object' ? (z as { zoneLowBoundary?: unknown }).zoneLowBoundary : null))
+    .slice(0, 5)
+  if (lows.length < 2 || lows.some(v => typeof v !== 'number')) return []
+  const edges = lows as number[]
+  return edges.map((low, i) => ({
+    metric_key: 'heart_rate',
+    zone_name: `Zone ${i + 1}`,
+    zone_color: '',
+    percentile_label: '',
+    min_value: i === 0 ? null : low,
+    max_value: i + 1 < edges.length ? edges[i + 1] : null,
+  }))
 }
 
 /** Index of the zone containing `value` (half-open [min, max)), falling back

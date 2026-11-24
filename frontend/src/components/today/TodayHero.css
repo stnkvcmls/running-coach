@@ -9,6 +9,12 @@
   padding: 16px;
 }
 
+/* The rule between readiness and the session takes the session's effort
+   colour (3px), so the hero carries its session without a full-card wash. */
+.session-hero.has-effort .readiness-line-wrap {
+  border-bottom: 3px solid var(--session-c);
+}
+
 .session-kind {
   display: flex;
   align-items: center;
@@ -17,6 +23,15 @@
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-muted);
+}
+
+/* Effort pill: 14% tint of the zone behind an ink label and a zone dot. */
+.session-kind--effort {
+  width: fit-content;
+  padding: 4px 11px 4px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--c) 14%, var(--bg-card));
+  color: var(--text);
 }
 
 .session-kind i {

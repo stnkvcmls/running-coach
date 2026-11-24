@@ -234,11 +234,23 @@ notation, and a daily question ("what am I running, and am I up for it?").
 
 ### 5.1 Principles
 
-1. **Colour means effort.** The only colour in the interface is the intensity
-   scale, in **Garmin's zone order** (grey, blue, green, orange, red), so what
-   the watch shows and what the app shows agree. Workout types map onto it
-   (recovery Z1, easy and long Z2, tempo Z4, intervals and race Z5). Status,
-   selection and brand use ink, not hue.
+1. **Three colour channels, one meaning each.** *(Amended 2026-11-24, colour
+   pass: [`mockups/colour-pass-before-after.html`](mockups/colour-pass-before-after.html).
+   "Colour means effort only" left every screen without a session in ink on
+   grey.)*
+   - **Zones = the effort of a session**, in **Garmin's zone order** (grey,
+     blue, green, orange, red), so what the watch shows and what the app shows
+     agree. Workout types map onto it (recovery Z1, easy and long Z2, tempo Z4,
+     intervals and race Z5). Used wherever effort already exists: marks, strips,
+     the hero's session rule, 14% badge tints, Plan's row bars, week mini-bars
+     and stacked week-km bar, and the HR trace.
+   - **Petrol = your body**: readiness, the fitness line, HRV/resting-HR/sleep
+     ranges and Progress body trends. Marks only, never an action.
+   - **Ink = text, actions and selection.** Primary buttons, active nav,
+     selected chips, out-of-range flags (as inverted pills).
+   - **Grey means Z1 only.** Inactive states are coded by shape: planned is a
+     22% tint with a zone outline, missed is a dashed outline in its own zone
+     colour, rest is a hollow rule-coloured outline.
 2. **The session comes first.** The workout, written the way a coach writes it
    ("6 × 800 m at 4:00"), with its structure drawn in effort colour, is the
    biggest thing on the most important screen. The same strip repeats in Plan,
@@ -252,13 +264,15 @@ notation, and a daily question ("what am I running, and am I up for it?").
 
 | Token | Light | Dark | Role |
 |---|---|---|---|
-| `--ground` | `#ECEEF0` | `#111416` | Page behind panels |
-| `--surface` | `#FFFFFF` | `#1A1E21` | Panels |
-| `--surface-2` | `#F2F4F5` | `#22272B` | Pressed state, today row, quiet button |
-| `--ink` | `#121518` | `#E8EBED` | Text, primary buttons, selection, focus |
-| `--ink-2` | `#525B64` | `#A3ACB4` | Secondary text (6.9 : 1 / 7.3 : 1 on surface) |
-| `--rule` | `#D8DDE1` | `#2C3338` | Hairlines, tracks |
+| `--ground` | `#F3F4F6` | `#0D0F11` | Page behind panels |
+| `--surface` | `#FFFFFF` | `#16191C` | Panels, top bar, Coach composer |
+| `--surface-2` | `#F1F3F5` | `#1F2428` | Pressed state, today row, quiet button |
+| `--ink` | `#111315` | `#F3F5F7` | Text, primary buttons, selection, focus |
+| `--ink-2` | `#4A5056` | `#A8AFB7` | Secondary text (8.2 : 1 / 8.0 : 1 on surface) |
+| `--rule` | `#DCE0E4` | `#2B3137` | Hairlines, tracks, 1px panel edge |
 | `--z1`…`--z5` | `#8A96A3 #2D7BCB #2B9156 #DD7A1E #D0353A` | `#8F9BA8 #4B96E2 #3DAE6B #EF8F37 #EC5459` | Effort only |
+| `--body` | `#0B6E75` | `#3CC3CF` | Body channel (6.0 : 1 / 8.3 : 1 on surface) |
+| `--body-subtle` | `#E4F1F2` | `#14292C` | Usual-range bands |
 
 Notes:
 
@@ -268,9 +282,12 @@ Notes:
   ink bar with on-ink text, which gets attention without borrowing Z5's meaning.
 - **Effort colours are for marks, not text.** Against `--surface` every `--z*`
   clears 3 : 1 for non-text graphics (light: Z1 3.0, Z2 4.4, Z3 4.0, Z4 3.1,
-  Z5 4.9; dark: 4.8–6.9). Labels next to a mark stay in ink, so colour is never
+  Z5 4.9; dark: 5.0–7.3). Labels next to a mark stay in ink, so colour is never
   the only carrier (Y2).
-- **Shadows go.** Panels separate from the ground by tone.
+- **Petrol stays off actions.** It sits ΔE ≈ 45 from Z2 and Z3; on a button it
+  would sit next to blue Easy rows and stop meaning anything.
+- **Shadows go.** Panels separate from the ground by a 1px `--rule` edge (by
+  tone alone a panel is only 1.1 : 1 against the lighter ground).
 
 ### 5.3 Type
 
@@ -300,7 +317,8 @@ Notes:
 - *Dark navy with a neon accent*, the stock sports-app look: it's roughly what
   the app already is, and it makes every data colour fight the brand colour.
 - *A single new brand hue* (say, a track-surface red): it would collide with Z5
-  and recreate X5.
+  and recreate X5. (Petrol was admitted in the 2026-11-24 colour pass only as
+  the body channel, never as brand or action colour.)
 - *The Nothing OS skin* (black/white, dot-matrix numerals, mono micro-labels):
   built on a branch and rejected by the owner as unreadable (§8).
 

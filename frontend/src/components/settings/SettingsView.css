@@ -225,6 +225,7 @@
   margin: 0;
   padding: 0;
   background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
 }
@@ -269,7 +270,14 @@
   white-space: nowrap;
 }
 
-.set-row-value--ok::before,
+/* OK is an ink check, not a green dot (green is Z3 effort). */
+.set-row-value--ok::before {
+  content: '✓';
+  margin-right: 5px;
+  font-weight: 700;
+  color: var(--text);
+}
+
 .set-row-value--warn::before {
   content: '';
   display: inline-block;
@@ -278,7 +286,6 @@
   border-radius: 50%;
   margin-right: 6px;
   vertical-align: 1px;
-  background: var(--z3);
 }
 
 .set-row-value--warn {

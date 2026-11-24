@@ -1,11 +1,11 @@
 import type { CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
-import { ComposedChart, Area, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts'
 import { useTrainingLoad } from '../../api/hooks'
 import type { TrainingLoadPoint } from '../../api/types'
 import { useTheme } from '../../App'
 import { formatDateKey } from '../../utils/date'
-import { getAxisTick, SERIES_COLORS, SERIES_DASHES, usePrefersReducedMotion } from '../../utils/chartTheme'
+import { BODY_COLOR, getAxisTick, SERIES_COLORS, SERIES_DASHES, usePrefersReducedMotion } from '../../utils/chartTheme'
 import './FormPanel.css'
 
 const WINDOW_DAYS = 42
@@ -52,8 +52,8 @@ interface Props {
   embedded?: boolean
 }
 
-/** Form panel: one sentence plus fitness (solid ink, faint area) and fatigue
- * (dashed ink-2) over six weeks. */
+/** Form panel: one sentence plus fitness (solid, body channel) and fatigue
+ * (dashed ink-2) over six weeks. No area fill. */
 export default function FormPanel({ current, dateKey, embedded = false }: Props) {
   const { data } = useTrainingLoad(90)
   const { theme } = useTheme()
@@ -74,21 +74,15 @@ export default function FormPanel({ current, dateKey, embedded = false }: Props)
             aria-label={`Fitness and fatigue over the last six weeks: fitness ${Math.round(points[0].ctl)} to ${Math.round(current.ctl)}, fatigue ${Math.round(points[0].atl)} to ${Math.round(current.atl)}.`}
           >
             <ResponsiveContainer width="100%" height={110}>
-              <ComposedChart data={chartData} margin={{ top: 6, right: 4, left: 4, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="formCtlFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={SERIES_COLORS[0]} stopOpacity={0.12} />
-                    <stop offset="100%" stopColor={SERIES_COLORS[0]} stopOpacity={0.01} />
-                  </linearGradient>
-                </defs>
+              <LineChart data={chartData} margin={{ top: 6, right: 4, left: 4, bottom: 0 }}>
                 <XAxis dataKey="label" tick={getAxisTick(theme, 11)} axisLine={false} tickLine={false} minTickGap={40} />
                 <YAxis hide domain={['dataMin - 5', 'dataMax + 5']} />
-                <Area
+                <Line
                   type="monotone"
                   dataKey="ctl"
-                  stroke={SERIES_COLORS[0]}
+                  stroke={BODY_COLOR}
                   strokeWidth={2}
-                  fill="url(#formCtlFill)"
+                  dot={false}
                   isAnimationActive={!reduceMotion}
                 />
                 <Line
@@ -100,11 +94,11 @@ export default function FormPanel({ current, dateKey, embedded = false }: Props)
                   dot={false}
                   isAnimationActive={!reduceMotion}
                 />
-              </ComposedChart>
+              </LineChart>
             </ResponsiveContainer>
           </div>
           <div className="form-legend" aria-hidden="true">
-            <span><i className="legend-swatch" style={{ '--swatch': SERIES_COLORS[0] } as CSSProperties} />Fitness</span>
+            <span><i className="legend-swatch" style={{ '--swatch': BODY_COLOR } as CSSProperties} />Fitness</span>
             <span><i className="legend-swatch legend-swatch--dashed" style={{ '--swatch': SERIES_COLORS[1] } as CSSProperties} />Fatigue</span>
           </div>
         </>

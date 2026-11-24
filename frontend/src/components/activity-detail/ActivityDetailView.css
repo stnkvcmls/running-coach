@@ -82,6 +82,7 @@
    §6.5). */
 .detail-panel {
   background: var(--bg-card);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
   min-width: 0;

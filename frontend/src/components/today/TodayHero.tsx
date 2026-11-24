@@ -30,8 +30,14 @@ const WORKOUT_TYPE_LABELS: Record<string, string> = {
 
 const NUMBER_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
 
+interface Kind {
+  label: string
+  /** Effort colour (var(--color-*)) */
+  color: string
+}
+
 /** Workout type → effort colour (var(--color-*)) and its label. */
-function kindOf(type: string | null | undefined, fallbackLabel?: string | null): { label: string; color: string } {
+function kindOf(type: string | null | undefined, fallbackLabel?: string | null): Kind {
   const t = (type ?? '').toLowerCase()
   if (t === 'default') return { label: fallbackLabel ?? 'Run', color: WORKOUT_TYPE_COLORS.default }
   return {
@@ -56,10 +62,23 @@ function sessionFor(
   })
 }
 
-function KindLine({ label, color }: { label: string; color: string }) {
+/** The kind of a done session: the plan/calendar type, else the activity's own tag. */
+function doneKind(activity: ActivitySummary, planDay: TrainingPlanDay | null, event: CalendarEvent | null): Kind {
+  const type = planDay?.workout_type ?? event?.workout_type ?? getActivityColor(activity.workout_tag ?? activity.name, activity.activity_type)
+  return kindOf(type, activity.workout_tag)
+}
+
+/** The kind of a planned session. */
+function plannedKind(planDay: TrainingPlanDay | null, event: CalendarEvent | null): Kind {
+  return kindOf(planDay?.workout_type ?? event?.workout_type, event?.title)
+}
+
+/** Workout label in a pill tinted with its effort colour (ink text, effort
+ * dot); without a colour (rest) it is plain ink-2 text. */
+function KindLine({ label, color }: { label: string; color?: string }) {
   return (
-    <p className="session-kind" style={{ '--c': color } as CSSProperties}>
-      <i aria-hidden="true" />
+    <p className={`session-kind${color ? ' session-kind--effort' : ''}`} style={color ? { '--c': color } as CSSProperties : undefined}>
+      {color && <i aria-hidden="true" />}
       {label}
     </p>
   )
@@ -124,11 +143,11 @@ interface PlannedProps {
   data: TodayResponse
   planDay: TrainingPlanDay | null
   event: CalendarEvent | null
+  kind: Kind
 }
 
-function PlannedSession({ data, planDay, event }: PlannedProps) {
+function PlannedSession({ data, planDay, event, kind }: PlannedProps) {
   const pushWorkout = usePushWorkoutToGarmin()
-  const kind = kindOf(planDay?.workout_type ?? event?.workout_type, event?.title)
   const session = sessionFor(kind.label, planDay, event)
   const ends = stripEnds(session)
   const distanceM = planDay?.target_distance_m ?? event?.distance_m ?? null
@@ -207,12 +226,11 @@ interface DoneProps {
   activity: ActivitySummary
   planDay: TrainingPlanDay | null
   event: CalendarEvent | null
+  kind: Kind
 }
 
-function DoneSession({ activity, planDay, event }: DoneProps) {
+function DoneSession({ activity, planDay, event, kind }: DoneProps) {
   const { data: detail } = useActivity(activity.id)
-  const type = planDay?.workout_type ?? event?.workout_type ?? getActivityColor(activity.workout_tag ?? activity.name, activity.activity_type)
-  const kind = kindOf(type, activity.workout_tag)
   const session = sessionFor(kind.label, planDay, event ?? detail?.scheduled_workout ?? null)
   const reps = repsFromAdherence(detail?.adherence)
   // Adherence comes from the plan day (as on Plan), so the two screens agree.
@@ -270,18 +288,24 @@ export default function TodayHero({ data }: Props) {
   const event = data.scheduled_events.find(e => e.event_type !== 'race') ?? null
 
   let body: ReactNode
+  // The session's effort colour, when there is a session: it draws the rule
+  // between readiness and the session (never the card's top edge, so a zone
+  // hue doesn't sit above the petrol readiness meter).
+  let kind: Kind | null = null
   if (matchedActivity) {
-    body = <DoneSession activity={matchedActivity} planDay={planDay} event={event} />
+    kind = doneKind(matchedActivity, planDay, event)
+    body = <DoneSession activity={matchedActivity} planDay={planDay} event={event} kind={kind} />
   } else if (planDay?.workout_type === 'rest') {
     body = (
       <>
-        <KindLine label="Rest" color="var(--text-faint)" />
+        <KindLine label="Rest" />
         <h2 className="session-notation session-notation--word">Rest day</h2>
         <p className="session-sub">Let the week's training absorb.</p>
       </>
     )
   } else if (planDay || event) {
-    body = <PlannedSession data={data} planDay={planDay} event={event} />
+    kind = plannedKind(planDay, event)
+    body = <PlannedSession data={data} planDay={planDay} event={event} kind={kind} />
   } else if (!plan && !planLoading) {
     body = <Link to="/plan" className="session-cta">Set up a plan</Link>
   } else {
@@ -289,7 +313,11 @@ export default function TodayHero({ data }: Props) {
   }
 
   return (
-    <section className="card hero session-hero" aria-label="Today's session">
+    <section
+      className={`card hero session-hero${kind ? ' has-effort' : ''}`}
+      style={kind ? { '--session-c': kind.color } as CSSProperties : undefined}
+      aria-label="Today's session"
+    >
       {data.readiness && <ReadinessLine readiness={data.readiness} />}
       <div className="session-body">{body}</div>
     </section>
