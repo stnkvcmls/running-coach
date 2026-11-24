@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Running Coach Colour Pass</title>
+<meta name="description" content="Why the Running Coach UI reads grey and what to change, agreed between Claude Opus 5.5 and Gemini 4 Argon. Side-by-side before/after mockups in light and dark.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap" rel="stylesheet">
+<style>
+/* ---------- Document chrome (not the app) ---------- */
+:root{
+  --d-bg:#f4f5f6; --d-surface:#ffffff; --d-ink:#111315; --d-ink-2:#4a5056; --d-line:#dce0e4; --d-chip:#eef0f2;
+  --d-petrol:#0b6e75;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --d-bg:#0b0d0f; --d-surface:#15181b; --d-ink:#f3f5f7; --d-ink-2:#a8afb7; --d-line:#2b3137; --d-chip:#1f2428;
+    --d-petrol:#3cc3cf;
+  }
+}
+:root[data-theme="dark"]{
+  --d-bg:#0b0d0f; --d-surface:#15181b; --d-ink:#f3f5f7; --d-ink-2:#a8afb7; --d-line:#2b3137; --d-chip:#1f2428;
+  --d-petrol:#3cc3cf;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--d-bg);color:var(--d-ink);font:16px/1.55 'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif}
+a{color:inherit}
+.wrap{max-width:1120px;margin:0 auto;padding:0 16px}
+header.top{padding:40px 0 8px}
+h1{font-size:clamp(28px,5vw,42px);line-height:1.1;margin:0 0 12px;letter-spacing:-.01em}
+h2{font-size:clamp(22px,3.2vw,28px);line-height:1.2;margin:56px 0 10px}
+h3{font-size:19px;margin:0 0 6px}
+p{margin:0 0 12px}
+.lede{font-size:18px;color:var(--d-ink-2);max-width:72ch}
+.meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.tag{font-size:13px;padding:4px 10px;border-radius:999px;background:var(--d-surface);border:1px solid var(--d-line);color:var(--d-ink-2)}
+.panel{background:var(--d-surface);border:1px solid var(--d-line);border-radius:16px;padding:20px}
+.grid2{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.muted{color:var(--d-ink-2)}
+code{font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--d-chip);border:1px solid var(--d-line);border-radius:5px;padding:1px 5px;overflow-wrap:anywhere}
+ol.causes,ul.plain{margin:0;padding-left:22px}
+ol.causes li,ul.plain li{margin-bottom:10px}
+.toolbar{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--d-bg) 90%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--d-line)}
+.toolbar .wrap{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding-top:10px;padding-bottom:10px}
+.toolbar nav{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;flex:1;min-width:0}
+.toolbar nav a{white-space:nowrap;text-decoration:none;font-size:14px;padding:6px 10px;border-radius:999px;color:var(--d-ink-2)}
+.toolbar nav a:hover{background:var(--d-surface);color:var(--d-ink)}
+.seg{display:inline-flex;border:1px solid var(--d-line);border-radius:999px;overflow:hidden;background:var(--d-surface)}
+.seg button{font:600 14px/1 'Archivo',system-ui,sans-serif;border:0;background:transparent;color:var(--d-ink-2);padding:9px 14px;cursor:pointer;min-height:36px}
+.seg button[aria-pressed="true"]{background:var(--d-ink);color:var(--d-bg)}
+.seg button:focus-visible{outline:2px solid var(--d-ink);outline-offset:-4px}
+
+/* comparison layout */
+.compare{display:grid;grid-template-columns:repeat(2,minmax(0,360px));gap:24px;justify-content:start;margin-top:20px}
+.compare figure{margin:0;min-width:0}
+.compare figcaption{font-weight:700;font-size:15px;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.compare figcaption span{font-weight:400;color:var(--d-ink-2);font-size:13px}
+.pair{display:grid;grid-template-columns:minmax(0,744px) minmax(0,1fr);gap:28px;align-items:start}
+@media (max-width:1100px){.pair{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:760px){.compare{grid-template-columns:minmax(0,1fr)}.compare figure{max-width:360px}}
+.notes{margin:0;padding:0;list-style:none;display:grid;gap:10px}
+.notes li{background:var(--d-surface);border:1px solid var(--d-line);border-radius:12px;padding:12px 14px;font-size:15px}
+.notes b{display:block;margin-bottom:2px}
+
+table.tok{width:100%;border-collapse:collapse;font-size:14px}
+table.tok th,table.tok td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--d-line);vertical-align:middle}
+table.tok th{font-size:13px;color:var(--d-ink-2);font-weight:600}
+.tablewrap{overflow-x:auto;background:var(--d-surface);border:1px solid var(--d-line);border-radius:16px}
+.sw{display:inline-block;width:14px;height:14px;border-radius:4px;border:1px solid rgba(127,127,127,.4);vertical-align:-2px;margin-right:6px}
+.chan{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+.chan .panel h3{display:flex;align-items:center;gap:10px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 10px}
+.chips i{width:28px;height:12px;border-radius:3px;display:inline-block}
+.log{display:grid;gap:14px}
+.turn{border-left:4px solid var(--d-line);padding:4px 0 4px 16px}
+.turn .who{font-weight:700;font-size:14px;margin-bottom:4px}
+.turn.g{border-left-color:var(--d-petrol)}
+.turn.c{border-left-color:var(--d-ink)}
+.turn p{color:var(--d-ink-2);margin-bottom:6px}
+footer{margin:64px 0 40px;color:var(--d-ink-2);font-size:14px}
+
+/* ---------- The app mockups ---------- */
+.phone{
+  --z-n: var(--rule);
+  width:100%;max-width:360px;background:var(--bg);color:var(--ink);
+  border-radius:28px;overflow:hidden;border:1px solid var(--d-line);
+  font-family:'Archivo',system-ui,sans-serif;font-size:14px;line-height:1.4;
+}
+/* BEFORE tokens = current globals.css */
+.phone[data-v="before"][data-m="light"]{
+  --bg:#ECEEF0;--card:#FFFFFF;--input:#F2F4F5;--ink:#121518;--ink2:#525B64;--ink3:#8A939B;--rule:#D8DDE1;--cardline:transparent;--on-ink:#FFFFFF;
+  --z1:#8A96A3;--z2:#2D7BCB;--z3:#2B9156;--z4:#DD7A1E;--z5:#D0353A;
+  --body:var(--ink);--body-band:#ECEEF0;--chrome:var(--bg);
+}
+.phone[data-v="before"][data-m="dark"]{
+  --bg:#111416;--card:#1A1E21;--input:#22272B;--ink:#E8EBED;--ink2:#A3ACB4;--ink3:#6D767E;--rule:#2C3338;--cardline:transparent;--on-ink:#111416;
+  --z1:#8F9BA8;--z2:#4B96E2;--z3:#3DAE6B;--z4:#EF8F37;--z5:#EC5459;
+  --body:var(--ink);--body-band:#22272B;--chrome:var(--bg);
+}
+/* AFTER tokens = agreed proposal */
+.phone[data-v="after"][data-m="light"]{
+  --bg:#F3F4F6;--card:#FFFFFF;--input:#F1F3F5;--ink:#111315;--ink2:#4A5056;--ink3:#8A939B;--rule:#DCE0E4;--cardline:#DCE0E4;--on-ink:#FFFFFF;
+  --z1:#8A96A3;--z2:#2D7BCB;--z3:#2B9156;--z4:#DD7A1E;--z5:#D0353A;
+  --body:#0B6E75;--body-band:#E4F1F2;--chrome:var(--card);
+}
+.phone[data-v="after"][data-m="dark"]{
+  --bg:#0D0F11;--card:#16191C;--input:#1F2428;--ink:#F3F5F7;--ink2:#A8AFB7;--ink3:#6D767E;--rule:#2B3137;--cardline:#2B3137;--on-ink:#0D0F11;
+  --z1:#8F9BA8;--z2:#4B96E2;--z3:#3DAE6B;--z4:#EF8F37;--z5:#EC5459;
+  --body:#3CC3CF;--body-band:#14292C;--chrome:var(--card);
+}
+.phone .z1{--z:var(--z1)}.phone .z2{--z:var(--z2)}.phone .z3{--z:var(--z3)}.phone .z4{--z:var(--z4)}.phone .z5{--z:var(--z5)}
+.phone .num{font-stretch:75%;font-weight:700;font-variant-numeric:tabular-nums lining-nums;letter-spacing:0}
+.phone .u{font-weight:400;font-stretch:100%;font-size:13px;color:var(--ink2);margin-left:2px}
+.tb{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--chrome);border-bottom:1px solid var(--rule)}
+.tb b{display:block;font-size:16px}
+.tb small{color:var(--ink2);font-size:13px}
+.av{width:30px;height:30px;border-radius:50%;background:var(--ink);color:var(--on-ink);display:grid;place-items:center;font-weight:700;font-size:13px}
+.cd{background:var(--card);border:1px solid var(--cardline);border-radius:16px;padding:16px;margin:12px}
+.cd h4{margin:0 0 10px;font-size:16px;display:flex;justify-content:space-between;align-items:baseline}
+.cd h4 a{font-size:13px;font-weight:400;color:var(--ink2)}
+.hr{height:1px;background:var(--rule);margin:14px 0}
+.ink2{color:var(--ink2)}
+
+/* week rail */
+.days{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;gap:2px}
+.day .dn{font-size:12px;color:var(--ink2);display:block}
+.day .dd{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;margin:4px 0 6px;font-size:15px}
+.day.today .dd{background:var(--ink);color:var(--on-ink)}
+.mkbox{height:44px;display:flex;align-items:flex-end;justify-content:center}
+.mk{width:22px;border-radius:4px}
+.mk.done{background:var(--z)}
+.mk.planned{border:1.5px solid var(--z);background:color-mix(in srgb,var(--z) 16%,transparent)}
+.mk.missed{border:1.5px dashed var(--ink3);background:transparent}
+.mk.rest{height:2px!important;width:16px;background:var(--ink3);border-radius:1px}
+.railfoot{display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:13px;color:var(--ink2)}
+.railfoot b{color:var(--ink)}
+.phone[data-v="after"] .mk.planned{background:color-mix(in srgb,var(--z) 22%,transparent)}
+.phone[data-v="after"] .mk.missed{border-color:var(--z)}
+.phone[data-v="after"] .mk.rest{height:14px!important;width:22px;background:transparent;border:1px solid var(--rule);border-radius:4px}
+
+/* readiness */
+.ready{display:flex;align-items:center;gap:10px}
+.ready .lbl{font-size:14px;color:var(--ink2)}
+.ready .val{font-size:22px}
+.meter{flex:1;height:6px;border-radius:3px;background:var(--rule);overflow:hidden}
+.meter i{display:block;height:100%;width:55%;background:var(--body);border-radius:3px}
+
+/* hero */
+.phone[data-v="after"] .hero .hr.sess{height:3px;background:var(--z);border-radius:2px}
+.done{display:flex;align-items:center;gap:8px;font-weight:600}
+.done .tick{width:20px;height:20px;border-radius:50%;background:var(--ink);color:var(--on-ink);display:grid;place-items:center;font-size:12px}
+.badge{display:inline-flex;align-items:center;gap:6px;font-weight:600;margin:10px 0 4px;color:var(--ink)}
+.badge::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--z)}
+.phone[data-v="after"] .badge{background:color-mix(in srgb,var(--z) 14%,var(--card));padding:4px 10px;border-radius:999px}
+.notation{font-size:40px;line-height:1.05;margin:2px 0 8px}
+.reps{position:relative;display:grid;grid-template-columns:repeat(6,1fr);gap:6px;align-items:end;height:92px;margin:18px 0 4px;border-top:1.5px dashed var(--ink);padding-top:0}
+.reps::after{content:"Target 4:00";position:absolute;right:0;top:-18px;font-size:11px;color:var(--ink2)}
+.reps i{display:block;background:var(--z);height:80px;border-radius:2px}
+.replbl{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;text-align:center;font-size:12px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stats small{display:block;color:var(--ink2);font-size:12px}
+.stats .num{font-size:24px}
+.btn{display:block;text-align:center;background:var(--ink);color:var(--on-ink);font-weight:600;border-radius:12px;padding:12px;margin-top:14px}
+
+/* body panel */
+.body{display:grid;grid-template-columns:1fr 1fr;gap:14px 12px}
+.body small{display:block;color:var(--ink2);font-size:12px}
+.body .num{font-size:26px;line-height:1.1}
+.st{font-size:12.5px;margin-top:2px;display:flex;gap:6px;align-items:baseline}
+.st.in{color:var(--ink2)}
+.st.out{color:var(--ink);font-weight:600}
+.st.out::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--ink);flex:none;transform:translateY(-1px)}
+.phone[data-v="after"] .st.in::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--body);flex:none;transform:translateY(-1px)}
+.phone[data-v="after"] .st.out{background:var(--ink);color:var(--on-ink);padding:2px 8px;border-radius:7px;display:inline-flex;width:fit-content}
+.phone[data-v="after"] .st.out::before{display:none}
+
+/* svg charts */
+.ch{display:block;width:100%;height:auto}
+.legend{display:flex;gap:16px;font-size:12px;color:var(--ink2);margin-top:6px}
+.legend svg{vertical-align:middle;margin-right:4px}
+
+/* plan */
+.phase{display:flex;gap:4px;margin-bottom:6px}
+.phase i{height:10px;border-radius:3px;background:var(--rule)}
+.phase-l{display:flex;gap:4px;font-size:12px;color:var(--ink2)}
+.phase-l span{white-space:nowrap}
+.phone[data-v="after"] .phase i.cur{background:var(--ink)}
+.phone[data-v="after"] .phase-l span.cur{color:var(--ink);font-weight:600}
+.weeks{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:0 12px}
+.wk{background:var(--card);border:1px solid var(--cardline);border-radius:12px;padding:8px}
+.wk.sel{border:2px solid var(--ink);padding:7px}
+.wk b{font-size:12.5px;display:block}
+.wk .num{font-size:17px}
+.mini{display:flex;gap:2px;align-items:flex-end;height:22px;margin-top:4px}
+.mini i{flex:1;border-radius:1.5px;background:var(--ink3)}
+.wk.sel .mini i{background:var(--ink)}
+.phone[data-v="after"] .mini i{background:var(--z,var(--rule))}
+.phone[data-v="after"] .mini i.p{opacity:.5}
+.phone[data-v="after"] .mini i.m{background:transparent;box-shadow:inset 0 0 0 1px var(--z)}
+.wkhead{display:flex;justify-content:space-between;margin:14px 12px 6px;font-weight:700;font-size:14px}
+.wkbar{display:flex;gap:2px;height:8px;margin:0 12px;border-radius:4px;overflow:hidden;background:var(--rule)}
+.wkbar i{height:100%}
+.phone[data-v="before"] .wkbar i{background:transparent}
+.phone[data-v="before"] .wkbar i.d{background:var(--ink)}
+.phone[data-v="after"] .wkbar{background:transparent;gap:3px;border-radius:0}
+.phone[data-v="after"] .wkbar i{border-radius:2px;background:color-mix(in srgb,var(--z) 22%,transparent);box-shadow:inset 0 0 0 1.5px var(--z)}
+.phone[data-v="after"] .wkbar i.d{background:var(--z)}
+.phone[data-v="after"] .wkbar i.m{background:transparent;box-shadow:none;border:1.5px dashed var(--z)}
+.rows{padding:0;overflow:hidden}
+.row{display:grid;grid-template-columns:48px 1fr auto;gap:8px;padding:12px 14px;border-bottom:1px solid var(--rule);position:relative}
+.row:last-child{border-bottom:0}
+.row .dy b{display:block;font-size:15px}
+.row .dy small{color:var(--ink2);font-size:12px}
+.row .tt{font-weight:700;font-size:15px;display:flex;align-items:center;gap:6px}
+.row .tt::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--z)}
+.row.rest .tt::before{display:none}
+.row .sub{color:var(--ink2);font-size:13px}
+.row.missed .tt{color:var(--ink3)}
+.row.missed .tt::before{background:transparent;border:1.5px solid var(--ink3);width:6px;height:6px}
+.row.missed .sub{color:var(--ink3)}
+.row .rt{text-align:right;font-size:12.5px;color:var(--ink2)}
+.row .rt .num{font-size:19px;color:var(--ink)}
+.watch{width:36px;height:36px;border-radius:9px;background:var(--ink);color:var(--on-ink);display:grid;place-items:center;margin-left:auto}
+.phone[data-v="after"] .row .tt::before{display:none}
+.phone[data-v="after"] .row::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:4px;border-radius:0 3px 3px 0;background:var(--z)}
+.phone[data-v="after"] .row.rest::before{display:none}
+.phone[data-v="after"] .row.missed::before{background:repeating-linear-gradient(to bottom,var(--z) 0 5px,transparent 5px 9px)}
+.phone[data-v="after"] .row.missed .tt,.phone[data-v="after"] .row.missed .sub{color:var(--ink2)}
+
+/* run detail */
+.rdh{background:var(--chrome);padding:12px 16px 14px;border-bottom:3px solid var(--z5)}
+.rdh .badge{margin:0 0 4px;font-size:13px}
+.phone[data-v="before"] .rdh .badge{background:var(--input);padding:3px 10px;border-radius:999px}
+.rdh b{display:block;font-size:20px}
+.tabs{display:flex;gap:16px;font-size:14px;color:var(--ink2);border-bottom:1px solid var(--rule);margin-bottom:10px}
+.tabs span{padding-bottom:8px}
+.tabs span.on{color:var(--ink);font-weight:600;box-shadow:inset 0 -2px 0 var(--ink)}
+
+/* progress */
+.pills{display:flex;gap:8px;padding:12px;background:var(--chrome);border-bottom:1px solid var(--rule)}
+.pills span{padding:7px 14px;border-radius:999px;border:1px solid var(--rule);font-weight:600;font-size:14px;color:var(--ink2)}
+.pills span.on{background:var(--ink);color:var(--on-ink);border-color:var(--ink)}
+.trend{padding:12px 0;border-bottom:1px solid var(--rule)}
+.trend:last-child{border-bottom:0;padding-bottom:0}
+.trend:first-child{padding-top:0}
+.trend .h{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px}
+.trend .h b{font-size:15px;display:block}
+.trend .num{font-size:24px}
+.foot{font-size:12.5px;color:var(--ink2);padding:0 14px 14px}
+</style>
+</head>
+<body>
+
+<header class="top wrap">
+  <h1>Running Coach: less grey, same rules</h1>
+  <p class="lede">The app reads grey because the approved rule "colour means effort only" is doing its job. Most screens have no effort on them, so they render in ink on cement. This proposal keeps that rule and fixes the grey with three things. Effort colour goes everywhere effort already exists. A lighter ground with hairlines replaces the cement. One new hue, petrol, carries exactly one meaning: your body.</p>
+  <div class="meta">
+    <span class="tag">Agreed by Claude Opus 5.5 and Gemini 4 Argon (High)</span>
+    <span class="tag">2 rounds + a review of this page</span>
+    <span class="tag">24 November 2026</span>
+    <span class="tag">Amends docs/UI_UX_CRITIQUE.md §5</span>
+  </div>
+</header>
+
+<div class="toolbar">
+  <div class="wrap">
+    <nav aria-label="Sections">
+      <a href="#why">Why grey</a><a href="#today">Today</a><a href="#plan">Plan</a><a href="#run">Run</a><a href="#progress">Progress</a><a href="#rules">Rules</a><a href="#tokens">Tokens</a><a href="#debate">Debate</a>
+    </nav>
+    <div class="seg" role="group" aria-label="Mockup theme">
+      <button type="button" data-mode="light" aria-pressed="true">Light</button>
+      <button type="button" data-mode="dark" aria-pressed="false">Dark</button>
+    </div>
+  </div>
+</div>
+
+<main class="wrap">
+
+<section id="why">
+  <h2>Why it reads grey</h2>
+  <p class="muted">This is the joint diagnosis. Gemini found causes 1–4 on its own. Claude added cause 5 in round 2.</p>
+  <div class="panel">
+    <ol class="causes">
+      <li><b>Cement ground.</b> With no shadows and no borders, <code>--bg #ECEEF0</code> had to be dark enough to separate panels by tone alone. It then floods the top bar, the Coach canvas, and every gap between cards. In dark mode, <code>#1A1E21</code> on <code>#111416</code> merges into one slab outdoors.</li>
+      <li><b>No-effort screens have no colour at all.</b> Below the session hero, Today (readiness, body, form, races, coach) is fully achromatic. So are Progress (five black sparklines on grey bands) and Coach.</li>
+      <li><b>Effort colour is missing even where effort exists.</b> Plan's week mini-bars and week-km bar are ink. Its phase timeline is a row of identical grey segments, and workouts get only an 8px dot. The run's HR trace is black over a grey area fill.</li>
+      <li><b>Every emphasis is ink.</b> Buttons, the readiness meter, fitness lines and range markers all share one ink colour. In dark mode the primary button is a flat <code>#E8EBED</code> bar.</li>
+      <li><b>Grey means two things.</b> Z1 effort is grey, and so is "inactive" (missed, rest, planned, empty tracks). That makes grey the most common mark in the app, and it can't mean Z1 reliably.</li>
+    </ol>
+  </div>
+</section>
+
+<section id="today">
+  <h2>Today</h2>
+  <div class="pair">
+    <div class="compare" data-screen="today"></div>
+    <ol class="notes">
+      <li><b>Lighter ground, hairline panels.</b> <code>#F3F4F6</code> ground, white cards with a 1px <code>#DCE0E4</code> line. The top bar moves onto the card colour, so the cement band at the top disappears.</li>
+      <li><b>Readiness is petrol.</b> It's about your body, not a session, so it gets the body hue instead of ink.</li>
+      <li><b>The hero gets its session's colour.</b> The divider between readiness and the session becomes a 3px zone rule, and the badge is tinted. The label stays in ink. The rule isn't on the card's top edge, so red never sits above the petrol readiness meter. No full-card wash, which glares outdoors.</li>
+      <li><b>Week rail: grey only means Z1.</b> Missed Monday is dashed in its own zone colour, not grey. Rest is a hollow outline. Planned fills go from 16% to 22%.</li>
+      <li><b>Body flags invert.</b> An out-of-range value gets an ink pill. An in-range value gets a petrol dot. Neither uses green or red, which would read as Z3/Z5.</li>
+      <li><b>Form: petrol fitness line, no grey smoke.</b> Fatigue stays as an ink dash.</li>
+    </ol>
+  </div>
+</section>
+
+<section id="plan">
+  <h2>Plan</h2>
+  <div class="pair">
+    <div class="compare" data-screen="plan"></div>
+    <ol class="notes">
+      <li><b>The current phase is filled.</b> Build is ink and labelled in bold. Previously every segment was the same grey.</li>
+      <li><b>Week mini-bars are drawn in effort colour.</b> Each week's shape now reads as its intensity mix, the same strip as Today. Done is solid, planned is 50% opacity, and missed is a zone outline.</li>
+      <li><b>The week-km bar is stacked by session.</b> Done is solid zone, planned is a 22% tint with a zone outline, and missed is dashed. You can see where the 73 km comes from.</li>
+      <li><b>A 4px zone bar down each row's left edge replaces the 8px dot.</b> The bar encodes session type, and the right column already says "✓ Done", so planned rows keep a solid bar. Missed is a dashed bar, and its text stays readable at ink-2 (8.2:1) instead of the faint grey it uses now (3.2:1).</li>
+    </ol>
+  </div>
+</section>
+
+<section id="run">
+  <h2>Run analysis</h2>
+  <div class="pair">
+    <div class="compare" data-screen="run"></div>
+    <ol class="notes">
+      <li><b>The HR trace is stroked by zone.</b> The line changes colour at your zone thresholds (Z1 to Z5, here Z2 &lt; 150, Z3 &lt; 160, Z4 &lt; 167, Z5 ≥ 167), so the chart shows where each rep tipped into Z5. The line is a 5-point rolling mean so the colour doesn't flicker on noise.</li>
+      <li><b>No grey area fill. Rep bands go neutral.</b> They're a light <code>--border</code> tint, so a pink band doesn't fight a green stroke.</li>
+      <li>Reps, time-in-zone and the red header rule already used effort colour. They don't change.</li>
+    </ol>
+  </div>
+</section>
+
+<section id="progress">
+  <h2>Progress · Body</h2>
+  <div class="pair">
+    <div class="compare" data-screen="progress"></div>
+    <ol class="notes">
+      <li><b>Body trends are petrol.</b> The line and the end marker are petrol. The usual-range band is a petrol tint instead of grey.</li>
+      <li><b>Out of range = ink pill + filled ink end-dot</b>, the same signal as on Today.</li>
+      <li>The selected tab stays ink. Petrol never marks a control.</li>
+    </ol>
+  </div>
+</section>
+
+<section id="rules">
+  <h2>The rule, amended: three channels, one meaning each</h2>
+  <p class="muted">This replaces §5.1 principle 1 and the "Shadows go" note in §5.2. Everything else in §5 stands.</p>
+  <div class="chan">
+    <div class="panel">
+      <h3>Zones = effort of a session</h3>
+      <div class="chips"><i style="background:#8A96A3"></i><i style="background:#2D7BCB"></i><i style="background:#2B9156"></i><i style="background:#DD7A1E"></i><i style="background:#D0353A"></i></div>
+      <p class="muted">Unchanged hexes, Garmin order. Now also used on structural marks: the hero session rule, 14% badge tints, row bars, week mini-bars, the stacked week-km bar, and the HR stroke. Still never used for text. A solid grey mark means Z1 and nothing else.</p>
+    </div>
+    <div class="panel">
+      <h3>Petrol = your body</h3>
+      <div class="chips"><i style="background:#0B6E75"></i><i style="background:#E4F1F2"></i><i style="background:#3CC3CF"></i><i style="background:#14292C"></i></div>
+      <p class="muted">Readiness meter, the Form fitness line, HRV, resting-HR and sleep range bands, Progress body trends, and the "in your usual range" marker. Marks only, never an action. At hue 185°, it's the only free hue that is neither violet (the stock AI-app colour) nor next to a zone. It sits ΔE ≈ 45 from Z2 and Z3. That's why it's kept off buttons, which sit next to blue Easy rows.</p>
+    </div>
+    <div class="panel">
+      <h3>Ink = text, actions, selection</h3>
+      <div class="chips"><i style="background:#111315"></i><i style="background:#F3F5F7;border:1px solid #ccc"></i></div>
+      <p class="muted">Primary buttons, the coach send button, active nav, selected chips and weeks, the active phase, and out-of-range pills. The dark-mode button brightens to <code>#F3F5F7</code>, so it reads as a button instead of a grey bar.</p>
+    </div>
+  </div>
+  <h3 style="margin-top:24px">Inactive states are coded by shape, not by grey</h3>
+  <div class="panel">
+    <ul class="plain">
+      <li><b>Done:</b> solid zone.</li>
+      <li><b>Planned:</b> 22% zone fill + 1.5px zone border on the week rail and the week-km bar; 50% opacity on mini-bars. Plan rows keep a solid bar (type, not state).</li>
+      <li><b>Missed:</b> hollow, dashed in its own zone colour (a zone outline on 4px mini-bars). The label is ink-2 (readable), not ink-3.</li>
+      <li><b>Rest:</b> hollow 1px <code>--border</code> outline; no zone bar in Plan rows.</li>
+      <li><b>Empty tracks:</b> <code>--border</code>.</li>
+    </ul>
+  </div>
+  <h3 style="margin-top:24px">What we explicitly won't do</h3>
+  <div class="panel">
+    <ul class="plain">
+      <li>No green/red for good/bad wellness. It collides with Z3/Z5.</li>
+      <li>No effort-coloured text. Every zone except Z5 is under 4.5:1 on white (3.0–4.4:1).</li>
+      <li>No full-card colour washes. They glare outdoors and turn every Easy day blue.</li>
+      <li>No cream or sand ground and no serif. That's the current "tasteful AI default", and it yellows in sunlight.</li>
+      <li>No pure #000/#FFF pairing and no novelty numerals. That was the rejected Nothing OS skin.</li>
+      <li>No petrol on buttons or nav. It would sit beside Z2 blue and stop meaning anything.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="tokens">
+  <h2>Tokens</h2>
+  <p class="muted">Contrast ratios were computed with the WCAG 2.x formula. Text needs at least 4.5:1, and marks need at least 3:1.</p>
+  <div class="tablewrap">
+  <table class="tok">
+    <thead><tr><th>Token (globals.css)</th><th>Light: now → proposed</th><th>Dark: now → proposed</th><th>Check</th></tr></thead>
+    <tbody>
+      <tr><td><code>--bg</code></td><td><span class="sw" style="background:#ECEEF0"></span>#ECEEF0 → <span class="sw" style="background:#F3F4F6"></span>#F3F4F6</td><td><span class="sw" style="background:#111416"></span>#111416 → <span class="sw" style="background:#0D0F11"></span>#0D0F11</td><td>card/ground 1.10:1, so separation comes from the border</td></tr>
+      <tr><td><code>--bg-card</code></td><td>#FFFFFF (same)</td><td><span class="sw" style="background:#1A1E21"></span>#1A1E21 → <span class="sw" style="background:#16191C"></span>#16191C</td><td>now also the top bar and Coach chrome</td></tr>
+      <tr><td><code>--bg-input</code></td><td>#F2F4F5 → #F1F3F5</td><td>#22272B → #1F2428</td><td>plus 1px border</td></tr>
+      <tr><td><code>--border</code></td><td><span class="sw" style="background:#D8DDE1"></span>#D8DDE1 → <span class="sw" style="background:#DCE0E4"></span>#DCE0E4</td><td>#2C3338 → #2B3137</td><td>new: <code>.card{border:1px solid var(--border)}</code>; 1.33 / 1.34:1</td></tr>
+      <tr><td><code>--text</code> (ink)</td><td>#121518 → #111315</td><td><span class="sw" style="background:#E8EBED"></span>#E8EBED → <span class="sw" style="background:#F3F5F7"></span>#F3F5F7</td><td>18.6:1 / 16.2:1 on card</td></tr>
+      <tr><td><code>--text-muted</code></td><td>#525B64 → #4A5056</td><td>#A3ACB4 → #A8AFB7</td><td>8.2 (7.4 on ground) / 8.0:1</td></tr>
+      <tr><td><code>--on-ink</code></td><td>#FFFFFF</td><td>#111416 → #0D0F11</td><td>17.6:1</td></tr>
+      <tr><td><code>--body</code> <em>new</em></td><td><span class="sw" style="background:#0B6E75"></span>#0B6E75</td><td><span class="sw" style="background:#3CC3CF"></span>#3CC3CF</td><td>6.0:1 / 8.3:1 (marks need only 3:1)</td></tr>
+      <tr><td><code>--body-subtle</code> <em>new</em></td><td><span class="sw" style="background:#E4F1F2"></span>#E4F1F2</td><td><span class="sw" style="background:#14292C"></span>#14292C</td><td>range bands only</td></tr>
+      <tr><td><code>--z1…--z5</code></td><td colspan="2">unchanged</td><td>marks: light 3.0–4.9:1, dark 5.0–7.3:1 on the new card</td></tr>
+      <tr><td><code>--success</code></td><td colspan="2">stays <code>var(--text)</code>; Settings' green "All checks pass" dot becomes an ink ✓</td><td>removes a Z3 leak</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="muted" style="margin-top:12px">The token is named <code>--body</code> after its meaning, not <code>--petrol</code> after its colour, so the rule stays readable in the CSS. Rough scope: <code>globals.css</code> (tokens, <code>.card</code> border), <code>TopBar.css</code>, <code>ChatView.css</code>, <code>ReadinessLine.css</code>, <code>TodayHero.css</code>, <code>WeekRail.css</code>, <code>BodyPanel.css</code>, <code>FormPanel.tsx</code>, <code>PlanView.css</code>, <code>SeasonTimeline.css</code>, the HR chart in <code>ChartTabs.tsx</code>, Progress sparklines, and <code>chartTheme.ts</code>. No new dependencies.</p>
+</section>
+
+<section id="debate">
+  <h2>How we got here</h2>
+  <div class="log">
+    <div class="turn g"><div class="who">Gemini, round 1 (independent; it read §5, globals.css and the 7 live screenshots)</div>
+      <p>Diagnosed causes 1–4. Proposed P1 chalk/obsidian ground + 1px borders, P2 a "Deep Petrol" accent for buttons, active nav, readiness and fitness, P3 effort colour on structure, P4 zone-stroked HR with no grey smoke, and P5 ink pills for wellness flags. Named its own biggest risk: petrol next to Z2 blue outdoors.</p></div>
+    <div class="turn c"><div class="who">Claude, round 2</div>
+      <p>Re-computed Gemini's contrast numbers; all held. Measured petrol at ΔE76 47/45 from Z2 and 42/46 from Z3, against 85 between Z2 and Z3, so petrol sits halfway between two zones. Accepted P1, P3, P4. Countered P1: the ground at #F7F7F8 is only 1.07:1 against white, so use #F3F4F6 with a #DCE0E4 border. Narrowed P2: petrol gets one meaning, your body, and never marks an action. Buttons stay ink, and the dark-mode button gets the brighter ink. Added P6 (grey means only Z1; inactive states coded by shape) and P7 (3px zone rule on the hero, no wash). Cut P5 down to its colour items.</p></div>
+    <div class="turn g"><div class="who">Gemini, round 2</div>
+      <p>Accepted P1–P7 with no counters, and wrote out the consolidated token and state spec this page implements. It agreed that limiting petrol to physiology removes its own Easy-day risk and keeps one hue to one meaning.</p></div>
+    <div class="turn g" id="review"><div class="who">Gemini, review of this page</div>
+      <p>Gemini read this HTML and light/dark screenshots of every pair. Verdict: <b>sign off with changes</b>. The tokens matched 100%, and it judged the after side to solve "too greyish" while improving readability. It flagged:</p>
+      <ul class="plain muted">
+        <li>missed and planned segments in the week-km bar didn't follow the state spec;</li>
+        <li>the hero's red top rule sat above the petrol readiness meter;</li>
+        <li>mini-bars drew planned weeks as solid;</li>
+        <li>the HR stroke flickered on noise, with green fighting pink rep bands;</li>
+        <li>five text errors: a contrast figure, a segment count, the "only free hue" claim, Z2's text contrast, and calling a missed day a grey track.</li>
+      </ul></div>
+    <div class="turn c"><div class="who">Claude, final</div>
+      <p>Accepted and applied all of the above. The session rule moved to the divider between readiness and the session. The HR line uses a 5-point mean with full Z1–Z5 stops and neutral rep bands. Planned and missed segments follow the state spec. All five text errors are fixed. Declined one point, hollow bars for planned Plan rows: the bar encodes session type, the row already says "✓ Done", and a list of hollow 4px bars would make Plan grey again. Gemini's remaining note is that Coach and the bottom nav aren't mocked. Under this rule they stay ink (send button, active tab), so there's nothing new to show.</p></div>
+  </div>
+</section>
+
+<footer>
+  Mockups are hand-built HTML using the real token values. Data comes from the seeded demo week (Tuesday 23 June). Both phones in each pair use identical markup: only the token set and the rules marked "after" differ. Real-app screenshots of the current state are in <code>docs/mockups/second-opinion/</code>.
+</footer>
+</main>
+
+<template id="t-today">
+  <div class="tb"><div><b>Tuesday 23 June</b><small>Build block, week 1 of 4</small></div><div class="av">A</div></div>
+  <div class="cd">
+    <div class="days">
+      <div class="day"><span class="dn">Mon</span><span class="dd num">22</span><div class="mkbox"><i class="mk missed z2" style="height:17px"></i></div></div>
+      <div class="day today"><span class="dn">Tue</span><span class="dd num">23</span><div class="mkbox"><i class="mk done z5" style="height:16px"></i></div></div>
+      <div class="day"><span class="dn">Wed</span><span class="dd num">24</span><div class="mkbox"><i class="mk planned z2" style="height:17px"></i></div></div>
+      <div class="day"><span class="dn">Thu</span><span class="dd num">25</span><div class="mkbox"><i class="mk planned z4" style="height:20px"></i></div></div>
+      <div class="day"><span class="dn">Fri</span><span class="dd num">26</span><div class="mkbox"><i class="mk rest"></i></div></div>
+      <div class="day"><span class="dn">Sat</span><span class="dd num">27</span><div class="mkbox"><i class="mk planned z2" style="height:17px"></i></div></div>
+      <div class="day"><span class="dn">Sun</span><span class="dd num">28</span><div class="mkbox"><i class="mk planned z2" style="height:42px"></i></div></div>
+    </div>
+    <div class="railfoot"><span>‹</span><span><b class="num" style="font-size:15px">9.2</b> of 73 km this week</span><span style="text-decoration:underline">Plan</span><span>›</span></div>
+  </div>
+  <div class="cd hero z5">
+    <div class="ready"><span class="lbl">Readiness</span><span class="val num">55</span><span class="meter"><i></i></span><b>Good</b></div>
+    <p class="ink2" style="margin:6px 0 0;font-size:13px">Low HRV is holding it back. Tap for the breakdown.</p>
+    <div class="hr sess"></div>
+    <div class="done"><span class="tick">✓</span>Done at 10:20</div>
+    <div class="badge">Intervals</div>
+    <div class="notation num">6 × 800 m</div>
+    <p style="margin:0;font-size:14px">All six reps within 5 s of 4:00. 61% adherence to the plan.</p>
+    <div class="reps"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="replbl num"><span>4:00</span><span>4:00</span><span>4:00</span><span>4:00</span><span>4:00</span><span>4:00</span></div>
+    <div class="hr"></div>
+    <div class="stats">
+      <div><small>Distance</small><span class="num">9.22</span><span class="u">km</span></div>
+      <div><small>Time</small><span class="num">44:17</span></div>
+      <div><small>Avg HR</small><span class="num">161</span><span class="u">bpm</span></div>
+    </div>
+    <div class="btn">Open run analysis</div>
+  </div>
+  <div class="cd">
+    <h4>Body <a>Daily history</a></h4>
+    <div class="body">
+      <div><small>Resting HR</small><span class="num">49</span><span class="u">bpm</span><div class="st in">In your usual range</div></div>
+      <div><small>HRV overnight</small><span class="num">42</span><span class="u">ms</span><div class="st out">Low, per Garmin</div></div>
+      <div><small>Sleep score</small><span class="num">56</span><div class="st out">Below range, 2 nights</div></div>
+      <div><small>Body battery</small><span class="num">74</span><div class="st in">In your usual range</div></div>
+    </div>
+  </div>
+  <div class="cd">
+    <h4>Form <a>Progress</a></h4>
+    <p style="font-size:14px;margin:0 0 8px"><b>Very fresh, +17.</b> Fitness is slipping to 62 and fatigue has dropped to 44.</p>
+    <svg class="ch" viewBox="0 0 300 90" aria-label="Fitness and fatigue, last 6 weeks" data-chart="form"></svg>
+    <div class="legend"><span><svg width="18" height="4"><line x1="0" y1="2" x2="18" y2="2" style="stroke:var(--body);stroke-width:2"/></svg>Fitness</span><span><svg width="18" height="4"><line x1="0" y1="2" x2="18" y2="2" style="stroke:var(--ink);stroke-width:1.5;stroke-dasharray:4 3"/></svg>Fatigue</span></div>
+  </div>
+</template>
+
+<template id="t-plan">
+  <div class="tb"><div><b>Plan</b><small>Berlin Marathon in 90 days</small></div><div class="av">A</div></div>
+  <div class="cd">
+    <h4>Build phase</h4>
+    <div class="phase"><i style="flex:26"></i><i class="cur" style="flex:19"></i><i style="flex:13"></i><i style="flex:19"></i><i style="flex:6"></i><i style="flex:13"></i></div>
+    <div class="phase-l"><span style="flex:26">Base</span><span class="cur" style="flex:19">Build</span><span style="flex:13">Peak</span><span style="flex:25">Taper</span><span style="flex:13">Recover</span></div>
+    <p style="margin:12px 0 0;font-size:14px">Four-week build block sharpening marathon-specific endurance with controlled tempo volume and a midblock long-run progression.</p>
+  </div>
+  <div class="weeks" data-weeks></div>
+  <div class="wkhead"><span>Aerobic Build</span><span><span class="num">9.2</span> <span style="font-weight:400" class="ink2">of 73 km</span></span></div>
+  <div class="wkbar"><i class="m z2" style="flex:9.5"></i><i class="d z5" style="flex:9.2"></i><i class="z2" style="flex:9.5"></i><i class="z4" style="flex:11.5"></i><i class="z2" style="flex:9.5"></i><i class="z2" style="flex:24"></i></div>
+  <div class="cd rows">
+    <div class="row missed z2"><div class="dy"><b>Mon</b><small>22 Jun</small></div><div><div class="tt">Easy</div><div class="sub">9.5 km at 5:42 /km</div></div><div class="rt">○ Missed</div></div>
+    <div class="row z5"><div class="dy"><b>Tue</b><small>23 Jun</small></div><div><div class="tt">Intervals</div><div class="sub">9 km at 4:54 /km</div></div><div class="rt"><span class="num">9.22</span><span class="u">km</span><br>✓ Done, 61%</div></div>
+    <div class="row z2"><div class="dy"><b>Wed</b><small>24 Jun</small></div><div><div class="tt">Easy</div><div class="sub">9.5 km at 5:42 /km</div></div><div class="rt"><span class="watch" aria-label="Send to watch"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6" y="6" width="12" height="12" rx="3"/><path d="M9 6l1-4h4l1 4M9 18l1 4h4l1-4M12 10v2.5l1.5 1"/></svg></span></div></div>
+    <div class="row z4"><div class="dy"><b>Thu</b><small>25 Jun</small></div><div><div class="tt">Tempo</div><div class="sub">11.5 km at 4:35 /km</div></div><div class="rt"><span class="num">11.5</span><span class="u">km</span></div></div>
+    <div class="row rest"><div class="dy"><b>Fri</b><small>26 Jun</small></div><div><div class="tt" style="font-weight:600" >Rest</div><div class="sub">Rest day</div></div><div class="rt"></div></div>
+    <div class="row z2"><div class="dy"><b>Sat</b><small>27 Jun</small></div><div><div class="tt">Easy</div><div class="sub">9.5 km at 5:42 /km</div></div><div class="rt"><span class="num">9.5</span><span class="u">km</span></div></div>
+    <div class="row z2"><div class="dy"><b>Sun</b><small>28 Jun</small></div><div><div class="tt">Long run</div><div class="sub">24 km at 5:35 /km</div></div><div class="rt"><span class="num">24</span><span class="u">km</span></div></div>
+  </div>
+</template>
+
+<template id="t-run">
+  <div class="rdh z5"><div class="badge">Interval</div><b>Interval Run</b><small class="ink2">Tuesday, 23 June 2026, 10:20</small></div>
+  <div class="cd">
+    <div class="stats">
+      <div><small>Distance</small><span class="num">9.22</span><span class="u">km</span></div>
+      <div><small>Time</small><span class="num">44:17</span></div>
+      <div><small>Avg pace</small><span class="num">4:48</span><span class="u">/km</span></div>
+    </div>
+  </div>
+  <div class="cd">
+    <div class="tabs"><span class="on">Heart rate</span><span>Elevation</span><span>Pace</span><span>Cadence</span></div>
+    <svg class="ch" viewBox="0 0 300 170" aria-label="Heart rate over distance" data-chart="hr"></svg>
+  </div>
+  <div class="cd">
+    <h4>Time in zone</h4>
+    <div style="display:flex;gap:3px;height:14px">
+      <i class="z1" style="flex:18.2;background:var(--z);border-radius:3px"></i><i class="z2" style="flex:7.3;background:var(--z);border-radius:3px"></i><i class="z3" style="flex:4.7;background:var(--z);border-radius:3px"></i><i class="z4" style="flex:8.3;background:var(--z);border-radius:3px"></i><i class="z5" style="flex:16.4;background:var(--z);border-radius:3px"></i>
+    </div>
+  </div>
+</template>
+
+<template id="t-progress">
+  <div class="tb"><div><b>Progress</b></div><div class="av">A</div></div>
+  <div class="pills"><span class="on">Body</span><span>Fitness</span><span>Records</span></div>
+  <div class="cd" data-trends></div>
+  <p class="foot">Bands: Garmin's baseline for HRV; your middle 80% of the last 90 days for the rest.</p>
+</template>
+
+<script>
+(function(){
+  // deterministic pseudo-random
+  function rng(seed){ return function(){ seed = (seed*16807) % 2147483647; return (seed-1)/2147483646; }; }
+  var uid = 0;
+
+  function formChart(svg){
+    var id = 'g' + (uid++);
+    var r = rng(7), fit = [], fat = [];
+    for (var i=0;i<42;i++){
+      fit.push(38 - Math.sin(i/9)*3 - (i>34 ? (i-34)*1.6 : 0) + r()*2);
+      var dip = (i%7===3) ? 14 : (i%7===4 ? 8 : 0);
+      fat.push(40 - dip + r()*6 - (i>34 ? (i-34)*4.5 : 0) + (i%7===0 ? -6:0));
+    }
+    function path(a){ return a.map(function(y,i){ return (i?'L':'M') + (4+i*292/41).toFixed(1) + ' ' + (y).toFixed(1); }).join(' '); }
+    var fitP = path(fit);
+    var area = fitP + ' L296 78 L4 78 Z';
+    svg.innerHTML =
+      '<defs><linearGradient id="'+id+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--ink);stop-opacity:.22"/><stop offset="1" style="stop-color:var(--ink);stop-opacity:0"/></linearGradient></defs>' +
+      '<path class="area" d="'+area+'" fill="url(#'+id+')"/>' +
+      '<path d="'+fitP+'" fill="none" style="stroke:var(--body);stroke-width:2;stroke-linejoin:round"/>' +
+      '<path d="'+path(fat)+'" fill="none" style="stroke:var(--ink);stroke-width:1.4;stroke-dasharray:4 3"/>' +
+      ['05-16','05-25','06-03','06-12','06-23'].map(function(t,i){ return '<text x="'+(4+i*73)+'" y="89" text-anchor="'+(i===0?'start':i===4?'end':'middle')+'" style="fill:var(--ink2);font-size:9px">'+t+'</text>'; }).join('');
+    if (svg.closest('.phone').dataset.v === 'after') svg.querySelector('.area').remove();
+  }
+
+  function hrChart(svg){
+    var id = 'h' + (uid++);
+    var after = svg.closest('.phone').dataset.v === 'after';
+    var x0=30, x1=296, y0=10, y1=140;           // plot box
+    var Y = function(bpm){ return y1 - (bpm-140)/40*(y1-y0); };
+    var X = function(km){ return x0 + km/9.22*(x1-x0); };
+    var reps = [[1.6,2.4],[2.8,3.6],[4.0,4.8],[5.2,6.0],[6.4,7.2],[7.6,8.4]];
+    var r = rng(11), pts = [];
+    for (var k=0.15;k<=9.2;k+=0.07){
+      var inRep = reps.some(function(p){ return k>=p[0] && k<=p[1]; });
+      var base = k<1.4 ? 152 + k*5 : (inRep ? 165 : 158);
+      pts.push([X(k), base + (r()-0.5)*9]);
+    }
+    if (after) pts = pts.map(function(p,i){            // 5-point rolling mean
+      var w = pts.slice(Math.max(0,i-2), i+3); return [p[0], w.reduce(function(a,q){ return a+q[1]; },0)/w.length];
+    });
+    pts = pts.map(function(p){ return [p[0], Y(p[1])]; });
+    var d = pts.map(function(p,i){ return (i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1); }).join(' ');
+    var s = '';
+    s += reps.map(function(p){ return '<rect x="'+X(p[0])+'" y="'+y0+'" width="'+(X(p[1])-X(p[0]))+'" height="'+(y1-y0)+'" style="fill:'+(after?'var(--rule);fill-opacity:.5':'var(--z5);fill-opacity:.12')+'"/>'; }).join('');
+    [140,150,160,170,180].forEach(function(b){ s += '<text x="0" y="'+(Y(b)+3)+'" style="fill:var(--ink2);font-size:9px">'+b+'</text>'; });
+    [0,2,4,6,8].forEach(function(km){ s += '<text x="'+(X(km)-3)+'" y="158" style="fill:var(--ink2);font-size:9px">'+km+'</text>'; });
+    s += '<text x="'+(x1-14)+'" y="168" style="fill:var(--ink2);font-size:9px">km</text>';
+    if (after){
+      // hard stops at this athlete's zone thresholds (bpm): Z1 < 135 ≤ Z2 < 150 ≤ Z3 < 160 ≤ Z4 < 167 ≤ Z5
+      var T = function(b){ return Math.min(1, Math.max(0, (Y(b)-y0)/(y1-y0))); };
+      var bands = [['z5',180,167],['z4',167,160],['z3',160,150],['z2',150,135],['z1',135,100]];
+      s = '<defs><linearGradient id="'+id+'" gradientUnits="userSpaceOnUse" x1="0" y1="'+y0+'" x2="0" y2="'+y1+'">' +
+          bands.map(function(b){ return '<stop offset="'+T(b[1])+'" style="stop-color:var(--'+b[0]+')"/><stop offset="'+T(b[2])+'" style="stop-color:var(--'+b[0]+')"/>'; }).join('') +
+          '</linearGradient></defs>' + s +
+          '<path d="'+d+'" fill="none" stroke="url(#'+id+')" style="stroke-width:2;stroke-linejoin:round"/>';
+    } else {
+      s = '<defs><linearGradient id="'+id+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--ink);stop-opacity:.16"/><stop offset="1" style="stop-color:var(--ink);stop-opacity:.02"/></linearGradient></defs>' + s +
+          '<path d="'+d+' L'+pts[pts.length-1][0]+' '+y1+' L'+pts[0][0]+' '+y1+' Z" fill="url(#'+id+')"/>' +
+          '<path d="'+d+'" fill="none" style="stroke:var(--ink);stroke-width:1.6;stroke-linejoin:round"/>';
+    }
+    svg.innerHTML = s;
+  }
+
+  function trends(el){
+    var items = [
+      {name:'Resting HR', val:'49', unit:'bpm', st:'in', label:'In your usual range', seed:3},
+      {name:'HRV overnight', val:'42', unit:'ms', st:'out', label:'Low, per Garmin', seed:5, drop:true},
+      {name:'Sleep score', val:'56', unit:'', st:'out', label:'Below your range for 2 nights', seed:9, drop:true}
+    ];
+    el.innerHTML = items.map(function(it){
+      var r = rng(it.seed), p = [];
+      for (var i=0;i<30;i++){ var y = 22 + (r()-0.5)*22; if (it.drop && i>26) y = 40 + (i-27)*2; p.push([4+i*292/29, y]); }
+      var d = p.map(function(q,i){ return (i?'L':'M')+q[0].toFixed(1)+' '+q[1].toFixed(1); }).join(' ');
+      var e = p[p.length-1];
+      var dot = it.st==='in'
+        ? '<circle cx="'+e[0]+'" cy="'+e[1]+'" r="3.5" style="fill:var(--card);stroke:var(--body);stroke-width:1.8"/>'
+        : '<circle cx="'+e[0]+'" cy="'+e[1]+'" r="4" style="fill:var(--ink)"/>';
+      return '<div class="trend"><div class="h"><div><b>'+it.name+'</b><div class="st '+it.st+'">'+it.label+'</div></div>' +
+        '<div><span class="num">'+it.val+'</span>'+(it.unit?'<span class="u">'+it.unit+'</span>':'')+'</div></div>' +
+        '<svg class="ch" viewBox="0 0 300 48" aria-hidden="true"><rect x="4" y="12" width="292" height="22" rx="3" style="fill:var(--body-band)"/>' +
+        '<path d="'+d+'" fill="none" style="stroke:var(--body);stroke-width:1.8;stroke-linejoin:round"/>'+dot+'</svg></div>';
+    }).join('');
+  }
+
+  function weeks(el){
+    var km = [[9.5,'z2'],[9.2,'z5'],[9.5,'z2'],[11.5,'z4'],[0,''],[9.5,'z2'],[24,'z2']];
+    var wk1 = ['m','d','p','p','','p','p'];               // missed, done, planned
+    el.innerHTML = [1,2,3,4].map(function(w){
+      return '<div class="wk'+(w===1?' sel':'')+'"><b>Week '+w+'</b><span class="num">73</span><span class="u">km</span><div class="mini">' +
+        km.map(function(k,i){ var st = k[0] ? (w===1 ? wk1[i] : 'p') : '';
+          return '<i class="'+k[1]+' '+st+'" style="height:'+(k[0]? Math.max(5, k[0]/24*22) : 2)+'px"></i>'; }).join('') + '</div></div>';
+    }).join('');
+  }
+
+  var mode = 'light';
+  try { mode = localStorage.getItem('colour-pass-mode') || 'light'; } catch(e){}
+
+  document.querySelectorAll('.compare').forEach(function(box){
+    var tpl = document.getElementById('t-' + box.dataset.screen);
+    ['before','after'].forEach(function(v){
+      var fig = document.createElement('figure');
+      var cap = document.createElement('figcaption');
+      cap.innerHTML = v === 'before' ? 'Before <span>current tokens</span>' : 'After <span>agreed proposal</span>';
+      var ph = document.createElement('div');
+      ph.className = 'phone'; ph.dataset.v = v; ph.dataset.m = mode;
+      ph.appendChild(tpl.content.cloneNode(true));
+      fig.appendChild(cap); fig.appendChild(ph); box.appendChild(fig);
+      ph.querySelectorAll('[data-chart="form"]').forEach(formChart);
+      ph.querySelectorAll('[data-chart="hr"]').forEach(hrChart);
+      ph.querySelectorAll('[data-trends]').forEach(trends);
+      ph.querySelectorAll('[data-weeks]').forEach(weeks);
+    });
+  });
+
+  function setMode(m){
+    document.querySelectorAll('.phone').forEach(function(p){ p.dataset.m = m; });
+    document.querySelectorAll('.seg button').forEach(function(b){ b.setAttribute('aria-pressed', String(b.dataset.mode === m)); });
+    try { localStorage.setItem('colour-pass-mode', m); } catch(e){}
+  }
+  document.querySelectorAll('.seg button').forEach(function(b){ b.addEventListener('click', function(){ setMode(b.dataset.mode); }); });
+  setMode(mode);
+})();
+</script>
+</body>
+</html>
