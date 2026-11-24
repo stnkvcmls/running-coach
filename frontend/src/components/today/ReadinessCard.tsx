@@ -9,12 +9,13 @@ interface Props {
 
 /**
  * Colour for a readiness score (ring stroke, component bars). Readiness is
- * status, not effort, so every band is ink (docs/UI_UX_CRITIQUE.md §5.1):
- * the number and the label word carry the band. Kept as a function so
- * callers stay band-aware if a non-colour treatment ever needs the score.
+ * the body, not effort, so every band is the body channel (petrol,
+ * docs/UI_UX_CRITIQUE.md §5.1): the number and the label word carry the band.
+ * Kept as a function so callers stay band-aware if a non-colour treatment
+ * ever needs the score.
  */
 export function scoreColor(_score: number): string {
-  return 'var(--text)'
+  return 'var(--body)'
 }
 
 export function ComponentBar({ label, value }: { label: string; value: number | null }) {

@@ -114,10 +114,11 @@ export default function App() {
   useEffect(() => {
     const root = document.documentElement
     root.setAttribute('data-theme', theme)
-    // The browser chrome (theme-color) follows the ground token of the theme
-    // just applied, read back from CSS so the value lives only in globals.css.
-    const ground = getComputedStyle(root).getPropertyValue('--bg').trim()
-    if (ground) document.querySelector('meta[name="theme-color"]')?.setAttribute('content', ground)
+    // The browser chrome (theme-color) follows the top bar, which sits on the
+    // panel token (--bg-card), read back from CSS so the value lives only in
+    // globals.css.
+    const chrome = getComputedStyle(root).getPropertyValue('--bg-card').trim()
+    if (chrome) document.querySelector('meta[name="theme-color"]')?.setAttribute('content', chrome)
   }, [theme])
 
   // First-run: redirect to onboarding when no athlete profile exists yet.

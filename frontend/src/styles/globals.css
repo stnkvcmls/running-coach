@@ -12,9 +12,11 @@
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
-/* Tokens (docs/UI_UX_CRITIQUE.md §5.2). Neutrals carry the interface; the only
-   chroma is the effort scale --z1…--z5, in Garmin's zone order, so the app and
-   the watch agree. Colour means effort: status, selection and emphasis use ink.
+/* Tokens (docs/UI_UX_CRITIQUE.md §5.2). Three colour channels, one meaning
+   each: the effort scale --z1…--z5 (Garmin's zone order, so the app and the
+   watch agree) is the effort of a session; --body (petrol) is the athlete's
+   body and fitness; ink is text, actions and selection. Neutrals carry the
+   rest, and a solid grey mark only ever means Z1.
    Dark is the default; [data-theme="light"] (set pre-paint by index.html)
    overrides the theme-dependent values. The token names predate the redesign
    and map onto the spec as: --bg = ground, --bg-card/--surface = surface,
@@ -23,20 +25,22 @@
 :root {
   color-scheme: dark;
 
-  --bg: #111416;
-  --bg-card: #1A1E21;
-  --bg-input: #22272B;
-  --bg-hover: #283036;
+  --bg: #0D0F11;
+  --bg-card: #16191C;
+  --bg-input: #1F2428;
+  --bg-hover: #262C31;
   --surface: var(--bg-card);
-  --text: #E8EBED;
-  --text-muted: #A3ACB4;
+  --text: #F3F5F7;
+  --text-muted: #A8AFB7;
   --text-secondary: var(--text-muted);
   /* ink-3: underlines, tracks, rest marks and other non-text marks. It is
      below 4.5:1 on every surface, so never use it for text. */
   --text-faint: #6D767E;
-  --border: #2C3338;
+  /* Rule: hairlines, tracks, and the 1px edge that separates every panel from
+     the ground (by tone alone a panel is only ~1.1:1 against it). */
+  --border: #2B3137;
   /* Text/icon colour on an ink-filled surface (primary button, selected chip). */
-  --on-ink: #111416;
+  --on-ink: #0D0F11;
   /* Dimmed backdrop behind sheets and modals. */
   --scrim: rgba(0, 0, 0, 0.6);
 
@@ -47,6 +51,12 @@
   --z3: #3DAE6B;
   --z4: #EF8F37;
   --z5: #EC5459;
+
+  /* Body channel: petrol (hue 185°, the one free hue that is neither violet
+     nor next to a zone). Marks only: readiness meter, fitness line, usual-range
+     markers and bands. Never an action, a button or a selection. */
+  --body: #3CC3CF;
+  --body-subtle: #14292C;
 
   /* Interactive emphasis is ink, not a hue. Kept as names for older rules. */
   --accent: var(--text);
@@ -74,7 +84,7 @@
   --color-strength: var(--z1);
   --color-default: var(--text-faint);
 
-  /* Panels separate from the ground by tone, not elevation. */
+  /* Panels separate from the ground by a 1px --border edge, not elevation. */
   --shadow-sm: none;
   --shadow-md: none;
 
@@ -112,14 +122,14 @@
 [data-theme="light"] {
   color-scheme: light;
 
-  --bg: #ECEEF0;
+  --bg: #F3F4F6;
   --bg-card: #FFFFFF;
-  --bg-input: #F2F4F5;
-  --bg-hover: #E7EBEE;
-  --text: #121518;
-  --text-muted: #525B64;
+  --bg-input: #F1F3F5;
+  --bg-hover: #E8EBEE;
+  --text: #111315;
+  --text-muted: #4A5056;
   --text-faint: #8A939B;
-  --border: #D8DDE1;
+  --border: #DCE0E4;
   --on-ink: #FFFFFF;
   --scrim: rgba(18, 21, 24, 0.45);
 
@@ -128,6 +138,9 @@
   --z3: #2B9156;
   --z4: #DD7A1E;
   --z5: #D0353A;
+
+  --body: #0B6E75;
+  --body-subtle: #E4F1F2;
 }
 
 *, *::before, *::after {
@@ -197,6 +210,7 @@ button {
 /* Utility classes */
 .card {
   background: var(--bg-card);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
 }
@@ -320,13 +334,13 @@ button {
 }
 
 /* Workout-type badge: the label stays ink (effort colours are below 4.5:1 as
-   text in light mode); the effort colour is the dot in front of it. Set
-   --effort to a --color-* / --z* reference inline. */
+   text in light mode); the effort colour is the dot in front of it and a 14%
+   tint behind it. Set --effort to a --color-* / --z* reference inline. */
 .badge-effort {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: var(--bg-input);
+  background: color-mix(in srgb, var(--effort, var(--color-default)) 14%, var(--bg-card));
   color: var(--text);
 }
 

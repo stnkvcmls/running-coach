@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#111416" />
+    <meta name="theme-color" content="#16191C" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="manifest" href="/static/manifest.json" />
@@ -16,7 +16,7 @@
       // Pre-paint theme, mirroring src/hooks/useThemePreference.ts: the stored
       // 'light' | 'dark' is an explicit choice; 'system' (or nothing stored)
       // follows prefers-color-scheme, falling back to dark without matchMedia.
-      // theme-color tracks the ground token (--bg in globals.css); App.tsx
+      // theme-color tracks the top bar's panel token (--bg-card in globals.css); App.tsx
       // keeps it current after load.
       (function() {
         var t = null;
@@ -25,7 +25,7 @@
           (!window.matchMedia || window.matchMedia('(prefers-color-scheme: dark)').matches));
         document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
         var meta = document.querySelector('meta[name="theme-color"]');
-        if (meta) meta.setAttribute('content', dark ? '#111416' : '#ECEEF0');
+        if (meta) meta.setAttribute('content', dark ? '#16191C' : '#FFFFFF');
       })();
     </script>
     <div id="root"></div>

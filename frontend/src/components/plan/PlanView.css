@@ -147,7 +147,7 @@
   text-align: left;
   color: var(--text);
   background: var(--surface);
-  border: 1.5px solid transparent;
+  border: 1.5px solid var(--border);
   border-radius: var(--radius-sm);
   transition: border-color var(--transition-fast);
 }
@@ -184,16 +184,28 @@
   margin-top: 6px;
 }
 
+/* Each day in its effort colour, coded by state: done solid, still to run
+   at half strength, missed as a hollow zone outline; rest is a track stub. */
 .plan-week-mini i {
   display: block;
   height: var(--h);
   min-height: 2px;
   border-radius: 1.5px;
-  background: var(--text-faint);
+  background: var(--c);
 }
 
-.plan-week-tile[aria-pressed="true"] .plan-week-mini i {
-  background: var(--text);
+.plan-week-mini i.is-upcoming,
+.plan-week-mini i.is-today {
+  opacity: 0.5;
+}
+
+.plan-week-mini i.is-missed {
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--c);
+}
+
+.plan-week-mini i.is-rest {
+  background: var(--border);
 }
 
 /* Week progress */
@@ -228,27 +240,44 @@
   color: var(--text);
 }
 
+/* The week stacked by session (WeekProgress): one segment per run, as wide
+   as its planned km, in its effort colour. Done is solid; still to run is a
+   22% tint with a zone outline; missed is a dashed zone outline. */
 .plan-progress-track {
-  height: 6px;
+  display: flex;
+  gap: 3px;
+  height: 8px;
   margin-top: 8px;
-  border-radius: 3px;
-  background: var(--bg-input);
-  overflow: hidden;
 }
 
-.plan-progress-fill {
-  height: 100%;
-  border-radius: 3px;
-  background: var(--text);
-  transition: width var(--transition-base);
+.plan-progress-seg {
+  flex-basis: 0;
+  min-width: 4px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--c) 22%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--c);
 }
 
-/* Day list: one panel, hairline rows, one effort dot per row (P4). */
+.plan-progress-seg.is-done {
+  background: var(--c);
+  box-shadow: none;
+}
+
+.plan-progress-seg.is-missed {
+  background: none;
+  box-shadow: none;
+  border: 1.5px dashed var(--c);
+}
+
+/* Day list: one panel, hairline rows, one 4px effort bar down each row's
+   left edge (P4). The bar is the session type; the state is in the row's
+   right-hand column (Done / Missed), except missed, whose bar is dashed. */
 .plan-days {
   list-style: none;
   margin: 0;
   padding: 0;
   background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
 }
@@ -266,19 +295,30 @@
   border-top: 0;
 }
 
-/* Today, still to run: tonal row with an ink rule. */
+.plan-day::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 4px;
+  border-radius: 0 3px 3px 0;
+  background: var(--plan-day-color, transparent);
+}
+
+.plan-day--missed::before {
+  background: repeating-linear-gradient(to bottom, var(--plan-day-color) 0 5px, transparent 5px 9px);
+}
+
+/* Today, still to run: tonal row, and its bar runs the full row height. */
 .plan-day--current {
   background: var(--bg-input);
 }
 
 .plan-day--current::before {
-  content: "";
-  position: absolute;
-  left: 0;
   top: 0;
   bottom: 0;
-  width: 3px;
-  background: var(--text);
+  border-radius: 0;
 }
 
 .plan-day-when {
@@ -304,19 +344,8 @@
 }
 
 .plan-day-kind {
-  display: flex;
-  align-items: center;
-  gap: 7px;
   font-weight: 650;
   color: var(--text);
-}
-
-.plan-day-dot {
-  width: 9px;
-  height: 9px;
-  flex-shrink: 0;
-  border-radius: 50%;
-  background: var(--plan-day-color);
 }
 
 .plan-day-line {
@@ -353,14 +382,10 @@
   color: var(--text-muted);
 }
 
+/* Missed reads quieter (ink-2), but stays readable: ink-3 is below 4.5:1. */
 .plan-day--missed .plan-day-kind,
 .plan-day--missed .plan-day-line {
-  color: var(--text-faint);
-}
-
-.plan-day--missed .plan-day-dot {
-  background: none;
-  box-shadow: inset 0 0 0 1.5px var(--text-faint);
+  color: var(--text-muted);
 }
 
 .plan-day-side {

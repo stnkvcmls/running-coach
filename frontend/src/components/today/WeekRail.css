@@ -77,17 +77,20 @@
   box-shadow: none;
 }
 
+/* Inactive states are coded by shape, not by grey (a solid grey mark only
+   ever means Z1): missed is hollow and dashed in its own zone colour, rest is
+   a short hollow outline in the rule colour. */
 .week-rail-day.is-missed .week-rail-bar {
   background: none;
   box-shadow: none;
-  outline: 1.5px dashed var(--text-faint);
+  outline: 1.5px dashed var(--c);
   outline-offset: -1.5px;
 }
 
 .week-rail-day.is-rest .week-rail-bar {
-  height: 2px;
-  background: var(--text-faint);
-  box-shadow: none;
+  height: 14px;
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 
 .week-rail-sum {

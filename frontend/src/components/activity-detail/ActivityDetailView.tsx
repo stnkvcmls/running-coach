@@ -270,6 +270,7 @@ export default function ActivityDetailView() {
                   metricZones={activity.metric_zones}
                   distanceKm={distanceKm}
                   repWindows={structured ? repWindows : null}
+                  hrZones={activity.hr_zones}
                 />
               </div>
             )}

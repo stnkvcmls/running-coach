@@ -1,3 +1,40 @@
+# Colour pass — less grey, same rules (2026-11-24)
+
+Spec: docs/mockups/colour-pass-before-after.html (agreed with Gemini, approved by owner).
+Branch: feat/colour-pass.
+
+## Tasks
+- [x] globals.css: new neutrals (light + dark), `--body` / `--body-subtle` tokens,
+      1px border on `.card`, `.badge-effort` 14% zone tint.
+- [x] Panels outside `.card` get the border: group-list, detail-panel, stat-info-card,
+      plan-days, plan-week-tile, season-timeline, set-list, pr-card.
+- [x] Chrome on card: TopBar, Coach composer.
+- [x] chartTheme.ts: `BODY_COLOR`, `zoneGradientStops()` (+ tests).
+- [x] Today: readiness meter petrol (verdict text ink); hero session divider 3px zone +
+      tinted kind pill; WeekRail missed dashed in zone colour, rest hollow outline;
+      BodyPanel in-range petrol dot / out-of-range ink pill; Form fitness petrol, no area.
+- [x] Plan: week mini-bars in zone colour (done solid / planned 50% / missed outline);
+      week-km bar stacked by session; 4px zone bar per row (replaces dot; today full-height).
+- [x] Run analysis: line metrics with zones stroked by zone, no area fill; rep bands neutral.
+- [x] Progress body trends: petrol line, band and in-range dot; out-of-range ink pill.
+- [x] Settings: green "ok" dot -> ink check.
+- [x] docs/UI_UX_CRITIQUE.md §5: amend principle 1 + token table.
+- [x] Verify: typecheck, vitest, build, real-browser screenshots light/dark vs mockup.
+
+## Review
+- Typecheck clean; vitest 355/355 (+4 new in chartTheme.test.ts for `zoneGradientStops` and `hrZoneBands`); `vite build` OK.
+- Real browser (Playwright, built app on a copy of `perf/perf.db`, clock faked to
+  2026-06-23 18:30, light + dark): Today, Plan, run analysis, Progress body,
+  Progress fitness, Settings, Coach all match the mockup.
+- Beyond the mockup, decided during implementation:
+  - HR trace zones come from Garmin's per-run `hr_zones[].zoneLowBoundary`
+    (`metric_zones` has no heart-rate rows); falls back to an ink line without them.
+  - Readiness verdict text is ink in every verdict (it was Z4/Z5 text for
+    ease/rest, and Z4 is 3.1:1 as text); the meter and component bars are petrol.
+  - Browser `theme-color` now follows `--bg-card` (the top bar), not `--bg`.
+  - Coach empty-state heading/icon to full ink (Gemini round-1 note).
+- Not mocked, unchanged by rule: bottom nav, buttons, chips (ink).
+
 # Phase 3 — Data Isolation (multi-user)
 
 Goal: every row, query, computation, and sync job is scoped to one user.

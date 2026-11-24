@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import type { MetricZone } from '../api/types'
 import {
-  getTooltipProps, getChartTickColor, getAxisTick, getGridStroke, getZoneColor, effortZoneColor,
+  getTooltipProps, getChartTickColor, getAxisTick, getGridStroke, getZoneColor, effortZoneColor, zoneGradientStops, hrZoneBands,
   usePrefersReducedMotion,
 } from './chartTheme'
 
@@ -63,6 +63,45 @@ describe('getZoneColor', () => {
 
   it('falls back to the default token when no zone matches', () => {
     expect(getZoneColor(150, zones.slice(0, 2))).toBe('var(--color-default)')
+  })
+})
+
+describe('zoneGradientStops', () => {
+  const zone = (min: number | null, max: number | null): MetricZone => ({
+    metric_key: 'heart_rate', zone_name: '', zone_color: '', percentile_label: '', min_value: min, max_value: max,
+  })
+  // Z1 < 135 ≤ Z2 < 150 ≤ Z3 < 160 ≤ Z4 < 167 ≤ Z5
+  const hr = [zone(null, 135), zone(135, 150), zone(150, 160), zone(160, 167), zone(167, null)]
+
+  it('paints hard zone bands top-down across the line extent, dropping zones outside it', () => {
+    expect(zoneGradientStops(hr, 140, 180)).toEqual([
+      { offset: 0, color: 'var(--z5)' }, { offset: 0.325, color: 'var(--z5)' },
+      { offset: 0.325, color: 'var(--z4)' }, { offset: 0.5, color: 'var(--z4)' },
+      { offset: 0.5, color: 'var(--z3)' }, { offset: 0.75, color: 'var(--z3)' },
+      { offset: 0.75, color: 'var(--z2)' }, { offset: 1, color: 'var(--z2)' },
+    ])
+  })
+
+  it('flips for a reversed axis (pace: smaller is higher)', () => {
+    const pace = [zone(300, null), zone(null, 300)] // Z1 slow, Z2 fast (sec/km)
+    expect(zoneGradientStops(pace, 240, 360, true)).toEqual([
+      { offset: 0, color: 'var(--z2)' }, { offset: 0.5, color: 'var(--z2)' },
+      { offset: 0.5, color: 'var(--z1)' }, { offset: 1, color: 'var(--z1)' },
+    ])
+  })
+
+  it('takes HR zone edges from the Garmin time-in-zone payload', () => {
+    const payload = [130, 135, 150, 160, 167].map((low, i) => ({ zoneNumber: i + 1, secsInZone: 60, zoneLowBoundary: low }))
+    const bands = hrZoneBands(payload)
+    expect(bands.map(b => [b.min_value, b.max_value])).toEqual([[null, 135], [135, 150], [150, 160], [160, 167], [167, null]])
+    expect(zoneGradientStops(bands, 140, 180)).toEqual(zoneGradientStops(hr, 140, 180))
+    expect(hrZoneBands([{ zoneNumber: 1, secsInZone: 60 }, { zoneNumber: 2, secsInZone: 60 }])).toEqual([])
+    expect(hrZoneBands(null)).toEqual([])
+  })
+
+  it('returns no stops for a flat line or no zones', () => {
+    expect(zoneGradientStops(hr, 150, 150)).toEqual([])
+    expect(zoneGradientStops([], 140, 180)).toEqual([])
   })
 })
 

@@ -38,6 +38,12 @@ function km(m: number, digits = 1): string {
   return String(Number((m / 1000).toFixed(digits)))
 }
 
+/** A plan day's effort colour (var(--color-*)); rest and unknown types fall
+ * back to the default token. */
+function workoutColor(type: string): string {
+  return WORKOUT_TYPE_COLORS[type] ?? 'var(--color-default)'
+}
+
 function shortDate(dateStr: string): string {
   return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
@@ -182,7 +188,7 @@ function DayRow({ day, defaultNote, showWatch }: DayRowProps) {
   const state = dayState(day)
   const isRest = state === 'rest'
   const label = WORKOUT_LABELS[day.workout_type] ?? day.workout_type
-  const color = WORKOUT_TYPE_COLORS[day.workout_type] ?? 'var(--color-default)'
+  const color = workoutColor(day.workout_type)
   const session = isRest
     ? null
     : describeSession({
@@ -238,19 +244,16 @@ function DayRow({ day, defaultNote, showWatch }: DayRowProps) {
   const isToday = state === 'today'
 
   return (
-    <li className={`plan-day plan-day--${state}${isToday ? ' plan-day--current' : ''}`}>
+    <li
+      className={`plan-day plan-day--${state}${isToday ? ' plan-day--current' : ''}`}
+      style={isRest ? undefined : { '--plan-day-color': color } as CSSProperties}
+    >
       <span className="plan-day-when">
         <b>{day.day_of_week.slice(0, 3)}</b>
         {shortDate(day.day_date)}
       </span>
       <div className="plan-day-what">
-        {isRest ? (
-          <p className="plan-day-kind">Rest</p>
-        ) : (
-          <p className="plan-day-kind" style={{ '--plan-day-color': color } as CSSProperties}>
-            <i className="plan-day-dot" aria-hidden="true" />{label}
-          </p>
-        )}
+        <p className="plan-day-kind">{isRest ? 'Rest' : label}</p>
         {line && <p className="plan-day-line">{line}</p>}
         {session?.structure && session.steps && session.steps.length > 0 && (
           <div className="plan-day-strip">
@@ -304,7 +307,12 @@ function WeekProgress({ week }: { week: TrainingPlanWeek }) {
   const doneM = week.days
     .filter(d => dayState(d) === 'done')
     .reduce((s, d) => s + (d.matched_distance_m ?? d.target_distance_m ?? 0), 0)
-  const pct = totalM > 0 ? Math.min(100, (doneM / totalM) * 100) : 0
+  // The bar is the week stacked by session, in day order: each segment as
+  // wide as its planned km, coloured by its effort, and filled/tinted/dashed
+  // by state (done/planned/missed), so you can see where the total comes from.
+  const segments = [...week.days]
+    .filter(d => d.workout_type !== 'rest' && (d.target_distance_m ?? 0) > 0)
+    .sort((a, b) => a.day_date.localeCompare(b.day_date))
 
   if (!week.theme && totalM === 0) return null
 
@@ -319,8 +327,14 @@ function WeekProgress({ week }: { week: TrainingPlanWeek }) {
         )}
       </div>
       {totalM > 0 && (
-        <div className="plan-progress-track">
-          <div className="plan-progress-fill" style={{ width: `${pct}%` }} />
+        <div className="plan-progress-track" aria-hidden="true">
+          {segments.map(d => (
+            <i
+              key={d.id}
+              className={`plan-progress-seg is-${dayState(d)}`}
+              style={{ flexGrow: d.target_distance_m ?? 0, '--c': workoutColor(d.workout_type) } as CSSProperties}
+            />
+          ))}
         </div>
       )}
     </div>
@@ -364,7 +378,11 @@ function WeekTile({ week, maxDayM, active, onClick }: { week: TrainingPlanWeek; 
         {days.map(d => (
           <i
             key={d.id}
-            style={{ '--h': `${maxDayM > 0 ? ((d.target_distance_m ?? 0) / maxDayM) * 100 : 0}%` } as CSSProperties}
+            className={`is-${dayState(d)}`}
+            style={{
+              '--h': `${maxDayM > 0 ? ((d.target_distance_m ?? 0) / maxDayM) * 100 : 0}%`,
+              '--c': workoutColor(d.workout_type),
+            } as CSSProperties}
           />
         ))}
       </span>

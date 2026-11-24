@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import {
-  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
   ScatterChart, Scatter, ReferenceLine, ReferenceArea,
 } from 'recharts'
 import type { ChartSeries, MetricZone } from '../../api/types'
 import { useTheme } from '../../App'
-import { getAxisTick, getTooltipProps, getZoneColor, SERIES_COLORS, usePrefersReducedMotion } from '../../utils/chartTheme'
+import {
+  getAxisTick, getTooltipProps, getZoneColor, hrZoneBands, SERIES_COLORS, usePrefersReducedMotion, zoneGradientStops,
+} from '../../utils/chartTheme'
 import './ChartTabs.css'
 
 const SCATTER_METRICS = new Set(['cadence', 'stride', 'gct', 'vert_osc', 'vert_ratio'])
@@ -17,6 +19,8 @@ interface Props {
   distanceKm?: number[] | null
   /** Work-rep stretches (km) to shade, for a structured session. */
   repWindows?: { startKm: number; endKm: number }[] | null
+  /** Garmin's HR time-in-zone payload; its zone edges colour the HR trace. */
+  hrZones?: unknown
 }
 
 /** Whole-km ticks, at most ~6 of them. */
@@ -40,7 +44,7 @@ function formatPaceTick(v: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
-export default function ChartTabs({ chartData, metricZones, distanceKm, repWindows }: Props) {
+export default function ChartTabs({ chartData, metricZones, distanceKm, repWindows, hrZones }: Props) {
   const keys = Object.keys(chartData).filter(k => k !== 'distance')
   const [activeKey, setActiveKey] = useState(keys[0] || '')
   const { theme } = useTheme()
@@ -51,11 +55,11 @@ export default function ChartTabs({ chartData, metricZones, distanceKm, repWindo
   const series = chartData[activeKey]
   if (!series) return null
 
-  // One metric at a time, so it is drawn in ink; only zone-coloured scatter
-  // dots (metric zones) and the rep shading carry effort colour.
+  // One metric at a time, drawn in ink unless it has metric zones: then the
+  // line (or each scatter dot) takes the effort colour of the zone it is in.
   const color = SERIES_COLORS[0]
   const isScatter = SCATTER_METRICS.has(activeKey)
-  const zones = metricZones?.[activeKey]
+  const zones = metricZones?.[activeKey] ?? (activeKey === 'heart_rate' ? hrZoneBands(hrZones) : undefined)
   const isPace = activeKey === 'pace' || activeKey === 'gap_pace'
 
   const byDistance = !!distanceKm && distanceKm.length === series.data.length
@@ -110,14 +114,16 @@ export default function ChartTabs({ chartData, metricZones, distanceKm, repWindo
     />
   )
 
+  // Rep windows are neutral bands: the effort colour belongs to the trace
+  // itself, and a tinted band would fight a zone-coloured line.
   const shading = byDistance && repWindows && repWindows.length > 0
     ? repWindows.map((w, i) => (
         <ReferenceArea
           key={`rep-${i}`}
           x1={w.startKm}
           x2={w.endKm}
-          fill="var(--z5)"
-          fillOpacity={0.1}
+          fill="var(--border)"
+          fillOpacity={0.5}
           stroke="none"
           ifOverflow="hidden"
         />
@@ -165,30 +171,36 @@ export default function ChartTabs({ chartData, metricZones, distanceKm, repWindo
       ? `ranging from ${yTickFormatter(Math.min(...values))} to ${yTickFormatter(Math.max(...values))}${unit}`
       : 'no data'
     ariaLabel = `${series.label} ${where}, ${range}${shading ? `, ${repWindows!.length} reps shaded` : ''}.`
+    // Zone-coloured stroke: hard stops at the zone edges, measured against
+    // the line's own extent (objectBoundingBox). No area fill.
+    const stops = zones && zones.length > 0 && values.length > 0
+      ? zoneGradientStops(zones, Math.min(...values), Math.max(...values), isPace)
+      : []
+    const strokeId = `zone-stroke-${activeKey}`
     chart = (
-      <AreaChart data={points} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-        <defs>
-          <linearGradient id={`grad-${activeKey}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity={0.14} />
-            <stop offset="100%" stopColor={color} stopOpacity={0.02} />
-          </linearGradient>
-        </defs>
+      <LineChart data={points} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+        {stops.length > 0 && (
+          <defs>
+            <linearGradient id={strokeId} x1="0" y1="0" x2="0" y2="1">
+              {stops.map((s, i) => <stop key={i} offset={s.offset} stopColor={s.color} />)}
+            </linearGradient>
+          </defs>
+        )}
         {shading}
         {xAxis}
         {yAxis}
         {tooltip}
-        <Area
+        <Line
           type="monotone"
           dataKey="v"
-          stroke={color}
-          strokeWidth={1.6}
-          fill={`url(#grad-${activeKey})`}
+          stroke={stops.length > 0 ? `url(#${strokeId})` : color}
+          strokeWidth={stops.length > 0 ? 2 : 1.6}
           connectNulls
           dot={false}
           activeDot={{ r: 3, fill: color }}
           isAnimationActive={!reduceMotion}
         />
-      </AreaChart>
+      </LineChart>
     )
   }
 

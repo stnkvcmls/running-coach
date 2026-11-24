@@ -19,7 +19,7 @@ function Metric({ label, value, unit, verdict }: MetricProps) {
         {Math.round(value)}
         {unit && <small>{unit}</small>}
       </dd>
-      <dd className={`body-metric-verdict${verdict?.flag ? ' is-flag' : ''}`}>
+      <dd className={`body-metric-verdict${verdict ? (verdict.flag ? ' is-flag' : ' is-in') : ''}`}>
         {verdict?.text ?? 'Building your range'}
       </dd>
     </div>

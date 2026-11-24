@@ -3,7 +3,6 @@
 }
 
 .readiness-line {
-  --readiness-tone: var(--text);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -11,18 +10,6 @@
   padding: 14px 16px 13px;
   text-align: left;
   color: var(--text);
-}
-
-.readiness-line--train {
-  --readiness-tone: var(--text);
-}
-
-.readiness-line--ease {
-  --readiness-tone: var(--z4);
-}
-
-.readiness-line--rest {
-  --readiness-tone: var(--danger);
 }
 
 .readiness-line:hover {
@@ -33,7 +20,7 @@
   font-size: 1.125rem;
   font-weight: 700;
   line-height: 1.2;
-  color: var(--readiness-tone);
+  color: var(--text);
 }
 
 .readiness-line-meta {
@@ -72,7 +59,9 @@
   position: absolute;
   inset: 0 auto 0 0;
   width: var(--v);
-  background: var(--readiness-tone);
+  /* Readiness is the body, not a session: petrol, in every verdict. The
+     verdict word carries train / ease / rest; effort hues stay off it. */
+  background: var(--body);
   border-radius: 3px;
 }
 
